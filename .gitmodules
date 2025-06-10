@@ -1,0 +1,3 @@
+[submodule "openfhe-development"]
+	path = openfhe-development
+	url = https://github.com/openfheorg/openfhe-development.git
