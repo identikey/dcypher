@@ -1,5 +1,8 @@
 
-
+# Submodules
+```
+git submodule update --init --recursive
+```
 
 # Compiling
 
