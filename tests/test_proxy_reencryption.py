@@ -45,7 +45,9 @@ def test_pre_workflow():
 
     # Decryption by Alice (for verification)
     start_time = time.time()
-    decrypted_by_alice = pre.decrypt(cc, alice_keys.secretKey, ciphertext_alice)
+    decrypted_by_alice = pre.decrypt(
+        cc, alice_keys.secretKey, ciphertext_alice, len(original_data)
+    )
     print(f"Decryption time (by Alice): {(time.time() - start_time) * 1000:.2f} ms")
 
     # Generate Re-Encryption Key
@@ -66,7 +68,9 @@ def test_pre_workflow():
 
     # Decryption by Bob
     start_time = time.time()
-    decrypted_by_bob = pre.decrypt(cc, bob_keys.secretKey, ciphertext_bob)
+    decrypted_by_bob = pre.decrypt(
+        cc, bob_keys.secretKey, ciphertext_bob, len(original_data)
+    )
     print(f"Decryption time (by Bob): {(time.time() - start_time) * 1000:.2f} ms")
 
     # Verification
@@ -86,7 +90,7 @@ def test_pre_workflow():
     ser_alice_sk = pre.serialize(alice_keys.secretKey)
     ser_bob_pk = pre.serialize(bob_keys.publicKey)
     ser_bob_sk = pre.serialize(bob_keys.secretKey)
-    ser_ciphertext_alice = pre.serialize(ciphertext_alice)
+    ser_ciphertext_alice = [pre.serialize(ct) for ct in ciphertext_alice]
     ser_re_key = pre.serialize(re_encryption_key)
     print(f"Serialization time: {(time.time() - start_time) * 1000:.2f} ms")
 
@@ -97,7 +101,9 @@ def test_pre_workflow():
     deser_alice_sk = pre.deserialize_secret_key(ser_alice_sk)
     deser_bob_pk = pre.deserialize_public_key(ser_bob_pk)
     deser_bob_sk = pre.deserialize_secret_key(ser_bob_sk)
-    deser_ciphertext_alice = pre.deserialize_ciphertext(ser_ciphertext_alice)
+    deser_ciphertext_alice = [
+        pre.deserialize_ciphertext(s_ct) for s_ct in ser_ciphertext_alice
+    ]
     deser_re_key = pre.deserialize_re_encryption_key(ser_re_key)
     print(f"Deserialization time: {(time.time() - start_time) * 1000:.2f} ms")
 
@@ -111,7 +117,9 @@ def test_pre_workflow():
 
     print("\nDecrypting with deserialized objects...")
     start_time = time.time()
-    final_decrypted_data = pre.decrypt(deser_cc, deser_bob_sk, deser_ciphertext_bob)
+    final_decrypted_data = pre.decrypt(
+        deser_cc, deser_bob_sk, deser_ciphertext_bob, len(original_data)
+    )
     print(f"Decryption time: {(time.time() - start_time) * 1000:.2f} ms")
 
     # 4. Verification

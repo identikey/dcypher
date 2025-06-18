@@ -99,11 +99,11 @@ def encrypt(cc_path, pk_path, data, input_file, output):
             return
 
     click.echo("Encrypting data...", err=True)
-    ciphertext = pre.encrypt(cc, pk, input_data)
-    serialized_ciphertext = pre.serialize(ciphertext)
+    ciphertexts = pre.encrypt(cc, pk, input_data)
+    serialized_ciphertexts = [pre.serialize(ct) for ct in ciphertexts]
 
     with open(output, "w") as f:
-        json.dump({"length": len(input_data), "ciphertext": serialized_ciphertext}, f)
+        json.dump({"length": len(input_data), "ciphertexts": serialized_ciphertexts}, f)
 
     click.echo(f"Ciphertext saved to {output}", err=True)
 
@@ -134,11 +134,20 @@ def decrypt(cc_path, sk_path, ciphertext_path, output_file):
     click.echo(f"Loading ciphertext from {ciphertext_path}...", err=True)
     with open(ciphertext_path, "r") as f:
         ciphertext_data = json.load(f)
-    ciphertext = pre.deserialize_ciphertext(ciphertext_data["ciphertext"])
+
     length = ciphertext_data.get("length")
 
+    if "ciphertexts" in ciphertext_data:
+        serialized_items = ciphertext_data["ciphertexts"]
+        ciphertexts = [
+            pre.deserialize_ciphertext(s_item) for s_item in serialized_items
+        ]
+    else:  # Legacy single-ciphertext format
+        serialized_item = ciphertext_data["ciphertext"]
+        ciphertexts = [pre.deserialize_ciphertext(serialized_item)]
+
     click.echo("Decrypting data...", err=True)
-    decrypted_data = pre.decrypt(cc, sk, ciphertext, length)
+    decrypted_data = pre.decrypt(cc, sk, ciphertexts, length)
 
     if output_file:
         with open(output_file, "wb") as f:
@@ -218,14 +227,23 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
     click.echo(f"Loading ciphertext from {ciphertext_path}...", err=True)
     with open(ciphertext_path, "r") as f:
         ciphertext_data = json.load(f)
-    ciphertext = pre.deserialize_ciphertext(ciphertext_data["ciphertext"])
+
     length = ciphertext_data.get("length")
 
-    click.echo("Re-encrypting ciphertext...", err=True)
-    re_ciphertext = pre.re_encrypt(cc, rekey, ciphertext)
-    serialized_re_ciphertext = pre.serialize(re_ciphertext)
+    if "ciphertexts" in ciphertext_data:
+        serialized_items = ciphertext_data["ciphertexts"]
+        ciphertexts = [
+            pre.deserialize_ciphertext(s_item) for s_item in serialized_items
+        ]
+    else:  # Legacy single-ciphertext format
+        serialized_item = ciphertext_data["ciphertext"]
+        ciphertexts = [pre.deserialize_ciphertext(serialized_item)]
 
-    output_data = {"ciphertext": serialized_re_ciphertext}
+    click.echo("Re-encrypting ciphertext...", err=True)
+    re_ciphertexts = pre.re_encrypt(cc, rekey, ciphertexts)
+    serialized_re_ciphertexts = [pre.serialize(ct) for ct in re_ciphertexts]
+
+    output_data = {"ciphertexts": serialized_re_ciphertexts}
     if length is not None:
         output_data["length"] = length
 

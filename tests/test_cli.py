@@ -3,6 +3,7 @@ import subprocess
 import os
 from pathlib import Path
 import sys
+import json
 
 
 @pytest.fixture
@@ -335,6 +336,118 @@ def test_full_workflow_with_random_bytes(cli_test_env):
             "bob.sec",
             "--ciphertext-path",
             "reciphertext_bob.json",
+            "--output-file",
+            str(decrypted_file_bob),
+        ]
+    )
+    with open(decrypted_file_bob, "rb") as f:
+        assert f.read() == original_data
+
+
+def test_large_file_workflow(cli_test_env):
+    run_command, test_dir = cli_test_env
+
+    # First, generate a crypto context to find out the slot count
+    cc_path = test_dir / "cc.json"
+    run_command(["gen-cc", "--output", str(cc_path)])
+    assert cc_path.exists()
+
+    # We need to load the cc to get the slot count, so we'll do it manually here
+    with open(cc_path, "r") as f:
+        cc_data = json.load(f)
+    from lib import pre
+
+    cc = pre.deserialize_cc(cc_data["cc"])
+    slot_count = pre.get_slot_count(cc)
+
+    # Create a file larger than the slot count
+    # Use a mix of random and zero bytes to ensure robustness
+    original_data = os.urandom(slot_count * 2) + b"\x00" * 10 + os.urandom(5)
+    input_file = test_dir / "large_input.bin"
+    with open(input_file, "wb") as f:
+        f.write(original_data)
+
+    # Now, run the full workflow with this large file
+    # 1. Generate keys (cc already generated)
+    run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "alice"])
+    run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "bob"])
+
+    # 2. Encrypt
+    ciphertext_path = test_dir / "ciphertext.json"
+    run_command(
+        [
+            "encrypt",
+            "--cc-path",
+            str(cc_path),
+            "--pk-path",
+            "alice.pub",
+            "--input-file",
+            str(input_file),
+            "--output",
+            str(ciphertext_path),
+        ]
+    )
+    assert ciphertext_path.exists()
+
+    # 3. Decrypt with Alice's key
+    decrypted_file_alice = test_dir / "decrypted_by_alice.bin"
+    run_command(
+        [
+            "decrypt",
+            "--cc-path",
+            str(cc_path),
+            "--sk-path",
+            "alice.sec",
+            "--ciphertext-path",
+            str(ciphertext_path),
+            "--output-file",
+            str(decrypted_file_alice),
+        ]
+    )
+    with open(decrypted_file_alice, "rb") as f:
+        assert f.read() == original_data
+
+    # 4. Generate re-encryption key and re-encrypt
+    rekey_path = test_dir / "rekey.json"
+    run_command(
+        [
+            "gen-rekey",
+            "--cc-path",
+            str(cc_path),
+            "--sk-path-from",
+            "alice.sec",
+            "--pk-path-to",
+            "bob.pub",
+            "--output",
+            str(rekey_path),
+        ]
+    )
+    reciphertext_path = test_dir / "reciphertext.json"
+    run_command(
+        [
+            "re-encrypt",
+            "--cc-path",
+            str(cc_path),
+            "--rekey-path",
+            str(rekey_path),
+            "--ciphertext-path",
+            str(ciphertext_path),
+            "--output",
+            str(reciphertext_path),
+        ]
+    )
+
+    # 5. Decrypt with Bob's key
+    decrypted_file_bob = test_dir / "decrypted_by_bob.bin"
+    run_command(
+        [
+            "decrypt",
+            "--cc-path",
+            str(cc_path),
+            "--sk-path",
+            "bob.sec",
+            "--ciphertext-path",
+            str(reciphertext_path),
             "--output-file",
             str(decrypted_file_bob),
         ]
