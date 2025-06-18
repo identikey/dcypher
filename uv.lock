@@ -3,6 +3,18 @@ revision = 2
 requires-python = ">=3.12"
 
 [[package]]
+name = "click"
+version = "8.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/60/6c/8ca2efa64cf75a977a0d7fac081354553ebe483345c734fb6b6515d96bbc/click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202", size = 286342, upload-time = "2025-05-20T23:19:49.832Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/32/10bb5764d90a8eee674e9dc6f4db6a0ab47c8c4d0d83c27f7c39ac415a4d/click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b", size = 102215, upload-time = "2025-05-20T23:19:47.796Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -18,6 +30,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "openfhe" },
     { name = "pybind11" },
+    { name = "yowasp-yosys" },
 ]
 
 [package.dev-dependencies]
@@ -29,10 +42,20 @@ dev = [
 requires-dist = [
     { name = "openfhe", specifier = ">=1.3.0.0.24.4" },
     { name = "pybind11", specifier = ">=2.13.6" },
+    { name = "yowasp-yosys", specifier = ">=0.54.0.0.post930" },
 ]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.4.0" }]
+
+[[package]]
+name = "importlib-resources"
+version = "6.5.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/8c/f834fbf984f691b4f7ff60f50b514cc3de5cc08abfc3295564dd89c5e2e7/importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c", size = 44693, upload-time = "2025-01-03T18:51:56.698Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/ed/1f1afb2e9e7f38a545d628f864d562a5ae64fe6f7a10e28ffb9b185b4e89/importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec", size = 37461, upload-time = "2025-01-03T18:51:54.306Z" },
+]
 
 [[package]]
 name = "iniconfig"
@@ -59,6 +82,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a1/d4/1fc4078c65507b51b96ca8f8c3ba19e6a61c8253c72794544580a7b6c24d/packaging-25.0.tar.gz", hash = "sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f", size = 165727, upload-time = "2025-04-19T11:48:59.673Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl", hash = "sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484", size = 66469, upload-time = "2025-04-19T11:48:57.875Z" },
+]
+
+[[package]]
+name = "platformdirs"
+version = "4.3.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/8b/3c73abc9c759ecd3f1f7ceff6685840859e8070c4d947c93fae71f6a0bf2/platformdirs-4.3.8.tar.gz", hash = "sha256:3d512d96e16bcb959a814c9f348431070822a6496326a4be0911c40b5a74c2bc", size = 21362, upload-time = "2025-05-07T22:47:42.121Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/39/979e8e21520d4e47a0bbe349e2713c0aac6f3d853d0e5b34d76206c439aa/platformdirs-4.3.8-py3-none-any.whl", hash = "sha256:ff7059bb7eb1179e2685604f4aaf157cfd9535242bd23742eadc3c13542139b4", size = 18567, upload-time = "2025-05-07T22:47:40.376Z" },
 ]
 
 [[package]]
@@ -102,4 +134,48 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/fb/aa/405082ce2749be5398045152251ac69c0f3578c7077efc53431303af97ce/pytest-8.4.0.tar.gz", hash = "sha256:14d920b48472ea0dbf68e45b96cd1ffda4705f33307dcc86c676c1b5104838a6", size = 1515232, upload-time = "2025-06-02T17:36:30.03Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2f/de/afa024cbe022b1b318a3d224125aa24939e99b4ff6f22e0ba639a2eaee47/pytest-8.4.0-py3-none-any.whl", hash = "sha256:f40f825768ad76c0977cbacdf1fd37c6f7a468e460ea6a0636078f8972d4517e", size = 363797, upload-time = "2025-06-02T17:36:27.859Z" },
+]
+
+[[package]]
+name = "wasmtime"
+version = "33.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "importlib-resources" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/69/3f65a4cc5cfca92cab669f655e93e3e1f32974be95274fdd2389dda6329d/wasmtime-33.0.0-py3-none-android_26_arm64_v8a.whl", hash = "sha256:a26e46c7f81888bcde8d12bae9302d7dcddd8a719fc19419fb27e4a06281c71a", size = 7488876, upload-time = "2025-05-20T16:05:55.861Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/d3/1d5c6eb9ad73f60f2d034cfb9597bf621e07a61a915879317f95b148b210/wasmtime-33.0.0-py3-none-android_26_x86_64.whl", hash = "sha256:e1243becb59ffda44ed2ba00bdd62d0b90adf8bfd3d960dccf8d30391a278a0e", size = 7878185, upload-time = "2025-05-20T16:05:58.04Z" },
+    { url = "https://files.pythonhosted.org/packages/99/cc/e33294735cfdf8be5a0cb0d16d33f9cc42cb4a86be2669b1019c53dd91d7/wasmtime-33.0.0-py3-none-any.whl", hash = "sha256:122d76e3d7886bee29aa86cd55ddd767b48da5990abeab3cd54f73e79ab56e4b", size = 6311145, upload-time = "2025-05-20T16:05:59.753Z" },
+    { url = "https://files.pythonhosted.org/packages/40/a9/16bbb3d483da3d10091f3067fd4eb814526a3278e9a22902be5fb9d9d499/wasmtime-33.0.0-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:ab1d1eea16ed11a476d1d94926f674cc0b72376777cb913ba2e6a620ebb745cd", size = 7593761, upload-time = "2025-05-20T16:06:01.551Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/4b/111b46c4a78ce2917eb2e499c8f86e6af892f1df5796cedeaf009e96cd5d/wasmtime-33.0.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:68ed6205bf7935cd272eb65105bd4d70fdbdc3fc678ff68b8ef9c5a71ebbcef4", size = 6831291, upload-time = "2025-05-20T16:06:02.912Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/53/c0cfef5560859ac2775ed124c38feab5af6d32ed495129724f693845dae9/wasmtime-33.0.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:f78e907ba860967e340421b23dcce62fd1497b250f4d0e1f349c114f71813df0", size = 8098843, upload-time = "2025-05-20T16:06:04.427Z" },
+    { url = "https://files.pythonhosted.org/packages/db/00/cfda08e54a20e559ba3a403702780bba226c33a83b5c1a9cf13eba7ba260/wasmtime-33.0.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:71d4e0ca9b0223dd888b0224fcd98c6a38c58bee81f57955ec866464e361ded5", size = 7479498, upload-time = "2025-05-20T16:06:06.277Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/48/88e1b3cce0a2886c393a74da68a86e8f37d22db46604166c93ba5c5fbe36/wasmtime-33.0.0-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:ad715713d73e89c0796d610d4111ac47fb6ae0327c7f56b772f7a48d0e52f525", size = 8109741, upload-time = "2025-05-20T16:06:07.949Z" },
+    { url = "https://files.pythonhosted.org/packages/61/d1/02d0fcb1a0bade73dd4c60fd8975e817df0629c6bf3f4a4b57fbfc5fbe52/wasmtime-33.0.0-py3-none-win_amd64.whl", hash = "sha256:29da818ff7754fe013de577c04a701cd558cf90a518b2f79f890d0bc3e97b555", size = 6311152, upload-time = "2025-05-20T16:06:09.579Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/2c/b0367a704ee0bd662fb5c7c24597bc388ff2bb8b1634c1f40abb39c59624/wasmtime-33.0.0-py3-none-win_arm64.whl", hash = "sha256:0cefe9014a2804fd679e20e09c8db53f89bf6a46782800077a7adba5adf42cb2", size = 5727145, upload-time = "2025-05-20T16:06:10.906Z" },
+]
+
+[[package]]
+name = "yowasp-runtime"
+version = "1.76"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "platformdirs" },
+    { name = "wasmtime" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/2b/2781cde033507853452bf1e924f6f211a80a4723edc9b302ddf5b9da8ece/yowasp_runtime-1.76-py3-none-any.whl", hash = "sha256:749181a5950764882a2bb33572d5337b0a8b96039a4f578bb78499974c08dff6", size = 5166, upload-time = "2025-05-21T01:54:57.798Z" },
+]
+
+[[package]]
+name = "yowasp-yosys"
+version = "0.54.0.0.post930"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "yowasp-runtime" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bc/cf/f6c4348ea12b4189bd28aad2e42737e0837c1dbc58f891195ad180dceb65/yowasp_yosys-0.54.0.0.post930-py3-none-any.whl", hash = "sha256:7e81d9d11236500a9c80d29aed650b65c5c37316509931e77cc04154a25e8753", size = 9485585, upload-time = "2025-06-09T14:16:51.679Z" },
 ]
