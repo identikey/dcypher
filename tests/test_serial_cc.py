@@ -1,6 +1,8 @@
 """Swaggerjacked from openfhe-python"""
 
 import logging
+import pathlib
+import tempfile
 import pytest
 
 import openfhe as fhe
@@ -50,7 +52,7 @@ def test_serial_cryptocontext(tmp_path):
     )
     assert success
     assert isinstance(ct1, fhe.Ciphertext)
-    LOGGER.debug("Cryptocontext deserializes to %s %s", success, ct1)
+    LOGGER.debug("Ciphertext deserializes successfully: %s", success)
     assert fhe.SerializeToFile(str(tmp_path / "ciphertext12.json"), ct1, fhe.JSON)
 
 
@@ -243,3 +245,9 @@ def rotate_vector(vector, rotation):
     else:
         rotated = vector
     return rotated
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_serial_cryptocontext(pathlib.Path(tmpdir))
