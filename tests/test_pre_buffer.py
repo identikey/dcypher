@@ -233,8 +233,6 @@ bool run_demo_pre(void) {
     ////////////////////////////////////////////////////////////
 
     std::cout << "Execution Completed." << std::endl;
-    assert good
-
     return good;
 }
 """
@@ -357,12 +355,6 @@ def test_demo_pre():
 
     print("Execution Completed.")
     assert good
-
-
-def main():
-    passed = test_demo_pre()
-    if not passed:
-        sys.exit(1)
 
 
 if __name__ == "__main__":
