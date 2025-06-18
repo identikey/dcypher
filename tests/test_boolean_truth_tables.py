@@ -199,7 +199,7 @@ int main() {
 
 """Python code to test the boolean truth tables."""
 
-from openfhe import *
+from openfhe import BINGATE, BINFHE_PARAMSET, BinFHEContext
 import pytest
 
 
@@ -279,5 +279,66 @@ def test_boolean_truth_tables():
     )
 
 
+def test_vhdl_circuit():
+    """
+    Tests a simple circuit manually synthesized from a VHDL-like description.
+    The VHDL code is:
+    x <= C nor B;
+    y <= A and not(B);
+    F <= not(x xor y); -- equivalent to x xnor y
+    """
+    # Setup FHE
+    cc = BinFHEContext()
+    cc.GenerateBinFHEContext(BINFHE_PARAMSET.STD128)
+    sk = cc.KeyGen()
+    cc.BTKeyGen(sk)
+
+    print("\nTesting VHDL circuit F <= (C nor B) xnor (A and not B)")
+
+    # Encrypt a constant 1 for NOT operation
+    ct_one = cc.Encrypt(sk, 1)
+
+    # Test all 2^3 = 8 input combinations for A, B, C
+    for a_in in [0, 1]:
+        for b_in in [0, 1]:
+            for c_in in [0, 1]:
+                # Plaintext evaluation for expected result
+                # x = C nor B
+                x = 1 if (c_in == 0 and b_in == 0) else 0
+                # not_b = not B
+                not_b = 1 - b_in
+                # y = A and not_b
+                y = a_in & not_b
+                # F = x xnor y
+                f_expected = 1 if x == y else 0
+
+                # Encrypt inputs
+                ct_a = cc.Encrypt(sk, a_in)
+                ct_b = cc.Encrypt(sk, b_in)
+                ct_c = cc.Encrypt(sk, c_in)
+
+                # FHE execution of the circuit
+                # x <= C nor B
+                ct_x = cc.EvalBinGate(BINGATE.NOR, ct_c, ct_b)
+
+                # y <= A and not B
+                # implement `not B` as `B XOR 1` since input ciphertexts must be independent
+                ct_not_b = cc.EvalBinGate(BINGATE.XOR, ct_b, ct_one)
+                ct_y = cc.EvalBinGate(BINGATE.AND, ct_a, ct_not_b)
+
+                # F <= x xnor y
+                ct_f = cc.EvalBinGate(BINGATE.XNOR, ct_x, ct_y)
+
+                # Decrypt and check
+                f_res = cc.Decrypt(sk, ct_f)
+
+                print(
+                    f"Inputs A={a_in}, B={b_in}, C={c_in} -> "
+                    f"Expected: {f_expected}, Got: {f_res}"
+                )
+                assert f_res == f_expected
+
+
 if __name__ == "__main__":
     test_boolean_truth_tables()
+    test_vhdl_circuit()
