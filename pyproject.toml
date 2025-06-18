@@ -8,3 +8,8 @@ dependencies = [
     "openfhe>=1.3.0.0.24.4",
     "pybind11>=2.13.6",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+]
