@@ -3,14 +3,7 @@ FROM ubuntu:24.04
 
 # Install system dependencies required for OpenFHE
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    g++ \
-    gcc \
-    make \
-    cmake \
-    libc6-dev \
-    libstdc++6 \
-    libgcc-s1 \
-    libomp-dev \
+    libgomp1 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
