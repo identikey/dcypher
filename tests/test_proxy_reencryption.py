@@ -77,6 +77,50 @@ def test_pre_workflow():
 
     print("\nPRE workflow completed successfully!")
 
+    print("\n--- Testing Serialization/Deserialization ---")
+
+    # 1. Serialize all objects
+    start_time = time.time()
+    ser_cc = pre.serialize(cc)
+    ser_alice_pk = pre.serialize(alice_keys.publicKey)
+    ser_alice_sk = pre.serialize(alice_keys.secretKey)
+    ser_bob_pk = pre.serialize(bob_keys.publicKey)
+    ser_bob_sk = pre.serialize(bob_keys.secretKey)
+    ser_ciphertext_alice = pre.serialize(ciphertext_alice)
+    ser_re_key = pre.serialize(re_encryption_key)
+    print(f"Serialization time: {(time.time() - start_time) * 1000:.2f} ms")
+
+    # 2. Deserialize all objects
+    start_time = time.time()
+    deser_cc = pre.deserialize_cc(ser_cc)
+    deser_alice_pk = pre.deserialize_public_key(ser_alice_pk)
+    deser_alice_sk = pre.deserialize_secret_key(ser_alice_sk)
+    deser_bob_pk = pre.deserialize_public_key(ser_bob_pk)
+    deser_bob_sk = pre.deserialize_secret_key(ser_bob_sk)
+    deser_ciphertext_alice = pre.deserialize_ciphertext(ser_ciphertext_alice)
+    deser_re_key = pre.deserialize_re_encryption_key(ser_re_key)
+    print(f"Deserialization time: {(time.time() - start_time) * 1000:.2f} ms")
+
+    # 3. Perform re-encryption and decryption with deserialized objects
+    print("\nRe-encrypting with deserialized objects...")
+    start_time = time.time()
+    deser_ciphertext_bob = pre.re_encrypt(
+        deser_cc, deser_re_key, deser_ciphertext_alice
+    )
+    print(f"Re-encryption time: {(time.time() - start_time) * 1000:.2f} ms")
+
+    print("\nDecrypting with deserialized objects...")
+    start_time = time.time()
+    final_decrypted_data = pre.decrypt(deser_cc, deser_bob_sk, deser_ciphertext_bob)
+    print(f"Decryption time: {(time.time() - start_time) * 1000:.2f} ms")
+
+    # 4. Verification
+    assert original_data == final_decrypted_data, (
+        "Decryption with deserialized objects failed"
+    )
+
+    print("\nSerialization/Deserialization test successful!")
+
 
 if __name__ == "__main__":
     test_pre_workflow()
