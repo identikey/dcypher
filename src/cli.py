@@ -60,14 +60,22 @@ def gen_keys(cc_path, output_prefix):
 @cli.command()
 @click.option("--cc-path", default="cc.json", help="Path to the crypto context file.")
 @click.option("--pk-path", help="Path to the public key file.", required=True)
+@click.option("--data", help="Comma-separated list of integers to encrypt.")
 @click.option(
-    "--data", help="Comma-separated list of integers to encrypt.", required=True
+    "--input-file",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to a file to encrypt.",
 )
 @click.option(
     "--output", default="ciphertext.json", help="Path to save the ciphertext."
 )
-def encrypt(cc_path, pk_path, data, output):
+def encrypt(cc_path, pk_path, data, input_file, output):
     """Encrypts data with a public key."""
+    if not data and not input_file:
+        raise click.UsageError("Either --data or --input-file must be provided.")
+    if data and input_file:
+        raise click.UsageError("Provide either --data or --input-file, not both.")
+
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
@@ -78,18 +86,24 @@ def encrypt(cc_path, pk_path, data, output):
         pk_data = json.load(f)
     pk = pre.deserialize_public_key(pk_data["key"])
 
-    try:
-        input_data = [int(x.strip()) for x in data.split(",")]
-    except ValueError:
-        click.echo("Error: Data must be a comma-separated list of integers.", err=True)
-        return
+    if input_file:
+        with open(input_file, "rb") as f:
+            input_data = list(f.read())
+    else:
+        try:
+            input_data = [int(x.strip()) for x in data.split(",")]
+        except ValueError:
+            click.echo(
+                "Error: Data must be a comma-separated list of integers.", err=True
+            )
+            return
 
     click.echo("Encrypting data...", err=True)
     ciphertext = pre.encrypt(cc, pk, input_data)
     serialized_ciphertext = pre.serialize(ciphertext)
 
     with open(output, "w") as f:
-        json.dump({"ciphertext": serialized_ciphertext}, f)
+        json.dump({"length": len(input_data), "ciphertext": serialized_ciphertext}, f)
 
     click.echo(f"Ciphertext saved to {output}", err=True)
 
@@ -100,7 +114,12 @@ def encrypt(cc_path, pk_path, data, output):
 @click.option(
     "--ciphertext-path", default="ciphertext.json", help="Path to the ciphertext file."
 )
-def decrypt(cc_path, sk_path, ciphertext_path):
+@click.option(
+    "--output-file",
+    type=click.Path(dir_okay=False),
+    help="Path to save the decrypted output.",
+)
+def decrypt(cc_path, sk_path, ciphertext_path, output_file):
     """Decrypts data with a secret key."""
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
@@ -116,11 +135,17 @@ def decrypt(cc_path, sk_path, ciphertext_path):
     with open(ciphertext_path, "r") as f:
         ciphertext_data = json.load(f)
     ciphertext = pre.deserialize_ciphertext(ciphertext_data["ciphertext"])
+    length = ciphertext_data.get("length")
 
     click.echo("Decrypting data...", err=True)
-    decrypted_data = pre.decrypt(cc, sk, ciphertext)
+    decrypted_data = pre.decrypt(cc, sk, ciphertext, length)
 
-    click.echo(f"{decrypted_data}")
+    if output_file:
+        with open(output_file, "wb") as f:
+            f.write(bytes(decrypted_data))
+        click.echo(f"Decrypted data written to {output_file}", err=True)
+    else:
+        click.echo(f"{decrypted_data}")
 
 
 @cli.command("gen-rekey")
@@ -194,13 +219,18 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
     with open(ciphertext_path, "r") as f:
         ciphertext_data = json.load(f)
     ciphertext = pre.deserialize_ciphertext(ciphertext_data["ciphertext"])
+    length = ciphertext_data.get("length")
 
     click.echo("Re-encrypting ciphertext...", err=True)
     re_ciphertext = pre.re_encrypt(cc, rekey, ciphertext)
     serialized_re_ciphertext = pre.serialize(re_ciphertext)
 
+    output_data = {"ciphertext": serialized_re_ciphertext}
+    if length is not None:
+        output_data["length"] = length
+
     with open(output, "w") as f:
-        json.dump({"ciphertext": serialized_re_ciphertext}, f)
+        json.dump(output_data, f)
 
     click.echo(f"Re-encrypted ciphertext saved to {output}", err=True)
 
