@@ -6,7 +6,7 @@
 
 The IdentiKey Message Specification provides a secure, verifiable, and chunkable format for transmitting data. It is inspired by PGP's ASCII armor and leverages Merkle trees for efficient content integrity verification, similar to BitTorrent's BEP 30.
 
-This format is designed to encapsulate data, such as ciphertexts from the proxy re-encryption library, for transmission.
+This format is designed to encapsulate data, such as ciphertexts from the proxy Recryption library, for transmission, storage, and homomorphic operations.
 
 ### Architectural Assumptions
 
@@ -121,6 +121,76 @@ If a recipient receives `Part 1/8`, it contains `Ciphertext Piece 1`.
 5. Finally, the recipient computes `Root = hash(P1234 + P5678)`.
 6. This computed `Root` is compared to the `MerkleRoot` in the header to verify integrity.
 
+To further illustrate, the following diagrams show the verification process for `Part 1/8` and `Part 8/8`.
+
+#### Part 1/8 AuthPath Walkthrough
+
+For `Part 1/8`, the recipient uses the `AuthPath` `[H2, P34, P5678]` to compute the root hash from `H1`.
+
+```mermaid
+graph TD
+    subgraph "Verification for Part 1/8"
+        direction LR
+
+        subgraph "Start"
+            H1["H1<br/>(from payload)"]
+        end
+
+        subgraph "AuthPath"
+            H2["H2<br/>(from AuthPath)"]
+            P34["P34<br/>(from AuthPath)"]
+            P5678_auth["P5678<br/>(from AuthPath)"]
+        end
+
+        subgraph "Computation"
+            H1 -- + --> P12("P12 =<br/>hash(H1+H2)")
+            H2 -- + --> P12
+
+            P12 -- + --> P1234("P1234 =<br/>hash(P12+P34)")
+            P34 -- + --> P1234
+
+            P1234 -- + --> Root("Root =<br/>hash(P1234+P5678)")
+            P5678_auth -- + --> Root
+        end
+
+        Root --> Result{Compare with<br/>MerkleRoot header}
+    end
+```
+
+#### Part 8/8 AuthPath Walkthrough
+
+For `Part 8/8`, the recipient uses `AuthPath` `[H7, P56, P1234]` to compute the root hash from `H8`.
+
+```mermaid
+graph TD
+    subgraph "Verification for Part 8/8"
+        direction LR
+
+        subgraph "Start"
+            H8["H8<br/>(from payload)"]
+        end
+
+        subgraph "AuthPath"
+            H7["H7<br/>(from AuthPath)"]
+            P56["P56<br/>(from AuthPath)"]
+            P1234_auth["P1234<br/>(from AuthPath)"]
+        end
+
+        subgraph "Computation"
+            H8 -- + --> P78("P78 =<br/>hash(H7+H8)")
+            H7 -- + --> P78
+
+            P78 -- + --> P5678("P5678 =<br/>hash(P56+P78)")
+            P56 -- + --> P5678
+
+            P5678 -- + --> Root("Root =<br/>hash(P1234+P5678)")
+            P1234_auth -- + --> Root
+        end
+
+        Root --> Result{Compare with<br/>MerkleRoot header}
+    end
+```
+
 Once all parts are verified and all 8 ciphertext pieces are collected, they are decrypted using the `SlotsUsed`, and the resulting plaintext is truncated to the `BytesTotal` specified in the header.
 
 The message for `Part 1/8` would look like this (note that `SlotsUsed` and `SlotsTotal` are example values and depend on the original data and `CryptoContext`):
@@ -129,10 +199,12 @@ The message for `Part 1/8` would look like this (note that `SlotsUsed` and `Slot
 ----- BEGIN IDK MESSAGE PART 1/8 -----
 AuthPath: ["<hash_of_H2>", "<hash_of_P34>", "<hash_of_P5678>"]
 BytesTotal: 8192
-ChunkHash: <blake2b_hash_of_the_base64_payload_below>
-MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
+CharacterSet: "UTF-8"
+ChunkHash: "<blake2b_hash_of_the_base64_payload_below>"
+Comment: "IYKYK"
+MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
 Part: 1/8
-Signature: <ecdsa_signature>
+Signature: "<ecdsa_signature>"
 SlotsTotal: 1024
 SlotsUsed: 1024
 Version: 0
@@ -142,8 +214,10 @@ Version: 0
 ----- BEGIN IDK MESSAGE PART 8/8 -----
 AuthPath: ["<hash_of_H7>", "<hash_of_P56>", "<hash_of_P1234>"]
 BytesTotal: 8192
-ChunkHash: <blake2b_hash_of_the_base64_payload_below>
-MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
+CharacterSet: "UTF-8"
+ChunkHash: "<blake2b_hash_of_the_base64_payload_below>"
+Comment: "IYKYK"
+MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
 Part: 8/8
 Signature: <ecdsa_signature>
 SlotsTotal: 1024
