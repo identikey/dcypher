@@ -51,7 +51,7 @@ The headers are in `Key: Value` format.
 
 ### Encryption and Piece Creation
 
-The raw message data is first encrypted using the proxy re-encryption library. The encryption process produces a list of serializable ciphertext objects. Each of these objects is then serialized into a byte array. These byte arrays are the fundamental "pieces" of the message.
+The raw message data is first encrypted using the proxy Recryption library. The encryption process produces a list of serializable ciphertext objects. Each of these objects is then serialized into a byte array. These byte arrays are the fundamental "pieces" of the message.
 
 The `BytesTotal` header must be set to the size in bytes of the original, pre-encryption data. The `SlotsUsed` header must be set to the number of coefficients in the vector that was encrypted. The `SlotsTotal` header must be set to the value returned by `get_slot_count()` for the `CryptoContext`.
 
@@ -62,7 +62,7 @@ The payload of each part contains one or more of the serialized ciphertext piece
 ### Merkle Tree and Message Assembly
 
 1. A Merkle tree is constructed from the hashes of the ciphertext pieces. The BLAKE2b hash of each piece's byte array is calculated to form the leaves of the tree.
-2. The tree is constructed by recursively hashing pairs of nodes until a single root hash, the `MerkleRoot`, is obtained. If there is an odd number of nodes at any level, the last node is paired with a zero-filled hash of the same length. The hashing algorithm for internal nodes is `BLAKE2b(hash(left_child) + hash(right_child))`.
+2. The tree is constructed by recursively hashing pairs of nodes until a single root hash, the `MerkleRoot`, is obtained. If there is an odd number of nodes at any level, the last node is paired with a zero-filled hash of the same length. The hashing algorithm for internal nodes is `BLAKE2b(left_child_hash + right_child_hash)`, where `+` denotes byte concatenation.
 3. The message is split into one or more parts for transmission. Each part's payload will contain one or more of the ciphertext pieces.
 4. The headers for each part are created, including the `AuthPath` required to verify the pieces contained within that part.
 
@@ -70,8 +70,8 @@ The payload of each part contains one or more of the serialized ciphertext piece
 
 The `Signature` is calculated and included for each part of the message to provide authenticity for all data within that part.
 
-1. A canonical text representation of the headers for the part is created. This includes all Mandatory headers (except `Signature` itself) and all Part-specific headers. The headers are ordered alphabetically by key.
-2. The SHA-256 hash of this combined text (canonical headers) is calculated.
+1. A canonical text representation of the headers for the part is created. This includes all Mandatory headers (except `Signature` itself) and all Part-specific headers. The headers are ordered alphabetically by key and formatted as `Key: Value\n`.
+2. The SHA-256 hash of the resulting concatenated string is calculated.
 3. This hash is signed using ECDSA with the sender's private key to produce the `Signature` value for the part.
 
 ### Decryption and Verification
@@ -198,31 +198,33 @@ The message for `Part 1/8` would look like this (note that `SlotsUsed` and `Slot
 ```text
 ----- BEGIN IDK MESSAGE PART 1/8 -----
 AuthPath: ["<hash_of_H2>", "<hash_of_P34>", "<hash_of_P5678>"]
-BytesTotal: 8192
+BytesTotal: "8192"
 CharacterSet: "UTF-8"
 ChunkHash: "<blake2b_hash_of_the_base64_payload_below>"
 Comment: "IYKYK"
 MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
-Part: 1/8
+Part: "1/8"
 Signature: "<ecdsa_signature>"
-SlotsTotal: 1024
-SlotsUsed: 1024
-Version: 0
+SlotsTotal: "1024"
+SlotsUsed: "1024"
+Version: "0"
+
 <base64_encoded_payload_of_ciphertext_piece_1>
 ----- END IDK MESSAGE PART 1/8 -----
 <...>
 ----- BEGIN IDK MESSAGE PART 8/8 -----
 AuthPath: ["<hash_of_H7>", "<hash_of_P56>", "<hash_of_P1234>"]
-BytesTotal: 8192
+BytesTotal: "8192"
 CharacterSet: "UTF-8"
 ChunkHash: "<blake2b_hash_of_the_base64_payload_below>"
 Comment: "IYKYK"
 MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
-Part: 8/8
-Signature: <ecdsa_signature>
-SlotsTotal: 1024
-SlotsUsed: 512
-Version: 0
+Part: "8/8"
+Signature: "<ecdsa_signature>"
+SlotsTotal: "1024"
+SlotsUsed: "512"
+Version: "0"
+
 <base64_encoded_payload_of_ciphertext_piece_8>
 ----- END IDK MESSAGE PART 8/8 -----
 ```
