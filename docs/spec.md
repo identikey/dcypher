@@ -31,10 +31,10 @@ The headers are in `Key: Value` format.
 
 #### Mandatory Headers (in every part)
 
-* `Version`: The version of the message specification. Current version is 1.
-* `DataLength`: The total number of coefficients (or slots) in the original data vector. This is used to correctly truncate the decrypted vector before byte conversion.
-* `TotalSize`: The total size in bytes of the original, unencoded message data. This is critical for correctly truncating the data after decryption.
-* `PieceSize`: The size in bytes of a single piece for the purpose of hashing. The last piece may be smaller.
+* `Version`: The version of the message specification. Current version is 0.
+* `SlotsTotal`: The total number of available slots per ciphertext, as determined by the `CryptoContext`.
+* `SlotsUsed`: The total number of coefficients (or slots) in the original data vector. This is used to correctly truncate the decrypted vector before byte conversion.
+* `BytesTotal`: The total size in bytes of the original, unencoded message data. This is critical for correctly truncating the data after decryption.
 * `MerkleRoot`: The BLAKE2b hash of the root of the Merle tree. This also serves as the unique identifier for the message.
 * `Signature`: An ECDSA signature of the canonicalized headers, to authenticate the metadata.
 
@@ -52,7 +52,7 @@ The headers are in `Key: Value` format.
 
 The raw message data is first encrypted using the proxy re-encryption library. The encryption process produces a list of serializable ciphertext objects. Each of these objects is then serialized into a string (e.g., Base64). These serialized strings are the fundamental "pieces" of the message.
 
-The `TotalSize` header must be set to the size in bytes of the original, pre-encryption data. The `DataLength` header must be set to the number of coefficients in the vector that was encrypted.
+The `TotalSize` header must be set to the size in bytes of the original, pre-encryption data. The `SlotsUsed` header must be set to the number of coefficients in the vector that was encrypted. The `SlotsTotal` header must be set to the value returned by `get_slot_count()` for the `CryptoContext`.
 
 ### Payload
 
@@ -69,14 +69,14 @@ The payload of each part contains one or more of the serialized ciphertext piece
 
 The `Signature` field provides authenticity for the message parameters.
 
-1. A canonical text representation of the headers is created. This includes `Version`, `DataLength`, `TotalSize`, `PieceSize`, and `MerkleRoot`. The headers are ordered alphabetically by key.
+1. A canonical text representation of the headers is created. This includes `Version`, `SlotsTotal`, `SlotsUsed`, `TotalSize`, and `MerkleRoot`. The headers are ordered alphabetically by key.
 
     ```
-    DataLength: <length>
     MerkleRoot: <hash>
-    PieceSize: <size>
-    TotalSize: <size>
-    Version: 1
+    SlotsTotal: <count>
+    SlotsUsed: <length>
+    BytesTotal: <size>
+    Version: 0
     ```
 
 2. The canonical text is hashed with SHA-256.
@@ -88,9 +88,9 @@ A recipient performs the following steps:
 
 1. For each message part received, verify the integrity of its payload. This is done by hashing the ciphertext pieces in the payload and using the `AuthPath` to recalculate a root hash, which is then compared against the `MerkleRoot` header.
 2. Once all parts are received and verified, extract and assemble the list of all ciphertext pieces.
-3. Deserialize and decrypt the ciphertext pieces using the appropriate key and the `DataLength` from the header. The crypto library will return a vector of coefficients, correctly truncated to `DataLength`.
+3. Deserialize and decrypt the ciphertext pieces using the appropriate key and the `SlotsUsed` from the header. The crypto library will return a vector of coefficients, correctly truncated to `SlotsUsed`.
 4. If the original data was a byte stream, convert the coefficient vector to bytes.
-5. Use the `TotalSize` header value to truncate the resulting data to its original byte length, removing any final padding. This step is critical for recovering the exact original message.
+5. Use the `BytesTotal` header value to truncate the resulting data to its original byte length, removing any final padding. This step is critical for recovering the exact original message.
 
 ### Example
 
@@ -127,21 +127,34 @@ If a recipient receives `Part 1/4`, it contains `Ciphertext Piece 1` and `Cipher
 4. The next hash needed is the sibling of `P1234`, which is `P5678`. The recipient computes `Root = hash(P1234 + P5678)`.
 5. This computed `Root` is compared to the `MerkleRoot` in the header to verify integrity.
 
-Once all parts are verified and all 8 ciphertext pieces are collected, they are decrypted using the `DataLength`, and the resulting plaintext is truncated to the `TotalSize` specified in the header.
+Once all parts are verified and all 8 ciphertext pieces are collected, they are decrypted using the `SlotsUsed`, and the resulting plaintext is truncated to the `BytesTotal` specified in the header.
 
-The message for `Part 1/4` would look like this (note that `DataLength` is an example value and depends on the original data):
+The message for `Part 1/8` would look like this (note that `SlotsUsed` and `SlotsTotal` are example values and depend on the original data and `CryptoContext`):
 
 ```text
 ----- BEGIN IDK MESSAGE PART 1/8 -----
-Version: 1
-DataLength: 4096
-TotalSize: 8192
-PieceSize: 1024
+Version: 0
+SlotsTotal: 1024
+SlotsUsed: 1024
+BytesTotal: 8192
 MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
 Signature: <ecdsa_signature>
 Part: 1/8
-AuthPath: ["<hash_P34>", "<hash_P5678>"]
+AuthPath: ["<hash_P12>", "<hash_P1234>"]
 
-<base64_encoded_payload_of_ciphertext_piece_1_and_2>
+<base64_encoded_payload_of_ciphertext_piece_1>
 ----- END IDK MESSAGE PART 1/8 -----
+<...>
+----- BEGIN IDK MESSAGE PART 8/8 -----
+Version: 0
+SlotsTotal: 1024
+SlotsUsed: 512
+BytesTotal: 8192
+MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
+Signature: <ecdsa_signature>
+Part: 8/8
+AuthPath: ["<hash_P78>", "<hash_P5678>"]
+
+<base64_encoded_payload_of_ciphertext_piece_7>
+----- END IDK MESSAGE PART 8/8 -----
 ```
