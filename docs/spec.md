@@ -8,6 +8,11 @@ The IdentiKey Message Specification provides a secure, verifiable, and chunkable
 
 This format is designed to encapsulate data, such as ciphertexts from the proxy re-encryption library, for transmission.
 
+### Architectural Assumptions
+
+* **CryptoContext:** All cryptographic operations (encryption, decryption, key generation) depend on a shared `CryptoContext`. This specification assumes that the recipient has access to the *exact same* `CryptoContext` used by the sender. This context is expected to be managed and transmitted out-of-band and is not part of the message payload itself.
+* **Public Keys:** To verify a signature, the recipient must have access to the sender's public key. This key is also assumed to be known beforehand, likely through a trusted key directory or a previous exchange.
+
 ### Format Overview
 
 An IdentiKey message is composed of one or more parts. Each part is a standalone text block that can be transmitted separately.
