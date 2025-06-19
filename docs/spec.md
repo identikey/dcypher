@@ -132,16 +132,16 @@ Once all parts are verified and all 8 ciphertext pieces are collected, they are 
 The message for `Part 1/4` would look like this (note that `DataLength` is an example value and depends on the original data):
 
 ```text
------ BEGIN IDK MESSAGE PART 1/4 -----
+----- BEGIN IDK MESSAGE PART 1/8 -----
 Version: 1
 DataLength: 4096
 TotalSize: 8192
 PieceSize: 1024
 MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
 Signature: <ecdsa_signature>
-Part: 1/4
+Part: 1/8
 AuthPath: ["<hash_P34>", "<hash_P5678>"]
 
 <base64_encoded_payload_of_ciphertext_piece_1_and_2>
------ END IDK MESSAGE PART 1/4 -----
+----- END IDK MESSAGE PART 1/8 -----
 ```
