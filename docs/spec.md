@@ -41,6 +41,7 @@ The headers are in `Key: Value` format.
 #### Part-specific Headers
 
 * `Part`: The sequence number of this part and the total number of parts (e.g., `1/5`).
+* `ChunkHash`: The BLAKE2b hash of the raw Base64 payload block for this part.
 * `AuthPath`: A JSON-encoded list of hashes. These are the sibling hashes required to compute the `MerkleRoot` from the pieces contained in this part. The hashes are ordered from the leaves of the tree towards the root.
 
 #### Optional Headers
@@ -50,51 +51,43 @@ The headers are in `Key: Value` format.
 
 ### Encryption and Piece Creation
 
-The raw message data is first encrypted using the proxy re-encryption library. The encryption process produces a list of serializable ciphertext objects. Each of these objects is then serialized into a string (e.g., Base64). These serialized strings are the fundamental "pieces" of the message.
+The raw message data is first encrypted using the proxy re-encryption library. The encryption process produces a list of serializable ciphertext objects. Each of these objects is then serialized into a byte array. These byte arrays are the fundamental "pieces" of the message.
 
-The `TotalSize` header must be set to the size in bytes of the original, pre-encryption data. The `SlotsUsed` header must be set to the number of coefficients in the vector that was encrypted. The `SlotsTotal` header must be set to the value returned by `get_slot_count()` for the `CryptoContext`.
+The `BytesTotal` header must be set to the size in bytes of the original, pre-encryption data. The `SlotsUsed` header must be set to the number of coefficients in the vector that was encrypted. The `SlotsTotal` header must be set to the value returned by `get_slot_count()` for the `CryptoContext`.
 
 ### Payload
 
-The payload of each part contains one or more of the serialized ciphertext pieces, concatenated and then encoded in Base64. A JSON array of the Base64 strings is also a valid representation.
+The payload of each part contains one or more of the serialized ciphertext pieces (as byte arrays), which are concatenated. This single resulting byte array is then encoded in Base64 to form the payload string.
 
 ### Merkle Tree and Message Assembly
 
-1. A Merkle tree is constructed from the hashes of the ciphertext pieces. The BLAKE2b hash of each piece is calculated to form the leaves of the tree.
+1. A Merkle tree is constructed from the hashes of the ciphertext pieces. The BLAKE2b hash of each piece's byte array is calculated to form the leaves of the tree.
 2. The tree is constructed by recursively hashing pairs of nodes until a single root hash, the `MerkleRoot`, is obtained. If there is an odd number of nodes at any level, the last node is paired with a zero-filled hash of the same length. The hashing algorithm for internal nodes is `BLAKE2b(hash(left_child) + hash(right_child))`.
 3. The message is split into one or more parts for transmission. Each part's payload will contain one or more of the ciphertext pieces.
 4. The headers for each part are created, including the `AuthPath` required to verify the pieces contained within that part.
 
 ### Signature Generation
 
-The `Signature` field provides authenticity for the message parameters.
+The `Signature` is calculated and included for each part of the message to provide authenticity for all data within that part.
 
-1. A canonical text representation of the headers is created. This includes `Version`, `SlotsTotal`, `SlotsUsed`, `TotalSize`, and `MerkleRoot`. The headers are ordered alphabetically by key.
-
-    ```
-    MerkleRoot: <hash>
-    SlotsTotal: <count>
-    SlotsUsed: <length>
-    BytesTotal: <size>
-    Version: 0
-    ```
-
-2. The canonical text is hashed with SHA-256.
-3. The hash is signed using ECDSA with the sender's private key.
+1. A canonical text representation of the headers for the part is created. This includes all Mandatory headers (except `Signature` itself) and all Part-specific headers. The headers are ordered alphabetically by key.
+2. The SHA-256 hash of this combined text (canonical headers) is calculated.
+3. This hash is signed using ECDSA with the sender's private key to produce the `Signature` value for the part.
 
 ### Decryption and Verification
 
-A recipient performs the following steps:
+A recipient performs the following steps for each part received:
 
-1. For each message part received, verify the integrity of its payload. This is done by hashing the ciphertext pieces in the payload and using the `AuthPath` to recalculate a root hash, which is then compared against the `MerkleRoot` header.
-2. Once all parts are received and verified, extract and assemble the list of all ciphertext pieces.
-3. Deserialize and decrypt the ciphertext pieces using the appropriate key and the `SlotsUsed` from the header. The crypto library will return a vector of coefficients, correctly truncated to `SlotsUsed`.
-4. If the original data was a byte stream, convert the coefficient vector to bytes.
-5. Use the `BytesTotal` header value to truncate the resulting data to its original byte length, removing any final padding. This step is critical for recovering the exact original message.
+1. Verify the signature. To do this, recreate the signed message by building the canonical header string (as described in Signature Generation). The SHA-256 hash of this string is then verified against the `Signature` header using the sender's public key. If the signature is invalid, the part must be discarded.
+2. With the signature verified, the recipient knows the payload and headers are authentic. It can then proceed with verifying the ciphertext pieces against the `MerkleRoot` using the `AuthPath`.
+3. Once all parts are received and verified, extract and assemble the list of all ciphertext pieces.
+4. Deserialize and decrypt the ciphertext pieces using the appropriate key and the `SlotsUsed` from the header.
+5. If the original data was a byte stream, convert the coefficient vector to bytes.
+6. Use the `BytesTotal` header value to truncate the resulting data to its original byte length.
 
 ### Example
 
-Consider a message that, after encryption, results in 8 ciphertext pieces. We'll transmit these in 4 parts (2 pieces per part). The Merkle tree is built on the hashes of these ciphertext pieces, where `H_n` is the hash of `Ciphertext Piece n`, and `P_xy` is the hash of its children.
+Consider a message that, after encryption, results in 8 ciphertext pieces. We'll transmit these in 8 parts (1 piece per part). The Merkle tree is built on the hashes of these ciphertext pieces, where `H_n` is the hash of `Ciphertext Piece n`, and `P_xy` is the hash of its children.
 
 ```mermaid
 graph TD
@@ -119,13 +112,14 @@ graph TD
     end
 ```
 
-If a recipient receives `Part 1/4`, it contains `Ciphertext Piece 1` and `Ciphertext Piece 2`.
+If a recipient receives `Part 1/8`, it contains `Ciphertext Piece 1`.
 
-1. The recipient decodes the payload to get the two ciphertext piece strings. It hashes them to get `H1` and `H2`, then computes `P12 = hash(H1 + H2)`.
-2. To verify this against the `MerkleRoot`, the recipient needs the sibling hashes up the tree. The `AuthPath` provides these.
-3. The first hash needed is the sibling of `P12`, which is `P34`. The recipient computes `P1234 = hash(P12 + P34)`.
-4. The next hash needed is the sibling of `P1234`, which is `P5678`. The recipient computes `Root = hash(P1234 + P5678)`.
-5. This computed `Root` is compared to the `MerkleRoot` in the header to verify integrity.
+1. The recipient decodes the Base64 payload to get the byte array for the ciphertext piece. It hashes this byte array to get `H1`.
+2. To verify this against the `MerkleRoot`, the recipient needs the sibling hashes up the tree. The `AuthPath` provides these hashes in order from the leaf's sibling to the highest-level sibling. For `H1`, the `AuthPath` will be `[H2, P34, P5678]`.
+3. The recipient computes `P12 = hash(H1 + H2)`.
+4. The recipient then computes `P1234 = hash(P12 + P34)`.
+5. Finally, the recipient computes `Root = hash(P1234 + P5678)`.
+6. This computed `Root` is compared to the `MerkleRoot` in the header to verify integrity.
 
 Once all parts are verified and all 8 ciphertext pieces are collected, they are decrypted using the `SlotsUsed`, and the resulting plaintext is truncated to the `BytesTotal` specified in the header.
 
@@ -133,28 +127,30 @@ The message for `Part 1/8` would look like this (note that `SlotsUsed` and `Slot
 
 ```text
 ----- BEGIN IDK MESSAGE PART 1/8 -----
-Version: 0
+AuthPath: ["<hash_of_H2>", "<hash_of_P34>", "<hash_of_P5678>"]
+BytesTotal: 8192
+ChunkHash: <blake2b_hash_of_the_base64_payload_below>
+MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
+Part: 1/8
+Signature: <ecdsa_signature>
 SlotsTotal: 1024
 SlotsUsed: 1024
-BytesTotal: 8192
-MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
-Signature: <ecdsa_signature>
-Part: 1/8
-AuthPath: ["<hash_P12>", "<hash_P1234>"]
+Version: 0
 
 <base64_encoded_payload_of_ciphertext_piece_1>
 ----- END IDK MESSAGE PART 1/8 -----
 <...>
 ----- BEGIN IDK MESSAGE PART 8/8 -----
-Version: 0
+AuthPath: ["<hash_of_H7>", "<hash_of_P56>", "<hash_of_P1234>"]
+BytesTotal: 8192
+ChunkHash: <blake2b_hash_of_the_base64_payload_below>
+MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
+Part: 8/8
+Signature: <ecdsa_signature>
 SlotsTotal: 1024
 SlotsUsed: 512
-BytesTotal: 8192
-MerkleRoot: <blake2b_root_hash_for_all_8_pieces>
-Signature: <ecdsa_signature>
-Part: 8/8
-AuthPath: ["<hash_P78>", "<hash_P5678>"]
+Version: 0
 
-<base64_encoded_payload_of_ciphertext_piece_7>
+<base64_encoded_payload_of_ciphertext_piece_8>
 ----- END IDK MESSAGE PART 8/8 -----
 ```
