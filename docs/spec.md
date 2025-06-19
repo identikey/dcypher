@@ -41,8 +41,8 @@ The headers are in `Key: Value` format.
 #### Part-specific Headers
 
 * `Part`: The sequence number of this part and the total number of parts (e.g., `1/5`).
-* `ChunkHash`: The BLAKE2b hash of the raw Base64 payload block for this part.
-* `AuthPath`: A JSON-encoded list of hashes. These are the sibling hashes required to compute the `MerkleRoot` from the pieces contained in this part. The hashes are ordered from the leaves of the tree towards the root.
+* `ChunkHash`: The BLAKE2b hash of the decoded Base64 payload for this part. The payload string should first be Base64-decoded into its raw bytes, and then those bytes should be hashed.
+* `AuthPath`: A JSON-encoded list of hex-encoded hashes. These are the sibling hashes required to compute the `MerkleRoot` from the pieces contained in this part. The hashes are ordered from the leaves of the tree towards the root.
 
 #### Optional Headers
 
@@ -204,7 +204,7 @@ ChunkHash: "<blake2b_hash_of_the_base64_payload_below>"
 Comment: "IYKYK"
 MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
 Part: "1/8"
-Signature: "<ecdsa_signature>"
+Signature: "<ecdsa_signature_of_the_canonicalized_headers>"
 SlotsTotal: "1024"
 SlotsUsed: "1024"
 Version: "0"
@@ -220,7 +220,7 @@ ChunkHash: "<blake2b_hash_of_the_base64_payload_below>"
 Comment: "IYKYK"
 MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
 Part: "8/8"
-Signature: "<ecdsa_signature>"
+Signature: "<ecdsa_signature_of_the_canonicalized_headers>"
 SlotsTotal: "1024"
 SlotsUsed: "512"
 Version: "0"
