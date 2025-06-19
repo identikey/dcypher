@@ -4,7 +4,7 @@ This file tests the proxy re-encryption (PRE) library.
 
 import time
 import random
-from lib import pre
+from src.lib import pre
 
 
 def test_pre_workflow():

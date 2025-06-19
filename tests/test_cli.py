@@ -355,7 +355,7 @@ def test_large_file_workflow(cli_test_env):
     # We need to load the cc to get the slot count, so we'll do it manually here
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    from lib import pre
+    from src.lib import pre
 
     cc = pre.deserialize_cc(cc_data["cc"])
     slot_count = pre.get_slot_count(cc)
