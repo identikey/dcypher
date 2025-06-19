@@ -136,7 +136,6 @@ Signature: <ecdsa_signature>
 SlotsTotal: 1024
 SlotsUsed: 1024
 Version: 0
-
 <base64_encoded_payload_of_ciphertext_piece_1>
 ----- END IDK MESSAGE PART 1/8 -----
 <...>
@@ -150,7 +149,6 @@ Signature: <ecdsa_signature>
 SlotsTotal: 1024
 SlotsUsed: 512
 Version: 0
-
 <base64_encoded_payload_of_ciphertext_piece_8>
 ----- END IDK MESSAGE PART 8/8 -----
 ```
