@@ -2201,3 +2201,121 @@ def test_download_file_unauthorized():
         # 3. Assert failure
         assert response.status_code == 401
         assert "Invalid classic signature" in response.text
+
+
+def test_get_file_metadata_nonexistent_file(cleanup):
+    """
+    Tests that getting metadata for a non-existent file hash returns 404.
+    """
+    # 1. Create a real account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+    # 2. Attempt to get metadata for a hash that does not exist
+    response = client.get(f"/storage/{pk_classic_hex}/nonexistent-file-hash")
+    assert response.status_code == 404
+    assert "File not found" in response.json()["detail"]
+
+
+def test_upload_chunk_for_unregistered_file(cleanup):
+    """
+    Tests that uploading a chunk for a file that has not been registered fails.
+    """
+    # 1. Create a real account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+    # 2. Attempt to upload a chunk without registering the parent file hash first
+    chunk_data = b"some data"
+    response = client.post(
+        f"/storage/{pk_classic_hex}/unregistered-file-hash/chunks",
+        files={"file": ("chunk_0", chunk_data)},
+        data={
+            "nonce": get_nonce(),
+            "chunk_hash": hashlib.sha256(chunk_data).hexdigest(),
+            "chunk_index": "0",
+            "total_chunks": "1",
+            "classic_signature": "doesnt-matter",
+            "pq_signatures": "doesnt-matter",
+        },
+    )
+    assert response.status_code == 404
+    assert "File record not found" in response.json()["detail"]
+
+
+def test_upload_file_malformed_pq_signatures(cleanup):
+    """
+    Tests that file upload fails if the pq_signatures field is not a valid
+    JSON string.
+    """
+    # 1. Create a real account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+    # 2. Attempt to upload with a malformed pq_signatures string
+    response = client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("test.txt", b"content", "text/plain")},
+        data={
+            "nonce": get_nonce(),
+            "file_hash": hashlib.sha256(b"content").hexdigest(),
+            "classic_signature": "doesnt-matter",
+            "pq_signatures": "this-is-not-a-valid-json-string",
+        },
+    )
+    assert response.status_code == 400
+    assert "Invalid format for pq_signatures" in response.json()["detail"]

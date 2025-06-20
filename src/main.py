@@ -107,21 +107,32 @@ class DownloadFileRequest(BaseModel):
 class UploadFileRequest(BaseModel):
     """Request to upload a file to the block store."""
 
-    file_hash: str  # SHA256 hash of the file
-    classic_signature: str  # Signature from the classic key
-    pq_signatures: list[PqSignature]  # Signatures from all existing PQ keys
-    nonce: str
+    file_hash: str = Field(..., description="SHA256 hash of the entire file content.")
+    classic_signature: str = Field(
+        ..., description="Signature from the root classic key authorizing the upload."
+    )
+    pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 class UploadChunkRequest(BaseModel):
     """Request to upload a single file chunk."""
 
-    chunk_hash: str  # SHA256 hash of the chunk
-    chunk_index: int
-    total_chunks: int
-    classic_signature: str
-    pq_signatures: list[PqSignature]
-    nonce: str
+    chunk_hash: str = Field(..., description="SHA256 hash of the chunk's content.")
+    chunk_index: int = Field(..., description="The zero-based index of this chunk.")
+    total_chunks: int = Field(
+        ..., description="The total number of chunks for the file."
+    )
+    classic_signature: str = Field(
+        ...,
+        description="Signature from the root classic key authorizing the chunk upload.",
+    )
+    pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 @app.get("/supported-pq-algs")
