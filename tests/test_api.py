@@ -663,3 +663,203 @@ def test_get_accounts_and_account_by_id():
     # 5. Test get non-existent account
     response = client.get("/accounts/nonexistentkey")
     assert response.status_code == 404
+
+
+def test_add_and_remove_pq_keys():
+    """
+    Tests the full lifecycle of an account's post-quantum keys:
+    1. Create an account with a classic key and two PQ keys.
+    2. Successfully add a new PQ key.
+    3. Successfully remove an optional PQ key.
+    4. Verify the state of the account after each operation.
+    """
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    add_pq_alg_1 = "Falcon-512"
+    add_pq_alg_2 = "Falcon-1024"
+
+    # Use a single, overarching 'with' block to manage all OQS signature objects,
+    # ensuring they remain valid for the entire duration of the test.
+    with (
+        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
+        oqs.Signature(add_pq_alg_1) as sig_add_pq_1,
+        oqs.Signature(add_pq_alg_2) as sig_add_pq_2,
+    ):
+        # === 1. Create an account with two PQ keys (one mandatory, one optional) ===
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
+
+        # Create account
+        nonce1 = get_nonce()
+        all_pks_creation = [pk_classic_hex, pk_ml_dsa_hex, pk_add_pq_1_hex]
+        message1 = f"{':'.join(all_pks_creation)}:{nonce1}".encode("utf-8")
+        sig_classic1 = sk_classic.sign(message1, hashfunc=hashlib.sha256).hex()
+        sig_ml_dsa1 = sig_ml_dsa.sign(message1).hex()
+        sig_add_pq_1_hex = sig_add_pq_1.sign(message1).hex()
+        create_payload = {
+            "public_key": pk_classic_hex,
+            "signature": sig_classic1,
+            "ml_dsa_signature": {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa1,
+                "alg": ML_DSA_ALG,
+            },
+            "additional_pq_signatures": [
+                {
+                    "public_key": pk_add_pq_1_hex,
+                    "signature": sig_add_pq_1_hex,
+                    "alg": add_pq_alg_1,
+                }
+            ],
+            "nonce": nonce1,
+        }
+        response = client.post("/accounts", json=create_payload)
+        assert response.status_code == 200
+
+        # Verify initial account state
+        response = client.get(f"/accounts/{pk_classic_hex}")
+        assert response.status_code == 200
+        assert len(response.json()["pq_keys"]) == 2
+
+        # === 2. Add a new PQ key ===
+        pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
+        nonce2 = get_nonce()
+        message2 = f"ADD-PQ:{pk_classic_hex}:{pk_add_pq_2_hex}:{nonce2}".encode("utf-8")
+
+        # Sign with all keys currently on the account, plus the new key
+        classic_sig2 = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
+        existing_pq_sigs = [
+            {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(message2).hex(),
+                "alg": ML_DSA_ALG,
+            },
+            {
+                "public_key": pk_add_pq_1_hex,
+                "signature": sig_add_pq_1.sign(message2).hex(),
+                "alg": add_pq_alg_1,
+            },
+        ]
+        new_pq_sig = {
+            "public_key": pk_add_pq_2_hex,
+            "signature": sig_add_pq_2.sign(message2).hex(),
+            "alg": add_pq_alg_2,
+        }
+
+        add_payload = {
+            "new_pq_signatures": [new_pq_sig],
+            "classic_signature": classic_sig2,
+            "existing_pq_signatures": existing_pq_sigs,
+            "nonce": nonce2,
+        }
+        response = client.post(
+            f"/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["message"] == "Successfully added 1 PQ key(s)."
+
+        # Verify account state after adding key
+        response = client.get(f"/accounts/{pk_classic_hex}")
+        assert response.status_code == 200
+        pq_keys_after_add = response.json()["pq_keys"]
+        assert len(pq_keys_after_add) == 3
+        assert any(k["public_key"] == pk_add_pq_2_hex for k in pq_keys_after_add)
+
+        # === 3. Remove an optional PQ key ===
+        pk_to_remove = pk_add_pq_1_hex
+        nonce3 = get_nonce()
+        message3 = f"REMOVE-PQ:{pk_classic_hex}:{pk_to_remove}:{nonce3}".encode("utf-8")
+
+        classic_sig3 = sk_classic.sign(message3, hashfunc=hashlib.sha256).hex()
+        # Sign with all keys on the account before removal
+        all_pq_sigs3 = [
+            {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(message3).hex(),
+                "alg": ML_DSA_ALG,
+            },
+            {
+                "public_key": pk_add_pq_1_hex,
+                "signature": sig_add_pq_1.sign(message3).hex(),
+                "alg": add_pq_alg_1,
+            },
+            {
+                "public_key": pk_add_pq_2_hex,
+                "signature": sig_add_pq_2.sign(message3).hex(),
+                "alg": add_pq_alg_2,
+            },
+        ]
+        remove_payload = {
+            "public_keys_to_remove": [pk_to_remove],
+            "classic_signature": classic_sig3,
+            "pq_signatures": all_pq_sigs3,
+            "nonce": nonce3,
+        }
+        response = client.post(
+            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=remove_payload
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["message"] == "Successfully removed PQ key(s)."
+
+        # Verify final account state
+        response = client.get(f"/accounts/{pk_classic_hex}")
+        assert response.status_code == 200
+        pq_keys_after_remove = response.json()["pq_keys"]
+        assert len(pq_keys_after_remove) == 2
+        assert not any(k["public_key"] == pk_to_remove for k in pq_keys_after_remove)
+        assert any(k["public_key"] == pk_ml_dsa_hex for k in pq_keys_after_remove)
+        assert any(k["public_key"] == pk_add_pq_2_hex for k in pq_keys_after_remove)
+
+
+def test_remove_mandatory_pq_key_fails():
+    """
+    Tests that an attempt to remove the mandatory ML-DSA key from an account
+    is rejected with a 400 error.
+    """
+    # 1. Create a minimal account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        nonce1 = get_nonce()
+        message1 = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode("utf-8")
+        sig_classic = sk_classic.sign(message1, hashfunc=hashlib.sha256).hex()
+        sig_ml_dsa_hex = sig_ml_dsa.sign(message1).hex()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sig_classic,
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa_hex,
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": nonce1,
+            },
+        )
+
+    # 2. Attempt to remove the mandatory key
+    nonce2 = get_nonce()
+    message2 = f"REMOVE-PQ:{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce2}".encode("utf-8")
+    classic_sig2 = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
+    pq_sig2 = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(message2).hex(),
+        "alg": ML_DSA_ALG,
+    }
+    remove_payload = {
+        "public_keys_to_remove": [pk_ml_dsa_hex],
+        "classic_signature": classic_sig2,
+        "pq_signatures": [pq_sig2],
+        "nonce": nonce2,
+    }
+    response = client.post(
+        f"/accounts/{pk_classic_hex}/remove-pq-keys", json=remove_payload
+    )
+    assert response.status_code == 400
+    assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in response.text

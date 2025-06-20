@@ -41,6 +41,24 @@ class CreateAccountRequest(BaseModel):
     nonce: str  # time-based nonce provided by the server
 
 
+class AddPqKeysRequest(BaseModel):
+    """Request to add new PQ keys to an account."""
+
+    new_pq_signatures: list[PqSignature]  # New PQ keys and their signatures
+    classic_signature: str  # Signature from the classic key
+    existing_pq_signatures: list[PqSignature]  # Signatures from existing PQ keys
+    nonce: str
+
+
+class RemovePqKeysRequest(BaseModel):
+    """Request to remove PQ keys from an account."""
+
+    public_keys_to_remove: list[str]  # Public keys of the PQ keys to remove
+    classic_signature: str  # Signature from the classic key
+    pq_signatures: list[PqSignature]  # Signatures from all existing PQ keys
+    nonce: str
+
+
 @app.get("/supported-pq-algs")
 def get_supported_pq_algs():
     """Returns a list of supported post-quantum signature algorithms."""
@@ -179,6 +197,177 @@ def get_account(public_key: str):
         "public_key": account[0],
         "pq_keys": pq_keys_list,
     }
+
+
+def find_account(public_key: str):
+    """Finds an account by its classic public key or raises HTTPException."""
+    account = next((acc for acc in accounts if acc[0] == public_key), None)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found.")
+    return account
+
+
+@app.post("/accounts/{public_key}/add-pq-keys")
+def add_pq_keys(public_key: str, request: AddPqKeysRequest):
+    """
+    Adds one or more new post-quantum keys to an existing account.
+    This action must be authorized by signing the request with the classic key
+    and all existing post-quantum keys for the account. The new keys must also
+    provide a signature to prove ownership.
+
+    The message to sign is:
+    f"ADD-PQ:{classic_pk}:{new_pk_1}:{new_pk_2}:...:{nonce}"
+    """
+    account = find_account(public_key)
+
+    if not verify_nonce(request.nonce):
+        raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
+
+    if request.nonce in used_nonces:
+        raise HTTPException(status_code=400, detail="Nonce has already been used.")
+
+    # Validate new keys
+    for new_sig in request.new_pq_signatures:
+        if new_sig.alg not in SUPPORTED_SIG_ALGS:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported PQ algorithm: {new_sig.alg}."
+            )
+
+    classic_pk, existing_pq_keys_tuple = account
+    existing_pq_keys_map = dict(existing_pq_keys_tuple)
+
+    new_pks_to_add = {s.public_key for s in request.new_pq_signatures}
+    if any(pk in existing_pq_keys_map for pk in new_pks_to_add):
+        raise HTTPException(
+            status_code=409, detail="One or more PQ keys already exist on the account."
+        )
+
+    if len(new_pks_to_add) != len(request.new_pq_signatures):
+        raise HTTPException(
+            status_code=400, detail="Duplicate public keys in new signatures list."
+        )
+
+    # Construct message and verify all signatures
+    new_pks_str = ":".join(sorted(list(new_pks_to_add)))
+    message_to_verify = f"ADD-PQ:{public_key}:{new_pks_str}:{request.nonce}".encode(
+        "utf-8"
+    )
+
+    # 1. Verify classic signature
+    if not verify_signature(public_key, request.classic_signature, message_to_verify):
+        raise HTTPException(status_code=401, detail="Invalid classic signature.")
+
+    # 2. Verify signatures from all existing PQ keys
+    existing_pks_in_req = {s.public_key for s in request.existing_pq_signatures}
+    if existing_pks_in_req != set(existing_pq_keys_map.keys()):
+        raise HTTPException(
+            status_code=401, detail="Signatures from all existing PQ keys are required."
+        )
+
+    for pq_sig in request.existing_pq_signatures:
+        if not verify_pq_signature(
+            pq_sig.public_key, pq_sig.signature, message_to_verify, pq_sig.alg
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
+            )
+
+    # 3. Verify signatures from all new PQ keys (proves ownership)
+    for new_sig in request.new_pq_signatures:
+        if not verify_pq_signature(
+            new_sig.public_key, new_sig.signature, message_to_verify, new_sig.alg
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid signature for new PQ key {new_sig.public_key}",
+            )
+
+    # All checks passed, update the account
+    accounts.remove(account)
+    new_pq_keys_info = tuple((s.public_key, s.alg) for s in request.new_pq_signatures)
+    updated_pq_keys = existing_pq_keys_tuple + new_pq_keys_info
+    new_account_tuple = (classic_pk, updated_pq_keys)
+    accounts.add(new_account_tuple)
+    used_nonces.add(request.nonce)
+
+    return {"message": f"Successfully added {len(new_pq_keys_info)} PQ key(s)."}
+
+
+@app.post("/accounts/{public_key}/remove-pq-keys")
+def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
+    """
+    Removes one or more post-quantum keys from an existing account.
+    This action must be authorized by signing the request with the classic key
+    and all existing post-quantum keys for the account. The mandatory ML-DSA
+    key cannot be removed.
+
+    The message to sign is:
+    f"REMOVE-PQ:{classic_pk}:{removed_pk_1}:{removed_pk_2}:...:{nonce}"
+    """
+    account = find_account(public_key)
+
+    if not verify_nonce(request.nonce):
+        raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
+
+    if request.nonce in used_nonces:
+        raise HTTPException(status_code=400, detail="Nonce has already been used.")
+
+    classic_pk, existing_pq_keys_tuple = account
+    existing_pq_keys_map = dict(existing_pq_keys_tuple)
+
+    # Validate keys to remove
+    for pk_to_remove in request.public_keys_to_remove:
+        if pk_to_remove not in existing_pq_keys_map:
+            raise HTTPException(
+                status_code=404,
+                detail=f"PQ key {pk_to_remove} not found on account.",
+            )
+        if existing_pq_keys_map[pk_to_remove] == ML_DSA_ALG:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot remove the mandatory PQ key ({ML_DSA_ALG}).",
+            )
+
+    # Construct message and verify all signatures
+    remove_pks_str = ":".join(sorted(request.public_keys_to_remove))
+    message_to_verify = (
+        f"REMOVE-PQ:{public_key}:{remove_pks_str}:{request.nonce}".encode("utf-8")
+    )
+
+    # 1. Verify classic signature
+    if not verify_signature(public_key, request.classic_signature, message_to_verify):
+        raise HTTPException(status_code=401, detail="Invalid classic signature.")
+
+    # 2. Verify signatures from ALL existing PQ keys
+    pks_in_req = {s.public_key for s in request.pq_signatures}
+    if pks_in_req != set(existing_pq_keys_map.keys()):
+        raise HTTPException(
+            status_code=401,
+            detail="Signatures from all existing PQ keys are required for removal.",
+        )
+
+    for pq_sig in request.pq_signatures:
+        if not verify_pq_signature(
+            pq_sig.public_key, pq_sig.signature, message_to_verify, pq_sig.alg
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
+            )
+
+    # All checks passed, update the account
+    accounts.remove(account)
+    updated_pq_keys_tuple = tuple(
+        key_info
+        for key_info in existing_pq_keys_tuple
+        if key_info[0] not in request.public_keys_to_remove
+    )
+    new_account_tuple = (classic_pk, updated_pq_keys_tuple)
+    accounts.add(new_account_tuple)
+    used_nonces.add(request.nonce)
+
+    return {"message": "Successfully removed PQ key(s)."}
 
 
 if __name__ == "__main__":
