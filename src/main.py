@@ -21,6 +21,12 @@ from lib.pq_auth import SUPPORTED_SIG_ALGS, verify_pq_signature
 SERVER_SECRET = "a-very-secret-key-that-should-be-changed"
 ML_DSA_ALG = "ML-DSA-87"
 
+# --- Storage Configuration ---
+# These paths can be monkeypatched in tests to redirect storage.
+BLOCK_STORE_ROOT = "block_store"
+CHUNK_STORE_ROOT = "chunk_store"
+# ---
+
 app = FastAPI()
 
 # A simple in-memory store for accounts and nonces.
@@ -543,7 +549,8 @@ async def upload_file(
             )
 
     # Store the file and its metadata
-    file_path = os.path.join("block_store", file_hash)
+    os.makedirs(BLOCK_STORE_ROOT, exist_ok=True)
+    file_path = os.path.join(BLOCK_STORE_ROOT, file_hash)
     with open(file_path, "wb") as f:
         f.write(file_content)
 
@@ -625,7 +632,7 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
                 detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
             )
 
-    file_path = os.path.join("block_store", file_hash)
+    file_path = os.path.join(BLOCK_STORE_ROOT, file_hash)
     if not os.path.exists(file_path):
         # This case should be rare if metadata exists, but good to have
         raise HTTPException(status_code=404, detail="File content not found on server.")
@@ -710,7 +717,8 @@ async def upload_chunk(
             )
 
     # Store the chunk
-    chunk_path = os.path.join("chunk_store", chunk_hash)
+    os.makedirs(CHUNK_STORE_ROOT, exist_ok=True)
+    chunk_path = os.path.join(CHUNK_STORE_ROOT, chunk_hash)
     with open(chunk_path, "wb") as f:
         f.write(chunk_content)
 

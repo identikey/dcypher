@@ -21,48 +21,44 @@ from src.main import (
 client = TestClient(app)
 
 
+@pytest.fixture
+def storage_paths(tmp_path):
+    """Provides isolated temporary storage paths for tests."""
+    block_store_path = tmp_path / "block_store"
+    chunk_store_path = tmp_path / "chunk_store"
+    block_store_path.mkdir()
+    chunk_store_path.mkdir()
+    return str(block_store_path), str(chunk_store_path)
+
+
 @pytest.fixture(autouse=True)
-def cleanup():
+def cleanup(storage_paths):
     """
-    Pytest fixture to reset the application state before and after each test.
-    This ensures that tests are isolated from each other.
+    Pytest fixture to reset application state and use temporary directories for storage.
+    This ensures tests are isolated, especially when running in parallel with pytest-xdist.
     """
-    # Reset state before each test
-    accounts.clear()
-    used_nonces.clear()
-    graveyard.clear()
-    block_store.clear()
-    chunk_store.clear()
+    block_store_path, chunk_store_path = storage_paths
 
-    # Ensure storage directories exist and are empty
-    os.makedirs("block_store", exist_ok=True)
-    os.makedirs("chunk_store", exist_ok=True)
+    # Mock the storage path constants in the main application
+    with (
+        mock.patch("src.main.BLOCK_STORE_ROOT", block_store_path),
+        mock.patch("src.main.CHUNK_STORE_ROOT", chunk_store_path),
+    ):
+        # Reset in-memory state before each test
+        accounts.clear()
+        used_nonces.clear()
+        graveyard.clear()
+        block_store.clear()
+        chunk_store.clear()
 
-    # Clean up any files in the block_store directory
-    for filename in os.listdir("block_store"):
-        os.remove(os.path.join("block_store", filename))
-    # Clean up any files in the chunk_store directory
-    for filename in os.listdir("chunk_store"):
-        os.remove(os.path.join("chunk_store", filename))
+        yield
 
-    yield
-    # Cleanup after test if needed
-    accounts.clear()
-    used_nonces.clear()
-    graveyard.clear()
-    block_store.clear()
-    chunk_store.clear()
-
-    # Ensure storage directories exist and are empty for post-test cleanup
-    os.makedirs("block_store", exist_ok=True)
-    os.makedirs("chunk_store", exist_ok=True)
-
-    # Clean up any files in the block_store directory again
-    for filename in os.listdir("block_store"):
-        os.remove(os.path.join("block_store", filename))
-    # Clean up any files in the chunk_store directory again
-    for filename in os.listdir("chunk_store"):
-        os.remove(os.path.join("chunk_store", filename))
+        # In-memory state is cleared again for good measure after the test
+        accounts.clear()
+        used_nonces.clear()
+        graveyard.clear()
+        block_store.clear()
+        chunk_store.clear()
 
 
 def get_nonce():
@@ -1647,10 +1643,11 @@ def test_graveyard():
         assert pk_falcon_2_hex in graveyard_pks
 
 
-def test_upload_file_successful():
+def test_upload_file_successful(storage_paths):
     """
     Tests the successful upload of a file to an account's block store.
     """
+    block_store_root, _ = storage_paths
     # 1. Create an account
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     vk_classic = sk_classic.get_verifying_key()
@@ -1707,7 +1704,7 @@ def test_upload_file_successful():
         assert response.json()["file_hash"] == file_hash
 
         # 6. Verify file exists on server
-        file_path = os.path.join("block_store", file_hash)
+        file_path = os.path.join(block_store_root, file_hash)
         assert os.path.exists(file_path)
         with open(file_path, "rb") as f:
             assert f.read() == file_content
@@ -1835,10 +1832,11 @@ def test_upload_file_unauthorized():
         assert "Invalid classic signature" in response.text
 
 
-def test_upload_chunks_successful():
+def test_upload_chunks_successful(storage_paths):
     """
     Tests the successful upload of multiple file chunks.
     """
+    _, chunk_store_root = storage_paths
     # 1. Create an account
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     vk_classic = sk_classic.get_verifying_key()
@@ -1929,7 +1927,7 @@ def test_upload_chunks_successful():
             )
 
             # Verify chunk exists on server
-            chunk_path = os.path.join("chunk_store", chunk_hash)
+            chunk_path = os.path.join(chunk_store_root, chunk_hash)
             assert os.path.exists(chunk_path)
             with open(chunk_path, "rb") as f:
                 assert f.read() == chunk_data
@@ -1939,7 +1937,7 @@ def test_upload_chunks_successful():
         assert len(chunk_store[file_hash]) == total_chunks
 
 
-def test_upload_chunk_unauthorized():
+def test_upload_chunk_unauthorized(storage_paths):
     """
     Tests that uploading a file chunk with an invalid signature fails.
     """
@@ -2037,10 +2035,11 @@ def test_list_files_nonexistent_account():
     assert "Account not found" in response.json()["detail"]
 
 
-def test_download_file_successful():
+def test_download_file_successful(storage_paths):
     """
     Tests the successful upload and subsequent download of a file.
     """
+    block_store_root, _ = storage_paths
     # 1. Create an account
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     vk_classic = sk_classic.get_verifying_key()

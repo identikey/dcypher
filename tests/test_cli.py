@@ -25,18 +25,31 @@ from src.lib import pre
 from fastapi.testclient import TestClient
 import click
 import hashlib
+import socket
 
 
-API_BASE_URL = "http://127.0.0.1:8000"
+@pytest.fixture(scope="session")
+def free_port():
+    """Finds and returns a free port on the host."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture(scope="session")
+def api_base_url(free_port):
+    """Constructs the base URL for the API using the free port."""
+    return f"http://127.0.0.1:{free_port}"
 
 
 @pytest.fixture(scope="session", autouse=True)
-def live_api_server():
+def live_api_server(free_port, api_base_url):
     """
-    Starts the FastAPI app in a background thread for the test session,
-    ensuring subprocesses can make real HTTP calls to it.
+    Starts the FastAPI app in a background thread for the test session.
+    Uses a dynamically allocated port to avoid conflicts, especially with pytest-xdist.
     """
-    config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning")
+    os.environ["API_BASE_URL"] = api_base_url
+    config = uvicorn.Config(app, host="127.0.0.1", port=free_port, log_level="warning")
     server = uvicorn.Server(config)
     ready_event = threading.Event()
 
@@ -583,7 +596,7 @@ def test_large_file_workflow(cli_test_env):
         assert f.read() == original_data
 
 
-def test_cli_upload_download_workflow(cli_test_env):
+def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     """
     Tests the end-to-end file storage workflow using the CLI against a live API.
 
@@ -617,7 +630,7 @@ def test_cli_upload_download_workflow(cli_test_env):
 
     # b. Authentication keys for API
     classic_sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    classic_vk = classic_sk.get_verifying_key()
+    classic_vk = classic_sk.verifying_key
     pk_classic_hex = classic_vk.to_string("uncompressed").hex()
     classic_sk_path = test_dir / "user_auth.sk"
     with open(classic_sk_path, "w") as f:
@@ -629,7 +642,7 @@ def test_cli_upload_download_workflow(cli_test_env):
         f.write(pq_sk)
 
     # --- 2. Create Account on the API (using requests) ---
-    nonce_resp = requests.get(f"{API_BASE_URL}/nonce")
+    nonce_resp = requests.get(f"{api_base_url}/nonce")
     assert nonce_resp.status_code == 200
     nonce = nonce_resp.json()["nonce"]
 
@@ -645,7 +658,7 @@ def test_cli_upload_download_workflow(cli_test_env):
             },
             "nonce": nonce,
         }
-    response = requests.post(f"{API_BASE_URL}/accounts", json=create_payload)
+    response = requests.post(f"{api_base_url}/accounts", json=create_payload)
     assert response.status_code == 200, response.text
 
     # --- 3. Prepare auth keys file for CLI ---
