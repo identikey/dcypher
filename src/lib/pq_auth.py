@@ -1,6 +1,7 @@
 import oqs
 
-SUPPORTED_SIG_ALGS = ["Dilithium2", "Falcon-512"]
+# SUPPORTED_SIG_ALGS = ["Dilithium2", "Falcon-512"]
+SUPPORTED_SIG_ALGS = list(oqs.get_enabled_sig_mechanisms())
 
 
 def verify_pq_signature(

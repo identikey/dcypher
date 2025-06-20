@@ -178,7 +178,7 @@ def test_create_account_invalid_pq_signature():
 def test_get_supported_pq_algs():
     response = client.get("/supported-pq-algs")
     assert response.status_code == 200
-    assert response.json() == {"algorithms": SUPPORTED_SIG_ALGS}
+    assert response.json() == {"algorithms": list(SUPPORTED_SIG_ALGS)}
 
 
 def test_get_accounts_and_account_by_id():
