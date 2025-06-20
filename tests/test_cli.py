@@ -794,5 +794,41 @@ def test_encrypt_with_data_string(cli_test_env):
         assert f.read() == original_data.encode("utf-8")
 
 
+def test_encrypt_mutually_exclusive_options(cli_test_env):
+    """
+    Tests that the `encrypt` command fails if both `--data` and `--input-file`
+    are provided, as they are mutually exclusive.
+    """
+    run_command, test_dir = cli_test_env
+    input_file = test_dir / "input.txt"
+    input_file.touch()  # Create a dummy file
+
+    # Generate necessary keys and context
+    run_command(["gen-cc", "--output", "cc.json"])
+    run_command(["gen-keys", "--cc-path", "cc.json", "--output-prefix", "alice"])
+
+    # Attempt to run encrypt with both data and input file
+    result = run_command(
+        [
+            "encrypt",
+            "--cc-path",
+            "cc.json",
+            "--pk-path",
+            "alice.pub",
+            "--data",
+            "some data",
+            "--input-file",
+            str(input_file),
+            "--output",
+            "ciphertext.json",
+        ]
+    )
+
+    # Expect a non-zero return code indicating an error
+    assert result.returncode != 0
+    # Expect a usage error message from click
+    assert "Error: Provide either --data or --input-file, not both." in result.stderr
+
+
 if __name__ == "__main__":
     pytest.main(["-s", __file__])

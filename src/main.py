@@ -6,7 +6,7 @@ import os
 import json
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
 # To run this with uvicorn:
@@ -45,37 +45,63 @@ class PqSignature(BaseModel):
 
 
 class CreateAccountRequest(BaseModel):
-    public_key: str  # hex-encoded uncompressed SECP256k1 public key
-    signature: str  # hex-encoded DER signature for the classic key
-    ml_dsa_signature: PqSignature  # Mandatory ML-DSA-87 signature
-    additional_pq_signatures: list[PqSignature] = []  # Optional additional PQ sigs
-    nonce: str  # time-based nonce provided by the server
+    public_key: str = Field(
+        ..., description="Hex-encoded uncompressed SECP256k1 public key."
+    )
+    signature: str = Field(
+        ..., description="Hex-encoded DER signature from the classic key."
+    )
+    ml_dsa_signature: PqSignature = Field(
+        ..., description="Mandatory ML-DSA-87 signature."
+    )
+    additional_pq_signatures: list[PqSignature] = Field(
+        [], description="Optional list of additional PQ signatures."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 class AddPqKeysRequest(BaseModel):
     """Request to add new PQ keys to an account."""
 
-    new_pq_signatures: list[PqSignature]  # New PQ keys and their signatures
-    classic_signature: str  # Signature from the classic key
-    existing_pq_signatures: list[PqSignature]  # Signatures from existing PQ keys
-    nonce: str
+    new_pq_signatures: list[PqSignature] = Field(
+        ..., description="New PQ keys and their corresponding authorization signatures."
+    )
+    classic_signature: str = Field(
+        ...,
+        description="Signature from the root classic key authorizing the operation.",
+    )
+    existing_pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 class RemovePqKeysRequest(BaseModel):
     """Request to remove PQ keys from an account."""
 
-    algs_to_remove: list[str]  # Algorithms of the PQ keys to remove
-    classic_signature: str  # Signature from the classic key
-    pq_signatures: list[PqSignature]  # Signatures from all existing PQ keys
-    nonce: str
+    algs_to_remove: list[str] = Field(
+        ..., description="A list of the algorithm names for the PQ keys to be removed."
+    )
+    classic_signature: str = Field(
+        ...,
+        description="Signature from the root classic key authorizing the operation.",
+    )
+    pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 class DownloadFileRequest(BaseModel):
     """Request to download a file from the block store."""
 
-    classic_signature: str
-    pq_signatures: list[PqSignature]
-    nonce: str
+    classic_signature: str = Field(
+        ..., description="Signature from the root classic key authorizing the download."
+    )
+    pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 class UploadFileRequest(BaseModel):

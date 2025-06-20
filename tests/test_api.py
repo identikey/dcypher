@@ -1935,6 +1935,104 @@ def test_upload_chunks_successful():
         assert len(chunk_store[file_hash]) == total_chunks
 
 
+def test_upload_chunk_unauthorized():
+    """
+    Tests that uploading a file chunk with an invalid signature fails.
+    """
+    # 1. Create a real account and register a file
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        # Create account
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+        # Register a file to get a valid file_hash
+        file_content = b"some content"
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        register_nonce = get_nonce()
+        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("chunked_file.txt", file_content, "text/plain")},
+            data={
+                "nonce": register_nonce,
+                "file_hash": file_hash,
+                "classic_signature": sk_classic.sign(
+                    register_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": json.dumps(
+                    [
+                        {
+                            "public_key": pk_ml_dsa_hex,
+                            "signature": sig_ml_dsa.sign(register_msg).hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ]
+                ),
+            },
+        )
+
+        # 2. Attempt to upload a chunk with an invalid signature
+        chunk_data = b"chunk data"
+        chunk_hash = hashlib.sha256(chunk_data).hexdigest()
+        chunk_nonce = get_nonce()
+        # The classic signature will be over an incorrect message
+        incorrect_msg = b"this is the wrong message"
+        invalid_classic_sig = sk_classic.sign(
+            incorrect_msg, hashfunc=hashlib.sha256
+        ).hex()
+        # The PQ sig is correct, to isolate the failure point
+        correct_chunk_msg = (
+            f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:0:1:{chunk_hash}:{chunk_nonce}"
+        ).encode()
+        pq_sig_chunk = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(correct_chunk_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            files={"file": ("chunk_0", chunk_data)},
+            data={
+                "nonce": chunk_nonce,
+                "chunk_hash": chunk_hash,
+                "chunk_index": "0",
+                "total_chunks": "1",
+                "classic_signature": invalid_classic_sig,
+                "pq_signatures": json.dumps([pq_sig_chunk]),
+            },
+        )
+
+        assert response.status_code == 401
+        assert "Invalid classic signature" in response.text
+
+
+def test_list_files_nonexistent_account():
+    """
+    Tests that listing files for a non-existent account returns 404.
+    """
+    response = client.get("/storage/nonexistent-public-key")
+    assert response.status_code == 404
+    assert "Account not found" in response.json()["detail"]
+
+
 def test_download_file_successful():
     """
     Tests the successful upload and subsequent download of a file.
