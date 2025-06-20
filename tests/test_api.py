@@ -34,14 +34,16 @@ def cleanup():
     block_store.clear()
     chunk_store.clear()
 
+    # Ensure storage directories exist and are empty
+    os.makedirs("block_store", exist_ok=True)
+    os.makedirs("chunk_store", exist_ok=True)
+
     # Clean up any files in the block_store directory
-    if os.path.exists("block_store"):
-        for filename in os.listdir("block_store"):
-            os.remove(os.path.join("block_store", filename))
+    for filename in os.listdir("block_store"):
+        os.remove(os.path.join("block_store", filename))
     # Clean up any files in the chunk_store directory
-    if os.path.exists("chunk_store"):
-        for filename in os.listdir("chunk_store"):
-            os.remove(os.path.join("chunk_store", filename))
+    for filename in os.listdir("chunk_store"):
+        os.remove(os.path.join("chunk_store", filename))
 
     yield
     # Cleanup after test if needed
@@ -51,14 +53,16 @@ def cleanup():
     block_store.clear()
     chunk_store.clear()
 
+    # Ensure storage directories exist and are empty for post-test cleanup
+    os.makedirs("block_store", exist_ok=True)
+    os.makedirs("chunk_store", exist_ok=True)
+
     # Clean up any files in the block_store directory again
-    if os.path.exists("block_store"):
-        for filename in os.listdir("block_store"):
-            os.remove(os.path.join("block_store", filename))
+    for filename in os.listdir("block_store"):
+        os.remove(os.path.join("block_store", filename))
     # Clean up any files in the chunk_store directory again
-    if os.path.exists("chunk_store"):
-        for filename in os.listdir("chunk_store"):
-            os.remove(os.path.join("chunk_store", filename))
+    for filename in os.listdir("chunk_store"):
+        os.remove(os.path.join("chunk_store", filename))
 
 
 def get_nonce():
@@ -2203,7 +2207,7 @@ def test_download_file_unauthorized():
         assert "Invalid classic signature" in response.text
 
 
-def test_get_file_metadata_nonexistent_file(cleanup):
+def test_get_file_metadata_nonexistent_file():
     """
     Tests that getting metadata for a non-existent file hash returns 404.
     """
@@ -2235,7 +2239,7 @@ def test_get_file_metadata_nonexistent_file(cleanup):
     assert "File not found" in response.json()["detail"]
 
 
-def test_upload_chunk_for_unregistered_file(cleanup):
+def test_upload_chunk_for_unregistered_file():
     """
     Tests that uploading a chunk for a file that has not been registered fails.
     """
@@ -2279,7 +2283,7 @@ def test_upload_chunk_for_unregistered_file(cleanup):
     assert "File record not found" in response.json()["detail"]
 
 
-def test_upload_file_malformed_pq_signatures(cleanup):
+def test_upload_file_malformed_pq_signatures():
     """
     Tests that file upload fails if the pq_signatures field is not a valid
     JSON string.

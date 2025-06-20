@@ -67,12 +67,15 @@ def cleanup_stores():
     graveyard.clear()
     block_store.clear()
     chunk_store.clear()
-    if os.path.exists("block_store"):
-        for filename in os.listdir("block_store"):
-            os.remove(os.path.join("block_store", filename))
-    if os.path.exists("chunk_store"):
-        for filename in os.listdir("chunk_store"):
-            os.remove(os.path.join("chunk_store", filename))
+
+    # Ensure storage directories exist and are empty
+    os.makedirs("block_store", exist_ok=True)
+    os.makedirs("chunk_store", exist_ok=True)
+
+    for filename in os.listdir("block_store"):
+        os.remove(os.path.join("block_store", filename))
+    for filename in os.listdir("chunk_store"):
+        os.remove(os.path.join("chunk_store", filename))
 
 
 @pytest.fixture(scope="module")
