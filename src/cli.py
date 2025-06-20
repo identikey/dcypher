@@ -6,6 +6,10 @@ import hashlib
 import os
 from base64 import b64decode
 import re
+from pathlib import Path
+import ecdsa
+import base64
+import sys
 
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
@@ -108,7 +112,6 @@ def encrypt(
         raise click.UsageError("Provide either --data or --input-file, not both.")
 
     # Dynamic import to avoid circular dependency if idk_message needs cli elements
-    import ecdsa
     from lib import idk_message
 
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
@@ -119,7 +122,7 @@ def encrypt(
     click.echo(f"Loading public key from {pk_path}...", err=True)
     with open(pk_path, "r") as f:
         pk_data = json.load(f)
-    pk = pre.deserialize_public_key(pk_data["key"])
+    pk = pre.deserialize_public_key(base64.b64decode(pk_data["key"]))
 
     click.echo(f"Loading signing key from {signing_key_path}...", err=True)
     with open(signing_key_path, "r") as f:
@@ -167,7 +170,6 @@ def encrypt(
 )
 def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     """Parses, verifies, and decrypts a spec-compliant IDK message."""
-    import ecdsa
     from lib import idk_message
 
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
@@ -178,7 +180,7 @@ def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     click.echo(f"Loading secret key from {sk_path}...", err=True)
     with open(sk_path, "r") as f:
         sk_data = json.load(f)
-    sk = pre.deserialize_secret_key(sk_data["key"])
+    sk = pre.deserialize_secret_key(base64.b64decode(sk_data["key"]))
 
     click.echo(f"Loading verifying key from {verifying_key_path}...", err=True)
     with open(verifying_key_path, "r") as f:
@@ -191,92 +193,16 @@ def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     with open(ciphertext_path, "r") as f:
         message_content = f.read()
 
-    # This regex splits the content by the BEGIN marker, but keeps the marker
-    # as part of the result list, allowing us to reconstruct each part.
-    parts_with_empties = re.split(r"(----- BEGIN IDK MESSAGE PART)", message_content)
-
-    message_parts = []
-    # The result of the split will be like ['', 'DELIMITER', 'CONTENT', 'DELIMITER', 'CONTENT', ...].
-    # We iterate through the list, taking pairs of (delimiter, content) to reconstruct the full part.
-    for i in range(1, len(parts_with_empties), 2):
-        if i + 1 < len(parts_with_empties):
-            full_part = parts_with_empties[i] + parts_with_empties[i + 1]
-            message_parts.append(full_part.strip())
-
-    click.echo(f"Found {len(message_parts)} message parts. Verifying...", err=True)
-
-    all_pieces = {}
-    total_bytes = 0
-    slots_used = 0
-
-    for i, part_str in enumerate(message_parts):
-        try:
-            parsed = idk_message.parse_idk_message_part(part_str)
-            headers = parsed["headers"]
-            payload_b64 = parsed["payload_b64"]
-
-            # Verify signature
-            signature_hex = headers.pop("Signature")
-
-            canonical_header_str = ""
-            for key in sorted(headers.keys()):
-                if key in ["PartNum", "TotalParts"]:
-                    continue
-                canonical_header_str += f"{key}: {headers[key]}\n"
-
-            header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
-            vk_verify.verify_digest(bytes.fromhex(signature_hex), header_hash)
-
-            # Verification passed, now convert types for use.
-            headers["SlotsUsed"] = int(headers["SlotsUsed"])
-            headers["BytesTotal"] = int(headers["BytesTotal"])
-
-            payload_bytes = b64decode(payload_b64)
-
-            # Verify ChunkHash
-            if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
-                raise click.ClickException(
-                    f"ChunkHash verification failed for part {i + 1}"
-                )
-
-            # Verify AuthPath
-            leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
-            piece_index = headers["PartNum"] - 1  # Assuming 1 piece per part
-            if not idk_message.verify_merkle_path(
-                leaf_hash_bytes,
-                json.loads(headers["AuthPath"]),
-                piece_index,
-                headers["MerkleRoot"],
-            ):
-                raise click.ClickException(
-                    f"Merkle path verification failed for part {i + 1}"
-                )
-
-            # Store piece
-            all_pieces[piece_index] = pre.deserialize_ciphertext_from_bytes(
-                payload_bytes
-            )
-            total_bytes = headers["BytesTotal"]
-            slots_used = headers["SlotsUsed"]
-
-        except (ValueError, ecdsa.BadSignatureError, click.ClickException) as e:
-            raise click.ClickException(f"Verification failed for part {i + 1}: {e}")
-
-    click.echo("All parts verified successfully. Decrypting...", err=True)
-
-    # Assemble pieces in order
-    sorted_pieces = [all_pieces[i] for i in sorted(all_pieces.keys())]
-
-    decrypted_data = pre.decrypt(cc, sk, sorted_pieces, slots_used)
-    final_data = pre.coefficients_to_bytes(decrypted_data, total_bytes)
-
-    if output_file:
-        with open(output_file, "wb") as f:
-            f.write(final_data)
-        click.echo(f"Decrypted data written to {output_file}", err=True)
-    else:
-        # This might print garbage to the console if not valid text
-        click.echo(final_data.decode("utf-8", errors="replace"))
+    # Decrypt and write to output
+    try:
+        decrypted_data = idk_message.decrypt_idk_message(
+            cc=cc, sk=sk, vk=vk_verify, message_str=message_content
+        )
+        Path(output_file).write_bytes(decrypted_data)
+        click.echo(f"Success! Decrypted data written to {output_file}", err=True)
+    except Exception as e:
+        click.echo(f"Error during decryption: {e}", err=True)
+        sys.exit(1)
 
 
 @cli.command("gen-rekey")
@@ -304,12 +230,12 @@ def gen_rekey(cc_path, sk_path_from, pk_path_to, output):
     click.echo(f"Loading 'from' secret key from {sk_path_from}...", err=True)
     with open(sk_path_from, "r") as f:
         sk_data = json.load(f)
-    sk_from = pre.deserialize_secret_key(sk_data["key"])
+    sk_from = pre.deserialize_secret_key(base64.b64decode(sk_data["key"]))
 
     click.echo(f"Loading 'to' public key from {pk_path_to}...", err=True)
     with open(pk_path_to, "r") as f:
         pk_data = json.load(f)
-    pk_to = pre.deserialize_public_key(pk_data["key"])
+    pk_to = pre.deserialize_public_key(base64.b64decode(pk_data["key"]))
 
     click.echo("Generating re-encryption key...", err=True)
     rekey = pre.generate_re_encryption_key(cc, sk_from, pk_to)
@@ -344,7 +270,7 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
     click.echo(f"Loading re-encryption key from {rekey_path}...", err=True)
     with open(rekey_path, "r") as f:
         rekey_data = json.load(f)
-    rekey = pre.deserialize_re_encryption_key(rekey_data["rekey"])
+    rekey = pre.deserialize_re_encryption_key(base64.b64decode(rekey_data["rekey"]))
 
     click.echo(f"Loading ciphertext from {ciphertext_path}...", err=True)
     with open(ciphertext_path, "r") as f:

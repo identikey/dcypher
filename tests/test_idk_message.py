@@ -248,3 +248,100 @@ def test_idk_message_format_conformance(crypto_setup):
     assert set(header_keys).issuperset(expected_headers), (
         f"Missing headers: {expected_headers - set(header_keys)}"
     )
+
+
+def test_full_message_reconstruction_and_decryption(crypto_setup):
+    """
+    Tests the end-to-end process of creating, parsing, reassembling,
+    and decrypting a multi-part message to verify data integrity.
+    This also implicitly tests the correct usage of SlotsUsed and BytesTotal.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    vk = crypto_setup["vk"]
+
+    # Use data that reliably creates multiple parts
+    # Ensure data size is just over what fits in a single ciphertext.
+    # With a 2-bytes-per-coeff ratio, this creates slots_used > slots_total.
+    original_data = os.urandom(pre.get_slot_count(cc) * 2 + 1)
+    pieces_per_part = 1
+
+    # 2. Create the message parts
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        pieces_per_part=pieces_per_part,
+    )
+    assert len(message_parts) > 1, (
+        "Test requires multiple message parts to be generated"
+    )
+
+    # 3. Process each part and reconstruct pieces
+    reconstructed_pieces_bytes = []
+    merkle_root_from_headers = None
+    slots_used_from_headers = None
+    bytes_total_from_headers = None
+
+    for i, part_str in enumerate(message_parts):
+        parsed_part = idk_message.parse_idk_message_part(part_str)
+        headers = parsed_part["headers"]
+        payload_b64 = parsed_part["payload_b64"]
+
+        # a. Verify Signature
+        signature_hex = headers.pop("Signature")
+        headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
+        canonical_header_str = ""
+        for key in sorted(headers.keys()):
+            if key in ["PartNum", "TotalParts"]:
+                continue
+            canonical_header_str += f"{key}: {headers[key]}\n"
+        header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
+        try:
+            vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
+        except ecdsa.BadSignatureError:
+            pytest.fail(f"ECDSA signature verification failed for part {i + 1}")
+
+        # b. Store and check for header consistency across parts
+        if merkle_root_from_headers is None:
+            merkle_root_from_headers = headers["MerkleRoot"]
+            slots_used_from_headers = int(headers["SlotsUsed"])
+            bytes_total_from_headers = int(headers["BytesTotal"])
+        else:
+            assert headers["MerkleRoot"] == merkle_root_from_headers
+            assert int(headers["SlotsUsed"]) == slots_used_from_headers
+            assert int(headers["BytesTotal"]) == bytes_total_from_headers
+
+        # c. Verify payload and its place in the Merkle tree
+        payload_bytes = base64.b64decode(payload_b64)
+        assert hashlib.blake2b(payload_bytes).hexdigest() == headers["ChunkHash"]
+        leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
+        assert idk_message.verify_merkle_path(
+            leaf_hash_bytes=leaf_hash_bytes,
+            auth_path_hex=json.loads(headers["AuthPath"]),
+            piece_index=i,  # Since pieces_per_part=1, piece_index == part_index
+            expected_root_hex=merkle_root_from_headers,
+        ), f"Merkle path verification failed for part {i + 1}"
+
+        reconstructed_pieces_bytes.append(payload_bytes)
+
+    # 4. Deserialize, decrypt, and reconstruct original data
+    assert len(reconstructed_pieces_bytes) == len(message_parts)
+    deserialized_ciphertexts = [
+        pre.deserialize_ciphertext(piece_bytes)
+        for piece_bytes in reconstructed_pieces_bytes
+    ]
+    decrypted_coeffs = pre.decrypt(
+        cc, keys.secretKey, deserialized_ciphertexts, slots_used_from_headers
+    )
+
+    # 5. Convert back to bytes and verify final data integrity
+    # This function is expected to handle the truncation based on total_bytes.
+    assert bytes_total_from_headers is not None
+    final_data = pre.coefficients_to_bytes(
+        decrypted_coeffs, total_bytes=bytes_total_from_headers
+    )
+    assert final_data == original_data

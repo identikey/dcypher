@@ -5,6 +5,7 @@ This file tests the proxy re-encryption (PRE) library.
 import time
 import random
 import os
+import base64
 from src.lib import pre
 
 
@@ -38,7 +39,7 @@ def test_pre_workflow():
     original_data = os.urandom(1024)
 
     # Convert bytes to coefficients before encryption
-    coeffs = pre.bytes_to_coefficients(original_data)
+    coeffs = pre.bytes_to_coefficients(original_data, pre.get_slot_count(cc))
 
     # Encryption by Alice
     print("\nEncrypting data with Alice's public key...")
@@ -106,17 +107,17 @@ def test_pre_workflow():
     # 2. Deserialize all objects
     start_time = time.time()
     deser_cc = pre.deserialize_cc(ser_cc)
-    deser_alice_pk = pre.deserialize_public_key(ser_alice_pk)
-    deser_alice_sk = pre.deserialize_secret_key(ser_alice_sk)
-    deser_bob_pk = pre.deserialize_public_key(ser_bob_pk)
-    deser_bob_sk = pre.deserialize_secret_key(ser_bob_sk)
+    deser_alice_pk = pre.deserialize_public_key(base64.b64decode(ser_alice_pk))
+    deser_alice_sk = pre.deserialize_secret_key(base64.b64decode(ser_alice_sk))
+    deser_bob_pk = pre.deserialize_public_key(base64.b64decode(ser_bob_pk))
+    deser_bob_sk = pre.deserialize_secret_key(base64.b64decode(ser_bob_sk))
     deser_ciphertext_alice = [
-        pre.deserialize_ciphertext(s_ct) for s_ct in ser_ciphertext_alice
+        pre.deserialize_ciphertext(base64.b64decode(ct)) for ct in ser_ciphertext_alice
     ]
     deser_re_key = pre.deserialize_re_encryption_key(ser_re_key)
     print(f"Deserialization time: {(time.time() - start_time) * 1000:.2f} ms")
 
-    # 3. Perform re-encryption and decryption with deserialized objects
+    # 3. Re-encrypt with deserialized objects and verify
     print("\nRe-encrypting with deserialized objects...")
     start_time = time.time()
     deser_ciphertext_bob = pre.re_encrypt(
@@ -129,17 +130,17 @@ def test_pre_workflow():
     final_decrypted_coeffs = pre.decrypt(
         deser_cc, deser_bob_sk, deser_ciphertext_bob, len(coeffs)
     )
-    final_decrypted_data = pre.coefficients_to_bytes(
+    final_decrypted_bytes = pre.coefficients_to_bytes(
         final_decrypted_coeffs, len(original_data)
     )
     print(f"Decryption time: {(time.time() - start_time) * 1000:.2f} ms")
 
     # 4. Verification
-    assert original_data == final_decrypted_data, (
+    assert original_data == final_decrypted_bytes, (
         "Decryption with deserialized objects failed"
     )
 
-    print("\nSerialization/Deserialization test successful!")
+    print("\nSerialization/Deserialization workflow completed successfully!")
 
 
 if __name__ == "__main__":

@@ -111,14 +111,26 @@ def create_idk_message_parts(
         A list of strings, where each string is a fully formatted IDK message part.
     """
     original_data_len = len(data)
+    # The total number of coefficients used by the original data, for the header.
+    total_slots_used = (original_data_len + 1) // 2
+    slot_count = pre.get_slot_count(cc)
+    max_bytes_per_chunk = (
+        slot_count * 2
+    )  # Each coefficient is an unsigned short (2 bytes)
 
-    # 1. Convert data to coefficients and encrypt
-    pt_coeffs = pre.bytes_to_coefficients(data)
-    slots_used = len(pt_coeffs)
-    encrypted_pieces = pre.encrypt(cc, pk, pt_coeffs)
+    # 1. Chunk the data, encrypt each chunk into a piece.
+    all_encrypted_pieces = []
+    for i in range(0, original_data_len, max_bytes_per_chunk):
+        data_chunk = data[i : i + max_bytes_per_chunk]
+        # Convert just the chunk to coefficients.
+        pt_coeffs = pre.bytes_to_coefficients(data_chunk, slot_count)
+        # Encrypt the coefficients for this chunk into a single ciphertext piece.
+        # pre.encrypt returns a list, so we expect one piece here.
+        encrypted_piece = pre.encrypt(cc, pk, pt_coeffs)
+        all_encrypted_pieces.extend(encrypted_piece)
 
     # 2. Serialize each ciphertext piece to its raw byte representation
-    serialized_pieces_bytes = [pre.serialize_to_bytes(p) for p in encrypted_pieces]
+    serialized_pieces_bytes = [pre.serialize_to_bytes(p) for p in all_encrypted_pieces]
 
     # 3. Build the Merkle tree from the raw byte pieces
     merkle_tree = MerkleTree(serialized_pieces_bytes)
@@ -146,7 +158,7 @@ def create_idk_message_parts(
         headers = {
             "Version": IDK_VERSION,
             "SlotsTotal": pre.get_slot_count(cc),
-            "SlotsUsed": slots_used,
+            "SlotsUsed": total_slots_used,  # Use the total for the whole message
             "BytesTotal": original_data_len,
             "MerkleRoot": merkle_root,
             "Part": f"{part_num}/{total_parts}",
@@ -273,3 +285,94 @@ def verify_merkle_path(
         current_index //= 2
 
     return computed_hash.hex() == expected_root_hex
+
+
+def decrypt_idk_message(
+    cc, sk: ecdsa.SigningKey, vk: ecdsa.VerifyingKey, message_str: str
+) -> bytes:
+    """
+    Parses, verifies, and decrypts a full IDK message string.
+
+    This is a high-level convenience function that encapsulates the entire
+    process of handling an incoming IDK message.
+
+    Args:
+        cc: The crypto context.
+        sk: The recipient's secret key for decryption.
+        vk: The sender's verifying key for signature verification.
+        message_str: The complete, raw IDK message string (can contain multiple parts).
+
+    Returns:
+        The decrypted original data as a byte string.
+
+    Raises:
+        ValueError: If any part of the verification or decryption fails.
+    """
+    # This regex splits the content by the BEGIN marker, but keeps the marker
+    # as part of the result list, allowing us to reconstruct each part.
+    import re
+
+    parts_with_empties = re.split(r"(----- BEGIN IDK MESSAGE PART)", message_str)
+    message_parts = []
+    # The result of the split will be like ['', 'DELIMITER', 'CONTENT', 'DELIMITER', 'CONTENT', ...].
+    for i in range(1, len(parts_with_empties), 2):
+        if i + 1 < len(parts_with_empties):
+            full_part = parts_with_empties[i] + parts_with_empties[i + 1]
+            message_parts.append(full_part.strip())
+
+    if not message_parts:
+        raise ValueError("No valid IDK message parts found in the input string.")
+
+    all_pieces = {}
+    total_bytes = 0
+    slots_used = 0
+    merkle_root = ""
+
+    for i, part_str in enumerate(message_parts):
+        try:
+            parsed = parse_idk_message_part(part_str)
+            headers = parsed["headers"]
+            payload_b64 = parsed["payload_b64"]
+
+            # Verify signature
+            signature_hex = headers.pop("Signature")
+            headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
+            canonical_header_str = ""
+            for key in sorted(headers.keys()):
+                if key in ["PartNum", "TotalParts"]:
+                    continue
+                canonical_header_str += f"{key}: {headers[key]}\n"
+
+            header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
+            vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
+
+            payload_bytes = base64.b64decode(payload_b64)
+            if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
+                raise ValueError("ChunkHash verification failed")
+
+            leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
+            piece_index = headers["PartNum"] - 1
+            if not verify_merkle_path(
+                leaf_hash_bytes,
+                json.loads(headers["AuthPath"]),
+                piece_index,
+                headers["MerkleRoot"],
+            ):
+                raise ValueError("Merkle path verification failed")
+
+            if not merkle_root:
+                merkle_root = headers["MerkleRoot"]
+                total_bytes = int(headers["BytesTotal"])
+                slots_used = int(headers["SlotsUsed"])
+            elif headers["MerkleRoot"] != merkle_root:
+                raise ValueError("Inconsistent Merkle roots across message parts")
+
+            all_pieces[piece_index] = pre.deserialize_ciphertext(payload_bytes)
+
+        except (ValueError, ecdsa.BadSignatureError) as e:
+            raise ValueError(f"Verification failed for part {i + 1}: {e}")
+
+    sorted_pieces = [all_pieces[i] for i in sorted(all_pieces.keys())]
+    decrypted_coeffs = pre.decrypt(cc, sk, sorted_pieces, slots_used)
+    final_data = pre.coefficients_to_bytes(decrypted_coeffs, total_bytes)
+    return final_data
