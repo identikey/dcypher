@@ -3,6 +3,8 @@ import hashlib
 import oqs
 import pytest
 import time
+import os
+import json
 from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
@@ -12,6 +14,8 @@ from src.main import (
     SUPPORTED_SIG_ALGS,
     ML_DSA_ALG,
     graveyard,
+    block_store,
+    chunk_store,
 )
 
 client = TestClient(app)
@@ -27,11 +31,34 @@ def cleanup():
     accounts.clear()
     used_nonces.clear()
     graveyard.clear()
+    block_store.clear()
+    chunk_store.clear()
+
+    # Clean up any files in the block_store directory
+    if os.path.exists("block_store"):
+        for filename in os.listdir("block_store"):
+            os.remove(os.path.join("block_store", filename))
+    # Clean up any files in the chunk_store directory
+    if os.path.exists("chunk_store"):
+        for filename in os.listdir("chunk_store"):
+            os.remove(os.path.join("chunk_store", filename))
+
     yield
     # Cleanup after test if needed
     accounts.clear()
     used_nonces.clear()
     graveyard.clear()
+    block_store.clear()
+    chunk_store.clear()
+
+    # Clean up any files in the block_store directory again
+    if os.path.exists("block_store"):
+        for filename in os.listdir("block_store"):
+            os.remove(os.path.join("block_store", filename))
+    # Clean up any files in the chunk_store directory again
+    if os.path.exists("chunk_store"):
+        for filename in os.listdir("chunk_store"):
+            os.remove(os.path.join("chunk_store", filename))
 
 
 def get_nonce():
@@ -1614,3 +1641,379 @@ def test_graveyard():
         graveyard_pks = {k["public_key"] for k in graveyard2}
         assert pk_falcon_1_hex in graveyard_pks
         assert pk_falcon_2_hex in graveyard_pks
+
+
+def test_upload_file_successful():
+    """
+    Tests the successful upload of a file to an account's block store.
+    """
+    # 1. Create an account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        nonce1 = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode()
+        create_response = client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": nonce1,
+            },
+        )
+        assert create_response.status_code == 200
+
+        # 2. Prepare file and upload request data
+        file_content = b"This is a test file for the block store."
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        upload_nonce = get_nonce()
+        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+
+        # 3. Sign the upload message
+        classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        # 4. Perform the upload
+        response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("test.txt", file_content, "text/plain")},
+            data={
+                "nonce": upload_nonce,
+                "file_hash": file_hash,
+                "classic_signature": classic_sig,
+                "pq_signatures": json.dumps([pq_sig]),
+            },
+        )
+
+        # 5. Assert success
+        assert response.status_code == 201, response.text
+        assert response.json()["message"] == "File uploaded successfully"
+        assert response.json()["file_hash"] == file_hash
+
+        # 6. Verify file exists on server
+        file_path = os.path.join("block_store", file_hash)
+        assert os.path.exists(file_path)
+        with open(file_path, "rb") as f:
+            assert f.read() == file_content
+
+        # 7. Verify metadata endpoints
+        response = client.get(f"/storage/{pk_classic_hex}")
+        assert response.status_code == 200
+        assert response.json()["files"] == [file_hash]
+
+        response = client.get(f"/storage/{pk_classic_hex}/{file_hash}")
+        assert response.status_code == 200
+        metadata = response.json()
+        assert metadata["filename"] == "test.txt"
+        assert metadata["size"] == len(file_content)
+
+
+def test_upload_file_invalid_hash():
+    """
+    Tests that file upload fails if the provided hash does not match the file.
+    """
+    # 1. Create a real account first
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+
+        # 2. Attempt upload with incorrect hash
+        file_content = b"content"
+        incorrect_hash = "thisisnotthehash"
+        upload_nonce = get_nonce()
+        upload_msg = f"UPLOAD:{pk_classic_hex}:{incorrect_hash}:{upload_nonce}".encode()
+
+        classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("test.txt", file_content, "text/plain")},
+            data={
+                "nonce": upload_nonce,
+                "file_hash": incorrect_hash,
+                "classic_signature": classic_sig,
+                "pq_signatures": json.dumps([pq_sig]),
+            },
+        )
+        assert response.status_code == 400
+        assert "File hash does not match" in response.text
+
+
+def test_upload_file_unauthorized():
+    """
+    Tests that file upload fails if signatures are invalid.
+    """
+    # 1. Create a real account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+
+        # 2. Attempt upload with invalid classic signature
+        file_content = b"content"
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        upload_nonce = get_nonce()
+
+        # Sign an incorrect message
+        incorrect_msg = b"wrong message"
+        invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(
+                f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+            ).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("test.txt", file_content, "text/plain")},
+            data={
+                "nonce": upload_nonce,
+                "file_hash": file_hash,
+                "classic_signature": invalid_sig,
+                "pq_signatures": json.dumps([pq_sig]),
+            },
+        )
+        assert response.status_code == 401
+        assert "Invalid classic signature" in response.text
+
+
+def test_upload_chunks_successful():
+    """
+    Tests the successful upload of multiple file chunks.
+    """
+    # 1. Create an account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        # Create account
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        create_response = client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+        assert create_response.status_code == 200
+
+        # 2. Register the file first (as per the workflow)
+        file_content = b"This is a test file that will be chunked."
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        register_nonce = get_nonce()
+        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        classic_sig_register = sk_classic.sign(
+            register_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_register = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(register_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        register_response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("chunked_file.txt", file_content, "text/plain")},
+            data={
+                "nonce": register_nonce,
+                "file_hash": file_hash,
+                "classic_signature": classic_sig_register,
+                "pq_signatures": json.dumps([pq_sig_register]),
+            },
+        )
+        assert register_response.status_code == 201
+
+        # 3. Upload chunks
+        chunks = [file_content[i : i + 10] for i in range(0, len(file_content), 10)]
+        total_chunks = len(chunks)
+        for i, chunk_data in enumerate(chunks):
+            chunk_hash = hashlib.sha256(chunk_data).hexdigest()
+            chunk_nonce = get_nonce()
+            chunk_msg = (
+                f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+                f"{i}:{total_chunks}:{chunk_hash}:{chunk_nonce}"
+            ).encode()
+
+            classic_sig_chunk = sk_classic.sign(
+                chunk_msg, hashfunc=hashlib.sha256
+            ).hex()
+            pq_sig_chunk = {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+                "alg": ML_DSA_ALG,
+            }
+
+            response = client.post(
+                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+                files={"file": (f"chunk_{i}", chunk_data)},
+                data={
+                    "nonce": chunk_nonce,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": str(i),
+                    "total_chunks": str(total_chunks),
+                    "classic_signature": classic_sig_chunk,
+                    "pq_signatures": json.dumps([pq_sig_chunk]),
+                },
+            )
+
+            assert response.status_code == 200, response.text
+            assert (
+                f"Chunk {i}/{total_chunks} uploaded successfully"
+                in response.json()["message"]
+            )
+
+            # Verify chunk exists on server
+            chunk_path = os.path.join("chunk_store", chunk_hash)
+            assert os.path.exists(chunk_path)
+            with open(chunk_path, "rb") as f:
+                assert f.read() == chunk_data
+
+        # 4. Verify chunk metadata is stored
+        assert file_hash in chunk_store
+        assert len(chunk_store[file_hash]) == total_chunks
+
+
+def test_download_file_successful():
+    """
+    Tests the successful upload and subsequent download of a file.
+    """
+    # 1. Create an account
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        # Create account
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        create_response = client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+        assert create_response.status_code == 200
+
+        # 2. Upload a file
+        file_content = b"This is a file for downloading."
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        upload_nonce = get_nonce()
+        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+        classic_sig_upload = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig_upload = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        upload_response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("download_test.txt", file_content, "text/plain")},
+            data={
+                "nonce": upload_nonce,
+                "file_hash": file_hash,
+                "classic_signature": classic_sig_upload,
+                "pq_signatures": json.dumps([pq_sig_upload]),
+            },
+        )
+        assert upload_response.status_code == 201
+
+        # 3. Prepare and execute download request
+        download_nonce = get_nonce()
+        download_msg = (
+            f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+        )
+        classic_sig_download = sk_classic.sign(
+            download_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": classic_sig_download,
+            "pq_signatures": [pq_sig_download],
+        }
+        download_response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/download",
+            json=download_payload,
+        )
+
+        # 4. Assert success and verify content
+        assert download_response.status_code == 200, download_response.text
+        assert download_response.content == file_content
+        assert (
+            download_response.headers["content-disposition"]
+            == 'attachment; filename="download_test.txt"'
+        )
