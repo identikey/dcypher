@@ -5,7 +5,14 @@ import pytest
 import time
 from unittest import mock
 from fastapi.testclient import TestClient
-from src.main import app, accounts, used_nonces, SUPPORTED_SIG_ALGS, ML_DSA_ALG
+from src.main import (
+    app,
+    accounts,
+    used_nonces,
+    SUPPORTED_SIG_ALGS,
+    ML_DSA_ALG,
+    graveyard,
+)
 
 client = TestClient(app)
 
@@ -19,10 +26,12 @@ def cleanup():
     # Reset state before each test
     accounts.clear()
     used_nonces.clear()
+    graveyard.clear()
     yield
     # Cleanup after test if needed
     accounts.clear()
     used_nonces.clear()
+    graveyard.clear()
 
 
 def get_nonce():
@@ -264,6 +273,37 @@ def test_create_account_unsupported_additional_pq_alg():
     )
     assert response.status_code == 400
     assert "Unsupported PQ algorithm" in response.text
+
+
+def test_create_account_duplicate_pq_alg():
+    """
+    Tests that account creation fails if the request contains multiple signatures
+    for the same post-quantum algorithm.
+    """
+    nonce = get_nonce()
+    # Prepare a payload where an additional signature uses the mandatory alg
+    response = client.post(
+        "/accounts",
+        json={
+            "public_key": "test",
+            "signature": "test",
+            "ml_dsa_signature": {
+                "public_key": "test_ml_dsa",
+                "signature": "test",
+                "alg": ML_DSA_ALG,
+            },
+            "additional_pq_signatures": [
+                {
+                    "public_key": "test_falcon",
+                    "signature": "test",
+                    "alg": ML_DSA_ALG,  # Duplicate algorithm
+                }
+            ],
+            "nonce": nonce,
+        },
+    )
+    assert response.status_code == 400
+    assert "Duplicate algorithm types are not allowed" in response.text
 
 
 def test_create_account_invalid_classic_signature():
@@ -985,9 +1025,10 @@ def test_add_pq_key_authorization_failures():
 
 def test_add_pq_key_input_validation_failures():
     """
-    Tests various input validation failure scenarios when adding a PQ key.
-    - Adding a key for an algorithm that already exists (should replace).
-    - Adding a key with an unsupported algorithm.
+    Tests various input validation scenarios when adding a PQ key.
+    - Replacing a key for an algorithm that already exists.
+    - Attempting to add a key with an unsupported algorithm.
+    - Attempting to add a key for the mandatory ML-DSA algorithm.
     """
     # 1. Setup: Create an account with one mandatory and one optional key
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -1028,7 +1069,7 @@ def test_add_pq_key_input_validation_failures():
 
         # --- Test Cases ---
 
-        # Case 1: Adding a key that already exists by algorithm type
+        # Case 1: Replacing a key that already exists by algorithm type
         add_nonce = get_nonce()
         add_msg = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_1}:{add_nonce}".encode()
         # We need a new key pair for the same algorithm to replace the old one
@@ -1086,8 +1127,7 @@ def test_add_pq_key_input_validation_failures():
         # Case 2: Adding a key with an unsupported algorithm
         unsupported_alg = "Unsupported-Alg"
         unsupported_nonce = get_nonce()
-        # The message to sign doesn't matter as much as the nonce check will fail first
-        # if the nonce is bad, but we create a valid one for correctness.
+        # The message to sign doesn't matter as much as the alg check will fail first.
         unsupported_msg = (
             f"ADD-PQ:{pk_classic_hex}:{unsupported_alg}:{unsupported_nonce}".encode()
         )
@@ -1116,12 +1156,54 @@ def test_add_pq_key_input_validation_failures():
         assert response.status_code == 400
         assert f"Unsupported PQ algorithm: {unsupported_alg}" in response.text
 
+        # Case 3: Attempting to add the mandatory algorithm
+        mandatory_nonce = get_nonce()
+        mandatory_msg = (
+            f"ADD-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{mandatory_nonce}".encode()
+        )
+        with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
+            pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
+            payload = {
+                "new_pq_signatures": [
+                    {
+                        "public_key": pk_ml_dsa_new_hex,
+                        "signature": sig_ml_dsa_new.sign(mandatory_msg).hex(),
+                        "alg": ML_DSA_ALG,
+                    }
+                ],
+                "classic_signature": sk_classic.sign(
+                    mandatory_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "existing_pq_signatures": [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(mandatory_msg).hex(),
+                        "alg": ML_DSA_ALG,
+                    },
+                    {
+                        "public_key": pk_add_pq_1_hex,
+                        "signature": sig_add_pq_1.sign(mandatory_msg).hex(),
+                        "alg": add_pq_alg_1,
+                    },
+                ],
+                "nonce": mandatory_nonce,
+            }
+            response = client.post(
+                f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+            )
+            assert response.status_code == 400
+            assert (
+                f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}"
+                in response.text
+            )
+
 
 def test_remove_pq_key_authorization_failures():
     """
     Tests various authorization failure scenarios when removing a PQ key.
     - Invalid classic signature.
     - Missing signature from an existing PQ key.
+    - Invalid signature from an existing PQ key.
     """
     # 1. Setup: Create an account with one mandatory and two optional keys
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -1222,6 +1304,23 @@ def test_remove_pq_key_authorization_failures():
         )
         assert response.status_code == 401
         assert "Signatures from all existing PQ keys are required" in response.text
+
+        # Case 3: Invalid signature from an existing PQ key
+        invalid_pq_sigs = [
+            valid_pq_sigs[0],
+            valid_pq_sigs[1],
+            {
+                "public_key": pk_add_pq_2_hex,
+                "signature": sig_add_pq_2.sign(incorrect_msg).hex(),
+                "alg": add_pq_alg_2,
+            },
+        ]
+        payload["pq_signatures"] = invalid_pq_sigs
+        response = client.post(
+            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
+        )
+        assert response.status_code == 401
+        assert "Invalid signature for existing PQ key" in response.text
 
 
 def test_remove_nonexistent_pq_key_fails():
