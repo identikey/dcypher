@@ -63,7 +63,9 @@ def cleanup(storage_paths):
 
 def _create_test_account(
     add_pq_algs: list[str] | None = None,
-) -> tuple[ecdsa.SigningKey, str, dict[str, tuple[oqs.Signature, str]]]:
+) -> tuple[
+    ecdsa.SigningKey, str, dict[str, tuple[oqs.Signature, str]], list[oqs.Signature]
+]:
     """
     Helper function to create a test account.
 
@@ -75,6 +77,7 @@ def _create_test_account(
         - The classic signing key object.
         - The classic public key hex string.
         - A dictionary of PQ signing objects and their algorithms.
+        - A list of all created oqs.Signature objects for cleanup.
     """
     if add_pq_algs is None:
         add_pq_algs = []
@@ -138,7 +141,7 @@ def _create_test_account(
     response = client.post("/accounts", json=payload)
     assert response.status_code == 200, response.text
 
-    return sk_classic, pk_classic_hex, all_pq_sks
+    return sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs
 
 
 def get_nonce():

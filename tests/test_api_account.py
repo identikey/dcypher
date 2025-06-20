@@ -440,55 +440,36 @@ def test_create_account_already_exists():
     all accounts.
     """
     # 1. Create an initial account
-    nonce1 = get_nonce()
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    sk_classic, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account()
+    try:
+        # 2. Attempt to create a second account with the same classic public key
+        nonce2 = get_nonce()
+        with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
+            pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
+            message2 = f"{pk_classic_hex}:{pk_ml_dsa_new_hex}:{nonce2}".encode("utf-8")
+            sig2_classic = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
+            sig2_ml_dsa = sig_ml_dsa_new.sign(message2).hex()
 
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        message1 = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode("utf-8")
-        sig1_classic = sk_classic.sign(message1, hashfunc=hashlib.sha256).hex()
-        sig1_ml_dsa = sig_ml_dsa.sign(message1).hex()
-        response = client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sig1_classic,
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig1_ml_dsa,
-                    "alg": ML_DSA_ALG,
+            response2 = client.post(
+                "/accounts",
+                json={
+                    "public_key": pk_classic_hex,  # Same classic PK
+                    "signature": sig2_classic,
+                    "ml_dsa_signature": {
+                        "public_key": pk_ml_dsa_new_hex,  # Different PQ PK
+                        "signature": sig2_ml_dsa,
+                        "alg": ML_DSA_ALG,
+                    },
+                    "nonce": nonce2,
                 },
-                "nonce": nonce1,
-            },
-        )
-        assert response.status_code == 200, response.text
-
-    # 2. Attempt to create a second account with the same classic public key
-    nonce2 = get_nonce()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
-        pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
-        message2 = f"{pk_classic_hex}:{pk_ml_dsa_new_hex}:{nonce2}".encode("utf-8")
-        sig2_classic = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
-        sig2_ml_dsa = sig_ml_dsa_new.sign(message2).hex()
-
-        response2 = client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,  # Same classic PK
-                "signature": sig2_classic,
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_new_hex,  # Different PQ PK
-                    "signature": sig2_ml_dsa,
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce2,
-            },
-        )
-        assert response2.status_code == 409
-        assert "Account with this classic public key already exists" in response2.text
+            )
+            assert response2.status_code == 409
+            assert (
+                "Account with this classic public key already exists" in response2.text
+            )
+    finally:
+        for sig in oqs_sigs_to_free:
+            sig.free()
 
 
 def test_create_account_expired_nonce():
@@ -576,78 +557,41 @@ def test_get_accounts_and_account_by_id():
     """
     # 1. Create two distinct accounts
     # Account 1
-    sk_classic_1 = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic_1 = sk_classic_1.get_verifying_key()
-    assert vk_classic_1 is not None
-    pk_classic_1_hex = vk_classic_1.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_1:
-        pk_ml_dsa_1_hex = sig_ml_dsa_1.generate_keypair().hex()
-        nonce1 = get_nonce()
-        message1 = f"{pk_classic_1_hex}:{pk_ml_dsa_1_hex}:{nonce1}".encode("utf-8")
-        sig1_classic = sk_classic_1.sign(message1, hashfunc=hashlib.sha256).hex()
-        sig1_ml_dsa = sig_ml_dsa_1.sign(message1).hex()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_1_hex,
-                "signature": sig1_classic,
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_1_hex,
-                    "signature": sig1_ml_dsa,
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce1,
-            },
-        )
-
+    _, pk_classic_1_hex, _, oqs_sigs_to_free_1 = _create_test_account()
     # Account 2
-    sk_classic_2 = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic_2 = sk_classic_2.get_verifying_key()
-    assert vk_classic_2 is not None
-    pk_classic_2_hex = vk_classic_2.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_2:
-        pk_ml_dsa_2_hex = sig_ml_dsa_2.generate_keypair().hex()
-        nonce2 = get_nonce()
-        message2 = f"{pk_classic_2_hex}:{pk_ml_dsa_2_hex}:{nonce2}".encode("utf-8")
-        sig2_classic = sk_classic_2.sign(message2, hashfunc=hashlib.sha256).hex()
-        sig2_ml_dsa = sig_ml_dsa_2.sign(message2).hex()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_2_hex,
-                "signature": sig2_classic,
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_2_hex,
-                    "signature": sig2_ml_dsa,
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce2,
-            },
-        )
+    _, pk_classic_2_hex, _, oqs_sigs_to_free_2 = _create_test_account()
 
-    # 2. Test get all accounts
-    response = client.get("/accounts")
-    assert response.status_code == 200
-    # Use sets for order-independent comparison
-    assert set(response.json()["accounts"]) == {pk_classic_1_hex, pk_classic_2_hex}
+    try:
+        # 2. Test get all accounts
+        response = client.get("/accounts")
+        assert response.status_code == 200
+        # Use sets for order-independent comparison
+        assert set(response.json()["accounts"]) == {
+            pk_classic_1_hex,
+            pk_classic_2_hex,
+        }
 
-    # 3. Test get single account (Account 1)
-    response = client.get(f"/accounts/{pk_classic_1_hex}")
-    assert response.status_code == 200
-    expected_pq_keys_1 = [{"public_key": pk_ml_dsa_1_hex, "alg": ML_DSA_ALG}]
-    # Response should be a list of dicts, so we compare item by item
-    assert len(response.json()["pq_keys"]) == 1
-    assert response.json()["pq_keys"][0] == expected_pq_keys_1[0]
-    assert response.json()["public_key"] == pk_classic_1_hex
+        # 3. Test get single account (Account 1)
+        response = client.get(f"/accounts/{pk_classic_1_hex}")
+        assert response.status_code == 200
+        account_details = response.json()
+        assert account_details["public_key"] == pk_classic_1_hex
+        assert len(account_details["pq_keys"]) == 1
+        assert account_details["pq_keys"][0]["alg"] == ML_DSA_ALG
 
-    # 4. Test get single account (Account 2)
-    response = client.get(f"/accounts/{pk_classic_2_hex}")
-    assert response.status_code == 200
-    expected_pq_keys_2 = [{"public_key": pk_ml_dsa_2_hex, "alg": ML_DSA_ALG}]
-    assert len(response.json()["pq_keys"]) == 1
-    assert response.json()["pq_keys"][0] == expected_pq_keys_2[0]
-    assert response.json()["public_key"] == pk_classic_2_hex
+        # 4. Test get single account (Account 2)
+        response = client.get(f"/accounts/{pk_classic_2_hex}")
+        assert response.status_code == 200
+        account_details_2 = response.json()
+        assert account_details_2["public_key"] == pk_classic_2_hex
+        assert len(account_details_2["pq_keys"]) == 1
+        assert account_details_2["pq_keys"][0]["alg"] == ML_DSA_ALG
 
-    # 5. Test get non-existent account
-    response = client.get("/accounts/nonexistentkey")
-    assert response.status_code == 404
+        # 5. Test get non-existent account
+        response = client.get("/accounts/nonexistentkey")
+        assert response.status_code == 404
+    finally:
+        for sig in oqs_sigs_to_free_1:
+            sig.free()
+        for sig in oqs_sigs_to_free_2:
+            sig.free()

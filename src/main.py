@@ -305,7 +305,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
     provide a signature to prove ownership.
 
     The message to sign is:
-    f"ADD-PQ:{classic_pk}:{new_pk_1}:{new_pk_2}:...:{nonce}"
+    f"ADD-PQ:{classic_pk}:{new_alg_1}:{new_alg_2}:...:{nonce}"
     """
     account_pq_keys = find_account(public_key)
 
