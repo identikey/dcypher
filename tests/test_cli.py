@@ -761,6 +761,8 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     result = run_command(
         [
             "upload",
+            "--api-url",
+            api_base_url,
             "--pk-path",
             pk_classic_hex,
             "--auth-keys-path",
@@ -778,6 +780,8 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     result = run_command(
         [
             "download",
+            "--api-url",
+            api_base_url,
             "--pk-path",
             pk_classic_hex,
             "--auth-keys-path",
@@ -914,6 +918,8 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     result = run_command(
         [
             "upload",
+            "--api-url",
+            api_base_url,
             "--pk-path",
             pk_classic_hex,
             "--auth-keys-path",
@@ -931,6 +937,8 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     result = run_command(
         [
             "download",
+            "--api-url",
+            api_base_url,
             "--pk-path",
             pk_classic_hex,
             "--auth-keys-path",

@@ -9,7 +9,8 @@ data, such as ciphertexts from the proxy re-encryption library.
 import json
 import base64
 import hashlib
-from typing import List, Dict, Any, Tuple
+import binascii
+from typing import List, Dict, Any, Tuple, Optional
 from lib.auth import sign_message, verify_signature
 from lib import pre
 import ecdsa
@@ -96,6 +97,7 @@ def create_idk_message_parts(
     pk,
     signing_key: ecdsa.SigningKey,
     pieces_per_part: int = 1,
+    optional_headers: Optional[Dict[str, str]] = None,
 ) -> List[str]:
     """
     Encrypts data and formats it into a list of IDK message part strings.
@@ -106,6 +108,7 @@ def create_idk_message_parts(
         pk: The public key for encryption.
         signing_key: The ECDSA signing key for signing the headers.
         pieces_per_part: The number of encrypted ciphertext pieces per message part.
+        optional_headers: A dictionary of optional headers to merge into the message headers.
 
     Returns:
         A list of strings, where each string is a fully formatted IDK message part.
@@ -166,6 +169,12 @@ def create_idk_message_parts(
             "AuthPath": json.dumps(merkle_tree.get_auth_path(i)),
         }
 
+        # Add optional headers, ensuring they don't override mandatory ones.
+        if optional_headers:
+            for key, value in optional_headers.items():
+                if key not in headers:
+                    headers[key] = value
+
         # d. Sign the headers
         canonical_header_str = ""
         for key in sorted(headers.keys()):
@@ -194,19 +203,13 @@ def create_idk_message_parts(
 def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
     """
     Parses a single IDK message part string into its components.
-
-    Args:
-        part_str: The raw string of the message part.
-
-    Returns:
-        A dictionary containing the headers and the Base64-encoded payload.
+    If the string contains multiple concatenated parts, this will parse the first one.
     """
     lines = part_str.strip().split("\n")
     if len(lines) < 4:
         raise ValueError("Invalid IDK message part format: too few lines.")
 
     begin_marker = lines[0]
-    end_marker = lines[-1]
 
     try:
         part_info = begin_marker.split(" ")[-2]
@@ -214,18 +217,31 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
     except (ValueError, IndexError):
         raise ValueError("Invalid BEGIN/END marker format.")
 
-    if begin_marker != BEGIN_IDK_MESSAGE.format(
-        part_num=part_num, total_parts=total_parts
-    ):
+    if not begin_marker.startswith("----- BEGIN IDK MESSAGE PART"):
         raise ValueError("Invalid BEGIN marker.")
-    if end_marker != END_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts):
+
+    expected_end_marker = END_IDK_MESSAGE.format(
+        part_num=part_num, total_parts=total_parts
+    )
+
+    # Find the end marker corresponding to our begin marker to handle concatenated files
+    end_marker_index = -1
+    for i, line in enumerate(lines):
+        if line.strip() == expected_end_marker:
+            end_marker_index = i
+            break
+
+    if end_marker_index == -1:
         raise ValueError("Invalid END marker.")
+
+    # Limit lines to only the first valid part found
+    part_lines = lines[: end_marker_index + 1]
 
     headers = {}
     header_lines = []
     payload_line_index = -1
     # Headers are from line 1 until we hit a blank line
-    for i, line in enumerate(lines[1:-1], start=1):
+    for i, line in enumerate(part_lines[1:-1], start=1):
         if not line.strip():
             payload_line_index = i + 1
             break
@@ -239,7 +255,7 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
         headers[key] = value
 
     # The payload is everything between the blank line and the END marker
-    payload_b64 = "".join(lines[payload_line_index:-1])
+    payload_b64 = "".join(part_lines[payload_line_index:-1])
 
     # Do not convert to int here. The caller should do it after verification.
     # The part number in the header is a string "num/total"
@@ -346,7 +362,8 @@ def decrypt_idk_message(
             header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
             vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
 
-            payload_bytes = base64.b64decode(payload_b64)
+            # Validate the payload format and content.
+            payload_bytes = base64.b64decode(payload_b64, validate=True)
             if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
                 raise ValueError("ChunkHash verification failed")
 
@@ -369,7 +386,7 @@ def decrypt_idk_message(
 
             all_pieces[piece_index] = pre.deserialize_ciphertext(payload_bytes)
 
-        except (ValueError, ecdsa.BadSignatureError) as e:
+        except (ValueError, ecdsa.BadSignatureError, binascii.Error) as e:
             raise ValueError(f"Verification failed for part {i + 1}: {e}")
 
     sorted_pieces = [all_pieces[i] for i in sorted(all_pieces.keys())]

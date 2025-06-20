@@ -345,3 +345,194 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
         decrypted_coeffs, total_bytes=bytes_total_from_headers
     )
     assert final_data == original_data
+
+
+def test_create_and_verify_with_optional_headers(crypto_setup):
+    """
+    Tests that optional headers are correctly included, signed, and verified.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    vk = crypto_setup["vk"]
+    original_data = os.urandom(50)
+    optional_headers = {"Comment": "This is a test comment."}
+
+    # 2. Create message with optional headers
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        optional_headers=optional_headers,
+    )
+    part_to_verify_str = message_parts[0]
+
+    # 3. Parse and verify
+    parsed_part = idk_message.parse_idk_message_part(part_to_verify_str)
+    headers = parsed_part["headers"]
+
+    # a. Check that the optional header is present
+    assert "Comment" in headers
+    assert headers["Comment"] == "This is a test comment."
+
+    # b. Verify the signature, which must now include the optional header
+    signature_hex = headers.pop("Signature")
+    headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
+    canonical_header_str = ""
+    # The optional header must be part of the canonical string for signature to be valid
+    for key in sorted(headers.keys()):
+        if key in ["PartNum", "TotalParts"]:
+            continue
+        canonical_header_str += f"{key}: {headers[key]}\n"
+    header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
+
+    try:
+        vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
+    except ecdsa.BadSignatureError:
+        pytest.fail("Signature verification failed with optional header")
+
+
+@pytest.mark.parametrize(
+    "tamper_func, error_msg",
+    [
+        (
+            lambda h, p: ({**h, "Signature": "00" * 64}, p),
+            "Signature verification should fail for a bad signature",
+        ),
+        (
+            # Tamper payload with invalid Base64 characters
+            lambda h, p: (h, p + "!@#$"),
+            "Parsing should fail for a payload with invalid Base64 characters",
+        ),
+        (
+            # Tamper payload with valid Base64 but wrong content
+            lambda h, p: (h, p[:-1] + ("a" if p[-1] != "a" else "b")),
+            "ChunkHash verification should fail for tampered but valid Base64 payload",
+        ),
+        (
+            lambda h, p: ({**h, "ChunkHash": "00" * 64}, p),
+            "ChunkHash verification should fail for a bad hash",
+        ),
+        (
+            lambda h, p: ({**h, "MerkleRoot": "00" * 64}, p),
+            "Merkle path verification should fail for a bad root",
+        ),
+        (
+            lambda h, p: ({**h, "AuthPath": "[]"}, p),
+            "Merkle path verification should fail for a bad auth path",
+        ),
+    ],
+)
+def test_verification_failures(crypto_setup, tamper_func, error_msg):
+    """
+    Tests that message verification fails when parts of the message are tampered with.
+    """
+    # 1. Create a valid baseline message part
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    vk = crypto_setup["vk"]
+    # Use enough data to guarantee multiple pieces, so AuthPath is never empty.
+    original_data = os.urandom(pre.get_slot_count(cc) * 2 + 1)
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data, cc=cc, pk=keys.publicKey, signing_key=sk
+    )
+    part_str = message_parts[0]
+    parsed_part = idk_message.parse_idk_message_part(part_str)
+    original_headers = parsed_part["headers"]
+    original_payload_b64 = parsed_part["payload_b64"]
+
+    # 2. Tamper with the headers or payload
+    tampered_headers, tampered_payload_b64 = tamper_func(
+        original_headers.copy(), original_payload_b64
+    )
+
+    # 3. Re-assemble the tampered message part string
+    header_block = ""
+    for key in sorted(tampered_headers.keys()):
+        # Don't include derived fields in the raw string
+        if key not in ["PartNum", "TotalParts"]:
+            header_block += f"{key}: {tampered_headers[key]}\n"
+
+    part_num = tampered_headers["PartNum"]
+    total_parts = tampered_headers["TotalParts"]
+    tampered_part_str = (
+        f"----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----\n"
+        f"{header_block}\n"
+        f"{tampered_payload_b64}\n"
+        f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
+    )
+
+    # 4. Assert that the high-level decryption/verification function raises an error
+    with pytest.raises(ValueError, match="Verification failed"):
+        idk_message.decrypt_idk_message(
+            cc=cc, sk=keys.secretKey, vk=vk, message_str=tampered_part_str
+        )
+
+
+def test_multiple_pieces_per_part_limitation(crypto_setup):
+    """
+    Tests message creation with multiple pieces per part and verifies the
+    known limitation that the AuthPath only validates the first piece.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    # Generate enough data for at least 2 pieces.
+    original_data = os.urandom(pre.get_slot_count(cc) * 4)
+
+    # 2. Create a message with 2 pieces per part
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        pieces_per_part=2,
+    )
+    assert len(message_parts) > 0
+    part_to_verify_str = message_parts[0]
+
+    # 3. Manually verify the pieces from the first part
+    parsed_part = idk_message.parse_idk_message_part(part_to_verify_str)
+    headers = parsed_part["headers"]
+    payload_bytes = base64.b64decode(parsed_part["payload_b64"])
+
+    # We can get this by re-creating the first two pieces and checking their length.
+    temp_coeffs_1 = pre.bytes_to_coefficients(
+        original_data[: pre.get_slot_count(cc) * 2], pre.get_slot_count(cc)
+    )
+    temp_piece_1 = pre.encrypt(cc, keys.publicKey, temp_coeffs_1)[0]
+    ser_piece_1 = pre.serialize_to_bytes(temp_piece_1)
+
+    temp_coeffs_2 = pre.bytes_to_coefficients(
+        original_data[pre.get_slot_count(cc) * 2 : pre.get_slot_count(cc) * 4],
+        pre.get_slot_count(cc),
+    )
+    temp_piece_2 = pre.encrypt(cc, keys.publicKey, temp_coeffs_2)[0]
+    ser_piece_2 = pre.serialize_to_bytes(temp_piece_2)
+
+    # The payload is the concatenation of the raw bytes of the pieces
+    piece_1_bytes = payload_bytes[: len(ser_piece_1)]
+    piece_2_bytes = payload_bytes[len(ser_piece_1) :]
+
+    # 4. Verify the AuthPath for the first piece (should succeed)
+    leaf_hash_1_bytes = hashlib.blake2b(piece_1_bytes).digest()
+    auth_path = json.loads(headers["AuthPath"])
+    assert idk_message.verify_merkle_path(
+        leaf_hash_bytes=leaf_hash_1_bytes,
+        auth_path_hex=auth_path,
+        piece_index=0,  # The path is for the first piece (index 0)
+        expected_root_hex=headers["MerkleRoot"],
+    ), "Merkle path for the first piece in the part should be valid"
+
+    # 5. Verify the AuthPath for the second piece (should fail)
+    leaf_hash_2_bytes = hashlib.blake2b(piece_2_bytes).digest()
+    assert not idk_message.verify_merkle_path(
+        leaf_hash_bytes=leaf_hash_2_bytes,
+        auth_path_hex=auth_path,
+        piece_index=1,  # This path is not for the second piece
+        expected_root_hex=headers["MerkleRoot"],
+    ), "Merkle path for the second piece should be invalid"

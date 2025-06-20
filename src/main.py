@@ -15,6 +15,7 @@ from typing import List
 # For example: export PYTHONPATH=.
 from lib.auth import verify_signature
 from lib.pq_auth import SUPPORTED_SIG_ALGS, verify_pq_signature
+from lib import idk_message
 
 # In a real application, this should be loaded from a secure configuration manager
 # or environment variable, and it should be a long, random string.
@@ -518,11 +519,18 @@ async def upload_file(
     except (json.JSONDecodeError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid format for pq_signatures.")
 
-    # Verify file hash
+    # Verify file hash by parsing the IDK message
     file_content = await file.read()
-    computed_hash = hashlib.sha256(file_content).hexdigest()
+    try:
+        parsed_part = idk_message.parse_idk_message_part(file_content.decode("utf-8"))
+        computed_hash = parsed_part["headers"]["MerkleRoot"]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse IDK message: {e}")
+
     if computed_hash != file_hash:
-        raise HTTPException(status_code=400, detail="File hash does not match.")
+        raise HTTPException(
+            status_code=400, detail="File hash does not match MerkleRoot."
+        )
 
     # Construct message and verify signatures
     message_to_verify = f"UPLOAD:{public_key}:{file_hash}:{nonce}".encode("utf-8")
