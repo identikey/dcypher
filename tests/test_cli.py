@@ -114,6 +114,21 @@ def cli_test_env(tmp_path, request):
 
 
 def test_full_workflow(cli_test_env):
+    """
+    Tests the full PRE workflow from key generation to re-encryption.
+
+    This test covers the following CLI commands in sequence:
+    1.  `gen-cc`: Generate a crypto context.
+    2.  `gen-keys`: Generate two sets of keys (for Alice and Bob).
+    3.  `encrypt`: Encrypt a file for Alice.
+    4.  `decrypt`: Decrypt the ciphertext with Alice's key.
+    5.  `gen-rekey`: Generate a re-encryption key from Alice to Bob.
+    6.  `re-encrypt`: Re-encrypt Alice's ciphertext for Bob.
+    7.  `decrypt`: Decrypt the re-encrypted ciphertext with Bob's key.
+
+    The test ensures that the data remains intact throughout the process.
+    This version uses a simple bytes string as input data.
+    """
     run_command, test_dir = cli_test_env
     original_data = b"this is a test"
     input_file = test_dir / "input.txt"
@@ -220,6 +235,12 @@ def test_full_workflow(cli_test_env):
 
 
 def test_full_workflow_with_string(cli_test_env):
+    """
+    Tests the full PRE workflow with a string-based message.
+
+    This test follows the same steps as `test_full_workflow` but uses a
+    different string as input to verify the workflow with standard text data.
+    """
     run_command, test_dir = cli_test_env
     original_data = b"This is a secret message."
     input_file = test_dir / "input.txt"
@@ -326,6 +347,13 @@ def test_full_workflow_with_string(cli_test_env):
 
 
 def test_full_workflow_with_random_bytes(cli_test_env):
+    """
+    Tests the full PRE workflow with random binary data.
+
+    This test follows the same steps as `test_full_workflow` but uses
+    128 bytes of random data as input to verify the workflow's robustness
+    with non-textual, binary content.
+    """
     run_command, test_dir = cli_test_env
     original_data = os.urandom(128)  # 128 random bytes
     input_file = test_dir / "input.bin"
@@ -432,6 +460,15 @@ def test_full_workflow_with_random_bytes(cli_test_env):
 
 
 def test_large_file_workflow(cli_test_env):
+    """
+    Tests the PRE workflow with a file larger than the crypto context's slot count.
+
+    This test verifies that the system can handle data that exceeds the
+    underlying encryption scheme's capacity for a single operation, forcing
+    the use of data chunking. The workflow is the same as `test_full_workflow`,
+    but the input file size is dynamically set to be larger than the PRE
+    slot count.
+    """
     run_command, test_dir = cli_test_env
 
     # First, generate a crypto context to find out the slot count
@@ -545,9 +582,18 @@ def test_large_file_workflow(cli_test_env):
 
 def test_cli_upload_download_workflow(cli_test_env):
     """
-    Tests the full upload/download workflow through the CLI, including
-    with a file larger than the PRE slot size.
-    This requires a running API instance.
+    Tests the end-to-end file storage workflow using the CLI against a live API.
+
+    This integration test covers:
+    1.  Client-side identity generation (PRE and authentication keys).
+    2.  Account creation on the remote server.
+    3.  Encryption of a large file that requires chunking.
+    4.  Uploading the encrypted file using the `upload` command.
+    5.  Downloading the file using the `download` command.
+    6.  Decrypting the downloaded file and verifying its integrity.
+
+    It ensures that the CLI can correctly interact with the API for storing
+    and retrieving large, encrypted files.
     """
     run_command, test_dir = cli_test_env
 
@@ -689,6 +735,63 @@ def test_cli_upload_download_workflow(cli_test_env):
     click.echo(
         "CLI upload/download/decrypt workflow successful with large file!", err=True
     )
+
+
+def test_encrypt_with_data_string(cli_test_env):
+    """
+    Tests the `encrypt` command using direct string input via the `--data` flag.
+
+    This test verifies that the CLI can correctly encrypt a string provided
+    directly on the command line, then decrypts the resulting ciphertext
+    to ensure the original data is recovered.
+    """
+    run_command, test_dir = cli_test_env
+    original_data = "this is a test string"
+
+    # 1. Generate Crypto Context
+    run_command(["gen-cc", "--output", "cc.json"])
+    assert (test_dir / "cc.json").exists()
+
+    # 2. Generate Alice's keys
+    run_command(["gen-keys", "--cc-path", "cc.json", "--output-prefix", "alice"])
+    assert (test_dir / "alice.pub").exists()
+    assert (test_dir / "alice.sec").exists()
+
+    # 3. Encrypt data with Alice's public key using --data
+    result = run_command(
+        [
+            "encrypt",
+            "--cc-path",
+            "cc.json",
+            "--pk-path",
+            "alice.pub",
+            "--data",
+            original_data,
+            "--output",
+            "ciphertext_alice.json",
+        ]
+    )
+    assert result.returncode == 0
+    assert (test_dir / "ciphertext_alice.json").exists()
+
+    # 4. Decrypt with Alice's secret key
+    decrypted_file_alice = test_dir / "decrypted_by_alice.txt"
+    result = run_command(
+        [
+            "decrypt",
+            "--cc-path",
+            "cc.json",
+            "--sk-path",
+            "alice.sec",
+            "--ciphertext-path",
+            "ciphertext_alice.json",
+            "--output-file",
+            str(decrypted_file_alice),
+        ]
+    )
+    assert result.returncode == 0
+    with open(decrypted_file_alice, "rb") as f:
+        assert f.read() == original_data.encode("utf-8")
 
 
 if __name__ == "__main__":

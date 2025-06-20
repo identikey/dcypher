@@ -75,7 +75,7 @@ def gen_keys(cc_path, output_prefix):
 @cli.command()
 @click.option("--cc-path", default="cc.json", help="Path to the crypto context file.")
 @click.option("--pk-path", help="Path to the public key file.", required=True)
-@click.option("--data", help="Comma-separated list of integers to encrypt.")
+@click.option("--data", help="String to encrypt.")
 @click.option(
     "--input-file",
     type=click.Path(exists=True, dir_okay=False),
@@ -105,13 +105,7 @@ def encrypt(cc_path, pk_path, data, input_file, output):
         with open(input_file, "rb") as f:
             input_data = list(f.read())
     else:
-        try:
-            input_data = [int(x.strip()) for x in data.split(",")]
-        except ValueError:
-            click.echo(
-                "Error: Data must be a comma-separated list of integers.", err=True
-            )
-            return
+        input_data = list(data.encode("utf-8"))
 
     click.echo("Encrypting data...", err=True)
     ciphertexts = pre.encrypt(cc, pk, input_data)
