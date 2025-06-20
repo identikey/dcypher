@@ -614,7 +614,7 @@ def test_cli_upload_download_workflow(cli_test_env):
 
     # b. Authentication keys for API
     classic_sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    classic_vk = classic_sk.verifying_key
+    classic_vk = classic_sk.get_verifying_key()
     pk_classic_hex = classic_vk.to_string("uncompressed").hex()
     classic_sk_path = test_dir / "user_auth.sk"
     with open(classic_sk_path, "w") as f:

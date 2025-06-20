@@ -3,3 +3,5 @@ __pycache__
 *.pyc
 *.egg-info
 /include
+/block_store
+/chunk_store

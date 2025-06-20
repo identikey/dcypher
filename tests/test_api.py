@@ -2017,3 +2017,89 @@ def test_download_file_successful():
             download_response.headers["content-disposition"]
             == 'attachment; filename="download_test.txt"'
         )
+
+
+def test_download_file_unauthorized():
+    """
+    Tests that file download fails if the signatures are invalid.
+    """
+    # 1. Create an account and upload a file successfully
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        # Create account
+        create_nonce = get_nonce()
+        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
+        client.post(
+            "/accounts",
+            json={
+                "public_key": pk_classic_hex,
+                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(create_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": create_nonce,
+            },
+        )
+
+        # Upload a file
+        file_content = b"This is a file for unauthorized download test."
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        upload_nonce = get_nonce()
+        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+        client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("test.txt", file_content, "text/plain")},
+            data={
+                "nonce": upload_nonce,
+                "file_hash": file_hash,
+                "classic_signature": sk_classic.sign(
+                    upload_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": json.dumps(
+                    [
+                        {
+                            "public_key": pk_ml_dsa_hex,
+                            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ]
+                ),
+            },
+        )
+
+        # 2. Attempt to download with invalid classic signature
+        download_nonce = get_nonce()
+        # Sign an incorrect message
+        incorrect_msg = b"wrong message for download"
+        invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
+
+        # The PQ signature is correct for the *actual* message, to isolate the failure
+        correct_download_msg = (
+            f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+        )
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": invalid_sig,
+            "pq_signatures": [pq_sig_download],
+        }
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/download",
+            json=download_payload,
+        )
+
+        # 3. Assert failure
+        assert response.status_code == 401
+        assert "Invalid classic signature" in response.text
