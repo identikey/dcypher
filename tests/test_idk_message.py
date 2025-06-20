@@ -53,7 +53,7 @@ def test_merkle_tree_creation():
 def test_merkle_tree_odd_leaves():
     """
     Tests that the Merkle tree handles an odd number of leaves correctly
-    by duplicating the last leaf's hash at the first level.
+    by pairing the last leaf's hash with a zero-hash, per the spec.
     """
     pieces = [b"a", b"b", b"c"]
     tree = MerkleTree(pieces)
@@ -61,12 +61,13 @@ def test_merkle_tree_odd_leaves():
     h1 = hashlib.blake2b(b"a").digest()
     h2 = hashlib.blake2b(b"b").digest()
     h3 = hashlib.blake2b(b"c").digest()
+    zero_hash = bytes(len(h3))  # A zero-filled hash of the same length
 
     p12 = hashlib.blake2b(h1 + h2).digest()
-    # The spec says the last node is paired with itself.
-    p33 = hashlib.blake2b(h3 + h3).digest()
+    # The spec says the last node is paired with a zero-filled hash.
+    p3_zero = hashlib.blake2b(h3 + zero_hash).digest()
 
-    root = hashlib.blake2b(p12 + p33).digest()
+    root = hashlib.blake2b(p12 + p3_zero).digest()
     assert tree.root == root.hex()
 
 
@@ -177,3 +178,73 @@ def test_create_and_verify_idk_message(crypto_setup):
         piece_index=piece_index,
         expected_root_hex=merkle_root,
     ), "Merkle path verification failed"
+
+
+def test_idk_message_format_conformance(crypto_setup):
+    """
+    Tests that the generated IDK message part string conforms to the spec's
+    textual format, ensuring it can be parsed by any compliant tool.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    original_data = os.urandom(100)  # small but non-trivial data
+    pieces_per_part = 1
+
+    # 2. Create message parts
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        pieces_per_part=pieces_per_part,
+    )
+
+    # 3. Take the first part and inspect its raw string format
+    part_to_test_str = message_parts[0]
+    lines = part_to_test_str.split("\n")
+    total_parts = len(message_parts)
+    part_num = 1
+
+    # a. Check BEGIN/END markers
+    assert lines[0] == f"----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----"
+    assert lines[-1] == f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
+
+    # b. Check for a single empty line between headers and payload
+    empty_line_indices = [i for i, line in enumerate(lines) if line == ""]
+    assert len(empty_line_indices) == 1, "There should be exactly one empty line"
+    header_end_index = empty_line_indices[0]
+
+    # c. Check header format (Key: Value) and alphabetical order
+    header_lines = lines[1:header_end_index]
+    header_keys = []
+    for header_line in header_lines:
+        assert ": " in header_line, f"Header line '{header_line}' is malformed"
+        key, _ = header_line.split(": ", 1)
+        header_keys.append(key)
+
+    assert header_keys == sorted(header_keys), "Headers are not in alphabetical order"
+
+    # d. Check payload is valid Base64
+    payload_b64 = "".join(lines[header_end_index + 1 : -1])
+    try:
+        base64.b64decode(payload_b64, validate=True)
+    except Exception:
+        pytest.fail("Payload is not valid Base64")
+
+    # e. Check all mandatory headers from the spec are present
+    expected_headers = {
+        "Version",
+        "SlotsTotal",
+        "SlotsUsed",
+        "BytesTotal",
+        "MerkleRoot",
+        "Signature",
+        "Part",
+        "ChunkHash",
+        "AuthPath",
+    }
+    assert set(header_keys).issuperset(expected_headers), (
+        f"Missing headers: {expected_headers - set(header_keys)}"
+    )

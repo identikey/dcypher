@@ -45,8 +45,12 @@ class MerkleTree:
             next_level = []
             for i in range(0, len(current_level), 2):
                 left = current_level[i]
-                # If there's an odd number of nodes, duplicate the last one's hash
-                right = current_level[i + 1] if i + 1 < len(current_level) else left
+                # If there's an odd number of nodes, pair the last one with a zero-hash.
+                if i + 1 < len(current_level):
+                    right = current_level[i + 1]
+                else:
+                    # Per spec, pad with a zero-filled hash of the same length.
+                    right = bytes(len(left))
                 next_level.append(self._hash_internal_node(left, right))
             tree.append(next_level)
             current_level = next_level
@@ -75,9 +79,10 @@ class MerkleTree:
             if sibling_index < len(level):
                 auth_path.append(level[sibling_index].hex())
             else:
-                # If there's no sibling (odd number of nodes), the node was paired
-                # with itself, so we add its own hash.
-                auth_path.append(level[current_index].hex())
+                # If there's no sibling (odd number of nodes), it was paired with a
+                # zero-hash of the same length as the current node.
+                zero_hash = bytes(len(level[current_index]))
+                auth_path.append(zero_hash.hex())
 
             # Move to the parent's index in the next level up
             current_index //= 2
