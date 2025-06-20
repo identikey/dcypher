@@ -4,6 +4,7 @@ This file tests the proxy re-encryption (PRE) library.
 
 import time
 import random
+import os
 from src.lib import pre
 
 
@@ -34,19 +35,24 @@ def test_pre_workflow():
     print(f"Key generation time: {(time.time() - start_time) * 1000:.2f} ms")
 
     # Data to be encrypted
-    nshort = ringsize
-    original_data = [random.randint(0, 65535) for _ in range(nshort)]
+    original_data = os.urandom(1024)
+
+    # Convert bytes to coefficients before encryption
+    coeffs = pre.bytes_to_coefficients(original_data)
 
     # Encryption by Alice
     print("\nEncrypting data with Alice's public key...")
     start_time = time.time()
-    ciphertext_alice = pre.encrypt(cc, alice_keys.publicKey, original_data)
+    ciphertext_alice = pre.encrypt(cc, alice_keys.publicKey, coeffs)
     print(f"Encryption time: {(time.time() - start_time) * 1000:.2f} ms")
 
     # Decryption by Alice (for verification)
     start_time = time.time()
-    decrypted_by_alice = pre.decrypt(
-        cc, alice_keys.secretKey, ciphertext_alice, len(original_data)
+    decrypted_coeffs_alice = pre.decrypt(
+        cc, alice_keys.secretKey, ciphertext_alice, len(coeffs)
+    )
+    decrypted_bytes_alice = pre.coefficients_to_bytes(
+        decrypted_coeffs_alice, len(original_data)
     )
     print(f"Decryption time (by Alice): {(time.time() - start_time) * 1000:.2f} ms")
 
@@ -68,14 +74,17 @@ def test_pre_workflow():
 
     # Decryption by Bob
     start_time = time.time()
-    decrypted_by_bob = pre.decrypt(
-        cc, bob_keys.secretKey, ciphertext_bob, len(original_data)
+    decrypted_coeffs_bob = pre.decrypt(
+        cc, bob_keys.secretKey, ciphertext_bob, len(coeffs)
+    )
+    decrypted_bytes_bob = pre.coefficients_to_bytes(
+        decrypted_coeffs_bob, len(original_data)
     )
     print(f"Decryption time (by Bob): {(time.time() - start_time) * 1000:.2f} ms")
 
     # Verification
-    assert original_data == decrypted_by_alice, "Decryption by Alice failed"
-    assert original_data == decrypted_by_bob, (
+    assert original_data == decrypted_bytes_alice, "Decryption by Alice failed"
+    assert original_data == decrypted_bytes_bob, (
         "Decryption by Bob after re-encryption failed"
     )
 
@@ -117,8 +126,11 @@ def test_pre_workflow():
 
     print("\nDecrypting with deserialized objects...")
     start_time = time.time()
-    final_decrypted_data = pre.decrypt(
-        deser_cc, deser_bob_sk, deser_ciphertext_bob, len(original_data)
+    final_decrypted_coeffs = pre.decrypt(
+        deser_cc, deser_bob_sk, deser_ciphertext_bob, len(coeffs)
+    )
+    final_decrypted_data = pre.coefficients_to_bytes(
+        final_decrypted_coeffs, len(original_data)
     )
     print(f"Decryption time: {(time.time() - start_time) * 1000:.2f} ms")
 
