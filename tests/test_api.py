@@ -61,6 +61,86 @@ def cleanup(storage_paths):
         chunk_store.clear()
 
 
+def _create_test_account(
+    add_pq_algs: list[str] | None = None,
+) -> tuple[ecdsa.SigningKey, str, dict[str, tuple[oqs.Signature, str]]]:
+    """
+    Helper function to create a test account.
+
+    Args:
+        add_pq_algs: A list of additional PQ algorithms to create keys for.
+
+    Returns:
+        A tuple containing:
+        - The classic signing key object.
+        - The classic public key hex string.
+        - A dictionary of PQ signing objects and their algorithms.
+    """
+    if add_pq_algs is None:
+        add_pq_algs = []
+
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+
+    all_pq_sks: dict[str, tuple[oqs.Signature, str]] = {}
+    all_pks_hex: list[str] = [pk_classic_hex]
+    additional_pq_payload = []
+    all_algs = [ML_DSA_ALG] + add_pq_algs
+
+    oqs_sigs = [oqs.Signature(alg) for alg in all_algs]
+
+    # Mandatory ML-DSA key
+    sig_ml_dsa = oqs_sigs[0]
+    pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+    all_pks_hex.append(pk_ml_dsa_hex)
+    all_pq_sks[pk_ml_dsa_hex] = (sig_ml_dsa, ML_DSA_ALG)
+
+    # Additional PQ keys
+    for i, alg in enumerate(add_pq_algs):
+        sig_add_pq = oqs_sigs[i + 1]
+        pk_add_pq_hex = sig_add_pq.generate_keypair().hex()
+        all_pks_hex.append(pk_add_pq_hex)
+        all_pq_sks[pk_add_pq_hex] = (sig_add_pq, alg)
+
+    # Create message and signatures
+    nonce = get_nonce()
+    message = f"{':'.join(all_pks_hex)}:{nonce}".encode("utf-8")
+
+    sig_classic_hex = sk_classic.sign(message, hashfunc=hashlib.sha256).hex()
+    sig_ml_dsa_hex = sig_ml_dsa.sign(message).hex()
+
+    for pk_hex, (sig_obj, _) in all_pq_sks.items():
+        if pk_hex != pk_ml_dsa_hex:
+            additional_pq_payload.append(
+                {
+                    "public_key": pk_hex,
+                    "signature": sig_obj.sign(message).hex(),
+                    "alg": all_pq_sks[pk_hex][1],
+                }
+            )
+
+    # Create account payload
+    payload = {
+        "public_key": pk_classic_hex,
+        "signature": sig_classic_hex,
+        "ml_dsa_signature": {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa_hex,
+            "alg": ML_DSA_ALG,
+        },
+        "nonce": nonce,
+    }
+    if additional_pq_payload:
+        payload["additional_pq_signatures"] = additional_pq_payload
+
+    response = client.post("/accounts", json=payload)
+    assert response.status_code == 200, response.text
+
+    return sk_classic, pk_classic_hex, all_pq_sks
+
+
 def get_nonce():
     """
     Helper function to request a nonce from the /nonce endpoint.
@@ -737,58 +817,27 @@ def test_add_and_remove_pq_keys():
     3. Successfully remove an optional PQ key.
     4. Verify the state of the account after each operation.
     """
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
-    all_pq_sks = {}  # {pk_hex: (oqs_sig_obj, alg)}
 
-    with (
-        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
-        oqs.Signature(add_pq_alg_1) as sig_add_pq_1,
-        oqs.Signature(add_pq_alg_2) as sig_add_pq_2,
-    ):
-        # === 1. Create an account with two PQ keys (one mandatory, one optional) ===
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        all_pq_sks[pk_ml_dsa_hex] = (sig_ml_dsa, ML_DSA_ALG)
-        pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
-        all_pq_sks[pk_add_pq_1_hex] = (sig_add_pq_1, add_pq_alg_1)
+    # === 1. Create an account with two PQ keys (one mandatory, one optional) ===
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account(
+        add_pq_algs=[add_pq_alg_1]
+    )
+    pk_ml_dsa_hex = next(pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG)
+    pk_add_pq_1_hex = next(
+        pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
+    )
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
 
-        # Create account
-        nonce1 = get_nonce()
-        all_pks_creation = [pk_classic_hex, pk_ml_dsa_hex, pk_add_pq_1_hex]
-        message1 = f"{':'.join(all_pks_creation)}:{nonce1}".encode("utf-8")
-        sig_classic1 = sk_classic.sign(message1, hashfunc=hashlib.sha256).hex()
-        sig_ml_dsa1 = sig_ml_dsa.sign(message1).hex()
-        sig_add_pq_1_hex = sig_add_pq_1.sign(message1).hex()
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": sig_classic1,
-            "ml_dsa_signature": {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa1,
-                "alg": ML_DSA_ALG,
-            },
-            "additional_pq_signatures": [
-                {
-                    "public_key": pk_add_pq_1_hex,
-                    "signature": sig_add_pq_1_hex,
-                    "alg": add_pq_alg_1,
-                }
-            ],
-            "nonce": nonce1,
-        }
-        response = client.post("/accounts", json=create_payload)
-        assert response.status_code == 200
+    # Verify initial account state
+    response = client.get(f"/accounts/{pk_classic_hex}")
+    assert response.status_code == 200
+    assert len(response.json()["pq_keys"]) == 2
 
-        # Verify initial account state
-        response = client.get(f"/accounts/{pk_classic_hex}")
-        assert response.status_code == 200
-        assert len(response.json()["pq_keys"]) == 2
-
-        # === 2. Add a new PQ key ===
+    # === 2. Add a new PQ key ===
+    with oqs.Signature(add_pq_alg_2) as sig_add_pq_2:
         pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
         all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
         nonce2 = get_nonce()
@@ -847,7 +896,7 @@ def test_add_and_remove_pq_keys():
         active_pks = accounts[pk_classic_hex]
         all_pq_sigs3 = []
         for alg, pk in active_pks.items():
-            signer = all_pq_sks[pk][0]
+            signer, _ = all_pq_sks[pk]
             all_pq_sigs3.append(
                 {"public_key": pk, "signature": signer.sign(message3).hex(), "alg": alg}
             )
@@ -873,6 +922,9 @@ def test_add_and_remove_pq_keys():
         assert not any(k["public_key"] == pk_to_remove for k in keys_after_remove)
         assert any(k["public_key"] == pk_ml_dsa_hex for k in keys_after_remove)
         assert any(k["public_key"] == pk_add_pq_2_hex for k in keys_after_remove)
+        # Clean up oqs signatures
+        for sig, _ in all_pq_sks.values():
+            sig.free()
 
 
 def test_remove_mandatory_pq_key_fails():
@@ -881,29 +933,9 @@ def test_remove_mandatory_pq_key_fails():
     is rejected with a 400 error.
     """
     # 1. Create a minimal account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        nonce1 = get_nonce()
-        message1 = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode("utf-8")
-        sig_classic = sk_classic.sign(message1, hashfunc=hashlib.sha256).hex()
-        sig_ml_dsa_hex = sig_ml_dsa.sign(message1).hex()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sig_classic,
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa_hex,
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce1,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
     # 2. Attempt to remove the mandatory key
     nonce2 = get_nonce()
@@ -925,6 +957,9 @@ def test_remove_mandatory_pq_key_fails():
     )
     assert response.status_code == 400
     assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in response.text
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_add_pq_key_authorization_failures():
@@ -936,44 +971,20 @@ def test_add_pq_key_authorization_failures():
     - Invalid signature for the new PQ key itself.
     """
     # 1. Setup: Create an account with one mandatory and one optional key
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    with (
-        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
-        oqs.Signature(add_pq_alg_1) as sig_add_pq_1,
-        oqs.Signature(add_pq_alg_2) as sig_add_pq_2,
-    ):
-        # Create the initial account
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_msg = (
-            f"{pk_classic_hex}:{pk_ml_dsa_hex}:{pk_add_pq_1_hex}:{nonce1}".encode()
-        )
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(create_msg).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "additional_pq_signatures": [
-                {
-                    "public_key": pk_add_pq_1_hex,
-                    "signature": sig_add_pq_1.sign(create_msg).hex(),
-                    "alg": add_pq_alg_1,
-                }
-            ],
-            "nonce": nonce1,
-        }
-        client.post("/accounts", json=create_payload)
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account(
+        add_pq_algs=[add_pq_alg_1]
+    )
+    pk_ml_dsa_hex = next(pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG)
+    pk_add_pq_1_hex = next(
+        pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
+    )
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
 
+    with oqs.Signature(add_pq_alg_2) as sig_add_pq_2:
         # 2. Prepare for a valid "add" operation
         pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
         add_nonce = get_nonce()
@@ -1048,6 +1059,9 @@ def test_add_pq_key_authorization_failures():
         response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
         assert response.status_code == 401
         assert f"Invalid signature for new PQ key" in response.text
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_add_pq_key_input_validation_failures():
@@ -1058,171 +1072,149 @@ def test_add_pq_key_input_validation_failures():
     - Attempting to add a key for the mandatory ML-DSA algorithm.
     """
     # 1. Setup: Create an account with one mandatory and one optional key
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
     add_pq_alg_1 = "Falcon-512"
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account(
+        add_pq_algs=[add_pq_alg_1]
+    )
+    pk_ml_dsa_hex = next(pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG)
+    pk_add_pq_1_hex = next(
+        pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
+    )
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
 
-    with (
-        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
-        oqs.Signature(add_pq_alg_1) as sig_add_pq_1,
-    ):
-        # Create the initial account
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_msg = (
-            f"{pk_classic_hex}:{pk_ml_dsa_hex}:{pk_add_pq_1_hex}:{nonce1}".encode()
-        )
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(create_msg).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "additional_pq_signatures": [
+    # --- Test Cases ---
+
+    # Case 1: Replacing a key that already exists by algorithm type
+    add_nonce = get_nonce()
+    add_msg = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_1}:{add_nonce}".encode()
+    # We need a new key pair for the same algorithm to replace the old one
+    with oqs.Signature(add_pq_alg_1) as sig_add_pq_1_new:
+        pk_add_pq_1_new_hex = sig_add_pq_1_new.generate_keypair().hex()
+        payload = {
+            "new_pq_signatures": [
                 {
-                    "public_key": pk_add_pq_1_hex,
-                    "signature": sig_add_pq_1.sign(create_msg).hex(),
+                    "public_key": pk_add_pq_1_new_hex,
+                    "signature": sig_add_pq_1_new.sign(add_msg).hex(),
                     "alg": add_pq_alg_1,
                 }
             ],
-            "nonce": nonce1,
-        }
-        client.post("/accounts", json=create_payload)
-
-        # --- Test Cases ---
-
-        # Case 1: Replacing a key that already exists by algorithm type
-        add_nonce = get_nonce()
-        add_msg = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_1}:{add_nonce}".encode()
-        # We need a new key pair for the same algorithm to replace the old one
-        with oqs.Signature(add_pq_alg_1) as sig_add_pq_1_new:
-            pk_add_pq_1_new_hex = sig_add_pq_1_new.generate_keypair().hex()
-            payload = {
-                "new_pq_signatures": [
-                    {
-                        "public_key": pk_add_pq_1_new_hex,
-                        "signature": sig_add_pq_1_new.sign(add_msg).hex(),
-                        "alg": add_pq_alg_1,
-                    }
-                ],
-                "classic_signature": sk_classic.sign(
-                    add_msg, hashfunc=hashlib.sha256
-                ).hex(),
-                "existing_pq_signatures": [
-                    {
-                        "public_key": pk_ml_dsa_hex,
-                        "signature": sig_ml_dsa.sign(add_msg).hex(),
-                        "alg": ML_DSA_ALG,
-                    },
-                    {
-                        "public_key": pk_add_pq_1_hex,
-                        "signature": sig_add_pq_1.sign(add_msg).hex(),
-                        "alg": add_pq_alg_1,
-                    },
-                ],
-                "nonce": add_nonce,
-            }
-            response = client.post(
-                f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-            )
-            assert response.status_code == 200, response.text
-            assert "Successfully added 1 PQ key(s)" in response.json()["message"]
-
-            # Verify state after adding: key count should be the same
-            response = client.get(f"/accounts/{pk_classic_hex}")
-            keys_after_add = response.json()["pq_keys"]
-            assert len(keys_after_add) == 2
-
-            # Verify the old key is in the graveyard
-            response = client.get(f"/accounts/{pk_classic_hex}/graveyard")
-            assert response.status_code == 200
-            graveyard_keys = response.json()["graveyard"]
-            assert len(graveyard_keys) == 1
-            assert graveyard_keys[0]["public_key"] == pk_add_pq_1_hex
-            assert graveyard_keys[0]["alg"] == add_pq_alg_1
-
-            # Verify the new key is active
-            active_pks = {k["public_key"] for k in keys_after_add}
-            assert pk_add_pq_1_new_hex in active_pks, "New key should be active"
-            assert pk_add_pq_1_hex not in active_pks, "Old key should not be active"
-
-        # Case 2: Adding a key with an unsupported algorithm
-        unsupported_alg = "Unsupported-Alg"
-        unsupported_nonce = get_nonce()
-        # The message to sign doesn't matter as much as the alg check will fail first.
-        unsupported_msg = (
-            f"ADD-PQ:{pk_classic_hex}:{unsupported_alg}:{unsupported_nonce}".encode()
-        )
-        payload = {
-            "new_pq_signatures": [
-                {"public_key": "junk", "signature": "junk", "alg": unsupported_alg}
-            ],
             "classic_signature": sk_classic.sign(
-                unsupported_msg, hashfunc=hashlib.sha256
+                add_msg, hashfunc=hashlib.sha256
             ).hex(),
             "existing_pq_signatures": [
                 {
                     "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(unsupported_msg).hex(),
+                    "signature": sig_ml_dsa.sign(add_msg).hex(),
                     "alg": ML_DSA_ALG,
                 },
                 {
                     "public_key": pk_add_pq_1_hex,
-                    "signature": sig_add_pq_1.sign(unsupported_msg).hex(),
+                    "signature": sig_add_pq_1.sign(add_msg).hex(),
                     "alg": add_pq_alg_1,
                 },
             ],
-            "nonce": unsupported_nonce,
+            "nonce": add_nonce,
+        }
+        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        assert response.status_code == 200, response.text
+        assert "Successfully added 1 PQ key(s)" in response.json()["message"]
+
+        # Verify state after adding: key count should be the same
+        response = client.get(f"/accounts/{pk_classic_hex}")
+        keys_after_add = response.json()["pq_keys"]
+        assert len(keys_after_add) == 2
+
+        # Verify the old key is in the graveyard
+        response = client.get(f"/accounts/{pk_classic_hex}/graveyard")
+        assert response.status_code == 200
+        graveyard_keys = response.json()["graveyard"]
+        assert len(graveyard_keys) == 1
+        assert graveyard_keys[0]["public_key"] == pk_add_pq_1_hex
+        assert graveyard_keys[0]["alg"] == add_pq_alg_1
+
+        # Verify the new key is active
+        active_pks = {k["public_key"] for k in keys_after_add}
+        assert pk_add_pq_1_new_hex in active_pks, "New key should be active"
+        assert pk_add_pq_1_hex not in active_pks, "Old key should not be active"
+
+        all_pq_sks[pk_add_pq_1_new_hex] = (sig_add_pq_1_new, add_pq_alg_1)
+        del all_pq_sks[pk_add_pq_1_hex]
+
+    # Case 2: Adding a key with an unsupported algorithm
+    unsupported_alg = "Unsupported-Alg"
+    unsupported_nonce = get_nonce()
+    # The message to sign doesn't matter as much as the alg check will fail first.
+    unsupported_msg = (
+        f"ADD-PQ:{pk_classic_hex}:{unsupported_alg}:{unsupported_nonce}".encode()
+    )
+    payload = {
+        "new_pq_signatures": [
+            {"public_key": "junk", "signature": "junk", "alg": unsupported_alg}
+        ],
+        "classic_signature": sk_classic.sign(
+            unsupported_msg, hashfunc=hashlib.sha256
+        ).hex(),
+        "existing_pq_signatures": [
+            {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(unsupported_msg).hex(),
+                "alg": ML_DSA_ALG,
+            },
+            {
+                "public_key": pk_add_pq_1_hex,
+                "signature": sig_add_pq_1.sign(unsupported_msg).hex(),
+                "alg": add_pq_alg_1,
+            },
+        ],
+        "nonce": unsupported_nonce,
+    }
+    response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+    assert response.status_code == 400
+    assert f"Unsupported PQ algorithm: {unsupported_alg}" in response.text
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
+
+    # Case 3: Attempting to add the mandatory algorithm
+    mandatory_nonce = get_nonce()
+    mandatory_msg = f"ADD-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{mandatory_nonce}".encode()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
+        pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
+        payload = {
+            "new_pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_new_hex,
+                    "signature": sig_ml_dsa_new.sign(mandatory_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+            "classic_signature": sk_classic.sign(
+                mandatory_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "existing_pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(mandatory_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                {
+                    "public_key": pk_add_pq_1_hex,
+                    "signature": sig_add_pq_1.sign(mandatory_msg).hex(),
+                    "alg": add_pq_alg_1,
+                },
+            ],
+            "nonce": mandatory_nonce,
         }
         response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
         assert response.status_code == 400
-        assert f"Unsupported PQ algorithm: {unsupported_alg}" in response.text
-
-        # Case 3: Attempting to add the mandatory algorithm
-        mandatory_nonce = get_nonce()
-        mandatory_msg = (
-            f"ADD-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{mandatory_nonce}".encode()
+        assert (
+            f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}"
+            in response.text
         )
-        with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
-            pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
-            payload = {
-                "new_pq_signatures": [
-                    {
-                        "public_key": pk_ml_dsa_new_hex,
-                        "signature": sig_ml_dsa_new.sign(mandatory_msg).hex(),
-                        "alg": ML_DSA_ALG,
-                    }
-                ],
-                "classic_signature": sk_classic.sign(
-                    mandatory_msg, hashfunc=hashlib.sha256
-                ).hex(),
-                "existing_pq_signatures": [
-                    {
-                        "public_key": pk_ml_dsa_hex,
-                        "signature": sig_ml_dsa.sign(mandatory_msg).hex(),
-                        "alg": ML_DSA_ALG,
-                    },
-                    {
-                        "public_key": pk_add_pq_1_hex,
-                        "signature": sig_add_pq_1.sign(mandatory_msg).hex(),
-                        "alg": add_pq_alg_1,
-                    },
-                ],
-                "nonce": mandatory_nonce,
-            }
-            response = client.post(
-                f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-            )
-            assert response.status_code == 400
-            assert (
-                f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}"
-                in response.text
-            )
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_remove_pq_key_authorization_failures():
@@ -1233,121 +1225,92 @@ def test_remove_pq_key_authorization_failures():
     - Invalid signature from an existing PQ key.
     """
     # 1. Setup: Create an account with one mandatory and two optional keys
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    with (
-        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
-        oqs.Signature(add_pq_alg_1) as sig_add_pq_1,
-        oqs.Signature(add_pq_alg_2) as sig_add_pq_2,
-    ):
-        # Create the initial account
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
-        pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_pks = [pk_classic_hex, pk_ml_dsa_hex, pk_add_pq_1_hex, pk_add_pq_2_hex]
-        create_msg = f"{':'.join(create_pks)}:{nonce1}".encode()
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(create_msg).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "additional_pq_signatures": [
-                {
-                    "public_key": pk_add_pq_1_hex,
-                    "signature": sig_add_pq_1.sign(create_msg).hex(),
-                    "alg": add_pq_alg_1,
-                },
-                {
-                    "public_key": pk_add_pq_2_hex,
-                    "signature": sig_add_pq_2.sign(create_msg).hex(),
-                    "alg": add_pq_alg_2,
-                },
-            ],
-            "nonce": nonce1,
-        }
-        client.post("/accounts", json=create_payload)
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account(
+        add_pq_algs=[add_pq_alg_1, add_pq_alg_2]
+    )
+    pk_ml_dsa_hex = next(pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG)
+    pk_add_pq_1_hex = next(
+        pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
+    )
+    pk_add_pq_2_hex = next(
+        pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_2
+    )
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
+    sig_add_pq_2, _ = all_pq_sks[pk_add_pq_2_hex]
 
-        # 2. Prepare for a valid "remove" operation
-        pk_to_remove = pk_add_pq_1_hex
-        alg_to_remove = add_pq_alg_1
-        remove_nonce = get_nonce()
-        correct_remove_msg = (
-            f"REMOVE-PQ:{pk_classic_hex}:{alg_to_remove}:{remove_nonce}".encode()
-        )
-        incorrect_msg = b"this is not the correct message"
+    # 2. Prepare for a valid "remove" operation
+    pk_to_remove = pk_add_pq_1_hex
+    alg_to_remove = add_pq_alg_1
+    remove_nonce = get_nonce()
+    correct_remove_msg = (
+        f"REMOVE-PQ:{pk_classic_hex}:{alg_to_remove}:{remove_nonce}".encode()
+    )
+    incorrect_msg = b"this is not the correct message"
 
-        valid_classic_sig = sk_classic.sign(
-            correct_remove_msg, hashfunc=hashlib.sha256
-        ).hex()
-        valid_pq_sigs = [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(correct_remove_msg).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            {
-                "public_key": pk_add_pq_1_hex,
-                "signature": sig_add_pq_1.sign(correct_remove_msg).hex(),
-                "alg": add_pq_alg_1,
-            },
-            {
-                "public_key": pk_add_pq_2_hex,
-                "signature": sig_add_pq_2.sign(correct_remove_msg).hex(),
-                "alg": add_pq_alg_2,
-            },
-        ]
+    valid_classic_sig = sk_classic.sign(
+        correct_remove_msg, hashfunc=hashlib.sha256
+    ).hex()
+    valid_pq_sigs = [
+        {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(correct_remove_msg).hex(),
+            "alg": ML_DSA_ALG,
+        },
+        {
+            "public_key": pk_add_pq_1_hex,
+            "signature": sig_add_pq_1.sign(correct_remove_msg).hex(),
+            "alg": add_pq_alg_1,
+        },
+        {
+            "public_key": pk_add_pq_2_hex,
+            "signature": sig_add_pq_2.sign(correct_remove_msg).hex(),
+            "alg": add_pq_alg_2,
+        },
+    ]
 
-        # --- Test Cases ---
+    # --- Test Cases ---
 
-        # Case 1: Invalid classic signature
-        payload = {
-            "algs_to_remove": [alg_to_remove],
-            "classic_signature": sk_classic.sign(
-                incorrect_msg, hashfunc=hashlib.sha256
-            ).hex(),
-            "pq_signatures": valid_pq_sigs,
-            "nonce": remove_nonce,
-        }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Invalid classic signature" in response.text
+    # Case 1: Invalid classic signature
+    payload = {
+        "algs_to_remove": [alg_to_remove],
+        "classic_signature": sk_classic.sign(
+            incorrect_msg, hashfunc=hashlib.sha256
+        ).hex(),
+        "pq_signatures": valid_pq_sigs,
+        "nonce": remove_nonce,
+    }
+    response = client.post(f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload)
+    assert response.status_code == 401
+    assert "Invalid classic signature" in response.text
 
-        # Case 2: Missing signature from an existing PQ key
-        payload["classic_signature"] = valid_classic_sig
-        payload["pq_signatures"] = [valid_pq_sigs[0], valid_pq_sigs[2]]  # Missing one
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Signatures from all existing PQ keys are required" in response.text
+    # Case 2: Missing signature from an existing PQ key
+    payload["classic_signature"] = valid_classic_sig
+    payload["pq_signatures"] = [valid_pq_sigs[0], valid_pq_sigs[2]]  # Missing one
+    response = client.post(f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload)
+    assert response.status_code == 401
+    assert "Signatures from all existing PQ keys are required" in response.text
 
-        # Case 3: Invalid signature from an existing PQ key
-        invalid_pq_sigs = [
-            valid_pq_sigs[0],
-            valid_pq_sigs[1],
-            {
-                "public_key": pk_add_pq_2_hex,
-                "signature": sig_add_pq_2.sign(incorrect_msg).hex(),
-                "alg": add_pq_alg_2,
-            },
-        ]
-        payload["pq_signatures"] = invalid_pq_sigs
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Invalid signature for existing PQ key" in response.text
+    # Case 3: Invalid signature from an existing PQ key
+    invalid_pq_sigs = [
+        valid_pq_sigs[0],
+        valid_pq_sigs[1],
+        {
+            "public_key": pk_add_pq_2_hex,
+            "signature": sig_add_pq_2.sign(incorrect_msg).hex(),
+            "alg": add_pq_alg_2,
+        },
+    ]
+    payload["pq_signatures"] = invalid_pq_sigs
+    response = client.post(f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload)
+    assert response.status_code == 401
+    assert "Invalid signature for existing PQ key" in response.text
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_remove_nonexistent_pq_key_fails():
@@ -1355,27 +1318,9 @@ def test_remove_nonexistent_pq_key_fails():
     Tests that removing a PQ key not on the account fails.
     """
     # 1. Setup: Create a standard account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce1,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
     # 2. Attempt to remove a key that doesn't exist
     alg_to_remove = "nonexistent-alg"
@@ -1398,6 +1343,9 @@ def test_remove_nonexistent_pq_key_fails():
     assert (
         f"PQ key for algorithm {alg_to_remove} not found on account." in response.text
     )
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_add_and_remove_multiple_pq_keys():
@@ -1405,39 +1353,21 @@ def test_add_and_remove_multiple_pq_keys():
     Tests adding and removing multiple PQ keys in a single request.
     """
     # 1. Setup: Create a minimal account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+    response = client.get(f"/accounts/{pk_classic_hex}")
+    assert len(response.json()["pq_keys"]) == 1
+
+    # 2. Add two new PQ keys in a single request
     with (
-        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
         oqs.Signature(add_pq_alg_1) as sig_add_pq_1,
         oqs.Signature(add_pq_alg_2) as sig_add_pq_2,
     ):
-        # Create the initial account
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce1,
-            },
-        )
-        response = client.get(f"/accounts/{pk_classic_hex}")
-        assert len(response.json()["pq_keys"]) == 1
-
-        # 2. Add two new PQ keys in a single request
         pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
         pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
         add_nonce = get_nonce()
@@ -1523,6 +1453,9 @@ def test_add_and_remove_multiple_pq_keys():
         keys_after_remove = response.json()["pq_keys"]
         assert len(keys_after_remove) == 1
         assert keys_after_remove[0]["public_key"] == pk_ml_dsa_hex
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_graveyard():
@@ -1532,46 +1465,21 @@ def test_graveyard():
     2. Replace a key and verify the old one is in the graveyard.
     3. Remove a key and verify it is also in the graveyard.
     """
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
     falcon_alg = "Falcon-512"
 
-    with (
-        oqs.Signature(ML_DSA_ALG) as sig_ml_dsa,
-        oqs.Signature(falcon_alg) as sig_falcon_1,
-        oqs.Signature(falcon_alg) as sig_falcon_2,
-    ):
-        # 1. Create account with ML-DSA and one Falcon key
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        pk_falcon_1_hex = sig_falcon_1.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_msg = (
-            f"{pk_classic_hex}:{pk_ml_dsa_hex}:{pk_falcon_1_hex}:{nonce1}".encode()
-        )
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "additional_pq_signatures": [
-                    {
-                        "public_key": pk_falcon_1_hex,
-                        "signature": sig_falcon_1.sign(create_msg).hex(),
-                        "alg": falcon_alg,
-                    }
-                ],
-                "nonce": nonce1,
-            },
-        )
+    # 1. Create account with ML-DSA and one Falcon key
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account(
+        add_pq_algs=[falcon_alg]
+    )
+    pk_ml_dsa_hex = next(pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG)
+    pk_falcon_1_hex = next(
+        pk for pk, (_, alg) in all_pq_sks.items() if alg == falcon_alg
+    )
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    sig_falcon_1, _ = all_pq_sks[pk_falcon_1_hex]
 
-        # 2. Replace the Falcon key with a new one
+    # 2. Replace the Falcon key with a new one
+    with oqs.Signature(falcon_alg) as sig_falcon_2:
         pk_falcon_2_hex = sig_falcon_2.generate_keypair().hex()
         add_nonce = get_nonce()
         add_msg = f"ADD-PQ:{pk_classic_hex}:{falcon_alg}:{add_nonce}".encode()
@@ -1642,6 +1550,10 @@ def test_graveyard():
         assert pk_falcon_1_hex in graveyard_pks
         assert pk_falcon_2_hex in graveyard_pks
 
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
+
 
 def test_upload_file_successful(storage_paths):
     """
@@ -1649,76 +1561,61 @@ def test_upload_file_successful(storage_paths):
     """
     block_store_root, _ = storage_paths
     # 1. Create an account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        nonce1 = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce1}".encode()
-        create_response = client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce1,
-            },
-        )
-        assert create_response.status_code == 200
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Prepare file and upload request data
-        file_content = b"This is a test file for the block store."
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        upload_nonce = get_nonce()
-        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+    # 2. Prepare file and upload request data
+    file_content = b"This is a test file for the block store."
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    upload_nonce = get_nonce()
+    upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
 
-        # 3. Sign the upload message
-        classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
-        pq_sig = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(upload_msg).hex(),
-            "alg": ML_DSA_ALG,
-        }
+    # 3. Sign the upload message
+    classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(upload_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
 
-        # 4. Perform the upload
-        response = client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
-            data={
-                "nonce": upload_nonce,
-                "file_hash": file_hash,
-                "classic_signature": classic_sig,
-                "pq_signatures": json.dumps([pq_sig]),
-            },
-        )
+    # 4. Perform the upload
+    response = client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("test.txt", file_content, "text/plain")},
+        data={
+            "nonce": upload_nonce,
+            "file_hash": file_hash,
+            "classic_signature": classic_sig,
+            "pq_signatures": json.dumps([pq_sig]),
+        },
+    )
 
-        # 5. Assert success
-        assert response.status_code == 201, response.text
-        assert response.json()["message"] == "File uploaded successfully"
-        assert response.json()["file_hash"] == file_hash
+    # 5. Assert success
+    assert response.status_code == 201, response.text
+    assert response.json()["message"] == "File uploaded successfully"
+    assert response.json()["file_hash"] == file_hash
 
-        # 6. Verify file exists on server
-        file_path = os.path.join(block_store_root, file_hash)
-        assert os.path.exists(file_path)
-        with open(file_path, "rb") as f:
-            assert f.read() == file_content
+    # 6. Verify file exists on server
+    file_path = os.path.join(block_store_root, file_hash)
+    assert os.path.exists(file_path)
+    with open(file_path, "rb") as f:
+        assert f.read() == file_content
 
-        # 7. Verify metadata endpoints
-        response = client.get(f"/storage/{pk_classic_hex}")
-        assert response.status_code == 200
-        assert response.json()["files"] == [file_hash]
+    # 7. Verify metadata endpoints
+    response = client.get(f"/storage/{pk_classic_hex}")
+    assert response.status_code == 200
+    assert response.json()["files"] == [file_hash]
 
-        response = client.get(f"/storage/{pk_classic_hex}/{file_hash}")
-        assert response.status_code == 200
-        metadata = response.json()
-        assert metadata["filename"] == "test.txt"
-        assert metadata["size"] == len(file_content)
+    response = client.get(f"/storage/{pk_classic_hex}/{file_hash}")
+    assert response.status_code == 200
+    metadata = response.json()
+    assert metadata["filename"] == "test.txt"
+    assert metadata["size"] == len(file_content)
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_upload_file_invalid_hash():
@@ -1726,53 +1623,39 @@ def test_upload_file_invalid_hash():
     Tests that file upload fails if the provided hash does not match the file.
     """
     # 1. Create a real account first
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Attempt upload with incorrect hash
-        file_content = b"content"
-        incorrect_hash = "thisisnotthehash"
-        upload_nonce = get_nonce()
-        upload_msg = f"UPLOAD:{pk_classic_hex}:{incorrect_hash}:{upload_nonce}".encode()
+    # 2. Attempt upload with incorrect hash
+    file_content = b"content"
+    incorrect_hash = "thisisnotthehash"
+    upload_nonce = get_nonce()
+    upload_msg = f"UPLOAD:{pk_classic_hex}:{incorrect_hash}:{upload_nonce}".encode()
 
-        classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
-        pq_sig = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(upload_msg).hex(),
-            "alg": ML_DSA_ALG,
-        }
+    classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(upload_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
-            data={
-                "nonce": upload_nonce,
-                "file_hash": incorrect_hash,
-                "classic_signature": classic_sig,
-                "pq_signatures": json.dumps([pq_sig]),
-            },
-        )
-        assert response.status_code == 400
-        assert "File hash does not match" in response.text
+    response = client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("test.txt", file_content, "text/plain")},
+        data={
+            "nonce": upload_nonce,
+            "file_hash": incorrect_hash,
+            "classic_signature": classic_sig,
+            "pq_signatures": json.dumps([pq_sig]),
+        },
+    )
+    assert response.status_code == 400
+    assert "File hash does not match" in response.text
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_upload_file_unauthorized():
@@ -1780,56 +1663,42 @@ def test_upload_file_unauthorized():
     Tests that file upload fails if signatures are invalid.
     """
     # 1. Create a real account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Attempt upload with invalid classic signature
-        file_content = b"content"
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        upload_nonce = get_nonce()
+    # 2. Attempt upload with invalid classic signature
+    file_content = b"content"
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    upload_nonce = get_nonce()
 
-        # Sign an incorrect message
-        incorrect_msg = b"wrong message"
-        invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
-        pq_sig = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(
-                f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
-            ).hex(),
-            "alg": ML_DSA_ALG,
-        }
+    # Sign an incorrect message
+    incorrect_msg = b"wrong message"
+    invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(
+            f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+        ).hex(),
+        "alg": ML_DSA_ALG,
+    }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
-            data={
-                "nonce": upload_nonce,
-                "file_hash": file_hash,
-                "classic_signature": invalid_sig,
-                "pq_signatures": json.dumps([pq_sig]),
-            },
-        )
-        assert response.status_code == 401
-        assert "Invalid classic signature" in response.text
+    response = client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("test.txt", file_content, "text/plain")},
+        data={
+            "nonce": upload_nonce,
+            "file_hash": file_hash,
+            "classic_signature": invalid_sig,
+            "pq_signatures": json.dumps([pq_sig]),
+        },
+    )
+    assert response.status_code == 401
+    assert "Invalid classic signature" in response.text
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_upload_chunks_successful(storage_paths):
@@ -1838,103 +1707,83 @@ def test_upload_chunks_successful(storage_paths):
     """
     _, chunk_store_root = storage_paths
     # 1. Create an account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        # Create account
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        create_response = client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
-        assert create_response.status_code == 200
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Register the file first (as per the workflow)
-        file_content = b"This is a test file that will be chunked."
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        register_nonce = get_nonce()
-        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
-        classic_sig_register = sk_classic.sign(
-            register_msg, hashfunc=hashlib.sha256
-        ).hex()
-        pq_sig_register = {
+    # 2. Register the file first (as per the workflow)
+    file_content = b"This is a test file that will be chunked."
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    register_nonce = get_nonce()
+    register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+    classic_sig_register = sk_classic.sign(register_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig_register = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(register_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
+    register_response = client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("chunked_file.txt", file_content, "text/plain")},
+        data={
+            "nonce": register_nonce,
+            "file_hash": file_hash,
+            "classic_signature": classic_sig_register,
+            "pq_signatures": json.dumps([pq_sig_register]),
+        },
+    )
+    assert register_response.status_code == 201
+
+    # 3. Upload chunks
+    chunks = [file_content[i : i + 10] for i in range(0, len(file_content), 10)]
+    total_chunks = len(chunks)
+    for i, chunk_data in enumerate(chunks):
+        chunk_hash = hashlib.sha256(chunk_data).hexdigest()
+        chunk_nonce = get_nonce()
+        chunk_msg = (
+            f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+            f"{i}:{total_chunks}:{chunk_hash}:{chunk_nonce}"
+        ).encode()
+
+        classic_sig_chunk = sk_classic.sign(chunk_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig_chunk = {
             "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(register_msg).hex(),
+            "signature": sig_ml_dsa.sign(chunk_msg).hex(),
             "alg": ML_DSA_ALG,
         }
-        register_response = client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("chunked_file.txt", file_content, "text/plain")},
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            files={"file": (f"chunk_{i}", chunk_data)},
             data={
-                "nonce": register_nonce,
-                "file_hash": file_hash,
-                "classic_signature": classic_sig_register,
-                "pq_signatures": json.dumps([pq_sig_register]),
+                "nonce": chunk_nonce,
+                "chunk_hash": chunk_hash,
+                "chunk_index": str(i),
+                "total_chunks": str(total_chunks),
+                "classic_signature": classic_sig_chunk,
+                "pq_signatures": json.dumps([pq_sig_chunk]),
             },
         )
-        assert register_response.status_code == 201
 
-        # 3. Upload chunks
-        chunks = [file_content[i : i + 10] for i in range(0, len(file_content), 10)]
-        total_chunks = len(chunks)
-        for i, chunk_data in enumerate(chunks):
-            chunk_hash = hashlib.sha256(chunk_data).hexdigest()
-            chunk_nonce = get_nonce()
-            chunk_msg = (
-                f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
-                f"{i}:{total_chunks}:{chunk_hash}:{chunk_nonce}"
-            ).encode()
+        assert response.status_code == 200, response.text
+        assert (
+            f"Chunk {i}/{total_chunks} uploaded successfully"
+            in response.json()["message"]
+        )
 
-            classic_sig_chunk = sk_classic.sign(
-                chunk_msg, hashfunc=hashlib.sha256
-            ).hex()
-            pq_sig_chunk = {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(chunk_msg).hex(),
-                "alg": ML_DSA_ALG,
-            }
+        # Verify chunk exists on server
+        chunk_path = os.path.join(chunk_store_root, chunk_hash)
+        assert os.path.exists(chunk_path)
+        with open(chunk_path, "rb") as f:
+            assert f.read() == chunk_data
 
-            response = client.post(
-                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
-                files={"file": (f"chunk_{i}", chunk_data)},
-                data={
-                    "nonce": chunk_nonce,
-                    "chunk_hash": chunk_hash,
-                    "chunk_index": str(i),
-                    "total_chunks": str(total_chunks),
-                    "classic_signature": classic_sig_chunk,
-                    "pq_signatures": json.dumps([pq_sig_chunk]),
-                },
-            )
+    # 4. Verify chunk metadata is stored
+    assert file_hash in chunk_store
+    assert len(chunk_store[file_hash]) == total_chunks
 
-            assert response.status_code == 200, response.text
-            assert (
-                f"Chunk {i}/{total_chunks} uploaded successfully"
-                in response.json()["message"]
-            )
-
-            # Verify chunk exists on server
-            chunk_path = os.path.join(chunk_store_root, chunk_hash)
-            assert os.path.exists(chunk_path)
-            with open(chunk_path, "rb") as f:
-                assert f.read() == chunk_data
-
-        # 4. Verify chunk metadata is stored
-        assert file_hash in chunk_store
-        assert len(chunk_store[file_hash]) == total_chunks
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_upload_chunk_unauthorized(storage_paths):
@@ -1942,88 +1791,71 @@ def test_upload_chunk_unauthorized(storage_paths):
     Tests that uploading a file chunk with an invalid signature fails.
     """
     # 1. Create a real account and register a file
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        # Create account
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
-        # Register a file to get a valid file_hash
-        file_content = b"some content"
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        register_nonce = get_nonce()
-        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
-        client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("chunked_file.txt", file_content, "text/plain")},
-            data={
-                "nonce": register_nonce,
-                "file_hash": file_hash,
-                "classic_signature": sk_classic.sign(
-                    register_msg, hashfunc=hashlib.sha256
-                ).hex(),
-                "pq_signatures": json.dumps(
-                    [
-                        {
-                            "public_key": pk_ml_dsa_hex,
-                            "signature": sig_ml_dsa.sign(register_msg).hex(),
-                            "alg": ML_DSA_ALG,
-                        }
-                    ]
-                ),
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # Register a file to get a valid file_hash
+    file_content = b"some content"
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    register_nonce = get_nonce()
+    register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+    client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("chunked_file.txt", file_content, "text/plain")},
+        data={
+            "nonce": register_nonce,
+            "file_hash": file_hash,
+            "classic_signature": sk_classic.sign(
+                register_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "pq_signatures": json.dumps(
+                [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(register_msg).hex(),
+                        "alg": ML_DSA_ALG,
+                    }
+                ]
+            ),
+        },
+    )
 
-        # 2. Attempt to upload a chunk with an invalid signature
-        chunk_data = b"chunk data"
-        chunk_hash = hashlib.sha256(chunk_data).hexdigest()
-        chunk_nonce = get_nonce()
-        # The classic signature will be over an incorrect message
-        incorrect_msg = b"this is the wrong message"
-        invalid_classic_sig = sk_classic.sign(
-            incorrect_msg, hashfunc=hashlib.sha256
-        ).hex()
-        # The PQ sig is correct, to isolate the failure point
-        correct_chunk_msg = (
-            f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:0:1:{chunk_hash}:{chunk_nonce}"
-        ).encode()
-        pq_sig_chunk = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(correct_chunk_msg).hex(),
-            "alg": ML_DSA_ALG,
-        }
+    # 2. Attempt to upload a chunk with an invalid signature
+    chunk_data = b"chunk data"
+    chunk_hash = hashlib.sha256(chunk_data).hexdigest()
+    chunk_nonce = get_nonce()
+    # The classic signature will be over an incorrect message
+    incorrect_msg = b"this is the wrong message"
+    invalid_classic_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
+    # The PQ sig is correct, to isolate the failure point
+    correct_chunk_msg = (
+        f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:0:1:{chunk_hash}:{chunk_nonce}"
+    ).encode()
+    pq_sig_chunk = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(correct_chunk_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks",
-            files={"file": ("chunk_0", chunk_data)},
-            data={
-                "nonce": chunk_nonce,
-                "chunk_hash": chunk_hash,
-                "chunk_index": "0",
-                "total_chunks": "1",
-                "classic_signature": invalid_classic_sig,
-                "pq_signatures": json.dumps([pq_sig_chunk]),
-            },
-        )
+    response = client.post(
+        f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+        files={"file": ("chunk_0", chunk_data)},
+        data={
+            "nonce": chunk_nonce,
+            "chunk_hash": chunk_hash,
+            "chunk_index": "0",
+            "total_chunks": "1",
+            "classic_signature": invalid_classic_sig,
+            "pq_signatures": json.dumps([pq_sig_chunk]),
+        },
+    )
 
-        assert response.status_code == 401
-        assert "Invalid classic signature" in response.text
+    assert response.status_code == 401
+    assert "Invalid classic signature" in response.text
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_list_files_nonexistent_account():
@@ -2041,83 +1873,63 @@ def test_download_file_successful(storage_paths):
     """
     block_store_root, _ = storage_paths
     # 1. Create an account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        # Create account
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        create_response = client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
-        assert create_response.status_code == 200
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Upload a file
-        file_content = b"This is a file for downloading."
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        upload_nonce = get_nonce()
-        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
-        classic_sig_upload = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
-        pq_sig_upload = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(upload_msg).hex(),
-            "alg": ML_DSA_ALG,
-        }
-        upload_response = client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("download_test.txt", file_content, "text/plain")},
-            data={
-                "nonce": upload_nonce,
-                "file_hash": file_hash,
-                "classic_signature": classic_sig_upload,
-                "pq_signatures": json.dumps([pq_sig_upload]),
-            },
-        )
-        assert upload_response.status_code == 201
+    # 2. Upload a file
+    file_content = b"This is a file for downloading."
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    upload_nonce = get_nonce()
+    upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+    classic_sig_upload = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig_upload = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(upload_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
+    upload_response = client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("download_test.txt", file_content, "text/plain")},
+        data={
+            "nonce": upload_nonce,
+            "file_hash": file_hash,
+            "classic_signature": classic_sig_upload,
+            "pq_signatures": json.dumps([pq_sig_upload]),
+        },
+    )
+    assert upload_response.status_code == 201
 
-        # 3. Prepare and execute download request
-        download_nonce = get_nonce()
-        download_msg = (
-            f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
-        )
-        classic_sig_download = sk_classic.sign(
-            download_msg, hashfunc=hashlib.sha256
-        ).hex()
-        pq_sig_download = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(download_msg).hex(),
-            "alg": ML_DSA_ALG,
-        }
-        download_payload = {
-            "nonce": download_nonce,
-            "classic_signature": classic_sig_download,
-            "pq_signatures": [pq_sig_download],
-        }
-        download_response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/download",
-            json=download_payload,
-        )
+    # 3. Prepare and execute download request
+    download_nonce = get_nonce()
+    download_msg = f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+    classic_sig_download = sk_classic.sign(download_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig_download = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(download_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
+    download_payload = {
+        "nonce": download_nonce,
+        "classic_signature": classic_sig_download,
+        "pq_signatures": [pq_sig_download],
+    }
+    download_response = client.post(
+        f"/storage/{pk_classic_hex}/{file_hash}/download",
+        json=download_payload,
+    )
 
-        # 4. Assert success and verify content
-        assert download_response.status_code == 200, download_response.text
-        assert download_response.content == file_content
-        assert (
-            download_response.headers["content-disposition"]
-            == 'attachment; filename="download_test.txt"'
-        )
+    # 4. Assert success and verify content
+    assert download_response.status_code == 200, download_response.text
+    assert download_response.content == file_content
+    assert (
+        download_response.headers["content-disposition"]
+        == 'attachment; filename="download_test.txt"'
+    )
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_download_file_unauthorized():
@@ -2125,85 +1937,110 @@ def test_download_file_unauthorized():
     Tests that file download fails if the signatures are invalid.
     """
     # 1. Create an account and upload a file successfully
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        # Create account
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # Upload a file
-        file_content = b"This is a file for unauthorized download test."
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        upload_nonce = get_nonce()
-        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
-        client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
-            data={
-                "nonce": upload_nonce,
-                "file_hash": file_hash,
-                "classic_signature": sk_classic.sign(
-                    upload_msg, hashfunc=hashlib.sha256
-                ).hex(),
-                "pq_signatures": json.dumps(
-                    [
-                        {
-                            "public_key": pk_ml_dsa_hex,
-                            "signature": sig_ml_dsa.sign(upload_msg).hex(),
-                            "alg": ML_DSA_ALG,
-                        }
-                    ]
-                ),
-            },
-        )
+    # Upload a file
+    file_content = b"This is a file for unauthorized download test."
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    upload_nonce = get_nonce()
+    upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+    client.post(
+        f"/storage/{pk_classic_hex}",
+        files={"file": ("test.txt", file_content, "text/plain")},
+        data={
+            "nonce": upload_nonce,
+            "file_hash": file_hash,
+            "classic_signature": sk_classic.sign(
+                upload_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "pq_signatures": json.dumps(
+                [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(upload_msg).hex(),
+                        "alg": ML_DSA_ALG,
+                    }
+                ]
+            ),
+        },
+    )
 
-        # 2. Attempt to download with invalid classic signature
-        download_nonce = get_nonce()
-        # Sign an incorrect message
-        incorrect_msg = b"wrong message for download"
-        invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
+    # 2. Attempt to download with invalid classic signature
+    download_nonce = get_nonce()
+    # Sign an incorrect message
+    incorrect_msg = b"wrong message for download"
+    invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
 
-        # The PQ signature is correct for the *actual* message, to isolate the failure
-        correct_download_msg = (
-            f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
-        )
-        pq_sig_download = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
-            "alg": ML_DSA_ALG,
-        }
+    # The PQ signature is correct for the *actual* message, to isolate the failure
+    correct_download_msg = (
+        f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+    )
+    pq_sig_download = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
 
-        download_payload = {
-            "nonce": download_nonce,
-            "classic_signature": invalid_sig,
-            "pq_signatures": [pq_sig_download],
-        }
+    download_payload = {
+        "nonce": download_nonce,
+        "classic_signature": invalid_sig,
+        "pq_signatures": [pq_sig_download],
+    }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/download",
-            json=download_payload,
-        )
+    response = client.post(
+        f"/storage/{pk_classic_hex}/{file_hash}/download",
+        json=download_payload,
+    )
 
-        # 3. Assert failure
-        assert response.status_code == 401
-        assert "Invalid classic signature" in response.text
+    # 3. Assert failure
+    assert response.status_code == 401
+    assert "Invalid classic signature" in response.text
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
+
+
+def test_download_file_nonexistent():
+    """
+    Tests that downloading a non-existent file returns a 404 error.
+    """
+    # 1. Create an account
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+    pk_ml_dsa_hex = next(iter(all_pq_sks))
+    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+    # 2. Prepare and execute download request for a fake file hash
+    fake_file_hash = "nonexistent-file-hash-12345"
+    download_nonce = get_nonce()
+    download_msg = (
+        f"DOWNLOAD:{pk_classic_hex}:{fake_file_hash}:{download_nonce}".encode()
+    )
+    classic_sig_download = sk_classic.sign(download_msg, hashfunc=hashlib.sha256).hex()
+    pq_sig_download = {
+        "public_key": pk_ml_dsa_hex,
+        "signature": sig_ml_dsa.sign(download_msg).hex(),
+        "alg": ML_DSA_ALG,
+    }
+    download_payload = {
+        "nonce": download_nonce,
+        "classic_signature": classic_sig_download,
+        "pq_signatures": [pq_sig_download],
+    }
+    response = client.post(
+        f"/storage/{pk_classic_hex}/{fake_file_hash}/download",
+        json=download_payload,
+    )
+
+    # 3. Assert 404 Not Found
+    assert response.status_code == 404
+    assert "File not found" in response.text
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_get_file_metadata_nonexistent_file():
@@ -2211,31 +2048,16 @@ def test_get_file_metadata_nonexistent_file():
     Tests that getting metadata for a non-existent file hash returns 404.
     """
     # 1. Create a real account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+
     # 2. Attempt to get metadata for a hash that does not exist
     response = client.get(f"/storage/{pk_classic_hex}/nonexistent-file-hash")
     assert response.status_code == 404
     assert "File not found" in response.json()["detail"]
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
 
 
 def test_upload_chunk_for_unregistered_file():
@@ -2243,27 +2065,8 @@ def test_upload_chunk_for_unregistered_file():
     Tests that uploading a chunk for a file that has not been registered fails.
     """
     # 1. Create a real account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+
     # 2. Attempt to upload a chunk without registering the parent file hash first
     chunk_data = b"some data"
     response = client.post(
@@ -2281,6 +2084,10 @@ def test_upload_chunk_for_unregistered_file():
     assert response.status_code == 404
     assert "File record not found" in response.json()["detail"]
 
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
+
 
 def test_upload_file_malformed_pq_signatures():
     """
@@ -2288,27 +2095,8 @@ def test_upload_file_malformed_pq_signatures():
     JSON string.
     """
     # 1. Create a real account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-        create_nonce = get_nonce()
-        create_msg = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{create_nonce}".encode()
-        client.post(
-            "/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": sk_classic.sign(create_msg, hashfunc=hashlib.sha256).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(create_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": create_nonce,
-            },
-        )
+    sk_classic, pk_classic_hex, all_pq_sks = _create_test_account()
+
     # 2. Attempt to upload with a malformed pq_signatures string
     response = client.post(
         f"/storage/{pk_classic_hex}",
@@ -2322,3 +2110,7 @@ def test_upload_file_malformed_pq_signatures():
     )
     assert response.status_code == 400
     assert "Invalid format for pq_signatures" in response.json()["detail"]
+
+    # Clean up oqs signatures
+    for sig, _ in all_pq_sks.values():
+        sig.free()
