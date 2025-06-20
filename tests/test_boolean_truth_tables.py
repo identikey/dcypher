@@ -1,4 +1,4 @@
-"""Original C++ code from OpenFHE."""
+"""Swaggerjacked with style from https://github.com/openfheorg/openfhe-development/blob/v1.2.4.0.0.2/src/binfhe/examples/boolean-truth-tables.cpp"""
 
 """
 //==================================================================================

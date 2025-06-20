@@ -1,4 +1,4 @@
-"""Swaggerjacked from openfhe-python"""
+"""Swaggerjacked from https://github.com/openfheorg/openfhe-python/blob/main/tests/test_serial_cc.py"""
 
 import logging
 import pathlib

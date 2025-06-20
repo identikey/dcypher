@@ -5,13 +5,19 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "ecdsa>=0.19.1",
+    "fastapi>=0.115.13",
+    "liboqs-python>=0.12.0",
     "openfhe>=1.3.0.0.24.4",
     "pybind11>=2.13.6",
+    "uvicorn>=0.34.3",
     "yowasp-yosys>=0.54.0.0.post930",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "mypy>=1.16.1",
+    "nose2>=0.15.1",
     "pytest>=8.4.0",
 ]
