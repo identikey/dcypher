@@ -21,7 +21,10 @@ app = FastAPI()
 
 # A simple in-memory store for accounts and nonces.
 # In a real application, you would use a persistent database.
-accounts = set()
+# accounts: { classic_pk: { alg: pq_pk, ... }, ... }
+accounts = {}
+# graveyard: { classic_pk: [ { "public_key": pk, "alg": alg, "retired_at": ts }, ... ] }
+graveyard = {}
 used_nonces = set()
 
 
@@ -53,7 +56,7 @@ class AddPqKeysRequest(BaseModel):
 class RemovePqKeysRequest(BaseModel):
     """Request to remove PQ keys from an account."""
 
-    public_keys_to_remove: list[str]  # Public keys of the PQ keys to remove
+    algs_to_remove: list[str]  # Algorithms of the PQ keys to remove
     classic_signature: str  # Signature from the classic key
     pq_signatures: list[PqSignature]  # Signatures from all existing PQ keys
     nonce: str
@@ -122,6 +125,15 @@ def create_account(request: CreateAccountRequest):
     if request.nonce in used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
+    # Prevent creating an account with duplicate algorithm types
+    all_pq_algs = [request.ml_dsa_signature.alg] + [
+        sig.alg for sig in request.additional_pq_signatures
+    ]
+    if len(all_pq_algs) != len(set(all_pq_algs)):
+        raise HTTPException(
+            status_code=400, detail="Duplicate algorithm types are not allowed."
+        )
+
     if request.ml_dsa_signature.alg != ML_DSA_ALG:
         raise HTTPException(
             status_code=400,
@@ -164,16 +176,15 @@ def create_account(request: CreateAccountRequest):
             )
 
     # Check for account existence based on the classic public key
-    if any(acc[0] == request.public_key for acc in accounts):
+    if request.public_key in accounts:
         raise HTTPException(
             status_code=409,
             detail="Account with this classic public key already exists.",
         )
 
-    # Store the account with all its public keys
-    pq_keys_info = tuple((sig.public_key, sig.alg) for sig in all_pq_signatures)
-    account_id = (request.public_key, pq_keys_info)
-    accounts.add(account_id)
+    # Store the account with all its public keys, indexed by algorithm
+    active_pq_keys = {sig.alg: sig.public_key for sig in all_pq_signatures}
+    accounts[request.public_key] = active_pq_keys
     used_nonces.add(request.nonce)
 
     return {"message": "Account created successfully", "public_key": request.public_key}
@@ -182,26 +193,25 @@ def create_account(request: CreateAccountRequest):
 @app.get("/accounts")
 def get_accounts():
     """Returns a list of all created accounts."""
-    return {"accounts": [acc[0] for acc in accounts]}
+    return {"accounts": list(accounts.keys())}
 
 
 @app.get("/accounts/{public_key}")
 def get_account(public_key: str):
     """Retrieves a single account by public key."""
-    account = next((acc for acc in accounts if acc[0] == public_key), None)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found.")
-
-    pq_keys_list = [{"public_key": pk, "alg": alg} for pk, alg in account[1]]
+    account_pq_keys = find_account(public_key)
+    pq_keys_list = [
+        {"public_key": pk, "alg": alg} for alg, pk in account_pq_keys.items()
+    ]
     return {
-        "public_key": account[0],
+        "public_key": public_key,
         "pq_keys": pq_keys_list,
     }
 
 
 def find_account(public_key: str):
     """Finds an account by its classic public key or raises HTTPException."""
-    account = next((acc for acc in accounts if acc[0] == public_key), None)
+    account = accounts.get(public_key)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found.")
     return account
@@ -218,7 +228,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
     The message to sign is:
     f"ADD-PQ:{classic_pk}:{new_pk_1}:{new_pk_2}:...:{nonce}"
     """
-    account = find_account(public_key)
+    account_pq_keys = find_account(public_key)
 
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -227,29 +237,33 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     # Validate new keys
+    new_algs_to_add = {s.alg for s in request.new_pq_signatures}
+    if len(new_algs_to_add) != len(request.new_pq_signatures):
+        raise HTTPException(
+            status_code=400, detail="Duplicate algorithm types in new signatures list."
+        )
+
     for new_sig in request.new_pq_signatures:
         if new_sig.alg not in SUPPORTED_SIG_ALGS:
             raise HTTPException(
                 status_code=400, detail=f"Unsupported PQ algorithm: {new_sig.alg}."
             )
-
-    classic_pk, existing_pq_keys_tuple = account
-    existing_pq_keys_map = dict(existing_pq_keys_tuple)
+        if new_sig.alg == ML_DSA_ALG:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}.",
+            )
 
     new_pks_to_add = {s.public_key for s in request.new_pq_signatures}
-    if any(pk in existing_pq_keys_map for pk in new_pks_to_add):
-        raise HTTPException(
-            status_code=409, detail="One or more PQ keys already exist on the account."
-        )
-
     if len(new_pks_to_add) != len(request.new_pq_signatures):
         raise HTTPException(
             status_code=400, detail="Duplicate public keys in new signatures list."
         )
 
     # Construct message and verify all signatures
-    new_pks_str = ":".join(sorted(list(new_pks_to_add)))
-    message_to_verify = f"ADD-PQ:{public_key}:{new_pks_str}:{request.nonce}".encode(
+    # Message includes algs now, not pks, as they are the identifiers
+    new_algs_str = ":".join(sorted(list(new_algs_to_add)))
+    message_to_verify = f"ADD-PQ:{public_key}:{new_algs_str}:{request.nonce}".encode(
         "utf-8"
     )
 
@@ -259,7 +273,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
 
     # 2. Verify signatures from all existing PQ keys
     existing_pks_in_req = {s.public_key for s in request.existing_pq_signatures}
-    if existing_pks_in_req != set(existing_pq_keys_map.keys()):
+    if existing_pks_in_req != set(account_pq_keys.values()):
         raise HTTPException(
             status_code=401, detail="Signatures from all existing PQ keys are required."
         )
@@ -284,14 +298,27 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
             )
 
     # All checks passed, update the account
-    accounts.remove(account)
-    new_pq_keys_info = tuple((s.public_key, s.alg) for s in request.new_pq_signatures)
-    updated_pq_keys = existing_pq_keys_tuple + new_pq_keys_info
-    new_account_tuple = (classic_pk, updated_pq_keys)
-    accounts.add(new_account_tuple)
+    # Move any replaced keys to the graveyard
+    if public_key not in graveyard:
+        graveyard[public_key] = []
+
+    for new_sig in request.new_pq_signatures:
+        if new_sig.alg in account_pq_keys:
+            old_pk = account_pq_keys[new_sig.alg]
+            graveyard[public_key].append(
+                {
+                    "public_key": old_pk,
+                    "alg": new_sig.alg,
+                    "retired_at": time.time(),
+                }
+            )
+        account_pq_keys[new_sig.alg] = new_sig.public_key
+
     used_nonces.add(request.nonce)
 
-    return {"message": f"Successfully added {len(new_pq_keys_info)} PQ key(s)."}
+    return {
+        "message": f"Successfully added {len(request.new_pq_signatures)} PQ key(s)."
+    }
 
 
 @app.post("/accounts/{public_key}/remove-pq-keys")
@@ -303,9 +330,9 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
     key cannot be removed.
 
     The message to sign is:
-    f"REMOVE-PQ:{classic_pk}:{removed_pk_1}:{removed_pk_2}:...:{nonce}"
+    f"REMOVE-PQ:{classic_pk}:{removed_alg_1}:{removed_alg_2}:...:{nonce}"
     """
-    account = find_account(public_key)
+    account_pq_keys = find_account(public_key)
 
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -313,26 +340,23 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
     if request.nonce in used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
-    classic_pk, existing_pq_keys_tuple = account
-    existing_pq_keys_map = dict(existing_pq_keys_tuple)
-
     # Validate keys to remove
-    for pk_to_remove in request.public_keys_to_remove:
-        if pk_to_remove not in existing_pq_keys_map:
+    for alg_to_remove in request.algs_to_remove:
+        if alg_to_remove not in account_pq_keys:
             raise HTTPException(
                 status_code=404,
-                detail=f"PQ key {pk_to_remove} not found on account.",
+                detail=f"PQ key for algorithm {alg_to_remove} not found on account.",
             )
-        if existing_pq_keys_map[pk_to_remove] == ML_DSA_ALG:
+        if alg_to_remove == ML_DSA_ALG:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot remove the mandatory PQ key ({ML_DSA_ALG}).",
             )
 
     # Construct message and verify all signatures
-    remove_pks_str = ":".join(sorted(request.public_keys_to_remove))
+    remove_algs_str = ":".join(sorted(request.algs_to_remove))
     message_to_verify = (
-        f"REMOVE-PQ:{public_key}:{remove_pks_str}:{request.nonce}".encode("utf-8")
+        f"REMOVE-PQ:{public_key}:{remove_algs_str}:{request.nonce}".encode("utf-8")
     )
 
     # 1. Verify classic signature
@@ -341,7 +365,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
 
     # 2. Verify signatures from ALL existing PQ keys
     pks_in_req = {s.public_key for s in request.pq_signatures}
-    if pks_in_req != set(existing_pq_keys_map.keys()):
+    if pks_in_req != set(account_pq_keys.values()):
         raise HTTPException(
             status_code=401,
             detail="Signatures from all existing PQ keys are required for removal.",
@@ -357,17 +381,29 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
             )
 
     # All checks passed, update the account
-    accounts.remove(account)
-    updated_pq_keys_tuple = tuple(
-        key_info
-        for key_info in existing_pq_keys_tuple
-        if key_info[0] not in request.public_keys_to_remove
-    )
-    new_account_tuple = (classic_pk, updated_pq_keys_tuple)
-    accounts.add(new_account_tuple)
+    # Move any replaced keys to the graveyard
+    if public_key not in graveyard:
+        graveyard[public_key] = []
+
+    for alg_to_remove in request.algs_to_remove:
+        removed_pk = account_pq_keys.pop(alg_to_remove)
+        graveyard[public_key].append(
+            {
+                "public_key": removed_pk,
+                "alg": alg_to_remove,
+                "retired_at": time.time(),
+            }
+        )
     used_nonces.add(request.nonce)
 
     return {"message": "Successfully removed PQ key(s)."}
+
+
+@app.get("/accounts/{public_key}/graveyard")
+def get_graveyard(public_key: str):
+    """Retrieves the graveyard of retired PQ keys for a given account."""
+    find_account(public_key)  # Ensure account exists
+    return {"public_key": public_key, "graveyard": graveyard.get(public_key, [])}
 
 
 if __name__ == "__main__":
