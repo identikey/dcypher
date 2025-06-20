@@ -18,17 +18,3 @@ dependencies = [
 
 [dependency-groups]
 dev = ["httpx>=0.28.1", "mypy>=1.16.1", "pytest>=8.4.0", "pytest-xdist>=3.7.0"]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-ecdsa = "^0.18.0"
-oqs = "^0.8.0"
-fastapi = "^0.104.1"
-uvicorn = { extras = ["standard"], version = "^0.24.0.post1" }
-python-multipart = "^0.0.6"
-requests = "^2.31.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
