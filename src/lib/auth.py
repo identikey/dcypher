@@ -27,3 +27,20 @@ def verify_signature(public_key_hex: str, signature_hex: str, message: bytes) ->
         ecdsa.BadSignatureError,
     ):
         return False
+
+
+def sign_message(sk_hex: str, message: bytes) -> str:
+    """
+    Signs a message with an ECDSA private key.
+
+    Args:
+        sk_hex: The private key in hex format.
+        message: The message to sign.
+
+    Returns:
+        The hex-encoded signature.
+    """
+    sk = ecdsa.SigningKey.from_string(bytes.fromhex(sk_hex), curve=ecdsa.SECP256k1)
+    # The message is hashed with SHA256 before signing
+    signature = sk.sign(message, hashfunc=hashlib.sha256)
+    return signature.hex()

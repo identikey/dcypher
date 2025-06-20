@@ -4,6 +4,21 @@ import oqs
 SUPPORTED_SIG_ALGS = list(oqs.get_enabled_sig_mechanisms())
 
 
+def generate_pq_keys(alg: str) -> tuple[bytes, bytes]:
+    """Generates a post-quantum key pair for a given algorithm."""
+    with oqs.Signature(alg) as sig:
+        pk = sig.generate_keypair()
+        sk = sig.export_secret_key()
+        return pk, sk
+
+
+def get_oqs_sig_from_path(sk_path: str, alg: str) -> oqs.Signature:
+    """Loads a secret key from a file and returns an oqs.Signature object."""
+    with open(sk_path, "rb") as f:
+        sk = f.read()
+    return oqs.Signature(alg, sk)
+
+
 def verify_pq_signature(
     public_key_hex: str,
     signature_hex: str,

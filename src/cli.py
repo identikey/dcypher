@@ -1,6 +1,21 @@
 import click
 from lib import pre
 import json
+import requests
+import hashlib
+
+
+API_BASE_URL = "http://127.0.0.1:8000"
+
+
+def get_nonce():
+    """Fetches a nonce from the API."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/nonce")
+        response.raise_for_status()
+        return response.json()["nonce"]
+    except requests.exceptions.RequestException as e:
+        raise click.ClickException(f"Failed to get nonce from API: {e}")
 
 
 @click.group()
@@ -251,6 +266,145 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
         json.dump(output_data, f)
 
     click.echo(f"Re-encrypted ciphertext saved to {output}", err=True)
+
+
+@cli.command("upload")
+@click.option("--pk-path", help="Path to the classic public key file.", required=True)
+@click.option(
+    "--auth-keys-path",
+    help="Path to the JSON file containing authentication key details.",
+    required=True,
+)
+@click.option(
+    "--file-path",
+    help="Path to the (encrypted) file to upload.",
+    type=click.Path(exists=True, dir_okay=False),
+    required=True,
+)
+def upload(pk_path, auth_keys_path, file_path):
+    """Uploads a file to the dCypher API."""
+    click.echo("Starting file upload process...", err=True)
+
+    # Load authentication keys
+    from lib.auth import sign_message
+    from lib.pq_auth import get_oqs_sig_from_path
+
+    try:
+        with open(auth_keys_path, "r") as f:
+            auth_keys = json.load(f)
+        with open(auth_keys["classic_sk_path"], "r") as f:
+            classic_sk_hex = f.read()
+    except (IOError, json.JSONDecodeError, KeyError) as e:
+        raise click.ClickException(f"Error loading auth keys: {e}")
+
+    # Calculate file hash
+    with open(file_path, "rb") as f:
+        file_content = f.read()
+    file_hash = hashlib.sha256(file_content).hexdigest()
+
+    # Get nonce
+    nonce = get_nonce()
+
+    # Construct and sign message
+    message = f"UPLOAD:{pk_path}:{file_hash}:{nonce}".encode("utf-8")
+    classic_sig = sign_message(classic_sk_hex, message)
+    pq_signatures = []
+    for pq_key in auth_keys["pq_keys"]:
+        sig_obj = get_oqs_sig_from_path(pq_key["sk_path"], pq_key["alg"])
+        pq_signatures.append(
+            {
+                "public_key": pq_key["pk_hex"],
+                "signature": sig_obj.sign(message).hex(),
+                "alg": pq_key["alg"],
+            }
+        )
+
+    # Prepare and send request
+    files = {"file": (file_path, file_content)}
+    data = {
+        "nonce": nonce,
+        "file_hash": file_hash,
+        "classic_signature": classic_sig,
+        "pq_signatures": json.dumps(pq_signatures),
+    }
+
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/storage/{pk_path}", files=files, data=data
+        )
+        response.raise_for_status()
+        click.echo("File uploaded successfully.", err=True)
+        click.echo(json.dumps(response.json(), indent=2))
+    except requests.exceptions.RequestException as e:
+        error_text = e.response.text if e.response else "No response from server."
+        raise click.ClickException(f"API request failed: {e}\n{error_text}")
+
+
+@cli.command("download")
+@click.option("--pk-path", help="Path to the classic public key.", required=True)
+@click.option(
+    "--auth-keys-path",
+    help="Path to the JSON file containing authentication key details.",
+    required=True,
+)
+@click.option("--file-hash", help="Hash of the file to download.", required=True)
+@click.option(
+    "--output-path",
+    help="Path to save the downloaded file.",
+    type=click.Path(dir_okay=False),
+    required=True,
+)
+def download(pk_path, auth_keys_path, file_hash, output_path):
+    """Downloads a file from the dCypher API."""
+    click.echo(f"Starting download for file hash: {file_hash}...", err=True)
+
+    # Load authentication keys
+    from lib.auth import sign_message
+    from lib.pq_auth import get_oqs_sig_from_path
+
+    try:
+        with open(auth_keys_path, "r") as f:
+            auth_keys = json.load(f)
+        with open(auth_keys["classic_sk_path"], "r") as f:
+            classic_sk_hex = f.read()
+    except (IOError, json.JSONDecodeError, KeyError) as e:
+        raise click.ClickException(f"Error loading auth keys: {e}")
+
+    # Get nonce
+    nonce = get_nonce()
+
+    # Construct and sign message
+    message = f"DOWNLOAD:{pk_path}:{file_hash}:{nonce}".encode("utf-8")
+    classic_sig = sign_message(classic_sk_hex, message)
+    pq_signatures = []
+    for pq_key in auth_keys["pq_keys"]:
+        sig_obj = get_oqs_sig_from_path(pq_key["sk_path"], pq_key["alg"])
+        pq_signatures.append(
+            {
+                "public_key": pq_key["pk_hex"],
+                "signature": sig_obj.sign(message).hex(),
+                "alg": pq_key["alg"],
+            }
+        )
+
+    # Prepare and send request
+    payload = {
+        "nonce": nonce,
+        "classic_signature": classic_sig,
+        "pq_signatures": pq_signatures,
+    }
+
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/storage/{pk_path}/{file_hash}/download", json=payload
+        )
+        response.raise_for_status()
+        with open(output_path, "wb") as f:
+            f.write(response.content)
+        click.echo(f"File successfully downloaded to {output_path}", err=True)
+    except requests.exceptions.RequestException as e:
+        error_text = e.response.text if e.response else "No response from server."
+        raise click.ClickException(f"API request failed: {e}\n{error_text}")
 
 
 if __name__ == "__main__":
