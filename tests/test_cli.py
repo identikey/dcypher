@@ -754,6 +754,141 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     )
 
 
+def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
+    """
+    Tests the end-to-end file storage workflow for a 1MB file using the CLI.
+    """
+    run_command, test_dir = cli_test_env
+
+    # --- 1. Setup Client-Side Identities ---
+    cc_path = test_dir / "cc.json"
+    run_command(["gen-cc", "--output", str(cc_path)])
+    run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])
+
+    classic_sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    classic_vk = classic_sk.get_verifying_key()
+    assert classic_vk is not None
+    pk_classic_hex = classic_vk.to_string("uncompressed").hex()
+    classic_sk_path = test_dir / "user_auth.sk"
+    with open(classic_sk_path, "w") as f:
+        f.write(classic_sk.to_string().hex())
+
+    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
+    pq_sk_path = test_dir / "user_auth_pq.sk"
+    with open(pq_sk_path, "wb") as f:
+        f.write(pq_sk)
+
+    # --- 2. Create Account on the API ---
+    nonce_resp = requests.get(f"{api_base_url}/nonce")
+    assert nonce_resp.status_code == 200
+    nonce = nonce_resp.json()["nonce"]
+
+    message = f"{pk_classic_hex}:{pq_pk.hex()}:{nonce}".encode("utf-8")
+    with oqs.Signature(ML_DSA_ALG, pq_sk) as sig_ml_dsa:
+        create_payload = {
+            "public_key": pk_classic_hex,
+            "signature": classic_sk.sign(message, hashfunc=hashlib.sha256).hex(),
+            "ml_dsa_signature": {
+                "public_key": pq_pk.hex(),
+                "signature": sig_ml_dsa.sign(message).hex(),
+                "alg": ML_DSA_ALG,
+            },
+            "nonce": nonce,
+        }
+    response = requests.post(f"{api_base_url}/accounts", json=create_payload)
+    assert response.status_code == 200, response.text
+
+    # --- 3. Prepare auth keys file for CLI ---
+    auth_keys_data = {
+        "classic_sk_path": str(classic_sk_path),
+        "pq_keys": [
+            {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}
+        ],
+    }
+    auth_keys_file = test_dir / "auth_keys.json"
+    with open(auth_keys_file, "w") as f:
+        json.dump(auth_keys_data, f)
+
+    # --- 4. Encrypt a 1MB file ---
+    original_data = os.urandom(1024 * 1024)  # 1MB
+    original_file = test_dir / "original_1mb.dat"
+    with open(original_file, "wb") as f:
+        f.write(original_data)
+
+    encrypted_file = test_dir / "encrypted_1mb.json"
+    result = run_command(
+        [
+            "encrypt",
+            "--cc-path",
+            str(cc_path),
+            "--pk-path",
+            "user_pre.pub",
+            "--input-file",
+            str(original_file),
+            "--output",
+            str(encrypted_file),
+        ]
+    )
+    assert result.returncode == 0
+
+    # --- 5. Upload the file using the CLI ---
+    result = run_command(
+        [
+            "upload",
+            "--pk-path",
+            pk_classic_hex,
+            "--auth-keys-path",
+            str(auth_keys_file),
+            "--file-path",
+            str(encrypted_file),
+        ]
+    )
+    assert result.returncode == 0, f"Upload failed: {result.stderr}"
+    upload_response = json.loads(result.stdout)
+    file_hash = upload_response["file_hash"]
+
+    # --- 6. Download the file using the CLI ---
+    downloaded_file = test_dir / "downloaded_1mb.json"
+    result = run_command(
+        [
+            "download",
+            "--pk-path",
+            pk_classic_hex,
+            "--auth-keys-path",
+            str(auth_keys_file),
+            "--file-hash",
+            file_hash,
+            "--output-path",
+            str(downloaded_file),
+        ]
+    )
+    assert result.returncode == 0, f"Download failed: {result.stderr}"
+    assert downloaded_file.exists()
+
+    # --- 7. Decrypt the downloaded file and verify ---
+    decrypted_file = test_dir / "decrypted_1mb.dat"
+    result = run_command(
+        [
+            "decrypt",
+            "--cc-path",
+            str(cc_path),
+            "--sk-path",
+            "user_pre.sec",
+            "--ciphertext-path",
+            str(downloaded_file),
+            "--output-file",
+            str(decrypted_file),
+        ]
+    )
+    assert result.returncode == 0
+    with open(decrypted_file, "rb") as f:
+        assert f.read() == original_data
+
+    click.echo(
+        "CLI upload/download/decrypt workflow successful with 1MB file!", err=True
+    )
+
+
 def test_encrypt_with_data_string(cli_test_env):
     """
     Tests the `encrypt` command using direct string input via the `--data` flag.

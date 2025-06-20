@@ -607,3 +607,76 @@ def test_upload_file_malformed_pq_signatures():
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
             sig.free()
+
+
+def test_upload_and_download_large_file(storage_paths):
+    """
+    Tests uploading and downloading a large (1MB) file.
+    """
+    # 1. Create an account
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    try:
+        pk_ml_dsa_hex = next(iter(all_pq_sks))
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+        # 2. Create a large file
+        large_file_content = os.urandom(1024 * 1024)  # 1MB
+        file_hash = hashlib.sha256(large_file_content).hexdigest()
+
+        # 3. Upload the file
+        upload_nonce = get_nonce()
+        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+        classic_sig_upload = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig_upload = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        upload_response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={
+                "file": (
+                    "large_file.bin",
+                    large_file_content,
+                    "application/octet-stream",
+                )
+            },
+            data={
+                "nonce": upload_nonce,
+                "file_hash": file_hash,
+                "classic_signature": classic_sig_upload,
+                "pq_signatures": json.dumps([pq_sig_upload]),
+            },
+        )
+        assert upload_response.status_code == 201, upload_response.text
+
+        # 4. Download the file
+        download_nonce = get_nonce()
+        download_msg = (
+            f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+        )
+        classic_sig_download = sk_classic.sign(
+            download_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": classic_sig_download,
+            "pq_signatures": [pq_sig_download],
+        }
+        download_response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/download",
+            json=download_payload,
+        )
+
+        # 5. Assert success and verify content
+        assert download_response.status_code == 200, download_response.text
+        assert download_response.content == large_file_content
+    finally:
+        # Clean up oqs signatures
+        for sig in oqs_sigs_to_free:
+            sig.free()
