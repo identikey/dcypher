@@ -1,0 +1,33 @@
+import oqs
+
+SUPPORTED_SIG_ALGS = ["Dilithium2", "Falcon-512"]
+
+
+def verify_pq_signature(
+    public_key_hex: str,
+    signature_hex: str,
+    message: bytes,
+    alg: str,
+) -> bool:
+    """
+    Verifies a post-quantum signature using liboqs.
+
+    Args:
+        public_key_hex: The public key in hex format.
+        signature_hex: The signature in hex format.
+        message: The message that was signed.
+        alg: The post-quantum signature algorithm to use.
+
+    Returns:
+        True if the signature is valid, False otherwise.
+    """
+    if alg not in SUPPORTED_SIG_ALGS:
+        return False
+
+    try:
+        with oqs.Signature(alg) as sig:
+            public_key = bytes.fromhex(public_key_hex)
+            signature = bytes.fromhex(signature_hex)
+            return sig.verify(message, signature, public_key)
+    except Exception:
+        return False

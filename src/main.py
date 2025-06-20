@@ -10,6 +10,7 @@ from pydantic import BaseModel
 # Ensure your PYTHONPATH is set up correctly if you have issues with the import.
 # For example: export PYTHONPATH=.
 from lib.auth import verify_signature
+from lib.pq_auth import SUPPORTED_SIG_ALGS, verify_pq_signature
 
 # In a real application, this should be loaded from a secure configuration manager
 # or environment variable, and it should be a long, random string.
@@ -26,7 +27,16 @@ used_nonces = set()
 class CreateAccountRequest(BaseModel):
     public_key: str  # hex-encoded uncompressed SECP256k1 public key
     signature: str  # hex-encoded DER signature
+    pq_public_key: str  # hex-encoded post-quantum public key
+    pq_signature: str  # hex-encoded post-quantum signature
+    pq_alg: str  # post-quantum algorithm used
     nonce: str  # time-based nonce provided by the server
+
+
+@app.get("/supported-pq-algs")
+def get_supported_pq_algs():
+    """Returns a list of supported post-quantum signature algorithms."""
+    return {"algorithms": SUPPORTED_SIG_ALGS}
 
 
 @app.get("/nonce")
@@ -73,10 +83,11 @@ def create_account(request: CreateAccountRequest):
 
     To create an account, the client must first request a nonce from the `/nonce`
     endpoint. Then, it must sign a message with the format:
-    f"{public_key_hex}:{nonce}"
+    f"{public_key_hex}:{pq_public_key_hex}:{nonce}"
 
     The signature should be created over the bytes of this UTF-8 encoded string,
-    using SHA256 as the hash function.
+    using SHA256 as the hash function for the classic signature, and the
+    appropriate hash function for the post-quantum signature.
     """
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -84,22 +95,40 @@ def create_account(request: CreateAccountRequest):
     if request.nonce in used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
-    # The message that is expected to be signed is the public key concatenated with the nonce.
-    message_to_verify = f"{request.public_key}:{request.nonce}".encode("utf-8")
+    if request.pq_alg not in SUPPORTED_SIG_ALGS:
+        raise HTTPException(status_code=400, detail="Unsupported PQ algorithm.")
 
-    is_valid = verify_signature(
+    # The message that is expected to be signed is the public key concatenated with the nonce.
+    message_to_verify = (
+        f"{request.public_key}:{request.pq_public_key}:{request.nonce}".encode("utf-8")
+    )
+
+    is_valid_classic = verify_signature(
         public_key_hex=request.public_key,
         signature_hex=request.signature,
         message=message_to_verify,
     )
+    if not is_valid_classic:
+        raise HTTPException(status_code=401, detail="Invalid classic signature.")
 
-    if not is_valid:
-        raise HTTPException(status_code=401, detail="Invalid signature.")
+    is_valid_pq = verify_pq_signature(
+        public_key_hex=request.pq_public_key,
+        signature_hex=request.pq_signature,
+        message=message_to_verify,
+        alg=request.pq_alg,
+    )
 
-    if request.public_key in accounts:
-        raise HTTPException(status_code=409, detail="Account already exists.")
+    if not is_valid_pq:
+        raise HTTPException(status_code=401, detail="Invalid post-quantum signature.")
 
-    accounts.add(request.public_key)
+    account_id = (request.public_key, request.pq_public_key, request.pq_alg)
+    if any(acc[0] == request.public_key for acc in accounts):
+        raise HTTPException(
+            status_code=409,
+            detail="Account with this classic public key already exists.",
+        )
+
+    accounts.add(account_id)
     used_nonces.add(request.nonce)
 
     return {"message": "Account created successfully", "public_key": request.public_key}
@@ -108,15 +137,20 @@ def create_account(request: CreateAccountRequest):
 @app.get("/accounts")
 def get_accounts():
     """Returns a list of all created accounts."""
-    return {"accounts": list(accounts)}
+    return {"accounts": [acc[0] for acc in accounts]}
 
 
 @app.get("/accounts/{public_key}")
 def get_account(public_key: str):
     """Retrieves a single account by public key."""
-    if public_key not in accounts:
+    account = next((acc for acc in accounts if acc[0] == public_key), None)
+    if not account:
         raise HTTPException(status_code=404, detail="Account not found.")
-    return {"public_key": public_key}
+    return {
+        "public_key": account[0],
+        "pq_public_key": account[1],
+        "pq_alg": account[2],
+    }
 
 
 if __name__ == "__main__":
