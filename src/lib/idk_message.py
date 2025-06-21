@@ -16,7 +16,7 @@ from lib import pre
 import ecdsa
 
 # Constants from the specification
-IDK_VERSION = "0"
+IDK_VERSION = "0.1"
 HASH_ALG = "blake2b"
 BEGIN_IDK_MESSAGE = "----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----"
 END_IDK_MESSAGE = "----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
@@ -174,9 +174,9 @@ def create_idk_message_parts(
         # A more robust implementation would handle paths for all pieces in a chunk.
         headers = {
             "Version": IDK_VERSION,
-            "SlotsTotal": part_slots_total,
-            "SlotsUsed": part_slots_used,
-            "BytesTotal": original_data_len,
+            "SlotsTotal": str(part_slots_total),
+            "SlotsUsed": str(part_slots_used),
+            "BytesTotal": str(original_data_len),
             "MerkleRoot": merkle_root,
             "Part": f"{part_num}/{total_parts}",
             "ChunkHash": hashlib.blake2b(payload_bytes).hexdigest(),
@@ -192,7 +192,11 @@ def create_idk_message_parts(
         # e. Sign the headers
         canonical_header_str = ""
         for key in sorted(headers.keys()):
-            canonical_header_str += f"{key}: {headers[key]}\n"
+            value = headers[key]
+            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+                canonical_header_str += f"{key}: {value}\n"
+            else:
+                canonical_header_str += f'{key}: "{value}"\n'
 
         header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
         signature = signing_key.sign_digest(header_hash).hex()
@@ -201,7 +205,11 @@ def create_idk_message_parts(
         # f. Assemble the final message part
         header_block = ""
         for key in sorted(headers.keys()):
-            header_block += f"{key}: {headers[key]}\n"
+            value = headers[key]
+            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+                header_block += f"{key}: {value}\n"
+            else:
+                header_block += f'{key}: "{value}"\n'
 
         message_part = (
             f"{BEGIN_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}\n"
@@ -266,6 +274,9 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
 
     for line in header_lines:
         key, value = line.split(": ", 1)
+        # Strip quotes from string values
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
         headers[key] = value
 
     # The payload is everything between the blank line and the END marker
@@ -370,9 +381,15 @@ def decrypt_idk_message(
             for key in sorted(headers.keys()):
                 if key in ["PartNum", "TotalParts"]:
                     continue
-                canonical_header_str += f"{key}: {headers[key]}\n"
+                value = headers[key]
+                # Re-create the canonical string by quoting string values
+                if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+                    canonical_header_str += f"{key}: {value}\n"
+                else:
+                    canonical_header_str += f'{key}: "{value}"\n'
 
             header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
+            # The signature from the header is already unquoted by parse_idk_message_part
             vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
 
             # Validate part-specific headers

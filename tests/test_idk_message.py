@@ -148,7 +148,11 @@ def test_create_and_verify_idk_message(crypto_setup):
         # skip derived keys
         if key in ["PartNum", "TotalParts"]:
             continue
-        canonical_header_str += f"{key}: {headers[key]}\n"
+        value = headers[key]
+        if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+            canonical_header_str += f"{key}: {value}\n"
+        else:
+            canonical_header_str += f'{key}: "{value}"\n'
 
     header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
 
@@ -219,10 +223,17 @@ def test_idk_message_format_conformance(crypto_setup):
     # c. Check header format (Key: Value) and alphabetical order
     header_lines = lines[1:header_end_index]
     header_keys = []
+    unquoted_headers = ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]
     for header_line in header_lines:
         assert ": " in header_line, f"Header line '{header_line}' is malformed"
-        key, _ = header_line.split(": ", 1)
+        key, value = header_line.split(": ", 1)
         header_keys.append(key)
+        if key in unquoted_headers:
+            assert not value.startswith('"'), f"Header {key} should not be quoted."
+        else:
+            assert value.startswith('"') and value.endswith('"'), (
+                f"String header {key} should be quoted."
+            )
 
     assert header_keys == sorted(header_keys), "Headers are not in alphabetical order"
 
@@ -298,7 +309,12 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
         for key in sorted(headers.keys()):
             if key in ["PartNum", "TotalParts"]:
                 continue
-            canonical_header_str += f"{key}: {headers[key]}\n"
+            value = headers[key]
+            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+                canonical_header_str += f"{key}: {value}\n"
+            else:
+                canonical_header_str += f'{key}: "{value}"\n'
+
         header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
         try:
             vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
@@ -385,7 +401,12 @@ def test_create_and_verify_with_optional_headers(crypto_setup):
     for key in sorted(headers.keys()):
         if key in ["PartNum", "TotalParts"]:
             continue
-        canonical_header_str += f"{key}: {headers[key]}\n"
+        value = headers[key]
+        if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+            canonical_header_str += f"{key}: {value}\n"
+        else:
+            canonical_header_str += f'{key}: "{value}"\n'
+
     header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
 
     try:
@@ -454,7 +475,11 @@ def test_verification_failures(crypto_setup, tamper_func, error_msg):
     for key in sorted(tampered_headers.keys()):
         # Don't include derived fields in the raw string
         if key not in ["PartNum", "TotalParts"]:
-            header_block += f"{key}: {tampered_headers[key]}\n"
+            value = tampered_headers[key]
+            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+                header_block += f"{key}: {value}\n"
+            else:
+                header_block += f'{key}: "{value}"\n'
 
     part_num = tampered_headers["PartNum"]
     total_parts = tampered_headers["TotalParts"]
