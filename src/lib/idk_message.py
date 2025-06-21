@@ -143,6 +143,7 @@ def create_idk_message_parts(
         len(serialized_pieces_bytes) + pieces_per_part - 1
     ) // pieces_per_part
     message_parts = []
+    current_piece_index = 0
 
     # 4. Create each message part
     for i in range(0, len(serialized_pieces_bytes), pieces_per_part):
@@ -153,7 +154,7 @@ def create_idk_message_parts(
         num_pieces_in_part = len(part_pieces)
         part_slots_total = num_pieces_in_part * slot_count
 
-        # b. Calculate SlotsUsed for this specific part's data content.
+        # b. Calculate PartSlotsUsed for this specific part's data content.
         start_piece_index = i
         # The data that corresponds to this part's pieces
         start_byte_index = start_piece_index * max_bytes_per_chunk
@@ -174,26 +175,33 @@ def create_idk_message_parts(
         # A more robust implementation would handle paths for all pieces in a chunk.
         headers = {
             "Version": IDK_VERSION,
-            "SlotsTotal": str(part_slots_total),
-            "SlotsUsed": str(part_slots_used),
+            "PartSlotsTotal": str(part_slots_total),
+            "PartSlotsUsed": str(part_slots_used),
             "BytesTotal": str(original_data_len),
             "MerkleRoot": merkle_root,
             "Part": f"{part_num}/{total_parts}",
             "ChunkHash": hashlib.blake2b(payload_bytes).hexdigest(),
-            "AuthPath": json.dumps(merkle_tree.get_auth_path(i)),
         }
 
-        # Add optional headers, ensuring they don't override mandatory ones.
+        # Add optional headers first, so they are part of the signed content
+        # in the same way as mandatory headers.
         if optional_headers:
             for key, value in optional_headers.items():
                 if key not in headers:
                     headers[key] = value
 
+        # AuthPath must be calculated for the first piece in the current part.
+        # We use current_piece_index which tracks the piece's absolute position.
+        headers["AuthPath"] = json.dumps(merkle_tree.get_auth_path(current_piece_index))
+
+        # Update the piece index for the next part.
+        current_piece_index += num_pieces_in_part
+
         # e. Sign the headers
         canonical_header_str = ""
         for key in sorted(headers.keys()):
             value = headers[key]
-            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+            if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
                 canonical_header_str += f"{key}: {value}\n"
             else:
                 canonical_header_str += f'{key}: "{value}"\n'
@@ -206,7 +214,7 @@ def create_idk_message_parts(
         header_block = ""
         for key in sorted(headers.keys()):
             value = headers[key]
-            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+            if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
                 header_block += f"{key}: {value}\n"
             else:
                 header_block += f'{key}: "{value}"\n'
@@ -364,26 +372,46 @@ def decrypt_idk_message(
     if not message_parts:
         raise ValueError("No valid IDK message parts found in the input string.")
 
+    # 1. Parse all parts first to sort them
+    parsed_parts = []
+    for part_str in message_parts:
+        parsed_parts.append(parse_idk_message_part(part_str))
+
+    # 2. Sort parts by their part number to process them in order.
+    # This is crucial for calculating the piece index correctly.
+    try:
+        sorted_parts = sorted(parsed_parts, key=lambda p: p["headers"]["PartNum"])
+    except KeyError:
+        raise ValueError("Malformed message part missing 'PartNum' header.")
+
     all_pieces = {}
     total_bytes = 0
     merkle_root = ""
+    current_piece_index = 0
+    slot_count = pre.get_slot_count(cc)
 
-    for i, part_str in enumerate(message_parts):
+    for parsed in sorted_parts:
         try:
-            parsed = parse_idk_message_part(part_str)
             headers = parsed["headers"]
             payload_b64 = parsed["payload_b64"]
 
             # Verify signature
             signature_hex = headers.pop("Signature")
+            # Reconstruct the "Part" header for canonical string verification
             headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
+
             canonical_header_str = ""
             for key in sorted(headers.keys()):
                 if key in ["PartNum", "TotalParts"]:
                     continue
                 value = headers[key]
                 # Re-create the canonical string by quoting string values
-                if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+                if key in [
+                    "PartSlotsTotal",
+                    "PartSlotsUsed",
+                    "BytesTotal",
+                    "AuthPath",
+                ]:
                     canonical_header_str += f"{key}: {value}\n"
                 else:
                     canonical_header_str += f'{key}: "{value}"\n'
@@ -393,12 +421,12 @@ def decrypt_idk_message(
             vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
 
             # Validate part-specific headers
-            part_slots_used = int(headers["SlotsUsed"])
-            part_slots_total = int(headers["SlotsTotal"])
+            part_slots_used = int(headers["PartSlotsUsed"])
+            part_slots_total = int(headers["PartSlotsTotal"])
             if part_slots_used > part_slots_total:
                 raise ValueError(
-                    f"SlotsUsed ({part_slots_used}) "
-                    f"cannot exceed SlotsTotal ({part_slots_total})"
+                    f"PartSlotsUsed ({part_slots_used}) "
+                    f"cannot exceed PartSlotsTotal ({part_slots_total})"
                 )
 
             # Validate the payload format and content.
@@ -406,21 +434,24 @@ def decrypt_idk_message(
             if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
                 raise ValueError("ChunkHash verification failed")
 
-            # When verifying the Merkle path, we must use the hash of the *first*
-            # raw piece in this payload, because the AuthPath is relative to it.
-            # We can't just hash payload_bytes if it contains multiple pieces.
-            # A simple way to get the first piece is to deserialize and re-serialize.
-            # This is slightly inefficient but safe. A more optimized approach would
-            # require knowing the exact serialized length of a single ciphertext piece.
-            first_piece_obj = pre.deserialize_ciphertext(payload_bytes)
-            first_piece_bytes = pre.serialize_to_bytes(first_piece_obj)
-            leaf_hash_bytes = hashlib.blake2b(first_piece_bytes).digest()
+            # Determine piece count and length to extract the first piece for hashing.
+            num_pieces = int(headers["PartSlotsTotal"]) // slot_count
+            if num_pieces == 0:
+                # This case handles parts that might exist for metadata but have no payload.
+                leaf_hash_bytes = hashlib.blake2b(b"").digest()
+            else:
+                if len(payload_bytes) % num_pieces != 0:
+                    raise ValueError(
+                        "Payload length is not a multiple of the number of pieces."
+                    )
+                piece_len = len(payload_bytes) // num_pieces
+                first_piece_bytes = payload_bytes[:piece_len]
+                leaf_hash_bytes = hashlib.blake2b(first_piece_bytes).digest()
 
-            piece_index = headers["PartNum"] - 1
             if not verify_merkle_path(
                 leaf_hash_bytes,
                 json.loads(headers["AuthPath"]),
-                piece_index,
+                current_piece_index,  # The index is the running total of pieces
                 headers["MerkleRoot"],
             ):
                 raise ValueError("Merkle path verification failed")
@@ -431,10 +462,23 @@ def decrypt_idk_message(
             elif headers["MerkleRoot"] != merkle_root:
                 raise ValueError("Inconsistent Merkle roots across message parts")
 
-            all_pieces[piece_index] = pre.deserialize_ciphertext(payload_bytes)
+            # Correctly deserialize all pieces from the payload
+            if num_pieces > 0:
+                piece_len = len(payload_bytes) // num_pieces
+                current_payload = payload_bytes
+                for piece_num in range(num_pieces):
+                    piece_index_in_message = current_piece_index + piece_num
+                    piece_data = current_payload[:piece_len]
+                    piece_obj = pre.deserialize_ciphertext(piece_data)
+                    all_pieces[piece_index_in_message] = piece_obj
+                    current_payload = current_payload[piece_len:]
 
-        except (ValueError, ecdsa.BadSignatureError, binascii.Error) as e:
-            raise ValueError(f"Verification failed for part {i + 1}: {e}")
+            # Update the piece index for the next part
+            current_piece_index += num_pieces
+
+        except (ValueError, ecdsa.BadSignatureError, binascii.Error, KeyError) as e:
+            part_num_str = parsed.get("headers", {}).get("PartNum", "unknown")
+            raise ValueError(f"Verification failed for part {part_num_str}: {e}")
 
     # Calculate total slots used from the message-wide BytesTotal header.
     total_slots_for_message = (total_bytes + 1) // 2

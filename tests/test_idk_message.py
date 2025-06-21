@@ -149,7 +149,7 @@ def test_create_and_verify_idk_message(crypto_setup):
         if key in ["PartNum", "TotalParts"]:
             continue
         value = headers[key]
-        if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+        if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
             canonical_header_str += f"{key}: {value}\n"
         else:
             canonical_header_str += f'{key}: "{value}"\n'
@@ -223,7 +223,7 @@ def test_idk_message_format_conformance(crypto_setup):
     # c. Check header format (Key: Value) and alphabetical order
     header_lines = lines[1:header_end_index]
     header_keys = []
-    unquoted_headers = ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]
+    unquoted_headers = ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]
     for header_line in header_lines:
         assert ": " in header_line, f"Header line '{header_line}' is malformed"
         key, value = header_line.split(": ", 1)
@@ -247,8 +247,8 @@ def test_idk_message_format_conformance(crypto_setup):
     # e. Check all mandatory headers from the spec are present
     expected_headers = {
         "Version",
-        "SlotsTotal",
-        "SlotsUsed",
+        "PartSlotsTotal",
+        "PartSlotsUsed",
         "BytesTotal",
         "MerkleRoot",
         "Signature",
@@ -265,7 +265,7 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
     """
     Tests the end-to-end process of creating, parsing, reassembling,
     and decrypting a multi-part message to verify data integrity.
-    This also implicitly tests the correct usage of SlotsUsed and BytesTotal.
+    This also implicitly tests the correct usage of PartSlotsUsed and BytesTotal.
     """
     # 1. Setup
     cc = crypto_setup["cc"]
@@ -274,10 +274,9 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
     vk = crypto_setup["vk"]
 
     # Use data that reliably creates multiple parts
-    # Ensure data size is just over what fits in a single ciphertext.
-    # With a 2-bytes-per-coeff ratio, this creates slots_used > slots_total.
-    original_data = os.urandom(pre.get_slot_count(cc) * 2 + 1)
-    pieces_per_part = 1
+    # This will generate 3 pieces, which with pieces_per_part=2 will create 2 parts.
+    original_data = os.urandom(pre.get_slot_count(cc) * 5)
+    pieces_per_part = 2
 
     # 2. Create the message parts
     message_parts = idk_message.create_idk_message_parts(
@@ -291,76 +290,123 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
         "Test requires multiple message parts to be generated"
     )
 
-    # 3. Process each part and reconstruct pieces
-    reconstructed_pieces_bytes = []
-    merkle_root_from_headers = None
-    bytes_total_from_headers = None
-    total_slots_from_parts = 0
+    full_message_str = "\n\n".join(message_parts)
 
-    for i, part_str in enumerate(message_parts):
-        parsed_part = idk_message.parse_idk_message_part(part_str)
-        headers = parsed_part["headers"]
-        payload_b64 = parsed_part["payload_b64"]
+    # 3. Decrypt and verify the full message
+    try:
+        decrypted_data = idk_message.decrypt_idk_message(
+            cc=cc, sk=keys.secretKey, vk=vk, message_str=full_message_str
+        )
+    except ValueError as e:
+        pytest.fail(f"Decryption failed with multi-piece parts: {e}")
 
-        # a. Verify Signature
-        signature_hex = headers.pop("Signature")
-        headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
-        canonical_header_str = ""
-        for key in sorted(headers.keys()):
-            if key in ["PartNum", "TotalParts"]:
-                continue
-            value = headers[key]
-            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
-                canonical_header_str += f"{key}: {value}\n"
-            else:
-                canonical_header_str += f'{key}: "{value}"\n'
+    # 4. Assert data integrity
+    assert decrypted_data == original_data
 
-        header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
-        try:
-            vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
-        except ecdsa.BadSignatureError:
-            pytest.fail(f"ECDSA signature verification failed for part {i + 1}")
 
-        # b. Store and check for header consistency across parts
-        if merkle_root_from_headers is None:
-            merkle_root_from_headers = headers["MerkleRoot"]
-            bytes_total_from_headers = int(headers["BytesTotal"])
-        else:
-            assert headers["MerkleRoot"] == merkle_root_from_headers
-            assert int(headers["BytesTotal"]) == bytes_total_from_headers
+def test_end_to_end_with_optional_headers(crypto_setup):
+    """
+    Tests the full lifecycle of a message with optional headers, using the
+    high-level decrypt_idk_message function.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    vk = crypto_setup["vk"]
+    original_data = os.urandom(123)
+    optional_headers = {
+        "Sender": "alice@example.com",
+        "Recipient": "bob@example.com",
+    }
 
-        # c. Verify payload and its place in the Merkle tree
-        payload_bytes = base64.b64decode(payload_b64)
-        assert hashlib.blake2b(payload_bytes).hexdigest() == headers["ChunkHash"]
-        leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
-        assert idk_message.verify_merkle_path(
-            leaf_hash_bytes=leaf_hash_bytes,
-            auth_path_hex=json.loads(headers["AuthPath"]),
-            piece_index=i,  # Since pieces_per_part=1, piece_index == part_index
-            expected_root_hex=merkle_root_from_headers,
-        ), f"Merkle path verification failed for part {i + 1}"
-
-        reconstructed_pieces_bytes.append(payload_bytes)
-
-    # 4. Deserialize, decrypt, and reconstruct original data
-    assert len(reconstructed_pieces_bytes) == len(message_parts)
-    deserialized_ciphertexts = [
-        pre.deserialize_ciphertext(piece_bytes)
-        for piece_bytes in reconstructed_pieces_bytes
-    ]
-    # Calculate total slots used from the message-wide BytesTotal header.
-    assert bytes_total_from_headers is not None
-    total_slots_for_message = (bytes_total_from_headers + 1) // 2
-    decrypted_coeffs = pre.decrypt(
-        cc, keys.secretKey, deserialized_ciphertexts, total_slots_for_message
+    # 2. Create the message parts with optional headers
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        pieces_per_part=1,
+        optional_headers=optional_headers,
     )
+    full_message_str = "\n\n".join(message_parts)
 
-    # 5. Convert back to bytes and verify final data integrity
-    # This function is expected to handle the truncation based on total_bytes.
-    final_data = pre.coefficients_to_bytes(
-        decrypted_coeffs, total_bytes=bytes_total_from_headers
+    # 3. Decrypt and verify the full message
+    try:
+        decrypted_data = idk_message.decrypt_idk_message(
+            cc=cc, sk=keys.secretKey, vk=vk, message_str=full_message_str
+        )
+    except ValueError as e:
+        pytest.fail(f"Decryption failed with optional headers: {e}")
+
+    # 4. Assert data integrity
+    assert decrypted_data == original_data
+
+
+def test_optional_headers_dont_overwrite_mandatory(crypto_setup):
+    """
+    Tests that optional headers cannot overwrite mandatory headers.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    original_data = os.urandom(50)
+    # Attempt to overwrite "Version" and "MerkleRoot"
+    optional_headers = {"Version": "HACKED", "MerkleRoot": "0000"}
+
+    # 2. Create message with malicious optional headers
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        optional_headers=optional_headers,
     )
-    assert final_data == original_data
+    part_to_verify_str = message_parts[0]
+
+    # 3. Parse and check that headers were not overwritten
+    parsed_part = idk_message.parse_idk_message_part(part_to_verify_str)
+    headers = parsed_part["headers"]
+
+    assert headers["Version"] == idk_message.IDK_VERSION
+    assert headers["Version"] != "HACKED"
+    assert "MerkleRoot" in headers
+    assert headers["MerkleRoot"] != "0000"
+
+
+def test_tampering_by_removing_optional_header(crypto_setup):
+    """
+    Tests that removing an optional header from a signed message invalidates it.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    vk = crypto_setup["vk"]
+    original_data = os.urandom(50)
+    optional_headers = {"CriticalInfo": "KeepThis"}
+
+    # 2. Create a valid message with an optional header
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        optional_headers=optional_headers,
+    )
+    part_str = message_parts[0]
+
+    # 3. Tamper with the raw string by removing the optional header line
+    lines = part_str.split("\n")
+    tampered_lines = [line for line in lines if not line.startswith("CriticalInfo:")]
+    tampered_part_str = "\n".join(tampered_lines)
+
+    # 4. Assert that verification fails
+    with pytest.raises(ValueError, match="Verification failed"):
+        idk_message.decrypt_idk_message(
+            cc=cc, sk=keys.secretKey, vk=vk, message_str=tampered_part_str
+        )
 
 
 def test_create_and_verify_with_optional_headers(crypto_setup):
@@ -402,7 +448,7 @@ def test_create_and_verify_with_optional_headers(crypto_setup):
         if key in ["PartNum", "TotalParts"]:
             continue
         value = headers[key]
-        if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+        if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
             canonical_header_str += f"{key}: {value}\n"
         else:
             canonical_header_str += f'{key}: "{value}"\n'
@@ -476,7 +522,7 @@ def test_verification_failures(crypto_setup, tamper_func, error_msg):
         # Don't include derived fields in the raw string
         if key not in ["PartNum", "TotalParts"]:
             value = tampered_headers[key]
-            if key in ["SlotsTotal", "SlotsUsed", "BytesTotal", "AuthPath"]:
+            if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
                 header_block += f"{key}: {value}\n"
             else:
                 header_block += f'{key}: "{value}"\n'
@@ -565,14 +611,14 @@ def test_multiple_pieces_per_part_limitation(crypto_setup):
 
 def test_slots_used_le_slots_total(crypto_setup):
     """
-    Tests that the SlotsUsed header is always less than or equal to SlotsTotal.
+    Tests that the PartSlotsUsed header is always less than or equal to PartSlotsTotal.
     """
     cc = crypto_setup["cc"]
     keys = crypto_setup["keys"]
     sk = crypto_setup["sk"]
 
     # This will create more than one piece, and with the previous logic,
-    # SlotsUsed would have been > SlotsTotal.
+    # PartSlotsUsed would have been > PartSlotsTotal.
     original_data = os.urandom(pre.get_slot_count(cc) * 2 + 1)
 
     message_parts = idk_message.create_idk_message_parts(
@@ -586,9 +632,9 @@ def test_slots_used_le_slots_total(crypto_setup):
     for part_str in message_parts:
         parsed_part = idk_message.parse_idk_message_part(part_str)
         headers = parsed_part["headers"]
-        slots_used = int(headers["SlotsUsed"])
-        slots_total = int(headers["SlotsTotal"])
+        slots_used = int(headers["PartSlotsUsed"])
+        slots_total = int(headers["PartSlotsTotal"])
         assert slots_used <= slots_total, (
-            f"SlotsUsed ({slots_used}) should not be greater than "
-            f"SlotsTotal ({slots_total})"
+            f"PartSlotsUsed ({slots_used}) should not be greater than "
+            f"PartSlotsTotal ({slots_total})"
         )
