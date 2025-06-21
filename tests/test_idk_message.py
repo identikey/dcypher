@@ -211,13 +211,13 @@ def test_idk_message_format_conformance(crypto_setup):
     assert lines[0] == f"----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----"
     assert lines[-1] == f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
 
-    # b. Check for a single empty line between headers and payload
+    # b. Check for no empty line between headers and payload
     empty_line_indices = [i for i, line in enumerate(lines) if line == ""]
-    assert len(empty_line_indices) == 1, "There should be exactly one empty line"
-    header_end_index = empty_line_indices[0]
+    assert not empty_line_indices, "There should be no empty lines"
 
     # c. Check header format (Key: Value) and alphabetical order
-    header_lines = lines[1:header_end_index]
+    # Headers are all lines between the BEGIN marker and the payload
+    header_lines = lines[1:-2]
     header_keys = []
     unquoted_headers = ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]
     for header_line in header_lines:
@@ -234,7 +234,7 @@ def test_idk_message_format_conformance(crypto_setup):
     assert header_keys == sorted(header_keys), "Headers are not in alphabetical order"
 
     # d. Check payload is valid Base64
-    payload_b64 = "".join(lines[header_end_index + 1 : -1])
+    payload_b64 = lines[-2]
     try:
         base64.b64decode(payload_b64, validate=True)
     except Exception:
@@ -284,7 +284,7 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
         "Test requires multiple message parts to be generated"
     )
 
-    full_message_str = "\n\n".join(message_parts)
+    full_message_str = "\n".join(message_parts)
 
     # 3. Decrypt and verify the full message
     try:
@@ -322,7 +322,7 @@ def test_end_to_end_with_optional_headers(crypto_setup):
         signing_key=sk,
         optional_headers=optional_headers,
     )
-    full_message_str = "\n\n".join(message_parts)
+    full_message_str = "\n".join(message_parts)
 
     # 3. Decrypt and verify the full message
     try:
@@ -510,15 +510,16 @@ def test_verification_failures(crypto_setup, tamper_func, error_msg):
     )
 
     # 3. Re-assemble the tampered message part string
-    header_block = ""
+    header_lines = []
     for key in sorted(tampered_headers.keys()):
         # Don't include derived fields in the raw string
         if key not in ["PartNum", "TotalParts"]:
             value = tampered_headers[key]
             if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
-                header_block += f"{key}: {value}\n"
+                header_lines.append(f"{key}: {value}")
             else:
-                header_block += f'{key}: "{value}"\n'
+                header_lines.append(f'{key}: "{value}"')
+    header_block = "\n".join(header_lines)
 
     part_num = tampered_headers["PartNum"]
     total_parts = tampered_headers["TotalParts"]

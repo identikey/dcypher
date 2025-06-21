@@ -203,7 +203,7 @@ def create_idk_message_parts(
 
         message_part = (
             f"{BEGIN_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}\n"
-            f"{header_block}\n"
+            f"{header_block}"  # header_block already has a trailing newline
             f"{payload_b64}\n"
             f"{END_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}"
         )
@@ -244,33 +244,31 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
             break
 
     if end_marker_index == -1:
-        raise ValueError("Invalid END marker.")
+        raise ValueError("Could not find matching END marker.")
 
     # Limit lines to only the first valid part found
     part_lines = lines[: end_marker_index + 1]
 
+    if len(part_lines) < 3:  # BEGIN, payload, END as a minimum
+        raise ValueError("Malformed part: missing headers or payload.")
+
+    header_lines = part_lines[1:-2]
+    if not header_lines:
+        raise ValueError("Malformed part: missing headers.")
+
     headers = {}
-    header_lines = []
-    payload_line_index = -1
-    # Headers are from line 1 until we hit a blank line
-    for i, line in enumerate(part_lines[1:-1], start=1):
-        if not line.strip():
-            payload_line_index = i + 1
-            break
-        header_lines.append(line)
-
-    if payload_line_index == -1 or not header_lines:
-        raise ValueError("Malformed part: missing separator or headers.")
-
     for line in header_lines:
-        key, value = line.split(": ", 1)
-        # Strip quotes from string values
-        if value.startswith('"') and value.endswith('"'):
-            value = value[1:-1]
-        headers[key] = value
+        try:
+            key, value = line.split(": ", 1)
+            # Strip quotes from string values
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+            headers[key] = value
+        except ValueError:
+            raise ValueError(f"Malformed header line: {line}")
 
-    # The payload is everything between the blank line and the END marker
-    payload_b64 = "".join(part_lines[payload_line_index:-1])
+    # The payload is the second to last line
+    payload_b64 = part_lines[-2]
 
     # Do not convert to int here. The caller should do it after verification.
     # The part number in the header is a string "num/total"
