@@ -96,7 +96,6 @@ def create_idk_message_parts(
     cc,
     pk,
     signing_key: ecdsa.SigningKey,
-    pieces_per_part: int = 1,
     optional_headers: Optional[Dict[str, str]] = None,
 ) -> List[str]:
     """
@@ -107,7 +106,6 @@ def create_idk_message_parts(
         cc: The crypto context for PRE operations.
         pk: The public key for encryption.
         signing_key: The ECDSA signing key for signing the headers.
-        pieces_per_part: The number of encrypted ciphertext pieces per message part.
         optional_headers: A dictionary of optional headers to merge into the message headers.
 
     Returns:
@@ -139,40 +137,28 @@ def create_idk_message_parts(
     merkle_tree = MerkleTree(serialized_pieces_bytes)
     merkle_root = merkle_tree.root
 
-    total_parts = (
-        len(serialized_pieces_bytes) + pieces_per_part - 1
-    ) // pieces_per_part
+    total_parts = len(serialized_pieces_bytes)
     message_parts = []
-    current_piece_index = 0
 
     # 4. Create each message part
-    for i in range(0, len(serialized_pieces_bytes), pieces_per_part):
-        part_num = (i // pieces_per_part) + 1
+    for i, piece_bytes in enumerate(serialized_pieces_bytes):
+        part_num = i + 1
 
-        # a. Get the chunk of raw byte pieces for this part
-        part_pieces = serialized_pieces_bytes[i : i + pieces_per_part]
-        num_pieces_in_part = len(part_pieces)
-        part_slots_total = num_pieces_in_part * slot_count
+        # a. Each part now corresponds to a single piece.
+        part_slots_total = slot_count
 
         # b. Calculate PartSlotsUsed for this specific part's data content.
-        start_piece_index = i
-        # The data that corresponds to this part's pieces
-        start_byte_index = start_piece_index * max_bytes_per_chunk
+        start_byte_index = i * max_bytes_per_chunk
         # The end byte index is capped by the original data length
-        end_byte_index = min(
-            (start_piece_index + num_pieces_in_part) * max_bytes_per_chunk,
-            original_data_len,
-        )
+        end_byte_index = min((i + 1) * max_bytes_per_chunk, original_data_len)
         part_data_len = end_byte_index - start_byte_index
         part_slots_used = (part_data_len + 1) // 2
 
         # c. Concatenate and Base64-encode the payload
-        payload_bytes = b"".join(part_pieces)
+        payload_bytes = piece_bytes
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
 
         # d. Prepare headers
-        # NOTE: The AuthPath is for the *first* piece in the chunk.
-        # A more robust implementation would handle paths for all pieces in a chunk.
         headers = {
             "Version": IDK_VERSION,
             "PartSlotsTotal": str(part_slots_total),
@@ -190,12 +176,8 @@ def create_idk_message_parts(
                 if key not in headers:
                     headers[key] = value
 
-        # AuthPath must be calculated for the first piece in the current part.
-        # We use current_piece_index which tracks the piece's absolute position.
-        headers["AuthPath"] = json.dumps(merkle_tree.get_auth_path(current_piece_index))
-
-        # Update the piece index for the next part.
-        current_piece_index += num_pieces_in_part
+        # AuthPath is calculated for the current piece.
+        headers["AuthPath"] = json.dumps(merkle_tree.get_auth_path(i))
 
         # e. Sign the headers
         canonical_header_str = ""

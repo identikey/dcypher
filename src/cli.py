@@ -96,15 +96,7 @@ def gen_keys(cc_path, output_prefix):
 @click.option(
     "--output", default="ciphertext.idk", help="Path to save the IDK message file."
 )
-@click.option(
-    "--pieces-per-part",
-    default=1,
-    type=int,
-    help="Number of ciphertext pieces per message part.",
-)
-def encrypt(
-    cc_path, pk_path, signing_key_path, data, input_file, output, pieces_per_part
-):
+def encrypt(cc_path, pk_path, signing_key_path, data, input_file, output):
     """Encrypts data and packages it into a spec-compliant IDK message."""
     if not data and not input_file:
         raise click.UsageError("Either --data or --input-file must be provided.")
@@ -143,7 +135,6 @@ def encrypt(
         cc=cc,
         pk=pk,
         signing_key=sk_sign,
-        pieces_per_part=pieces_per_part,
     )
 
     with open(output, "w") as f:

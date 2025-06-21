@@ -215,7 +215,6 @@ def test_upload_chunks_successful(storage_paths):
             cc=cc,
             pk=keys.publicKey,
             signing_key=sk_idk_signer,
-            pieces_per_part=1,  # Use one piece per part for chunking
         )
         parsed_first_part = parse_idk_message_part(message_parts[0])
         file_hash = parsed_first_part["headers"]["MerkleRoot"]

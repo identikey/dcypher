@@ -204,7 +204,6 @@ def _create_test_idk_file(content: bytes) -> tuple[bytes, str]:
         cc=cc,
         pk=keys.publicKey,
         signing_key=sk_idk_signer,
-        pieces_per_part=1,  # Ensure a single part for simplicity
     )
     idk_file_bytes = message_parts[0].encode("utf-8")
 
