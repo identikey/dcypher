@@ -17,8 +17,18 @@ from src.main import (
     block_store,
     chunk_store,
 )
+from lib import pre
+from lib.idk_message import MerkleTree
+from lib.idk_message import create_idk_message_parts, parse_idk_message_part
+import base64
 
-from tests.test_api import storage_paths, cleanup, _create_test_account, get_nonce
+from tests.test_api import (
+    storage_paths,
+    cleanup,
+    _create_test_account,
+    get_nonce,
+    _create_test_idk_file,
+)
 
 client = TestClient(app)
 
@@ -35,8 +45,8 @@ def test_upload_file_successful(storage_paths):
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # 2. Prepare file and upload request data
-        file_content = b"This is a test file for the block store."
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        original_content = b"This is a test file for the block store."
+        idk_file_bytes, file_hash = _create_test_idk_file(original_content)
         upload_nonce = get_nonce()
         upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
 
@@ -51,7 +61,7 @@ def test_upload_file_successful(storage_paths):
         # 4. Perform the upload
         response = client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
+            files={"file": ("test.txt", idk_file_bytes, "text/plain")},
             data={
                 "nonce": upload_nonce,
                 "file_hash": file_hash,
@@ -69,7 +79,7 @@ def test_upload_file_successful(storage_paths):
         file_path = os.path.join(block_store_root, file_hash)
         assert os.path.exists(file_path)
         with open(file_path, "rb") as f:
-            assert f.read() == file_content
+            assert f.read() == idk_file_bytes
 
         # 7. Verify metadata endpoints
         response = client.get(f"/storage/{pk_classic_hex}")
@@ -80,7 +90,7 @@ def test_upload_file_successful(storage_paths):
         assert response.status_code == 200
         metadata = response.json()
         assert metadata["filename"] == "test.txt"
-        assert metadata["size"] == len(file_content)
+        assert metadata["size"] == len(idk_file_bytes)
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
@@ -98,7 +108,8 @@ def test_upload_file_invalid_hash():
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # 2. Attempt upload with incorrect hash
-        file_content = b"content"
+        original_content = b"content"
+        idk_file_bytes, _ = _create_test_idk_file(original_content)
         incorrect_hash = "thisisnotthehash"
         upload_nonce = get_nonce()
         upload_msg = f"UPLOAD:{pk_classic_hex}:{incorrect_hash}:{upload_nonce}".encode()
@@ -112,7 +123,7 @@ def test_upload_file_invalid_hash():
 
         response = client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
+            files={"file": ("test.txt", idk_file_bytes, "text/plain")},
             data={
                 "nonce": upload_nonce,
                 "file_hash": incorrect_hash,
@@ -121,7 +132,7 @@ def test_upload_file_invalid_hash():
             },
         )
         assert response.status_code == 400
-        assert "File hash does not match" in response.text
+        assert "File hash does not match MerkleRoot" in response.text
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
@@ -139,8 +150,8 @@ def test_upload_file_unauthorized(storage_paths):
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # 2. Attempt upload with invalid classic signature
-        file_content = b"content"
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        original_content = b"content"
+        idk_file_bytes, file_hash = _create_test_idk_file(original_content)
         upload_nonce = get_nonce()
 
         # Sign an incorrect message
@@ -156,7 +167,7 @@ def test_upload_file_unauthorized(storage_paths):
 
         response = client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
+            files={"file": ("test.txt", idk_file_bytes, "text/plain")},
             data={
                 "nonce": upload_nonce,
                 "file_hash": file_hash,
@@ -174,23 +185,44 @@ def test_upload_file_unauthorized(storage_paths):
 
 def test_upload_chunks_successful(storage_paths):
     """
-    Tests the successful upload of multiple file chunks.
+    Tests the successful upload of multiple file chunks after registering the
+    main file metadata.
     """
     _, chunk_store_root = storage_paths
     # 1. Create an account
     (
         sk_classic,
         pk_classic_hex,
-        all_pq_sKS,
+        all_pq_sks,
         oqs_sigs_to_free,
     ) = _create_test_account()
     try:
-        pk_ml_dsa_hex = next(iter(all_pq_sKS))
-        sig_ml_dsa, _ = all_pq_sKS[pk_ml_dsa_hex]
+        pk_ml_dsa_hex = next(iter(all_pq_sks))
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Register the file first (as per the workflow)
-        file_content = b"This is a test file that will be chunked."
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        # 2. Prepare all cryptographic materials and content on the client side.
+        original_content = (
+            b"This is a test file that will be chunked into multiple pieces."
+        )
+        cc = pre.create_crypto_context()
+        keys = pre.generate_keys(cc)
+        sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+        # 3. Create all the IDK message parts.
+        #    This generates the encrypted pieces and the overall Merkle root.
+        message_parts = create_idk_message_parts(
+            data=original_content,
+            cc=cc,
+            pk=keys.publicKey,
+            signing_key=sk_idk_signer,
+            pieces_per_part=1,  # Use one piece per part for chunking
+        )
+        parsed_first_part = parse_idk_message_part(message_parts[0])
+        file_hash = parsed_first_part["headers"]["MerkleRoot"]
+
+        # 4. Register the file by sending the *first part* of the message.
+        #    The server will store this part and register the file hash.
+        registration_idk_part = message_parts[0].encode("utf-8")
         register_nonce = get_nonce()
         register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
         classic_sig_register = sk_classic.sign(
@@ -203,7 +235,7 @@ def test_upload_chunks_successful(storage_paths):
         }
         register_response = client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("chunked_file.txt", file_content, "text/plain")},
+            files={"file": ("chunked_file.txt", registration_idk_part, "text/plain")},
             data={
                 "nonce": register_nonce,
                 "file_hash": file_hash,
@@ -211,13 +243,20 @@ def test_upload_chunks_successful(storage_paths):
                 "pq_signatures": json.dumps([pq_sig_register]),
             },
         )
-        assert register_response.status_code == 201
+        assert register_response.status_code == 201, register_response.text
 
-        # 3. Upload chunks
-        chunks = [file_content[i : i + 10] for i in range(0, len(file_content), 10)]
-        total_chunks = len(chunks)
-        for i, chunk_data in enumerate(chunks):
-            chunk_hash = hashlib.sha256(chunk_data).hexdigest()
+        # 5. Extract the raw encrypted pieces from the remaining parts to upload as chunks.
+        #    This simulates a client holding onto the raw pieces.
+        all_pieces = []
+        for part_str in message_parts:
+            parsed = parse_idk_message_part(part_str)
+            piece_bytes = base64.b64decode(parsed["payload_b64"])
+            all_pieces.append(piece_bytes)
+
+        # 6. Upload subsequent chunks (skip the first one already sent)
+        total_chunks = len(all_pieces)
+        for i, chunk_data in enumerate(all_pieces[1:], start=1):
+            chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
             chunk_nonce = get_nonce()
             chunk_msg = (
                 f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
@@ -258,9 +297,16 @@ def test_upload_chunks_successful(storage_paths):
             with open(chunk_path, "rb") as f:
                 assert f.read() == chunk_data
 
-        # 4. Verify chunk metadata is stored
-        assert file_hash in chunk_store
-        assert len(chunk_store[file_hash]) == total_chunks
+        # 7. Verify chunk metadata is stored
+        # The number of chunks in the store should be one less than total pieces,
+        # since the first piece was part of the block store registration.
+        if total_chunks > 1:
+            assert file_hash in chunk_store
+            assert len(chunk_store[file_hash]) == total_chunks - 1
+        else:
+            # If there's only one chunk, it was sent with the registration,
+            # so the separate chunk_store should not have an entry for it.
+            assert file_hash not in chunk_store
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
@@ -277,13 +323,13 @@ def test_upload_chunk_unauthorized(storage_paths):
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
         # Register a file to get a valid file_hash
-        file_content = b"some content"
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        original_content = b"some content"
+        idk_file_bytes, file_hash = _create_test_idk_file(original_content)
         register_nonce = get_nonce()
         register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
         client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("chunked_file.txt", file_content, "text/plain")},
+            files={"file": ("chunked_file.txt", idk_file_bytes, "text/plain")},
             data={
                 "nonce": register_nonce,
                 "file_hash": file_hash,
@@ -304,7 +350,7 @@ def test_upload_chunk_unauthorized(storage_paths):
 
         # 2. Attempt to upload a chunk with an invalid signature
         chunk_data = b"chunk data"
-        chunk_hash = hashlib.sha256(chunk_data).hexdigest()
+        chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
         chunk_nonce = get_nonce()
         # The classic signature will be over an incorrect message
         incorrect_msg = b"this is the wrong message"
@@ -363,8 +409,8 @@ def test_download_file_successful(storage_paths):
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # 2. Upload a file
-        file_content = b"This is a file for downloading."
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        original_content = b"This is a file for downloading."
+        idk_file_bytes, file_hash = _create_test_idk_file(original_content)
         upload_nonce = get_nonce()
         upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
         classic_sig_upload = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
@@ -375,7 +421,7 @@ def test_download_file_successful(storage_paths):
         }
         upload_response = client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("download_test.txt", file_content, "text/plain")},
+            files={"file": ("download_test.txt", idk_file_bytes, "text/plain")},
             data={
                 "nonce": upload_nonce,
                 "file_hash": file_hash,
@@ -410,7 +456,7 @@ def test_download_file_successful(storage_paths):
 
         # 4. Assert success and verify content
         assert download_response.status_code == 200, download_response.text
-        assert download_response.content == file_content
+        assert download_response.content == idk_file_bytes
         assert (
             download_response.headers["content-disposition"]
             == 'attachment; filename="download_test.txt"'
@@ -432,13 +478,13 @@ def test_download_file_unauthorized():
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # Upload a file
-        file_content = b"This is a file for unauthorized download test."
-        file_hash = hashlib.sha256(file_content).hexdigest()
+        original_content = b"This is a file for unauthorized download test."
+        idk_file_bytes, file_hash = _create_test_idk_file(original_content)
         upload_nonce = get_nonce()
         upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
         client.post(
             f"/storage/{pk_classic_hex}",
-            files={"file": ("test.txt", file_content, "text/plain")},
+            files={"file": ("test.txt", idk_file_bytes, "text/plain")},
             data={
                 "nonce": upload_nonce,
                 "file_hash": file_hash,
@@ -621,7 +667,7 @@ def test_upload_and_download_large_file(storage_paths):
 
         # 2. Create a large file
         large_file_content = os.urandom(1024 * 1024)  # 1MB
-        file_hash = hashlib.sha256(large_file_content).hexdigest()
+        idk_file_bytes, file_hash = _create_test_idk_file(large_file_content)
 
         # 3. Upload the file
         upload_nonce = get_nonce()
@@ -637,7 +683,7 @@ def test_upload_and_download_large_file(storage_paths):
             files={
                 "file": (
                     "large_file.bin",
-                    large_file_content,
+                    idk_file_bytes,
                     "application/octet-stream",
                 )
             },
@@ -675,7 +721,7 @@ def test_upload_and_download_large_file(storage_paths):
 
         # 5. Assert success and verify content
         assert download_response.status_code == 200, download_response.text
-        assert download_response.content == large_file_content
+        assert download_response.content == idk_file_bytes
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:

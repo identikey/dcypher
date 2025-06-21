@@ -367,7 +367,16 @@ def decrypt_idk_message(
             if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
                 raise ValueError("ChunkHash verification failed")
 
-            leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
+            # When verifying the Merkle path, we must use the hash of the *first*
+            # raw piece in this payload, because the AuthPath is relative to it.
+            # We can't just hash payload_bytes if it contains multiple pieces.
+            # A simple way to get the first piece is to deserialize and re-serialize.
+            # This is slightly inefficient but safe. A more optimized approach would
+            # require knowing the exact serialized length of a single ciphertext piece.
+            first_piece_obj = pre.deserialize_ciphertext(payload_bytes)
+            first_piece_bytes = pre.serialize_to_bytes(first_piece_obj)
+            leaf_hash_bytes = hashlib.blake2b(first_piece_bytes).digest()
+
             piece_index = headers["PartNum"] - 1
             if not verify_merkle_path(
                 leaf_hash_bytes,

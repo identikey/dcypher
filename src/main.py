@@ -694,7 +694,7 @@ async def upload_chunk(
 
     # Verify chunk hash
     chunk_content = await file.read()
-    computed_hash = hashlib.sha256(chunk_content).hexdigest()
+    computed_hash = hashlib.blake2b(chunk_content).hexdigest()
     if computed_hash != chunk_hash:
         raise HTTPException(status_code=400, detail="Chunk hash does not match.")
 
@@ -741,6 +741,35 @@ async def upload_chunk(
     used_nonces.add(nonce)
 
     return {"message": f"Chunk {chunk_index}/{total_chunks} uploaded successfully."}
+
+
+@app.post("/test/cleanup")
+def cleanup_test_stores():
+    """
+    A test-only endpoint to clean up the in-memory stores and on-disk storage.
+    This is necessary because the server runs in a separate thread and its
+    state is not affected by fixtures running in the test process.
+    """
+    # Clear in-memory stores
+    accounts.clear()
+    used_nonces.clear()
+    graveyard.clear()
+    block_store.clear()
+    chunk_store.clear()
+
+    # Clear on-disk storage
+    for store_root in [BLOCK_STORE_ROOT, CHUNK_STORE_ROOT]:
+        if os.path.exists(store_root):
+            for filename in os.listdir(store_root):
+                file_path = os.path.join(store_root, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                except Exception as e:
+                    # In a real app, you'd log this more robustly
+                    print(f"Failed to delete {file_path}. Reason: {e}")
+
+    return {"message": "All in-memory stores and on-disk storage cleared."}
 
 
 if __name__ == "__main__":

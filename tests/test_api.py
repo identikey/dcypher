@@ -17,6 +17,7 @@ from src.main import (
     block_store,
     chunk_store,
 )
+from lib import idk_message, pre
 
 client = TestClient(app)
 
@@ -168,3 +169,47 @@ def test_get_nonce_endpoint():
     assert len(parts) == 2
     # Further validation of the nonce's cryptographic properties is implicitly
     # tested by the various `create_account` tests that consume the nonce.
+
+
+def _create_test_idk_file(content: bytes) -> tuple[bytes, str]:
+    """
+    Creates a valid, spec-compliant IDK message for testing API endpoints.
+
+    This helper function handles the necessary cryptographic setup:
+    1. Generates a fresh crypto context (for PRE).
+    2. Generates a PRE public/private key pair.
+    3. Generates an ECDSA key pair for signing the IDK message headers.
+    4. Encrypts the provided content and packages it into a single IDK message part.
+       (For simplicity, it assumes content fits in one part).
+
+    Args:
+        content: The raw bytes to be encrypted and packaged.
+
+    Returns:
+        A tuple containing:
+        - The raw bytes of the generated IDK message part.
+        - The MerkleRoot of the message, to be used as the `file_hash`.
+    """
+    # 1. & 2. Crypto Context and PRE Keys
+    cc = pre.create_crypto_context()
+    keys = pre.generate_keys(cc)
+
+    # 3. IDK Message Signing Key
+    sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+    # 4. Create the IDK message part
+    # For testing, we assume the content fits into a single part.
+    message_parts = idk_message.create_idk_message_parts(
+        data=content,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk_idk_signer,
+        pieces_per_part=1,  # Ensure a single part for simplicity
+    )
+    idk_file_bytes = message_parts[0].encode("utf-8")
+
+    # 5. Extract MerkleRoot to use as the file_hash
+    parsed_part = idk_message.parse_idk_message_part(message_parts[0])
+    merkle_root = parsed_part["headers"]["MerkleRoot"]
+
+    return idk_file_bytes, merkle_root
