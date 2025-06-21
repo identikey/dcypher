@@ -416,19 +416,9 @@ def decrypt_idk_message(
             if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
                 raise ValueError("ChunkHash verification failed")
 
-            # Determine piece count and length to extract the first piece for hashing.
-            num_pieces = int(headers["PartSlotsTotal"]) // slot_count
-            if num_pieces == 0:
-                # This case handles parts that might exist for metadata but have no payload.
-                leaf_hash_bytes = hashlib.blake2b(b"").digest()
-            else:
-                if len(payload_bytes) % num_pieces != 0:
-                    raise ValueError(
-                        "Payload length is not a multiple of the number of pieces."
-                    )
-                piece_len = len(payload_bytes) // num_pieces
-                first_piece_bytes = payload_bytes[:piece_len]
-                leaf_hash_bytes = hashlib.blake2b(first_piece_bytes).digest()
+            # The payload *is* the single serialized ciphertext piece.
+            # Hash it for Merkle path verification.
+            leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
 
             if not verify_merkle_path(
                 leaf_hash_bytes,
@@ -444,19 +434,12 @@ def decrypt_idk_message(
             elif headers["MerkleRoot"] != merkle_root:
                 raise ValueError("Inconsistent Merkle roots across message parts")
 
-            # Correctly deserialize all pieces from the payload
-            if num_pieces > 0:
-                piece_len = len(payload_bytes) // num_pieces
-                current_payload = payload_bytes
-                for piece_num in range(num_pieces):
-                    piece_index_in_message = current_piece_index + piece_num
-                    piece_data = current_payload[:piece_len]
-                    piece_obj = pre.deserialize_ciphertext(piece_data)
-                    all_pieces[piece_index_in_message] = piece_obj
-                    current_payload = current_payload[piece_len:]
+            # Correctly deserialize the single piece from the payload.
+            piece_obj = pre.deserialize_ciphertext(payload_bytes)
+            all_pieces[current_piece_index] = piece_obj
 
             # Update the piece index for the next part
-            current_piece_index += num_pieces
+            current_piece_index += 1
 
         except (ValueError, ecdsa.BadSignatureError, binascii.Error, KeyError) as e:
             part_num_str = parsed.get("headers", {}).get("PartNum", "unknown")
