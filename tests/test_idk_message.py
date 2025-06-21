@@ -283,8 +283,8 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
     # 3. Process each part and reconstruct pieces
     reconstructed_pieces_bytes = []
     merkle_root_from_headers = None
-    slots_used_from_headers = None
     bytes_total_from_headers = None
+    total_slots_from_parts = 0
 
     for i, part_str in enumerate(message_parts):
         parsed_part = idk_message.parse_idk_message_part(part_str)
@@ -308,11 +308,9 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
         # b. Store and check for header consistency across parts
         if merkle_root_from_headers is None:
             merkle_root_from_headers = headers["MerkleRoot"]
-            slots_used_from_headers = int(headers["SlotsUsed"])
             bytes_total_from_headers = int(headers["BytesTotal"])
         else:
             assert headers["MerkleRoot"] == merkle_root_from_headers
-            assert int(headers["SlotsUsed"]) == slots_used_from_headers
             assert int(headers["BytesTotal"]) == bytes_total_from_headers
 
         # c. Verify payload and its place in the Merkle tree
@@ -334,13 +332,15 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
         pre.deserialize_ciphertext(piece_bytes)
         for piece_bytes in reconstructed_pieces_bytes
     ]
+    # Calculate total slots used from the message-wide BytesTotal header.
+    assert bytes_total_from_headers is not None
+    total_slots_for_message = (bytes_total_from_headers + 1) // 2
     decrypted_coeffs = pre.decrypt(
-        cc, keys.secretKey, deserialized_ciphertexts, slots_used_from_headers
+        cc, keys.secretKey, deserialized_ciphertexts, total_slots_for_message
     )
 
     # 5. Convert back to bytes and verify final data integrity
     # This function is expected to handle the truncation based on total_bytes.
-    assert bytes_total_from_headers is not None
     final_data = pre.coefficients_to_bytes(
         decrypted_coeffs, total_bytes=bytes_total_from_headers
     )
@@ -536,3 +536,34 @@ def test_multiple_pieces_per_part_limitation(crypto_setup):
         piece_index=1,  # This path is not for the second piece
         expected_root_hex=headers["MerkleRoot"],
     ), "Merkle path for the second piece should be invalid"
+
+
+def test_slots_used_le_slots_total(crypto_setup):
+    """
+    Tests that the SlotsUsed header is always less than or equal to SlotsTotal.
+    """
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+
+    # This will create more than one piece, and with the previous logic,
+    # SlotsUsed would have been > SlotsTotal.
+    original_data = os.urandom(pre.get_slot_count(cc) * 2 + 1)
+
+    message_parts = idk_message.create_idk_message_parts(
+        data=original_data,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk,
+        pieces_per_part=1,
+    )
+
+    for part_str in message_parts:
+        parsed_part = idk_message.parse_idk_message_part(part_str)
+        headers = parsed_part["headers"]
+        slots_used = int(headers["SlotsUsed"])
+        slots_total = int(headers["SlotsTotal"])
+        assert slots_used <= slots_total, (
+            f"SlotsUsed ({slots_used}) should not be greater than "
+            f"SlotsTotal ({slots_total})"
+        )

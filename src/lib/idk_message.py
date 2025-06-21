@@ -150,18 +150,32 @@ def create_idk_message_parts(
 
         # a. Get the chunk of raw byte pieces for this part
         part_pieces = serialized_pieces_bytes[i : i + pieces_per_part]
+        num_pieces_in_part = len(part_pieces)
+        part_slots_total = num_pieces_in_part * slot_count
 
-        # b. Concatenate and Base64-encode the payload
+        # b. Calculate SlotsUsed for this specific part's data content.
+        start_piece_index = i
+        # The data that corresponds to this part's pieces
+        start_byte_index = start_piece_index * max_bytes_per_chunk
+        # The end byte index is capped by the original data length
+        end_byte_index = min(
+            (start_piece_index + num_pieces_in_part) * max_bytes_per_chunk,
+            original_data_len,
+        )
+        part_data_len = end_byte_index - start_byte_index
+        part_slots_used = (part_data_len + 1) // 2
+
+        # c. Concatenate and Base64-encode the payload
         payload_bytes = b"".join(part_pieces)
         payload_b64 = base64.b64encode(payload_bytes).decode("ascii")
 
-        # c. Prepare headers
+        # d. Prepare headers
         # NOTE: The AuthPath is for the *first* piece in the chunk.
         # A more robust implementation would handle paths for all pieces in a chunk.
         headers = {
             "Version": IDK_VERSION,
-            "SlotsTotal": pre.get_slot_count(cc),
-            "SlotsUsed": total_slots_used,  # Use the total for the whole message
+            "SlotsTotal": part_slots_total,
+            "SlotsUsed": part_slots_used,
             "BytesTotal": original_data_len,
             "MerkleRoot": merkle_root,
             "Part": f"{part_num}/{total_parts}",
@@ -175,7 +189,7 @@ def create_idk_message_parts(
                 if key not in headers:
                     headers[key] = value
 
-        # d. Sign the headers
+        # e. Sign the headers
         canonical_header_str = ""
         for key in sorted(headers.keys()):
             canonical_header_str += f"{key}: {headers[key]}\n"
@@ -184,7 +198,7 @@ def create_idk_message_parts(
         signature = signing_key.sign_digest(header_hash).hex()
         headers["Signature"] = signature
 
-        # e. Assemble the final message part
+        # f. Assemble the final message part
         header_block = ""
         for key in sorted(headers.keys()):
             header_block += f"{key}: {headers[key]}\n"
@@ -341,7 +355,6 @@ def decrypt_idk_message(
 
     all_pieces = {}
     total_bytes = 0
-    slots_used = 0
     merkle_root = ""
 
     for i, part_str in enumerate(message_parts):
@@ -361,6 +374,15 @@ def decrypt_idk_message(
 
             header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
             vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
+
+            # Validate part-specific headers
+            part_slots_used = int(headers["SlotsUsed"])
+            part_slots_total = int(headers["SlotsTotal"])
+            if part_slots_used > part_slots_total:
+                raise ValueError(
+                    f"SlotsUsed ({part_slots_used}) "
+                    f"cannot exceed SlotsTotal ({part_slots_total})"
+                )
 
             # Validate the payload format and content.
             payload_bytes = base64.b64decode(payload_b64, validate=True)
@@ -389,7 +411,6 @@ def decrypt_idk_message(
             if not merkle_root:
                 merkle_root = headers["MerkleRoot"]
                 total_bytes = int(headers["BytesTotal"])
-                slots_used = int(headers["SlotsUsed"])
             elif headers["MerkleRoot"] != merkle_root:
                 raise ValueError("Inconsistent Merkle roots across message parts")
 
@@ -398,7 +419,9 @@ def decrypt_idk_message(
         except (ValueError, ecdsa.BadSignatureError, binascii.Error) as e:
             raise ValueError(f"Verification failed for part {i + 1}: {e}")
 
+    # Calculate total slots used from the message-wide BytesTotal header.
+    total_slots_for_message = (total_bytes + 1) // 2
     sorted_pieces = [all_pieces[i] for i in sorted(all_pieces.keys())]
-    decrypted_coeffs = pre.decrypt(cc, sk, sorted_pieces, slots_used)
+    decrypted_coeffs = pre.decrypt(cc, sk, sorted_pieces, total_slots_for_message)
     final_data = pre.coefficients_to_bytes(decrypted_coeffs, total_bytes)
     return final_data
