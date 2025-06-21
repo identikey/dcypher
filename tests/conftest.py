@@ -8,6 +8,7 @@ import threading
 import uvicorn
 from fastapi.testclient import TestClient
 import requests
+import shutil
 
 from src.main import (
     app,
@@ -19,7 +20,7 @@ from src.main import (
 )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def free_port():
     """Finds and returns a free port on the host."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -27,58 +28,65 @@ def free_port():
         return s.getsockname()[1]
 
 
-@pytest.fixture(scope="session")
-def api_base_url(free_port):
-    """Constructs the base URL for the API using the free port."""
-    return f"http://127.0.0.1:{free_port}"
-
-
-@pytest.fixture(scope="session", autouse=True)
-def live_api_server(free_port, api_base_url):
+@pytest.fixture(scope="function")
+def live_api_server(free_port, monkeypatch, tmp_path):
     """
-    Starts the FastAPI app in a background thread for the test session.
-    Uses a dynamically allocated port to avoid conflicts, especially with pytest-xdist.
+    Starts the FastAPI app in a background thread for a test function.
+    Uses a dynamically allocated port and the function-scoped temp path
+    to ensure complete test isolation.
     """
+    # Use the per-test tmp_path for storage
+    block_store_path = tmp_path / "block_store"
+    chunk_store_path = tmp_path / "chunk_store"
+    block_store_path.mkdir()
+    chunk_store_path.mkdir()
+
+    # Monkeypatch the storage roots and clear in-memory stores for this test run
+    from src.main import accounts, used_nonces, graveyard, block_store, chunk_store
+
+    monkeypatch.setattr("src.main.BLOCK_STORE_ROOT", str(block_store_path))
+    monkeypatch.setattr("src.main.CHUNK_STORE_ROOT", str(chunk_store_path))
+    accounts.clear()
+    used_nonces.clear()
+    graveyard.clear()
+    block_store.clear()
+    chunk_store.clear()
+
+    api_base_url = f"http://127.0.0.1:{free_port}"
     os.environ["API_BASE_URL"] = api_base_url
-    config = uvicorn.Config(app, host="127.0.0.1", port=free_port, log_level="debug")
+    config = uvicorn.Config(app, host="127.0.0.1", port=free_port, log_level="warning")
     server = uvicorn.Server(config)
     ready_event = threading.Event()
 
     def run_server():
-        original_startup = server.startup
-
-        async def new_startup(sockets=None):
-            await original_startup(sockets=sockets)
-            ready_event.set()
-
-        server.startup = new_startup
         server.run()
 
     thread = threading.Thread(target=run_server, daemon=True)
+
+    # Patch server startup to set the ready event, so we know when it's up.
+    original_startup = server.startup
+
+    async def new_startup(sockets=None):
+        await original_startup(sockets=sockets)
+        ready_event.set()
+
+    server.startup = new_startup
     thread.start()
 
     if not ready_event.wait(timeout=10):
         raise RuntimeError("Uvicorn server failed to start in time.")
 
-    yield
+    yield api_base_url
+
+    # Teardown: stop the server thread
+    server.should_exit = True
+    thread.join(timeout=5)
 
 
-@pytest.fixture(autouse=True)
-def cleanup_stores(request):
-    """
-    Cleans up the in-memory stores and on-disk storage on the live server
-    before each test that uses the live server. It does this by making a
-    request to a special test-only cleanup endpoint.
-    """
-    # Only run this for tests that use the live server.
-    if "live_api_server" in request.fixturenames:
-        api_base_url = request.getfixturevalue("api_base_url")
-        try:
-            # The actual cleanup happens on the server via this endpoint
-            response = requests.post(f"{api_base_url}/test/cleanup")
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            pytest.fail(f"Failed to call the cleanup endpoint on the server: {e}")
+@pytest.fixture(scope="function")
+def api_base_url(live_api_server):
+    """Provides the base URL of the live test server for a given test."""
+    return live_api_server
 
 
 @pytest.fixture(scope="module")
