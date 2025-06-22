@@ -5,6 +5,7 @@ import pytest
 import time
 import os
 import json
+import gzip
 from unittest import mock
 from fastapi.testclient import TestClient
 from main import app
@@ -246,9 +247,13 @@ def test_upload_chunks_successful(storage_paths):
             piece_bytes = base64.b64decode(parsed["payload_b64"])
             all_pieces.append(piece_bytes)
 
-        # 6. Upload subsequent chunks (skip the first one already sent)
+        # 6. Upload subsequent chunks (skip the first one already sent) with compression
         total_chunks = len(all_pieces)
         for i, chunk_data in enumerate(all_pieces[1:], start=1):
+            # Compress the chunk data with maximum compression (simulate small chunks for best compression)
+            compressed_chunk_data = gzip.compress(chunk_data, compresslevel=9)
+
+            # Hash is calculated on the ORIGINAL (uncompressed) data
             chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
             chunk_nonce = get_nonce()
             chunk_msg = (
@@ -267,12 +272,13 @@ def test_upload_chunks_successful(storage_paths):
 
             response = client.post(
                 f"/storage/{pk_classic_hex}/{file_hash}/chunks",
-                files={"file": (f"chunk_{i}", chunk_data)},
+                files={"file": (f"chunk_{i}", compressed_chunk_data)},
                 data={
                     "nonce": chunk_nonce,
                     "chunk_hash": chunk_hash,
                     "chunk_index": str(i),
                     "total_chunks": str(total_chunks),
+                    "compressed": "true",  # Indicate chunk is compressed
                     "classic_signature": classic_sig_chunk,
                     "pq_signatures": json.dumps([pq_sig_chunk]),
                 },
@@ -283,12 +289,17 @@ def test_upload_chunks_successful(storage_paths):
                 f"Chunk {i}/{total_chunks} uploaded successfully"
                 in response.json()["message"]
             )
+            # Check for compression info in response
+            assert "compressed" in response.json()["message"]
 
-            # Verify chunk exists on server
+            # Verify compressed chunk exists on server
             chunk_path = os.path.join(chunk_store_root, chunk_hash)
             assert os.path.exists(chunk_path)
             with open(chunk_path, "rb") as f:
-                assert f.read() == chunk_data
+                stored_data = f.read()
+                assert stored_data == compressed_chunk_data  # Should be compressed
+                # Verify we can decompress it back to original
+                assert gzip.decompress(stored_data) == chunk_data
 
         # 7. Verify chunk metadata is stored
         # The number of chunks in the store should be one less than total pieces,
@@ -300,6 +311,299 @@ def test_upload_chunks_successful(storage_paths):
             # If there's only one chunk, it was sent with the registration,
             # so the separate chunk_store should not have an entry for it.
             assert file_hash not in state.chunk_store
+    finally:
+        # Clean up oqs signatures
+        for sig in oqs_sigs_to_free:
+            sig.free()
+
+
+def test_upload_chunk_compression_ratio(storage_paths):
+    """
+    Tests that chunk compression provides significant space savings for small, compressible chunks.
+    """
+    _, chunk_store_root = storage_paths
+    # 1. Create an account
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    try:
+        pk_ml_dsa_hex = next(iter(all_pq_sks))
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+        # 2. Register a file to get a valid file_hash
+        original_content = b"A" * 1000  # 1KB of repeated 'A's - highly compressible
+        idk_file_bytes, file_hash = _create_test_idk_file(original_content)
+        register_nonce = get_nonce()
+        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("test_file.txt", idk_file_bytes, "text/plain")},
+            data={
+                "nonce": register_nonce,
+                "file_hash": file_hash,
+                "classic_signature": sk_classic.sign(
+                    register_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": json.dumps(
+                    [
+                        {
+                            "public_key": pk_ml_dsa_hex,
+                            "signature": sig_ml_dsa.sign(register_msg).hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ]
+                ),
+            },
+        )
+
+        # 3. Create a highly compressible chunk
+        chunk_data = (
+            b"This is a repeating pattern! " * 50
+        )  # ~1.5KB, highly compressible
+        compressed_chunk_data = gzip.compress(chunk_data, compresslevel=9)
+
+        # Calculate compression ratio
+        compression_ratio = len(compressed_chunk_data) / len(chunk_data)
+        print(
+            f"Compression ratio: {compression_ratio:.2f} ({len(chunk_data)} -> {len(compressed_chunk_data)} bytes)"
+        )
+
+        # 4. Upload the compressed chunk
+        chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
+        chunk_nonce = get_nonce()
+        chunk_msg = (
+            f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:0:1:{chunk_hash}:{chunk_nonce}"
+        ).encode()
+
+        classic_sig_chunk = sk_classic.sign(chunk_msg, hashfunc=hashlib.sha256).hex()
+        pq_sig_chunk = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            files={"file": ("compressed_chunk", compressed_chunk_data)},
+            data={
+                "nonce": chunk_nonce,
+                "chunk_hash": chunk_hash,
+                "chunk_index": "0",
+                "total_chunks": "1",
+                "compressed": "true",
+                "classic_signature": classic_sig_chunk,
+                "pq_signatures": json.dumps([pq_sig_chunk]),
+            },
+        )
+
+        # 5. Verify successful upload with compression info
+        assert response.status_code == 200, response.text
+        response_msg = response.json()["message"]
+        assert "compressed" in response_msg
+        assert (
+            f"{len(compressed_chunk_data)} bytes from {len(chunk_data)} bytes"
+            in response_msg
+        )
+
+        # 6. Verify chunk stored correctly and compression ratio is good
+        assert compression_ratio < 0.05, (
+            f"Expected compression ratio < 0.05, got {compression_ratio:.2f}"
+        )
+
+        # 7. Verify chunk metadata includes compression info
+        assert file_hash in state.chunk_store
+        chunk_metadata = state.chunk_store[file_hash][chunk_hash]
+        assert chunk_metadata["compressed"] is True
+        assert chunk_metadata["size"] == len(chunk_data)  # Original size
+        assert chunk_metadata["compressed_size"] == len(compressed_chunk_data)
+
+    finally:
+        # Clean up oqs signatures
+        for sig in oqs_sigs_to_free:
+            sig.free()
+
+
+def test_1mb_file_multiple_encryption_compression(storage_paths):
+    """
+    Tests compression on realistic encrypted chunks by encrypting a 1MB file
+    multiple times with different keys, creating many encrypted chunks to test
+    compression ratios on actual encrypted data.
+    """
+    _, chunk_store_root = storage_paths
+    # 1. Create an account
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    try:
+        pk_ml_dsa_hex = next(iter(all_pq_sks))
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+        # 2. Create a 1MB file
+        large_file_content = os.urandom(1024 * 1024)  # 1MB random data
+        print(f"Created 1MB file with {len(large_file_content):,} bytes")
+
+        # 3. Encrypt the same file 3 times with different keys to get different encrypted chunks
+        all_encrypted_chunks = []
+        encryption_runs = 3
+
+        for run in range(encryption_runs):
+            print(f"Encryption run {run + 1}/{encryption_runs}...")
+
+            # Create fresh crypto context and keys for each encryption
+            cc = pre.create_crypto_context()
+            keys = pre.generate_keys(cc)
+            sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+            # Create IDK message parts (encrypted chunks)
+            message_parts = create_idk_message_parts(
+                data=large_file_content,
+                cc=cc,
+                pk=keys.publicKey,
+                signing_key=sk_idk_signer,
+            )
+
+            # Use complete IDK message parts (with headers and formatting)
+            for i, part_str in enumerate(message_parts):
+                # Convert the full IDK message part string to bytes for compression testing
+                part_bytes = part_str.encode("utf-8")
+                all_encrypted_chunks.append((f"run{run}_chunk{i}", part_bytes))
+
+        print(
+            f"Generated {len(all_encrypted_chunks)} encrypted chunks across {encryption_runs} encryption runs"
+        )
+
+        # 4. Register a dummy file for chunk uploads
+        dummy_content = b"1MB compression test"
+        idk_file_bytes, file_hash = _create_test_idk_file(dummy_content)
+        register_nonce = get_nonce()
+        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("compression_test.txt", idk_file_bytes, "text/plain")},
+            data={
+                "nonce": register_nonce,
+                "file_hash": file_hash,
+                "classic_signature": sk_classic.sign(
+                    register_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": json.dumps(
+                    [
+                        {
+                            "public_key": pk_ml_dsa_hex,
+                            "signature": sig_ml_dsa.sign(register_msg).hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ]
+                ),
+            },
+        )
+
+        # 5. Upload all encrypted chunks with compression
+        total_original_size = 0
+        total_compressed_size = 0
+        successful_uploads = 0
+        total_chunks = len(all_encrypted_chunks)
+
+        print(f"Testing compression on {total_chunks} encrypted chunks...")
+
+        for i, (chunk_name, chunk_data) in enumerate(all_encrypted_chunks):
+            # Compress the encrypted chunk data
+            compressed_chunk_data = gzip.compress(chunk_data, compresslevel=9)
+
+            # Track sizes
+            total_original_size += len(chunk_data)
+            total_compressed_size += len(compressed_chunk_data)
+
+            # Calculate hash on original encrypted data
+            chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
+            chunk_nonce = get_nonce()
+            chunk_msg = (
+                f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+                f"{i}:{total_chunks}:{chunk_hash}:{chunk_nonce}"
+            ).encode()
+
+            # Sign the message
+            classic_sig_chunk = sk_classic.sign(
+                chunk_msg, hashfunc=hashlib.sha256
+            ).hex()
+            pq_sig_chunk = {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+                "alg": ML_DSA_ALG,
+            }
+
+            # Upload the compressed encrypted chunk
+            response = client.post(
+                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+                files={"file": (chunk_name, compressed_chunk_data)},
+                data={
+                    "nonce": chunk_nonce,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": str(i),
+                    "total_chunks": str(total_chunks),
+                    "compressed": "true",
+                    "classic_signature": classic_sig_chunk,
+                    "pq_signatures": json.dumps([pq_sig_chunk]),
+                },
+            )
+
+            if response.status_code == 200:
+                successful_uploads += 1
+            else:
+                print(f"Failed to upload {chunk_name}: {response.text}")
+
+            # Progress report every 20 chunks
+            if (i + 1) % 20 == 0:
+                current_ratio = total_compressed_size / total_original_size
+                print(
+                    f"Processed {i + 1}/{total_chunks} chunks. Compression ratio so far: {current_ratio:.3f}"
+                )
+
+        # 6. Verify all chunks uploaded successfully
+        assert successful_uploads == total_chunks, (
+            f"Only {successful_uploads}/{total_chunks} chunks uploaded successfully"
+        )
+
+        # 7. Calculate and analyze compression results
+        overall_compression_ratio = total_compressed_size / total_original_size
+        space_saved_percent = (1 - overall_compression_ratio) * 100
+
+        print(f"\n=== COMPRESSION RESULTS FOR ENCRYPTED DATA ===")
+        print(f"  Original 1MB file encrypted {encryption_runs} times")
+        print(f"  Total chunks processed: {total_chunks}")
+        print(f"  Original encrypted size: {total_original_size:,} bytes")
+        print(f"  Compressed size: {total_compressed_size:,} bytes")
+        print(f"  Compression ratio: {overall_compression_ratio:.3f}")
+        print(f"  Space saved: {space_saved_percent:.1f}%")
+        print(f"  Average chunk size: {total_original_size // total_chunks:,} bytes")
+
+        # 8. Verify compression is reasonable for full IDK message parts
+        # Full IDK messages should compress well due to headers, base64 encoding, and formatting
+        # even though the encrypted payload itself doesn't compress much
+        assert overall_compression_ratio < 1.0, (
+            "Should achieve compression on IDK message parts"
+        )
+        assert overall_compression_ratio > 0.2, (
+            f"Compression ratio {overall_compression_ratio:.3f} seems too good - check if test is working correctly"
+        )
+        assert overall_compression_ratio < 0.8, (
+            f"Compression ratio {overall_compression_ratio:.3f} seems too poor for IDK message format"
+        )
+
+        # 9. Verify chunk store metadata
+        assert file_hash in state.chunk_store
+        assert len(state.chunk_store[file_hash]) == total_chunks
+
+        # 10. Spot check chunk metadata
+        sample_indices = [0, total_chunks // 4, total_chunks // 2, total_chunks - 1]
+        for i in sample_indices:
+            chunk_name, chunk_data = all_encrypted_chunks[i]
+            chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
+
+            if chunk_hash in state.chunk_store[file_hash]:
+                chunk_metadata = state.chunk_store[file_hash][chunk_hash]
+                assert chunk_metadata["compressed"] is True
+                assert chunk_metadata["size"] == len(chunk_data)  # Original size
+                assert (
+                    chunk_metadata["compressed_size"] < chunk_metadata["size"]
+                )  # Some compression
+
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
@@ -368,6 +672,7 @@ def test_upload_chunk_unauthorized(storage_paths):
                 "chunk_hash": chunk_hash,
                 "chunk_index": "0",
                 "total_chunks": "1",
+                "compressed": "false",  # Add compression parameter
                 "classic_signature": invalid_classic_sig,
                 "pq_signatures": json.dumps([pq_sig_chunk]),
             },
@@ -609,6 +914,7 @@ def test_upload_chunk_for_unregistered_file():
                 "chunk_hash": hashlib.sha256(chunk_data).hexdigest(),
                 "chunk_index": "0",
                 "total_chunks": "1",
+                "compressed": "false",  # Add compression parameter
                 "classic_signature": "doesnt-matter",
                 "pq_signatures": "doesnt-matter",
             },

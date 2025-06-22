@@ -2,6 +2,7 @@ import os
 import json
 import time
 import hashlib
+import gzip
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List
@@ -195,6 +196,7 @@ async def upload_chunk(
     chunk_hash: str = Form(...),
     chunk_index: int = Form(...),
     total_chunks: int = Form(...),
+    compressed: bool = Form(False),  # New parameter to indicate if chunk is compressed
     classic_signature: str = Form(...),
     pq_signatures: str = Form(...),  # JSON string
     file: UploadFile = File(...),
@@ -229,9 +231,22 @@ async def upload_chunk(
     except (json.JSONDecodeError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid format for pq_signatures.")
 
-    # Verify chunk hash
+    # Read chunk content
     chunk_content = await file.read()
-    computed_hash = hashlib.blake2b(chunk_content).hexdigest()
+
+    # If chunk is compressed, decompress it for hash verification
+    if compressed:
+        try:
+            original_chunk_content = gzip.decompress(chunk_content)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to decompress chunk: {e}"
+            )
+    else:
+        original_chunk_content = chunk_content
+
+    # Verify chunk hash against original (decompressed) content
+    computed_hash = hashlib.blake2b(original_chunk_content).hexdigest()
     if computed_hash != chunk_hash:
         raise HTTPException(status_code=400, detail="Chunk hash does not match.")
 
@@ -261,20 +276,31 @@ async def upload_chunk(
                 detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
             )
 
-    # Store the chunk
+    # Store the chunk (keep compressed if it was compressed)
     os.makedirs(config.CHUNK_STORE_ROOT, exist_ok=True)
     chunk_path = os.path.join(config.CHUNK_STORE_ROOT, chunk_hash)
     with open(chunk_path, "wb") as f:
-        f.write(chunk_content)
+        f.write(chunk_content)  # Store as received (compressed or not)
 
     if file_hash not in state.chunk_store:
         state.chunk_store[file_hash] = {}
 
     state.chunk_store[file_hash][chunk_hash] = {
         "index": chunk_index,
-        "size": len(chunk_content),
+        "size": len(original_chunk_content),  # Original size
+        "compressed_size": len(chunk_content)
+        if compressed
+        else len(original_chunk_content),
+        "compressed": compressed,
         "stored_at": time.time(),
     }
     state.used_nonces.add(nonce)
 
-    return {"message": f"Chunk {chunk_index}/{total_chunks} uploaded successfully."}
+    compression_info = (
+        f" (compressed {len(chunk_content)} bytes from {len(original_chunk_content)} bytes)"
+        if compressed
+        else ""
+    )
+    return {
+        "message": f"Chunk {chunk_index}/{total_chunks} uploaded successfully{compression_info}."
+    }

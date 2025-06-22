@@ -91,6 +91,7 @@ class UploadChunkRequest(BaseModel):
     total_chunks: int = Field(
         ..., description="The total number of chunks for the file."
     )
+    compressed: bool = Field(False, description="Whether the chunk is gzip compressed.")
     classic_signature: str = Field(
         ...,
         description="Signature from the root classic key authorizing the chunk upload.",
