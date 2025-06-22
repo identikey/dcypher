@@ -1,3 +1,23 @@
+# dCypher Project Description
+
+
+
+# Python vs. Zig
+- The python version is the original / proof of concept code
+- We are currently writing the zig proxy code, which is a re-encryption proxy service implemented in Zig, providing both CLI tools and HTTP API for proxy re-encryption operations.
+
+# Docker
+
 When building the docker image, use the following command:
-`docker buildx build --platform linux/amd64 -t dcypher --load .`
+`just docker-build`
+
+# Slash Commands
+
+/pseudocode: 1. plan the feature 2. write pseudocode, get feedback from user 3. write tests 4. write the code, building the code and running the tests to make sure it works
+/commit: commit your code as you go
+/unit-tests: write comprehensive unit tests for the feature
+
+
+
+
 

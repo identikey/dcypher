@@ -27,3 +27,6 @@ docker-cli *args:
 # Run a custom command in the Docker container
 docker-exec command:
     docker run --rm -it dcypher {{command}}
+
+proxy *args:
+    ./zig-out/bin/zig_proxy {{args}}
