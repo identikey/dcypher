@@ -212,12 +212,20 @@ def test_idk_message_format_conformance(crypto_setup):
     assert lines[-1] == f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
 
     # b. Check for no empty line between headers and payload
-    empty_line_indices = [i for i, line in enumerate(lines) if line == ""]
-    assert not empty_line_indices, "There should be no empty lines"
+    body_lines = lines[1:-1]
+    assert "" not in body_lines, "There should be no empty lines in the message body."
 
     # c. Check header format (Key: Value) and alphabetical order
-    # Headers are all lines between the BEGIN marker and the payload
-    header_lines = lines[1:-2]
+    header_lines = []
+    payload_lines = []
+    is_header = True
+    for line in body_lines:
+        if is_header and ": " in line:
+            header_lines.append(line)
+        else:
+            is_header = False
+            payload_lines.append(line)
+
     header_keys = []
     unquoted_headers = ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]
     for header_line in header_lines:
@@ -234,7 +242,7 @@ def test_idk_message_format_conformance(crypto_setup):
     assert header_keys == sorted(header_keys), "Headers are not in alphabetical order"
 
     # d. Check payload is valid Base64
-    payload_b64 = lines[-2]
+    payload_b64 = "".join(payload_lines)
     try:
         base64.b64decode(payload_b64, validate=True)
     except Exception:
@@ -510,22 +518,21 @@ def test_verification_failures(crypto_setup, tamper_func, error_msg):
     )
 
     # 3. Re-assemble the tampered message part string
-    header_lines = []
+    header_block = ""
     for key in sorted(tampered_headers.keys()):
         # Don't include derived fields in the raw string
         if key not in ["PartNum", "TotalParts"]:
             value = tampered_headers[key]
             if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
-                header_lines.append(f"{key}: {value}")
+                header_block += f"{key}: {value}\n"
             else:
-                header_lines.append(f'{key}: "{value}"')
-    header_block = "\n".join(header_lines)
+                header_block += f'{key}: "{value}"\n'
 
     part_num = tampered_headers["PartNum"]
     total_parts = tampered_headers["TotalParts"]
     tampered_part_str = (
         f"----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----\n"
-        f"{header_block}\n"
+        f"{header_block}"
         f"{tampered_payload_b64}\n"
         f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
     )

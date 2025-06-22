@@ -138,7 +138,7 @@ def encrypt(cc_path, pk_path, signing_key_path, data, input_file, output):
     )
 
     with open(output, "w") as f:
-        f.write("\n\n".join(message_parts))
+        f.write("\n".join(message_parts))
 
     click.echo(f"IDK message saved to {output}", err=True)
 

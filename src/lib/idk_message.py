@@ -203,7 +203,7 @@ def create_idk_message_parts(
 
         message_part = (
             f"{BEGIN_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}\n"
-            f"{header_block}"  # header_block already has a trailing newline
+            f"{header_block}"
             f"{payload_b64}\n"
             f"{END_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}"
         )
@@ -218,7 +218,7 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
     If the string contains multiple concatenated parts, this will parse the first one.
     """
     lines = part_str.strip().split("\n")
-    if len(lines) < 4:
+    if len(lines) < 3:
         raise ValueError("Invalid IDK message part format: too few lines.")
 
     begin_marker = lines[0]
@@ -244,31 +244,34 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
             break
 
     if end_marker_index == -1:
-        raise ValueError("Could not find matching END marker.")
+        raise ValueError("Invalid END marker.")
 
     # Limit lines to only the first valid part found
     part_lines = lines[: end_marker_index + 1]
 
-    if len(part_lines) < 3:  # BEGIN, payload, END as a minimum
-        raise ValueError("Malformed part: missing headers or payload.")
-
-    header_lines = part_lines[1:-2]
-    if not header_lines:
-        raise ValueError("Malformed part: missing headers.")
-
     headers = {}
-    for line in header_lines:
-        try:
-            key, value = line.split(": ", 1)
-            # Strip quotes from string values
-            if value.startswith('"') and value.endswith('"'):
-                value = value[1:-1]
-            headers[key] = value
-        except ValueError:
-            raise ValueError(f"Malformed header line: {line}")
+    header_lines = []
+    payload_line_index = -1
+    # Headers are lines with ": ". The first line without is the payload.
+    for i, line in enumerate(part_lines[1:-1], start=1):
+        # The payload is the first line without a colon-space separator.
+        if ": " not in line:
+            payload_line_index = i
+            break
+        header_lines.append(line)
 
-    # The payload is the second to last line
-    payload_b64 = part_lines[-2]
+    if payload_line_index == -1 or not header_lines:
+        raise ValueError("Malformed part: missing payload separator or headers.")
+
+    for line in header_lines:
+        key, value = line.split(": ", 1)
+        # Strip quotes from string values
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        headers[key] = value
+
+    # The payload is everything from the separator line to the END marker
+    payload_b64 = "".join(part_lines[payload_line_index:-1])
 
     # Do not convert to int here. The caller should do it after verification.
     # The part number in the header is a string "num/total"
