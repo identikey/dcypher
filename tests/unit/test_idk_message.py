@@ -11,6 +11,7 @@ import json
 import ecdsa
 import hashlib
 import base64
+import binascii
 from src.lib import pre
 from src.lib import idk_message
 from src.lib.idk_message import MerkleTree
@@ -97,6 +98,34 @@ def test_merkle_auth_path():
     computed_root = hashlib.blake2b(
         computed_p12 + bytes.fromhex(auth_path_0[1])
     ).digest()
+    assert computed_root.hex() == tree.root
+
+
+def test_merkle_tree_empty_pieces():
+    """Tests that creating a Merkle tree with no pieces raises a ValueError."""
+    with pytest.raises(ValueError, match="Cannot build a Merkle tree with no pieces."):
+        MerkleTree([])
+
+
+def test_merkle_auth_path_odd_leaves():
+    """Tests the auth path for a leaf in a tree with an odd number of leaves."""
+    pieces = [b"a", b"b", b"c"]
+    tree = MerkleTree(pieces)
+
+    h1 = hashlib.blake2b(b"a").digest()
+    h2 = hashlib.blake2b(b"b").digest()
+    h3 = hashlib.blake2b(b"c").digest()
+    zero_hash = bytes(len(h3))
+
+    # Auth path for 'c' (index 2) should be [hash(zero), hash(hash(a)+hash(b))]
+    auth_path_2 = tree.get_auth_path(2)
+
+    p12 = hashlib.blake2b(h1 + h2).digest()
+    assert auth_path_2 == [zero_hash.hex(), p12.hex()]
+
+    # Verify the path
+    p3_zero = hashlib.blake2b(h3 + bytes.fromhex(auth_path_2[0])).digest()
+    computed_root = hashlib.blake2b(bytes.fromhex(auth_path_2[1]) + p3_zero).digest()
     assert computed_root.hex() == tree.root
 
 
@@ -571,4 +600,63 @@ def test_slots_used_le_slots_total(crypto_setup):
         assert slots_used <= slots_total, (
             f"PartSlotsUsed ({slots_used}) should not be greater than "
             f"PartSlotsTotal ({slots_total})"
+        )
+
+
+@pytest.mark.parametrize(
+    "part_str, error_msg_match",
+    [
+        ("invalid", "too few lines"),
+        ("----- BEGIN IDK MESSAGE PART 1/1 -----\nline2\nline3", "Invalid END marker"),
+        (
+            "----- FAKE BEGIN -----\nheaders\npayload\n----- END IDK MESSAGE PART 1/1 -----",
+            "Invalid BEGIN marker",
+        ),
+        (
+            "----- BEGIN IDK MESSAGE PART -----\nheaders\npayload\n----- END IDK MESSAGE PART 1/1 -----",
+            "Invalid BEGIN/END marker format",
+        ),
+        (
+            "----- BEGIN IDK MESSAGE PART 1/1 -----\npayload\n----- END IDK MESSAGE PART 1/1 -----",
+            "missing payload separator or headers",
+        ),
+    ],
+)
+def test_parse_idk_message_part_failures(part_str, error_msg_match):
+    """
+    Tests that parse_idk_message_part raises ValueError for various malformed inputs.
+    """
+    with pytest.raises(ValueError, match=error_msg_match):
+        # The b64decode error is wrapped, so we need to catch the outer ValueError
+        try:
+            idk_message.parse_idk_message_part(part_str)
+        except binascii.Error as e:
+            raise ValueError(e)
+
+
+def test_decrypt_with_inconsistent_merkle_roots(crypto_setup):
+    """
+    Tests that decryption fails if message parts have different Merkle roots.
+    """
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]
+    vk = crypto_setup["vk"]
+
+    # Create two separate messages for different data
+    data1 = os.urandom(pre.get_slot_count(cc) * 2)
+    data2 = os.urandom(pre.get_slot_count(cc) * 2)
+    parts1 = idk_message.create_idk_message_parts(
+        data=data1, cc=cc, pk=keys.publicKey, signing_key=sk
+    )
+    parts2 = idk_message.create_idk_message_parts(
+        data=data2, cc=cc, pk=keys.publicKey, signing_key=sk
+    )
+
+    # Mix parts from the two messages
+    mixed_message_str = parts1[0] + "\n" + parts2[0]
+
+    with pytest.raises(ValueError, match="Inconsistent Merkle roots"):
+        idk_message.decrypt_idk_message(
+            cc=cc, sk=keys.secretKey, vk=vk, message_str=mixed_message_str
         )

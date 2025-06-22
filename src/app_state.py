@@ -1,3 +1,4 @@
+import threading
 from fastapi import HTTPException
 
 
@@ -14,6 +15,22 @@ class ServerState:
         self.block_store = {}
         # chunk_store: { file_hash: { chunk_hash: chunk_metadata } }
         self.chunk_store = {}
+        self._nonce_lock = threading.Lock()
+
+    def check_and_add_nonce(self, nonce: str):
+        """
+        Atomically checks for a nonce and adds it to the used set.
+
+        Raises:
+            HTTPException: If the nonce has already been used, to prevent replay attacks.
+        """
+        with self._nonce_lock:
+            if nonce in self.used_nonces:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Replay attack detected: nonce has already been used.",
+                )
+            self.used_nonces.add(nonce)
 
 
 # Global state instance. In a real app, this might be managed differently.

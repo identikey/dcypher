@@ -223,14 +223,14 @@ def parse_idk_message_part(part_str: str) -> Dict[str, Any]:
 
     begin_marker = lines[0]
 
+    if not begin_marker.startswith("----- BEGIN IDK MESSAGE PART"):
+        raise ValueError("Invalid BEGIN marker.")
+
     try:
         part_info = begin_marker.split(" ")[-2]
         part_num, total_parts = map(int, part_info.split("/"))
     except (ValueError, IndexError):
         raise ValueError("Invalid BEGIN/END marker format.")
-
-    if not begin_marker.startswith("----- BEGIN IDK MESSAGE PART"):
-        raise ValueError("Invalid BEGIN marker.")
 
     expected_end_marker = END_IDK_MESSAGE.format(
         part_num=part_num, total_parts=total_parts

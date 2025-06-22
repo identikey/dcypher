@@ -112,3 +112,63 @@ def test_add_used_nonce(clean_state):
     clean_state.used_nonces.add(nonce2)
     assert nonce2 in clean_state.used_nonces
     assert len(clean_state.used_nonces) == 2
+
+
+def test_check_and_add_nonce(clean_state):
+    """Tests the atomic check_and_add_nonce method."""
+    nonce = "atomic_nonce_123"
+
+    # First time should be successful
+    try:
+        clean_state.check_and_add_nonce(nonce)
+    except HTTPException:
+        pytest.fail("check_and_add_nonce() raised HTTPException unexpectedly!")
+
+    assert nonce in clean_state.used_nonces
+
+    # Second time should raise an exception
+    with pytest.raises(HTTPException) as excinfo:
+        clean_state.check_and_add_nonce(nonce)
+    assert excinfo.value.status_code == 400
+    assert "Replay attack detected" in excinfo.value.detail
+
+
+def test_remove_account(clean_state):
+    """Tests removing an account."""
+    clean_state.accounts["test_pk"] = {"alg": "test_alg"}
+    assert "test_pk" in clean_state.accounts
+
+    del clean_state.accounts["test_pk"]
+    assert "test_pk" not in clean_state.accounts
+
+
+def test_remove_from_block_store(clean_state):
+    """Tests removing file metadata from the block_store."""
+    clean_state.block_store["user1"] = {
+        "file1_hash": {"filename": "test1.txt"},
+        "file2_hash": {"filename": "test2.txt"},
+    }
+    # Remove one file for a user
+    del clean_state.block_store["user1"]["file1_hash"]
+    assert "file1_hash" not in clean_state.block_store["user1"]
+    assert len(clean_state.block_store["user1"]) == 1
+
+    # Remove the user completely
+    del clean_state.block_store["user1"]
+    assert "user1" not in clean_state.block_store
+
+
+def test_remove_from_chunk_store(clean_state):
+    """Tests removing chunk metadata from the chunk_store."""
+    clean_state.chunk_store["file1_hash"] = {
+        "chunk1_hash": {"index": 0},
+        "chunk2_hash": {"index": 1},
+    }
+    # Remove a chunk from a file
+    del clean_state.chunk_store["file1_hash"]["chunk1_hash"]
+    assert "chunk1_hash" not in clean_state.chunk_store["file1_hash"]
+    assert len(clean_state.chunk_store["file1_hash"]) == 1
+
+    # Remove the file entry completely
+    del clean_state.chunk_store["file1_hash"]
+    assert "file1_hash" not in clean_state.chunk_store
