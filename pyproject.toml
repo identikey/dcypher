@@ -17,4 +17,10 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["httpx>=0.28.1", "mypy>=1.16.1", "pytest>=8.4.0", "pytest-xdist>=3.7.0"]
+dev = [
+    "httpx>=0.28.1",
+ "mypy>=1.16.1",
+ "openhands-ai>=0.45.0",
+ "pytest>=8.4.0",
+ "pytest-xdist>=3.7.0",
+]
