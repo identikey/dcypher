@@ -2,9 +2,6 @@
 This file tests the proxy re-encryption (PRE) library.
 """
 
-import time
-import random
-import os
 import base64
 import pytest
 from src.lib import pre
@@ -75,12 +72,11 @@ def test_bytes_to_coefficients_padding():
     odd_length_data = b"12345"
     slot_count = 10
     coeffs = pre.bytes_to_coefficients(odd_length_data, slot_count)
-    # 5 bytes -> 3 shorts (6 bytes), so 2 original coeffs + 1 from padded byte
-    # struct.unpack('<3H', b'12345\0') -> (12593, 13107, 13312) - this is wrong, let's just check length
-    assert len(odd_length_data) % 2 == 1
-    # After padding, it should be even
-    padded_data = odd_length_data + b"\0"
-    assert len(pre.coefficients_to_bytes(coeffs, len(padded_data))) == len(padded_data)
+
+    # The key test: can we convert back to the original data length?
+    assert len(odd_length_data) % 2 == 1  # Confirm it's odd-length
+    recovered_data = pre.coefficients_to_bytes(coeffs, len(odd_length_data))
+    assert recovered_data == odd_length_data
 
 
 def test_bytes_to_coefficients_oversized_data():
@@ -294,24 +290,33 @@ def test_deserialization_failure(crypto_setup):
 
 
 @pytest.mark.parametrize(
-    "test_data",
+    "data_description,test_data_func",
     [
-        b"",
-        b"A",
-        b"12345678"
-        * (pre.create_crypto_context().GetRingDimension() // 4),  # Exactly fills slots
+        ("empty", lambda: b""),
+        ("single_byte", lambda: b"A"),
+        (
+            "exactly_fills_slots",
+            lambda: b"12345678" * 1000,
+        ),  # Will be truncated in test
     ],
 )
-def test_workflow_with_edge_case_data(crypto_setup, test_data):
+def test_workflow_with_edge_case_data(crypto_setup, data_description, test_data_func):
     """
     Tests the full PRE workflow with various edge-case data sizes.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]
     bob_keys = crypto_setup["bob_keys"]
-    original_data = test_data
 
+    # Generate test data based on actual slot count
     slot_count = pre.get_slot_count(cc)
+    if data_description == "exactly_fills_slots":
+        # Create data that exactly fills the available slots
+        max_bytes = slot_count * 2
+        original_data = (b"12345678" * (max_bytes // 8 + 1))[:max_bytes]
+    else:
+        original_data = test_data_func()
+
     coeffs = pre.bytes_to_coefficients(original_data, slot_count)
     ciphertext_alice = pre.encrypt(cc, alice_keys.publicKey, coeffs)
 
