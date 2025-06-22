@@ -20,9 +20,14 @@ class ServerState:
 state = ServerState()
 
 
+def get_app_state():
+    """Returns the global app state instance."""
+    return state
+
+
 def find_account(public_key: str):
     """Finds an account by its classic public key or raises HTTPException."""
-    account = state.accounts.get(public_key)
+    account = get_app_state().accounts.get(public_key)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found.")
     return account

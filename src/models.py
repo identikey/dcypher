@@ -99,3 +99,36 @@ class UploadChunkRequest(BaseModel):
         ..., description="Signatures from all existing PQ keys on the account."
     )
     nonce: str = Field(..., description="Time-based nonce provided by the server.")
+
+
+# --- Data Models ---
+
+
+class PqPublicKey(BaseModel):
+    """Represents a post-quantum public key."""
+
+    public_key: str
+    alg: str
+
+
+class Account(BaseModel):
+    """Represents a user account."""
+
+    classic_pk: str
+    pq_keys: List[PqPublicKey]
+
+
+class Chunk(BaseModel):
+    """Represents a single chunk of a file."""
+
+    chunk_id: str
+    chunk_index: int
+    data: bytes
+
+
+class Block(BaseModel):
+    """Represents a block, which is a collection of chunks (i.e., a file)."""
+
+    block_id: str
+    chunk_ids: List[str]
+    total_chunks: int
