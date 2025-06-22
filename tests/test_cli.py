@@ -13,9 +13,9 @@ import uvicorn
 import time
 from src.main import (
     app,
-    ML_DSA_ALG,
-    state,
 )
+from src.config import ML_DSA_ALG
+from src.app_state import state
 from src.lib.pq_auth import generate_pq_keys
 from src.lib import pre
 from fastapi.testclient import TestClient

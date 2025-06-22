@@ -12,8 +12,9 @@ import shutil
 
 from src.main import (
     app,
-    state,
 )
+from src.app_state import state
+from src.config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
 
 
 @pytest.fixture(scope="function")
@@ -38,8 +39,8 @@ def live_api_server(free_port, monkeypatch, tmp_path):
     chunk_store_path.mkdir()
 
     # Monkeypatch the storage roots and clear in-memory stores for this test run
-    monkeypatch.setattr("src.main.BLOCK_STORE_ROOT", str(block_store_path))
-    monkeypatch.setattr("src.main.CHUNK_STORE_ROOT", str(chunk_store_path))
+    monkeypatch.setattr("src.routers.storage.BLOCK_STORE_ROOT", str(block_store_path))
+    monkeypatch.setattr("src.routers.storage.CHUNK_STORE_ROOT", str(chunk_store_path))
     state.accounts.clear()
     state.used_nonces.clear()
     state.graveyard.clear()

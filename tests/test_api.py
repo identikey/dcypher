@@ -9,11 +9,11 @@ from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
     app,
-    state,
-    SUPPORTED_SIG_ALGS,
-    ML_DSA_ALG,
 )
-from lib import idk_message, pre
+from src.app_state import state
+from src.lib.pq_auth import SUPPORTED_SIG_ALGS
+from src.config import ML_DSA_ALG
+from src.lib import idk_message, pre
 
 client = TestClient(app)
 
@@ -25,37 +25,35 @@ def storage_paths(tmp_path):
     chunk_store_path = tmp_path / "chunk_store"
     block_store_path.mkdir()
     chunk_store_path.mkdir()
-    return str(block_store_path), str(chunk_store_path)
+
+    with (
+        mock.patch("src.routers.storage.BLOCK_STORE_ROOT", str(block_store_path)),
+        mock.patch("src.routers.storage.CHUNK_STORE_ROOT", str(chunk_store_path)),
+    ):
+        yield str(block_store_path), str(chunk_store_path)
 
 
 @pytest.fixture(autouse=True)
-def cleanup(storage_paths):
+def cleanup():
     """
-    Pytest fixture to reset application state and use temporary directories for storage.
+    Pytest fixture to reset application state.
     This ensures tests are isolated, especially when running in parallel with pytest-xdist.
     """
-    block_store_path, chunk_store_path = storage_paths
+    # Reset in-memory state before each test
+    state.accounts.clear()
+    state.used_nonces.clear()
+    state.graveyard.clear()
+    state.block_store.clear()
+    state.chunk_store.clear()
 
-    # Mock the storage path constants in the main application
-    with (
-        mock.patch("src.main.BLOCK_STORE_ROOT", block_store_path),
-        mock.patch("src.main.CHUNK_STORE_ROOT", chunk_store_path),
-    ):
-        # Reset in-memory state before each test
-        state.accounts.clear()
-        state.used_nonces.clear()
-        state.graveyard.clear()
-        state.block_store.clear()
-        state.chunk_store.clear()
+    yield
 
-        yield
-
-        # In-memory state is cleared again for good measure after the test
-        state.accounts.clear()
-        state.used_nonces.clear()
-        state.graveyard.clear()
-        state.block_store.clear()
-        state.chunk_store.clear()
+    # In-memory state is cleared again for good measure after the test
+    state.accounts.clear()
+    state.used_nonces.clear()
+    state.graveyard.clear()
+    state.block_store.clear()
+    state.chunk_store.clear()
 
 
 def _create_test_account(
