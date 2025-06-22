@@ -7,18 +7,16 @@ import os
 import json
 from unittest import mock
 from fastapi.testclient import TestClient
-from src.main import (
-    app,
-)
-from src.app_state import state
+from src.main import app
+from src.app_state import state, get_app_state
 from src.lib.pq_auth import SUPPORTED_SIG_ALGS
 from src.config import ML_DSA_ALG
 from src.lib import pre
-from src.lib.idk_message import MerkleTree
+from src.lib.idk_message import MerkleTree, IDK_VERSION
 from src.lib.idk_message import create_idk_message_parts, parse_idk_message_part
 import base64
 
-from tests.test_api import (
+from tests.integration.test_api import (
     storage_paths,
     cleanup,
     _create_test_account,

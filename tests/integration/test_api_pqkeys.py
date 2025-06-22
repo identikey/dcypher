@@ -14,7 +14,12 @@ from src.app_state import state
 from src.lib.pq_auth import SUPPORTED_SIG_ALGS
 from src.config import ML_DSA_ALG
 
-from tests.test_api import storage_paths, cleanup, _create_test_account, get_nonce
+from tests.integration.test_api import (
+    storage_paths,
+    cleanup,
+    _create_test_account,
+    get_nonce,
+)
 
 client = TestClient(app)
 
