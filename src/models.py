@@ -90,6 +90,18 @@ class DownloadChunkRequest(BaseModel):
     )
 
 
+class DownloadConcatenatedRequest(BaseModel):
+    """Request to download all chunks concatenated as a single gzip file."""
+
+    classic_signature: str = Field(
+        ..., description="Signature from the root classic key authorizing the download."
+    )
+    pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
+
+
 class UploadFileRequest(BaseModel):
     """Request to upload a file to the block store."""
 

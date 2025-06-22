@@ -10,6 +10,7 @@ from pathlib import Path
 import ecdsa
 import base64
 import sys
+import gzip
 
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
@@ -371,14 +372,20 @@ def upload(pk_path, auth_keys_path, file_path, api_url):
     help="Path to save the downloaded file.",
 )
 @click.option(
+    "--compressed",
+    is_flag=True,
+    help="Request compressed download from server.",
+)
+@click.option(
     "--api-url",
     envvar="DCY_API_URL",
     default="https://api.dcypher.io",
     help="API base URL.",
 )
-def download(pk_path, auth_keys_path, file_hash, output_path, api_url):
-    """Downloads a file from the remote storage API."""
+def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_url):
+    """Downloads a file from the remote storage API with integrity verification."""
     from lib.auth import sign_message_with_keys
+    from lib import idk_message
 
     click.echo(f"Starting download for file hash: {file_hash}...", err=True)
     nonce = get_nonce(api_url)
@@ -411,14 +418,75 @@ def download(pk_path, auth_keys_path, file_hash, output_path, api_url):
         "nonce": nonce,
         "classic_signature": signatures["classic_signature"],
         "pq_signatures": signatures["pq_signatures"],
+        "compressed": compressed,
     }
 
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
+
+        # Get the downloaded content
+        downloaded_content = response.content
+
+        # Check if server sent compressed data
+        is_compressed = response.headers.get("content-type") == "application/gzip"
+
+        click.echo("Verifying downloaded content integrity...", err=True)
+
+        # Decompress if necessary for verification
+        if is_compressed:
+            try:
+                content_to_verify = gzip.decompress(downloaded_content)
+                click.echo("Successfully decompressed downloaded content.", err=True)
+            except Exception as e:
+                raise click.ClickException(
+                    f"Failed to decompress downloaded content: {e}"
+                )
+        else:
+            content_to_verify = downloaded_content
+
+        # Verify the IDK message integrity
+        try:
+            # Parse the IDK message to extract and verify the MerkleRoot
+            parsed_part = idk_message.parse_idk_message_part(
+                content_to_verify.decode("utf-8")
+            )
+            computed_hash = parsed_part["headers"]["MerkleRoot"]
+
+            if computed_hash != file_hash:
+                raise click.ClickException(
+                    f"Integrity check failed! Expected hash {file_hash}, "
+                    f"but downloaded content has hash {computed_hash}"
+                )
+
+            click.echo("✓ Content integrity verified successfully.", err=True)
+
+        except UnicodeDecodeError:
+            raise click.ClickException(
+                "Downloaded content is not a valid IDK message (not UTF-8)"
+            )
+        except Exception as e:
+            raise click.ClickException(f"Failed to verify IDK message integrity: {e}")
+
+        # Save the verified content (as originally downloaded, compressed or not)
         with open(output_path, "wb") as f:
-            f.write(response.content)
-        click.echo(f"File '{file_hash}' downloaded successfully to '{output_path}'.")
+            f.write(downloaded_content)
+
+        # Provide helpful output information
+        if is_compressed:
+            original_size = len(content_to_verify)
+            compressed_size = len(downloaded_content)
+            click.echo(
+                f"File '{file_hash}' downloaded and verified successfully to '{output_path}' "
+                f"(compressed: {compressed_size} bytes, original: {original_size} bytes).",
+                err=True,
+            )
+        else:
+            click.echo(
+                f"File '{file_hash}' downloaded and verified successfully to '{output_path}'.",
+                err=True,
+            )
+
     except requests.exceptions.RequestException as e:
         error_text = e.response.text if e.response else str(e)
         raise click.ClickException(f"API request failed: {error_text}")

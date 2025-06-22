@@ -36,7 +36,7 @@ def test_upload_chunks_successful(storage_paths):
     Tests the successful upload of multiple file chunks after registering the
     main file metadata.
     """
-    _, chunk_store_root = storage_paths
+    block_store_root, chunk_store_root = storage_paths
     # 1. Create an account
     (
         sk_classic,
@@ -145,7 +145,7 @@ def test_upload_chunks_successful(storage_paths):
             # Check for compression info in response
             assert "compressed" in response.json()["message"]
 
-            # Verify compressed chunk exists on server
+            # Verify compressed chunk exists on server (individual storage)
             chunk_path = os.path.join(chunk_store_root, chunk_hash)
             assert os.path.exists(chunk_path)
             with open(chunk_path, "rb") as f:
@@ -154,12 +154,20 @@ def test_upload_chunks_successful(storage_paths):
                 # Verify we can decompress it back to original
                 assert gzip.decompress(stored_data) == chunk_data
 
-        # 7. Verify chunk metadata is stored
+        # 7. Verify chunk metadata is stored and concatenated file exists
         # The number of chunks in the store should be one less than total pieces,
         # since the first piece was part of the block store registration.
         if total_chunks > 1:
             assert file_hash in state.chunk_store
             assert len(state.chunk_store[file_hash]) == total_chunks - 1
+
+            # Verify concatenated file exists (chunks are now stored in block_store_root)
+            concatenated_file_path = os.path.join(
+                block_store_root, f"{file_hash}.chunks.gz"
+            )
+            assert os.path.exists(concatenated_file_path), (
+                "Concatenated chunks file should exist"
+            )
         else:
             # If there's only one chunk, it was sent with the registration,
             # so the separate chunk_store should not have an entry for it.

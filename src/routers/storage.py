@@ -15,6 +15,7 @@ from models import (
     PqSignature,
     DownloadFileRequest,
     DownloadChunkRequest,
+    DownloadConcatenatedRequest,
 )
 from app_state import state, find_account
 import config
@@ -299,12 +300,30 @@ async def upload_chunk(
                 detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
             )
 
-    # Store the chunk (keep compressed if it was compressed)
+    # Store the chunk individually (as before) and also append to concatenated file
     os.makedirs(config.CHUNK_STORE_ROOT, exist_ok=True)
     chunk_path = os.path.join(config.CHUNK_STORE_ROOT, chunk_hash)
     with open(chunk_path, "wb") as f:
         f.write(chunk_content)  # Store as received (compressed or not)
 
+    # Also append to concatenated gzip file for tools like zgrep
+    os.makedirs(config.BLOCK_STORE_ROOT, exist_ok=True)
+    concatenated_file_path = os.path.join(
+        config.BLOCK_STORE_ROOT, f"{file_hash}.chunks.gz"
+    )
+
+    # Ensure chunk is compressed before appending to concatenated file
+    if compressed:
+        compressed_data = chunk_content
+    else:
+        # Compress uncompressed chunks before appending
+        compressed_data = gzip.compress(original_chunk_content, compresslevel=9)
+
+    # Append compressed chunk to concatenated file
+    with open(concatenated_file_path, "ab") as f:  # append binary mode
+        f.write(compressed_data)
+
+    # Track chunk metadata for both storage methods
     if file_hash not in state.chunk_store:
         state.chunk_store[file_hash] = {}
 
@@ -388,7 +407,7 @@ async def download_chunk(
                 detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
             )
 
-    # Read the chunk from storage
+        # Read the chunk from storage
     chunk_path = os.path.join(config.CHUNK_STORE_ROOT, chunk_hash)
     if not os.path.exists(chunk_path):
         raise HTTPException(
@@ -433,5 +452,82 @@ async def download_chunk(
             "X-Chunk-Index": str(chunk_metadata["index"]),
             "X-Original-Size": str(chunk_metadata["size"]),
             "X-Compressed": str(is_stored_compressed).lower(),
+        },
+    )
+
+
+@router.post("/storage/{public_key}/{file_hash}/chunks/download")
+async def download_concatenated_chunks(
+    public_key: str, file_hash: str, request: DownloadConcatenatedRequest
+):
+    """
+    Downloads all chunks as a single concatenated gzip file that can be used with zgrep, zcat, etc.
+    Must be authorized by all keys on the account.
+    Message to sign: f"DOWNLOAD-CHUNKS:{public_key}:{file_hash}:{nonce}"
+    """
+    account_pq_keys = find_account(public_key)
+
+    # Verify the parent file exists
+    user_files = state.block_store.get(public_key, {})
+    if file_hash not in user_files:
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    # Check if concatenated chunks file exists
+    concatenated_file_path = os.path.join(
+        config.BLOCK_STORE_ROOT, f"{file_hash}.chunks.gz"
+    )
+    if not os.path.exists(concatenated_file_path):
+        raise HTTPException(status_code=404, detail="No chunks found for this file.")
+
+    if not verify_nonce(request.nonce):
+        raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
+
+    if request.nonce in state.used_nonces:
+        raise HTTPException(status_code=400, detail="Nonce has already been used.")
+
+    # Construct and verify signature message
+    message_to_verify = (
+        f"DOWNLOAD-CHUNKS:{public_key}:{file_hash}:{request.nonce}".encode("utf-8")
+    )
+
+    # Verify classic signature
+    if not verify_signature(public_key, request.classic_signature, message_to_verify):
+        raise HTTPException(status_code=401, detail="Invalid classic signature.")
+
+    # Verify PQ signatures
+    pks_in_req = {s.public_key for s in request.pq_signatures}
+    if pks_in_req != set(account_pq_keys.values()):
+        raise HTTPException(
+            status_code=401,
+            detail="Signatures from all existing PQ keys are required for download.",
+        )
+
+    for pq_sig in request.pq_signatures:
+        if not verify_pq_signature(
+            pq_sig.public_key, pq_sig.signature, message_to_verify, pq_sig.alg
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
+            )
+
+    state.used_nonces.add(request.nonce)
+
+    # Get file metadata for filename
+    file_metadata = user_files[file_hash]
+    base_filename = (
+        file_metadata["filename"].rsplit(".", 1)[0]
+        if "." in file_metadata["filename"]
+        else file_metadata["filename"]
+    )
+
+    # Return the concatenated gzip file directly
+    return FileResponse(
+        path=concatenated_file_path,
+        filename=f"{base_filename}.chunks.gz",
+        media_type="application/gzip",
+        headers={
+            "X-Chunk-Count": str(len(state.chunk_store.get(file_hash, {}))),
+            "X-File-Type": "concatenated-gzip-chunks",
         },
     )

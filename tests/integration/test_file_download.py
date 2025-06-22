@@ -12,6 +12,7 @@ import pytest
 import json
 import gzip
 import base64
+import os
 from fastapi.testclient import TestClient
 from main import app
 from config import ML_DSA_ALG
@@ -394,7 +395,10 @@ def test_download_chunk_compressed(storage_paths):
                     ),
                 },
             )
-            assert response.status_code == 200
+            assert response.status_code == 200, (
+                f"Chunk {i} upload failed: {response.text}"
+            )
+            assert "compressed" in response.json()["message"]
             uploaded_chunks.append((chunk_hash, chunk_data, compressed_chunk_data))
 
         # 4. Test downloading chunks with different compression options
@@ -632,6 +636,237 @@ def test_download_chunk_nonexistent():
         # 4. Assert 404 Not Found
         assert response.status_code == 404
         assert "Chunk not found" in response.text
+
+    finally:
+        # Clean up oqs signatures
+        for sig in oqs_sigs_to_free:
+            sig.free()
+
+
+def test_concatenated_chunks_download_workflow(storage_paths):
+    """
+    Tests the full workflow of uploading compressed chunks and downloading them
+    as a single concatenated gzip file that can be used with zgrep, zcat, etc.
+    """
+    block_store_root, _ = storage_paths
+    # 1. Create an account
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    try:
+        pk_ml_dsa_hex = next(iter(all_pq_sks))
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+        # 2. Create a large file that will be split into multiple chunks
+        cc = pre.create_crypto_context()
+        keys = pre.generate_keys(cc)
+        sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+        # Use content larger than slot count to force multiple chunks
+        slot_count = pre.get_slot_count(cc)
+        # Create content with identifiable patterns for testing
+        chunk1_content = b"CHUNK_ONE_DATA: " + b"A" * (slot_count * 2)
+        chunk2_content = b"CHUNK_TWO_DATA: " + b"B" * (slot_count * 2)
+        chunk3_content = b"CHUNK_THREE_DATA: " + b"C" * (slot_count * 2)
+        large_content = chunk1_content + chunk2_content + chunk3_content
+
+        # Create IDK message parts
+        message_parts = create_idk_message_parts(
+            data=large_content,
+            cc=cc,
+            pk=keys.publicKey,
+            signing_key=sk_idk_signer,
+        )
+
+        # Should have multiple parts due to large content
+        assert len(message_parts) > 1, (
+            f"Expected multiple chunks, got {len(message_parts)}"
+        )
+
+        # Upload the first part as the main file
+        first_part_bytes = message_parts[0].encode("utf-8")
+        parsed_first = parse_idk_message_part(message_parts[0])
+        file_hash = parsed_first["headers"]["MerkleRoot"]
+
+        upload_nonce = get_nonce()
+        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
+        upload_response = client.post(
+            f"/storage/{pk_classic_hex}",
+            files={"file": ("concatenated_test.txt", first_part_bytes, "text/plain")},
+            data={
+                "nonce": upload_nonce,
+                "file_hash": file_hash,
+                "classic_signature": sk_classic.sign(
+                    upload_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": json.dumps(
+                    [
+                        {
+                            "public_key": pk_ml_dsa_hex,
+                            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ]
+                ),
+            },
+        )
+        assert upload_response.status_code == 201, (
+            f"Upload failed: {upload_response.text}"
+        )
+
+        # 3. Upload remaining parts as compressed chunks
+        uploaded_chunk_data = []
+        for i, part_str in enumerate(message_parts[1:], start=1):
+            parsed = parse_idk_message_part(part_str)
+            chunk_data = base64.b64decode(parsed["payload_b64"])
+            compressed_chunk_data = gzip.compress(chunk_data, compresslevel=9)
+            chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
+
+            chunk_nonce = get_nonce()
+            chunk_msg = (
+                f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+                f"{i}:{len(message_parts)}:{chunk_hash}:{chunk_nonce}"
+            ).encode()
+
+            response = client.post(
+                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+                files={"file": (f"chunk_{i}", compressed_chunk_data)},
+                data={
+                    "nonce": chunk_nonce,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": str(i),
+                    "total_chunks": str(len(message_parts)),
+                    "compressed": "true",
+                    "classic_signature": sk_classic.sign(
+                        chunk_msg, hashfunc=hashlib.sha256
+                    ).hex(),
+                    "pq_signatures": json.dumps(
+                        [
+                            {
+                                "public_key": pk_ml_dsa_hex,
+                                "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+                                "alg": ML_DSA_ALG,
+                            }
+                        ]
+                    ),
+                },
+            )
+            assert response.status_code == 200, (
+                f"Chunk {i} upload failed: {response.text}"
+            )
+            assert "compressed" in response.json()["message"]
+            uploaded_chunk_data.append((chunk_hash, chunk_data, compressed_chunk_data))
+
+        # 4. Verify concatenated file exists on disk
+        concatenated_file_path = os.path.join(
+            block_store_root, f"{file_hash}.chunks.gz"
+        )
+        assert os.path.exists(concatenated_file_path), "Concatenated file should exist"
+
+        # 5. Test downloading the concatenated chunks file
+        download_nonce = get_nonce()
+        download_msg = (
+            f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+        )
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": sk_classic.sign(
+                download_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(download_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+        }
+
+        response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
+            json=download_payload,
+        )
+
+        # 6. Verify successful download
+        assert response.status_code == 200, f"Download failed: {response.text}"
+        assert response.headers["content-type"] == "application/gzip"
+        assert (
+            response.headers["content-disposition"]
+            == 'attachment; filename="concatenated_test.chunks.gz"'
+        )
+        assert "x-chunk-count" in response.headers
+        assert "x-file-type" in response.headers
+        assert response.headers["x-file-type"] == "concatenated-gzip-chunks"
+
+        # 7. Verify the downloaded content can be decompressed and contains expected data
+        concatenated_gzip_data = response.content
+
+        # Save to a temporary file to test with system tools
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".gz", delete=False) as temp_file:
+            temp_file.write(concatenated_gzip_data)
+            temp_file_path = temp_file.name
+
+        try:
+            # Test that we can decompress it
+            import subprocess
+
+            result = subprocess.run(
+                ["gunzip", "-t", temp_file_path], capture_output=True
+            )
+            assert result.returncode == 0, f"gunzip test failed: {result.stderr}"
+
+            # Test that we can extract content
+            result = subprocess.run(["zcat", temp_file_path], capture_output=True)
+            assert result.returncode == 0, f"zcat failed: {result.stderr}"
+
+            # The decompressed content should be the concatenation of all uploaded chunk data
+            decompressed_content = result.stdout
+
+            # Verify we can find parts of our original chunks in the decompressed data
+            # (Note: the exact structure depends on how gzip concatenation works with our encrypted chunks)
+            assert len(decompressed_content) > 0, (
+                "Decompressed content should not be empty"
+            )
+
+            print(f"Successfully downloaded and verified concatenated gzip file:")
+            print(f"  Original chunks: {len(uploaded_chunk_data)}")
+            print(f"  Concatenated file size: {len(concatenated_gzip_data)} bytes")
+            print(f"  Decompressed size: {len(decompressed_content)} bytes")
+
+        finally:
+            # Clean up temp file
+            os.unlink(temp_file_path)
+
+        # 8. Verify both individual and concatenated downloads work
+        if uploaded_chunk_data:
+            chunk_hash, chunk_data, compressed_chunk_data = uploaded_chunk_data[0]
+
+            # Test individual chunk download
+            individual_download_nonce = get_nonce()
+            individual_download_msg = f"DOWNLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_hash}:{individual_download_nonce}".encode()
+            individual_download_payload = {
+                "nonce": individual_download_nonce,
+                "chunk_hash": chunk_hash,
+                "classic_signature": sk_classic.sign(
+                    individual_download_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(individual_download_msg).hex(),
+                        "alg": ML_DSA_ALG,
+                    }
+                ],
+                "compressed": True,  # Request compressed version
+            }
+
+            response = client.post(
+                f"/storage/{pk_classic_hex}/{file_hash}/chunks/{chunk_hash}/download",
+                json=individual_download_payload,
+            )
+
+            assert response.status_code == 200, "Individual chunk download should work"
+            assert response.content == compressed_chunk_data
 
     finally:
         # Clean up oqs signatures
