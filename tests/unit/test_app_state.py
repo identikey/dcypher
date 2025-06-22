@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from src.app_state import ServerState, find_account, get_app_state
+from app_state import ServerState, find_account, get_app_state
 
 
 def test_get_app_state():
@@ -20,12 +20,12 @@ def clean_state():
     new_state = ServerState()
     # This is a bit of a hack, but it's the simplest way to replace the singleton
     # for testing purposes. We'll manually set the global `state` variable.
-    import src.app_state
+    import app_state
 
-    src.app_state.state = new_state
+    app_state.state = new_state
     yield new_state
     # Restore the original state
-    src.app_state.state = original_state
+    app_state.state = original_state
 
 
 def test_find_account_success(clean_state):

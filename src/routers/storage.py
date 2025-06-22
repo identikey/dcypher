@@ -6,16 +6,16 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List
 
-from src.lib.auth import verify_signature
-from src.lib.pq_auth import verify_pq_signature
-from src.lib import idk_message
-from src.security import verify_nonce
-from src.models import (
+from lib.auth import verify_signature
+from lib.pq_auth import verify_pq_signature
+from lib import idk_message
+from security import verify_nonce
+from models import (
     PqSignature,
     DownloadFileRequest,
 )
-from src.app_state import state, find_account
-from src.config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
+from app_state import state, find_account
+import config
 
 router = APIRouter()
 
@@ -91,8 +91,8 @@ async def upload_file(
             )
 
     # Store the file and its metadata
-    os.makedirs(BLOCK_STORE_ROOT, exist_ok=True)
-    file_path = os.path.join(BLOCK_STORE_ROOT, file_hash)
+    os.makedirs(config.BLOCK_STORE_ROOT, exist_ok=True)
+    file_path = os.path.join(config.BLOCK_STORE_ROOT, file_hash)
     with open(file_path, "wb") as f:
         f.write(file_content)
 
@@ -174,7 +174,7 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
                 detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
             )
 
-    file_path = os.path.join(BLOCK_STORE_ROOT, file_hash)
+    file_path = os.path.join(config.BLOCK_STORE_ROOT, file_hash)
     if not os.path.exists(file_path):
         # This case should be rare if metadata exists, but good to have
         raise HTTPException(status_code=404, detail="File content not found on server.")
@@ -262,8 +262,8 @@ async def upload_chunk(
             )
 
     # Store the chunk
-    os.makedirs(CHUNK_STORE_ROOT, exist_ok=True)
-    chunk_path = os.path.join(CHUNK_STORE_ROOT, chunk_hash)
+    os.makedirs(config.CHUNK_STORE_ROOT, exist_ok=True)
+    chunk_path = os.path.join(config.CHUNK_STORE_ROOT, chunk_hash)
     with open(chunk_path, "wb") as f:
         f.write(chunk_content)
 

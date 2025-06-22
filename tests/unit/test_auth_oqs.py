@@ -1,6 +1,6 @@
 import oqs
 import pytest
-from src.lib.pq_auth import verify_pq_signature
+from lib.pq_auth import verify_pq_signature
 
 SUPPORTED_SIG_ALGS = oqs.get_enabled_sig_mechanisms()
 

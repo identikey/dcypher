@@ -10,11 +10,11 @@ from fastapi.testclient import TestClient
 import requests
 import shutil
 
-from src.main import (
+from main import (
     app,
 )
-from src.app_state import state
-from src.config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
+from app_state import state
+from config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
 
 
 @pytest.fixture(scope="function")
@@ -39,8 +39,8 @@ def live_api_server(free_port, monkeypatch, tmp_path):
     chunk_store_path.mkdir()
 
     # Monkeypatch the storage roots and clear in-memory stores for this test run
-    monkeypatch.setattr("src.routers.storage.BLOCK_STORE_ROOT", str(block_store_path))
-    monkeypatch.setattr("src.routers.storage.CHUNK_STORE_ROOT", str(chunk_store_path))
+    monkeypatch.setattr("config.BLOCK_STORE_ROOT", str(block_store_path))
+    monkeypatch.setattr("config.CHUNK_STORE_ROOT", str(chunk_store_path))
     state.accounts.clear()
     state.used_nonces.clear()
     state.graveyard.clear()

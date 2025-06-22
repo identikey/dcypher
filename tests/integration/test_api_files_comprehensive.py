@@ -16,13 +16,13 @@ import threading
 import concurrent.futures
 from unittest import mock
 from fastapi.testclient import TestClient
-from src.main import app
-from src.app_state import state
-from src.lib.pq_auth import SUPPORTED_SIG_ALGS
-from src.config import ML_DSA_ALG
-from src.lib import pre
-from src.lib.idk_message import MerkleTree, IDK_VERSION
-from src.lib.idk_message import create_idk_message_parts, parse_idk_message_part
+from main import app
+from app_state import state
+from lib.pq_auth import SUPPORTED_SIG_ALGS
+from config import ML_DSA_ALG
+from lib import pre
+from lib.idk_message import MerkleTree, IDK_VERSION
+from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 import base64
 
 from tests.integration.test_api import (

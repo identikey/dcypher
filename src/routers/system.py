@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from src.lib.pq_auth import SUPPORTED_SIG_ALGS
-from src.security import generate_nonce
+from lib.pq_auth import SUPPORTED_SIG_ALGS
+from security import generate_nonce
 
 router = APIRouter()
 

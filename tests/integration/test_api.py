@@ -7,30 +7,30 @@ import os
 import json
 from unittest import mock
 from fastapi.testclient import TestClient
-from src.main import (
+from main import (
     app,
 )
-from src.app_state import state
-from src.lib.pq_auth import SUPPORTED_SIG_ALGS
-from src.config import ML_DSA_ALG
-from src.lib import idk_message, pre
+from app_state import state
+from lib.pq_auth import SUPPORTED_SIG_ALGS
+from config import ML_DSA_ALG
+from lib import idk_message, pre
 
 client = TestClient(app)
 
 
 @pytest.fixture
-def storage_paths(tmp_path):
+def storage_paths(tmp_path, monkeypatch):
     """Provides isolated temporary storage paths for tests."""
     block_store_path = tmp_path / "block_store"
     chunk_store_path = tmp_path / "chunk_store"
     block_store_path.mkdir()
     chunk_store_path.mkdir()
 
-    with (
-        mock.patch("src.routers.storage.BLOCK_STORE_ROOT", str(block_store_path)),
-        mock.patch("src.routers.storage.CHUNK_STORE_ROOT", str(chunk_store_path)),
-    ):
-        yield str(block_store_path), str(chunk_store_path)
+    # Patch the config module attributes
+    monkeypatch.setattr("config.BLOCK_STORE_ROOT", str(block_store_path))
+    monkeypatch.setattr("config.CHUNK_STORE_ROOT", str(chunk_store_path))
+
+    yield str(block_store_path), str(chunk_store_path)
 
 
 @pytest.fixture(autouse=True)

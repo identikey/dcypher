@@ -1,6 +1,6 @@
 import ecdsa
 import hashlib
-from src.lib.auth import verify_signature
+from lib.auth import verify_signature
 
 
 def test_verify_signature_valid():

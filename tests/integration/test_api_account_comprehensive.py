@@ -10,11 +10,11 @@ import threading
 import concurrent.futures
 from unittest import mock
 from fastapi.testclient import TestClient
-from src.main import app
-from src.app_state import state
-from src.lib.pq_auth import SUPPORTED_SIG_ALGS
-from src.config import ML_DSA_ALG
-from src.security import SERVER_SECRET
+from main import app
+from app_state import state
+from lib.pq_auth import SUPPORTED_SIG_ALGS
+from config import ML_DSA_ALG
+from security import SERVER_SECRET
 
 from tests.integration.test_api import (
     storage_paths,
