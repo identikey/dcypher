@@ -5,6 +5,7 @@ import pytest
 import time
 import os
 import json
+import hmac
 from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
@@ -13,6 +14,7 @@ from src.main import (
     SUPPORTED_SIG_ALGS,
     ML_DSA_ALG,
 )
+from src.security import SERVER_SECRET
 
 from tests.test_api import storage_paths, cleanup, _create_test_account, get_nonce
 
@@ -474,30 +476,29 @@ def test_create_account_expired_nonce():
     Nonces are time-sensitive and should be rejected after their validity
     period (5 minutes).
     """
-    with mock.patch("src.main.time") as mock_time:
-        # 1. Get a nonce at a specific time
-        mock_time.time.return_value = 1000.0
-        nonce = get_nonce()
+    # 1. Manually create an expired nonce with a valid signature
+    expired_timestamp = str(time.time() - 301)  # 301 seconds in the past
+    mac = hmac.new(
+        SERVER_SECRET.encode(), expired_timestamp.encode(), hashlib.sha256
+    ).hexdigest()
+    expired_nonce = f"{expired_timestamp}:{mac}"
 
-        # 2. Simulate time passing beyond the expiration date
-        mock_time.time.return_value = 1000.0 + 301.0  # 301 seconds later
-
-        # 3. Attempt to use the expired nonce
-        response = client.post(
-            "/accounts",
-            json={
+    # 2. Attempt to use the expired nonce
+    response = client.post(
+        "/accounts",
+        json={
+            "public_key": "test",
+            "signature": "test",
+            "ml_dsa_signature": {
                 "public_key": "test",
                 "signature": "test",
-                "ml_dsa_signature": {
-                    "public_key": "test",
-                    "signature": "test",
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce,
+                "alg": ML_DSA_ALG,
             },
-        )
-        assert response.status_code == 400
-        assert "Invalid or expired nonce" in response.text
+            "nonce": expired_nonce,
+        },
+    )
+    assert response.status_code == 400
+    assert "Invalid or expired nonce" in response.text
 
 
 def test_create_account_malformed_nonce():

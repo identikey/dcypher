@@ -16,6 +16,7 @@ from typing import List
 from lib.auth import verify_signature
 from lib.pq_auth import SUPPORTED_SIG_ALGS, verify_pq_signature
 from lib import idk_message
+from security import generate_nonce, verify_nonce
 
 # In a real application, this should be loaded from a secure configuration manager
 # or environment variable, and it should be a long, random string.
@@ -174,34 +175,8 @@ def get_nonce():
     Generates a time-based, HMAC-signed nonce for the client to sign.
     Nonces are valid for 5 minutes.
     """
-    timestamp = str(time.time())
-    mac = hmac.new(
-        SERVER_SECRET.encode(), timestamp.encode(), hashlib.sha256
-    ).hexdigest()
-    nonce = f"{timestamp}:{mac}"
+    nonce = generate_nonce()
     return {"nonce": nonce}
-
-
-def verify_nonce(nonce: str) -> bool:
-    """Verifies the integrity and expiration of a nonce."""
-    try:
-        timestamp_str, mac = nonce.split(":")
-        timestamp = float(timestamp_str)
-    except ValueError:
-        return False  # Malformed nonce
-
-    # 1. Check if expired (5-minute validity)
-    if time.time() - timestamp > 300:
-        return False
-
-    # 2. Check HMAC signature
-    expected_mac = hmac.new(
-        SERVER_SECRET.encode(), timestamp_str.encode(), hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(expected_mac, mac):
-        return False
-
-    return True
 
 
 @app.post("/accounts")
