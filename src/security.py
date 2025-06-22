@@ -2,9 +2,7 @@ import time
 import hmac
 import hashlib
 
-# In a real application, this should be loaded from a secure configuration manager
-# or environment variable, and it should be a long, random string.
-SERVER_SECRET = "a-very-secret-key-that-should-be-changed"
+from src.config import SERVER_SECRET
 
 
 def generate_nonce() -> str:
