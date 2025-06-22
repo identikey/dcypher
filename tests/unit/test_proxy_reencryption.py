@@ -119,18 +119,35 @@ def test_decrypt_with_wrong_key(crypto_setup):
     assert decrypted_data_wrong != original_data
 
 
-def test_public_key_canonical_serialization(crypto_setup):
-    """Tests that public key serialization is deterministic and canonical."""
+def test_public_key_serialization_behavior(crypto_setup):
+    """
+    Tests that public key serialization is deterministic but NOT canonical,
+    and that the key remains functional after a serialization roundtrip.
+    """
     cc = crypto_setup["cc"]
     pk = crypto_setup["alice_keys"].publicKey
+    sk = crypto_setup["alice_keys"].secretKey
 
+    # 1. Verify that serialization is deterministic
     ser_pk1 = pre.serialize_to_bytes(pk)
     ser_pk2 = pre.serialize_to_bytes(pk)
     assert ser_pk1 == ser_pk2, "Public key serialization is not deterministic"
 
+    # 2. Verify that the roundtrip is NOT canonical
     deser_pk = pre.deserialize_public_key(ser_pk1)
     reser_pk = pre.serialize_to_bytes(deser_pk)
-    assert ser_pk1 != reser_pk, "Public key serialization roundtrip failed"
+    assert ser_pk1 != reser_pk, "Public key serialization was unexpectedly canonical"
+
+    # 3. Verify the deserialized key is functional
+    original_data = b"test for functional public key"
+    slot_count = pre.get_slot_count(cc)
+    coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    ciphertext = pre.encrypt(cc, deser_pk, coeffs)
+    decrypted_coeffs = pre.decrypt(cc, sk, ciphertext, len(coeffs))
+    decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(original_data))
+    assert decrypted_data == original_data, (
+        "Deserialized public key failed to encrypt correctly"
+    )
 
 
 def test_secret_key_serialization_behavior(crypto_setup):
@@ -178,22 +195,41 @@ def test_secret_key_serialization_behavior(crypto_setup):
     assert re_decrypted_data == original_data, "Re-key from deserialized SK failed"
 
 
-def test_ciphertext_canonical_serialization(crypto_setup):
-    """Tests that ciphertext serialization is deterministic and canonical."""
+def test_ciphertext_serialization_behavior(crypto_setup):
+    """
+    Tests that ciphertext serialization is deterministic but NOT canonical,
+    and that it remains functional after a serialization roundtrip.
+    """
     cc = crypto_setup["cc"]
-    pk = crypto_setup["alice_keys"].publicKey
-    original_data = b"some data"
+    keys = crypto_setup["alice_keys"]
+    original_data = b"some data for ciphertext test"
     slot_count = pre.get_slot_count(cc)
     coeffs = pre.bytes_to_coefficients(original_data, slot_count)
-    ciphertext = pre.encrypt(cc, pk, coeffs)[0]
+    ciphertexts = pre.encrypt(cc, keys.publicKey, coeffs)
 
+    # Test the first ciphertext in the list
+    ciphertext = ciphertexts[0]
+
+    # 1. Verify that serialization is deterministic
     ser_ct1 = pre.serialize_to_bytes(ciphertext)
     ser_ct2 = pre.serialize_to_bytes(ciphertext)
     assert ser_ct1 == ser_ct2, "Ciphertext serialization is not deterministic"
 
+    # 2. Verify that the roundtrip is NOT canonical
     deser_ct = pre.deserialize_ciphertext(ser_ct1)
     reser_ct = pre.serialize_to_bytes(deser_ct)
-    assert ser_ct1 != reser_ct, "Ciphertext serialization roundtrip failed"
+    assert ser_ct1 != reser_ct, "Ciphertext serialization was unexpectedly canonical"
+
+    # 3. Verify the deserialized ciphertext is functional
+    # Replace the first ciphertext with the deserialized one
+    modified_ciphertexts = [deser_ct] + ciphertexts[1:]
+    decrypted_coeffs = pre.decrypt(
+        cc, keys.secretKey, modified_ciphertexts, len(coeffs)
+    )
+    decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(original_data))
+    assert decrypted_data == original_data, (
+        "Deserialized ciphertext failed to decrypt correctly"
+    )
 
 
 def test_workflow_with_deserialized_objects(crypto_setup):
