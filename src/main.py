@@ -22,6 +22,26 @@ from lib import idk_message
 SERVER_SECRET = "a-very-secret-key-that-should-be-changed"
 ML_DSA_ALG = "ML-DSA-87"
 
+
+class ServerState:
+    """A simple in-memory store for application state."""
+
+    def __init__(self):
+        # accounts: { classic_pk: { alg: pq_pk, ... }, ... }
+        self.accounts = {}
+        # graveyard: { classic_pk: [ { "public_key": pk, "alg": alg, "retired_at": ts }, ... ] }
+        self.graveyard = {}
+        self.used_nonces = set()
+        # block_store: { classic_pk: { file_hash: file_metadata } }
+        self.block_store = {}
+        # chunk_store: { file_hash: { chunk_hash: chunk_metadata } }
+        self.chunk_store = {}
+
+
+# Global state instance. In a real app, this might be managed differently.
+state = ServerState()
+
+
 # --- Storage Configuration ---
 # These paths can be monkeypatched in tests to redirect storage.
 BLOCK_STORE_ROOT = "block_store"
@@ -33,14 +53,14 @@ app = FastAPI()
 # A simple in-memory store for accounts and nonces.
 # In a real application, you would use a persistent database.
 # accounts: { classic_pk: { alg: pq_pk, ... }, ... }
-accounts = {}
+# accounts = {}
 # graveyard: { classic_pk: [ { "public_key": pk, "alg": alg, "retired_at": ts }, ... ] }
-graveyard = {}
-used_nonces = set()
+# graveyard = {}
+# used_nonces = set()
 # block_store: { classic_pk: { file_hash: file_metadata } }
-block_store = {}
+# block_store = {}
 # chunk_store: { file_hash: { chunk_hash: chunk_metadata } }
-chunk_store = {}
+# chunk_store = {}
 
 
 class PqSignature(BaseModel):
@@ -202,7 +222,7 @@ def create_account(request: CreateAccountRequest):
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
 
-    if request.nonce in used_nonces:
+    if request.nonce in state.used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     # Prevent creating an account with duplicate algorithm types
@@ -256,7 +276,7 @@ def create_account(request: CreateAccountRequest):
             )
 
     # Check for account existence based on the classic public key
-    if request.public_key in accounts:
+    if request.public_key in state.accounts:
         raise HTTPException(
             status_code=409,
             detail="Account with this classic public key already exists.",
@@ -264,8 +284,8 @@ def create_account(request: CreateAccountRequest):
 
     # Store the account with all its public keys, indexed by algorithm
     active_pq_keys = {sig.alg: sig.public_key for sig in all_pq_signatures}
-    accounts[request.public_key] = active_pq_keys
-    used_nonces.add(request.nonce)
+    state.accounts[request.public_key] = active_pq_keys
+    state.used_nonces.add(request.nonce)
 
     return {"message": "Account created successfully", "public_key": request.public_key}
 
@@ -273,7 +293,7 @@ def create_account(request: CreateAccountRequest):
 @app.get("/accounts")
 def get_accounts():
     """Returns a list of all created accounts."""
-    return {"accounts": list(accounts.keys())}
+    return {"accounts": list(state.accounts.keys())}
 
 
 @app.get("/accounts/{public_key}")
@@ -291,7 +311,7 @@ def get_account(public_key: str):
 
 def find_account(public_key: str):
     """Finds an account by its classic public key or raises HTTPException."""
-    account = accounts.get(public_key)
+    account = state.accounts.get(public_key)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found.")
     return account
@@ -313,7 +333,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
 
-    if request.nonce in used_nonces:
+    if request.nonce in state.used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     # Validate new keys
@@ -379,13 +399,13 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
 
     # All checks passed, update the account
     # Move any replaced keys to the graveyard
-    if public_key not in graveyard:
-        graveyard[public_key] = []
+    if public_key not in state.graveyard:
+        state.graveyard[public_key] = []
 
     for new_sig in request.new_pq_signatures:
         if new_sig.alg in account_pq_keys:
             old_pk = account_pq_keys[new_sig.alg]
-            graveyard[public_key].append(
+            state.graveyard[public_key].append(
                 {
                     "public_key": old_pk,
                     "alg": new_sig.alg,
@@ -394,7 +414,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
             )
         account_pq_keys[new_sig.alg] = new_sig.public_key
 
-    used_nonces.add(request.nonce)
+    state.used_nonces.add(request.nonce)
 
     return {
         "message": f"Successfully added {len(request.new_pq_signatures)} PQ key(s)."
@@ -417,7 +437,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
 
-    if request.nonce in used_nonces:
+    if request.nonce in state.used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     # Validate keys to remove
@@ -462,19 +482,19 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
 
     # All checks passed, update the account
     # Move any replaced keys to the graveyard
-    if public_key not in graveyard:
-        graveyard[public_key] = []
+    if public_key not in state.graveyard:
+        state.graveyard[public_key] = []
 
     for alg_to_remove in request.algs_to_remove:
         removed_pk = account_pq_keys.pop(alg_to_remove)
-        graveyard[public_key].append(
+        state.graveyard[public_key].append(
             {
                 "public_key": removed_pk,
                 "alg": alg_to_remove,
                 "retired_at": time.time(),
             }
         )
-    used_nonces.add(request.nonce)
+    state.used_nonces.add(request.nonce)
 
     return {"message": "Successfully removed PQ key(s)."}
 
@@ -483,7 +503,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
 def get_graveyard(public_key: str):
     """Retrieves the graveyard of retired PQ keys for a given account."""
     find_account(public_key)  # Ensure account exists
-    return {"public_key": public_key, "graveyard": graveyard.get(public_key, [])}
+    return {"public_key": public_key, "graveyard": state.graveyard.get(public_key, [])}
 
 
 @app.post("/storage/{public_key}", status_code=201)
@@ -509,7 +529,7 @@ async def upload_file(
     if not verify_nonce(nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
 
-    if nonce in used_nonces:
+    if nonce in state.used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     # Manually parse pq_signatures from JSON string
@@ -562,17 +582,17 @@ async def upload_file(
     with open(file_path, "wb") as f:
         f.write(file_content)
 
-    if public_key not in block_store:
-        block_store[public_key] = {}
+    if public_key not in state.block_store:
+        state.block_store[public_key] = {}
 
-    block_store[public_key][file_hash] = {
+    state.block_store[public_key][file_hash] = {
         "filename": file.filename,
         "content_type": file.content_type,
         "size": len(file_content),
         "created_at": time.time(),
     }
 
-    used_nonces.add(nonce)
+    state.used_nonces.add(nonce)
 
     return {"message": "File uploaded successfully", "file_hash": file_hash}
 
@@ -581,7 +601,7 @@ async def upload_file(
 def list_files(public_key: str):
     """Lists all files in the user's block store."""
     find_account(public_key)  # Ensure account exists
-    user_files = block_store.get(public_key, {})
+    user_files = state.block_store.get(public_key, {})
     return {"files": list(user_files.keys())}
 
 
@@ -589,7 +609,7 @@ def list_files(public_key: str):
 def get_file_metadata(public_key: str, file_hash: str):
     """Gets metadata for a specific file in the user's block store."""
     find_account(public_key)
-    user_files = block_store.get(public_key, {})
+    user_files = state.block_store.get(public_key, {})
     file_metadata = user_files.get(file_hash)
     if not file_metadata:
         raise HTTPException(status_code=404, detail="File not found.")
@@ -604,7 +624,7 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
     Message to sign: f"DOWNLOAD:{public_key}:{file_hash}:{nonce}"
     """
     account_pq_keys = find_account(public_key)
-    user_files = block_store.get(public_key, {})
+    user_files = state.block_store.get(public_key, {})
     file_metadata = user_files.get(file_hash)
     if not file_metadata:
         raise HTTPException(status_code=404, detail="File not found.")
@@ -612,7 +632,7 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
 
-    if request.nonce in used_nonces:
+    if request.nonce in state.used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     message_to_verify = f"DOWNLOAD:{public_key}:{file_hash}:{request.nonce}".encode(
@@ -645,7 +665,7 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
         # This case should be rare if metadata exists, but good to have
         raise HTTPException(status_code=404, detail="File content not found on server.")
 
-    used_nonces.add(request.nonce)
+    state.used_nonces.add(request.nonce)
     return FileResponse(
         path=file_path,
         filename=file_metadata["filename"],
@@ -673,7 +693,10 @@ async def upload_chunk(
     account_pq_keys = find_account(public_key)
 
     # Simplified file existence check for now
-    if public_key not in block_store or file_hash not in block_store[public_key]:
+    if (
+        public_key not in state.block_store
+        or file_hash not in state.block_store[public_key]
+    ):
         raise HTTPException(
             status_code=404,
             detail="File record not found. Upload file metadata first.",
@@ -682,7 +705,7 @@ async def upload_chunk(
     if not verify_nonce(nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
 
-    if nonce in used_nonces:
+    if nonce in state.used_nonces:
         raise HTTPException(status_code=400, detail="Nonce has already been used.")
 
     # Manually parse pq_signatures from JSON string
@@ -730,15 +753,15 @@ async def upload_chunk(
     with open(chunk_path, "wb") as f:
         f.write(chunk_content)
 
-    if file_hash not in chunk_store:
-        chunk_store[file_hash] = {}
+    if file_hash not in state.chunk_store:
+        state.chunk_store[file_hash] = {}
 
-    chunk_store[file_hash][chunk_hash] = {
+    state.chunk_store[file_hash][chunk_hash] = {
         "index": chunk_index,
         "size": len(chunk_content),
         "stored_at": time.time(),
     }
-    used_nonces.add(nonce)
+    state.used_nonces.add(nonce)
 
     return {"message": f"Chunk {chunk_index}/{total_chunks} uploaded successfully."}
 

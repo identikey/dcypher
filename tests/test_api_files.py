@@ -9,13 +9,9 @@ from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
     app,
-    accounts,
-    used_nonces,
+    state,
     SUPPORTED_SIG_ALGS,
     ML_DSA_ALG,
-    graveyard,
-    block_store,
-    chunk_store,
 )
 from lib import pre
 from lib.idk_message import MerkleTree
@@ -300,12 +296,12 @@ def test_upload_chunks_successful(storage_paths):
         # The number of chunks in the store should be one less than total pieces,
         # since the first piece was part of the block store registration.
         if total_chunks > 1:
-            assert file_hash in chunk_store
-            assert len(chunk_store[file_hash]) == total_chunks - 1
+            assert file_hash in state.chunk_store
+            assert len(state.chunk_store[file_hash]) == total_chunks - 1
         else:
             # If there's only one chunk, it was sent with the registration,
             # so the separate chunk_store should not have an entry for it.
-            assert file_hash not in chunk_store
+            assert file_hash not in state.chunk_store
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:

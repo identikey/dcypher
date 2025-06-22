@@ -9,13 +9,9 @@ from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
     app,
-    accounts,
-    used_nonces,
+    state,
     SUPPORTED_SIG_ALGS,
     ML_DSA_ALG,
-    graveyard,
-    block_store,
-    chunk_store,
 )
 
 from tests.test_api import storage_paths, cleanup, _create_test_account, get_nonce
@@ -80,8 +76,8 @@ def test_create_account_successful():
             # 8. Assert success
             assert response.status_code == 200, response.text
             assert response.json()["message"] == "Account created successfully"
-            assert len(accounts) == 1
-            account = accounts[pk_classic_hex]
+            assert len(state.accounts) == 1
+            account = state.accounts[pk_classic_hex]
             expected_pq_keys = {
                 ML_DSA_ALG: pk_ml_dsa_hex,
                 add_pq_alg: pk_add_pq_hex,
@@ -132,8 +128,8 @@ def test_create_account_successful_mandatory_only():
         # 7. Assert success
         assert response.status_code == 200, response.text
         assert response.json()["message"] == "Account created successfully"
-        assert len(accounts) == 1
-        account = accounts[pk_classic_hex]
+        assert len(state.accounts) == 1
+        account = state.accounts[pk_classic_hex]
         expected_pq_keys = {ML_DSA_ALG: pk_ml_dsa_hex}
         assert account == expected_pq_keys
 
@@ -166,7 +162,7 @@ def test_create_account_used_nonce():
     nonce is provided. This prevents replay attacks.
     """
     nonce = get_nonce()
-    used_nonces.add(nonce)  # Manually add to used nonces
+    state.used_nonces.add(nonce)  # Manually add to used nonces
     response = client.post(
         "/accounts",
         json={

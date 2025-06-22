@@ -9,13 +9,9 @@ from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
     app,
-    accounts,
-    used_nonces,
+    state,
     SUPPORTED_SIG_ALGS,
     ML_DSA_ALG,
-    graveyard,
-    block_store,
-    chunk_store,
 )
 from lib import idk_message, pre
 
@@ -46,20 +42,20 @@ def cleanup(storage_paths):
         mock.patch("src.main.CHUNK_STORE_ROOT", chunk_store_path),
     ):
         # Reset in-memory state before each test
-        accounts.clear()
-        used_nonces.clear()
-        graveyard.clear()
-        block_store.clear()
-        chunk_store.clear()
+        state.accounts.clear()
+        state.used_nonces.clear()
+        state.graveyard.clear()
+        state.block_store.clear()
+        state.chunk_store.clear()
 
         yield
 
         # In-memory state is cleared again for good measure after the test
-        accounts.clear()
-        used_nonces.clear()
-        graveyard.clear()
-        block_store.clear()
-        chunk_store.clear()
+        state.accounts.clear()
+        state.used_nonces.clear()
+        state.graveyard.clear()
+        state.block_store.clear()
+        state.chunk_store.clear()
 
 
 def _create_test_account(

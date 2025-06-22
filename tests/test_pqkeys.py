@@ -9,13 +9,9 @@ from unittest import mock
 from fastapi.testclient import TestClient
 from src.main import (
     app,
-    accounts,
-    used_nonces,
+    state,
     SUPPORTED_SIG_ALGS,
     ML_DSA_ALG,
-    graveyard,
-    block_store,
-    chunk_store,
 )
 
 from tests.test_api import storage_paths, cleanup, _create_test_account, get_nonce
@@ -123,7 +119,7 @@ def test_add_and_remove_pq_keys():
         classic_sig3 = sk_classic.sign(message3, hashfunc=hashlib.sha256).hex()
 
         # Get all active keys for signing
-        active_pks = accounts[pk_classic_hex]
+        active_pks = state.accounts[pk_classic_hex]
         all_pq_sigs3 = []
         for alg, pk in active_pks.items():
             signer, _ = all_pq_sks[pk]

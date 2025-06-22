@@ -14,11 +14,7 @@ import time
 from src.main import (
     app,
     ML_DSA_ALG,
-    accounts,
-    used_nonces,
-    graveyard,
-    block_store,
-    chunk_store,
+    state,
 )
 from src.lib.pq_auth import generate_pq_keys
 from src.lib import pre

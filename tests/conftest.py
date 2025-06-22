@@ -12,11 +12,7 @@ import shutil
 
 from src.main import (
     app,
-    accounts,
-    used_nonces,
-    graveyard,
-    block_store,
-    chunk_store,
+    state,
 )
 
 
@@ -42,15 +38,13 @@ def live_api_server(free_port, monkeypatch, tmp_path):
     chunk_store_path.mkdir()
 
     # Monkeypatch the storage roots and clear in-memory stores for this test run
-    from src.main import accounts, used_nonces, graveyard, block_store, chunk_store
-
     monkeypatch.setattr("src.main.BLOCK_STORE_ROOT", str(block_store_path))
     monkeypatch.setattr("src.main.CHUNK_STORE_ROOT", str(chunk_store_path))
-    accounts.clear()
-    used_nonces.clear()
-    graveyard.clear()
-    block_store.clear()
-    chunk_store.clear()
+    state.accounts.clear()
+    state.used_nonces.clear()
+    state.graveyard.clear()
+    state.block_store.clear()
+    state.chunk_store.clear()
 
     api_base_url = f"http://127.0.0.1:{free_port}"
     os.environ["API_BASE_URL"] = api_base_url
