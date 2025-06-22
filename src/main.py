@@ -6,7 +6,6 @@ import os
 import json
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
 from typing import List
 
 # To run this with uvicorn:
@@ -17,39 +16,25 @@ from lib.auth import verify_signature
 from lib.pq_auth import SUPPORTED_SIG_ALGS, verify_pq_signature
 from lib import idk_message
 from security import generate_nonce, verify_nonce
+from models import (
+    PqSignature,
+    CreateAccountRequest,
+    AddPqKeysRequest,
+    RemovePqKeysRequest,
+    DownloadFileRequest,
+    UploadFileRequest,
+    UploadChunkRequest,
+)
+from routers import accounts as accounts_router
+from app_state import state, find_account
+from config import ML_DSA_ALG, BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
 
 # In a real application, this should be loaded from a secure configuration manager
 # or environment variable, and it should be a long, random string.
 SERVER_SECRET = "a-very-secret-key-that-should-be-changed"
-ML_DSA_ALG = "ML-DSA-87"
-
-
-class ServerState:
-    """A simple in-memory store for application state."""
-
-    def __init__(self):
-        # accounts: { classic_pk: { alg: pq_pk, ... }, ... }
-        self.accounts = {}
-        # graveyard: { classic_pk: [ { "public_key": pk, "alg": alg, "retired_at": ts }, ... ] }
-        self.graveyard = {}
-        self.used_nonces = set()
-        # block_store: { classic_pk: { file_hash: file_metadata } }
-        self.block_store = {}
-        # chunk_store: { file_hash: { chunk_hash: chunk_metadata } }
-        self.chunk_store = {}
-
-
-# Global state instance. In a real app, this might be managed differently.
-state = ServerState()
-
-
-# --- Storage Configuration ---
-# These paths can be monkeypatched in tests to redirect storage.
-BLOCK_STORE_ROOT = "block_store"
-CHUNK_STORE_ROOT = "chunk_store"
-# ---
 
 app = FastAPI()
+app.include_router(accounts_router.router, tags=["accounts"])
 
 # A simple in-memory store for accounts and nonces.
 # In a real application, you would use a persistent database.
@@ -62,105 +47,6 @@ app = FastAPI()
 # block_store = {}
 # chunk_store: { file_hash: { chunk_hash: chunk_metadata } }
 # chunk_store = {}
-
-
-class PqSignature(BaseModel):
-    """Represents a post-quantum signature."""
-
-    public_key: str  # hex-encoded post-quantum public key
-    signature: str  # hex-encoded post-quantum signature
-    alg: str  # post-quantum algorithm used
-
-
-class CreateAccountRequest(BaseModel):
-    public_key: str = Field(
-        ..., description="Hex-encoded uncompressed SECP256k1 public key."
-    )
-    signature: str = Field(
-        ..., description="Hex-encoded DER signature from the classic key."
-    )
-    ml_dsa_signature: PqSignature = Field(
-        ..., description="Mandatory ML-DSA-87 signature."
-    )
-    additional_pq_signatures: list[PqSignature] = Field(
-        [], description="Optional list of additional PQ signatures."
-    )
-    nonce: str = Field(..., description="Time-based nonce provided by the server.")
-
-
-class AddPqKeysRequest(BaseModel):
-    """Request to add new PQ keys to an account."""
-
-    new_pq_signatures: list[PqSignature] = Field(
-        ..., description="New PQ keys and their corresponding authorization signatures."
-    )
-    classic_signature: str = Field(
-        ...,
-        description="Signature from the root classic key authorizing the operation.",
-    )
-    existing_pq_signatures: list[PqSignature] = Field(
-        ..., description="Signatures from all existing PQ keys on the account."
-    )
-    nonce: str = Field(..., description="Time-based nonce provided by the server.")
-
-
-class RemovePqKeysRequest(BaseModel):
-    """Request to remove PQ keys from an account."""
-
-    algs_to_remove: list[str] = Field(
-        ..., description="A list of the algorithm names for the PQ keys to be removed."
-    )
-    classic_signature: str = Field(
-        ...,
-        description="Signature from the root classic key authorizing the operation.",
-    )
-    pq_signatures: list[PqSignature] = Field(
-        ..., description="Signatures from all existing PQ keys on the account."
-    )
-    nonce: str = Field(..., description="Time-based nonce provided by the server.")
-
-
-class DownloadFileRequest(BaseModel):
-    """Request to download a file from the block store."""
-
-    classic_signature: str = Field(
-        ..., description="Signature from the root classic key authorizing the download."
-    )
-    pq_signatures: list[PqSignature] = Field(
-        ..., description="Signatures from all existing PQ keys on the account."
-    )
-    nonce: str = Field(..., description="Time-based nonce provided by the server.")
-
-
-class UploadFileRequest(BaseModel):
-    """Request to upload a file to the block store."""
-
-    file_hash: str = Field(..., description="SHA256 hash of the entire file content.")
-    classic_signature: str = Field(
-        ..., description="Signature from the root classic key authorizing the upload."
-    )
-    pq_signatures: list[PqSignature] = Field(
-        ..., description="Signatures from all existing PQ keys on the account."
-    )
-    nonce: str = Field(..., description="Time-based nonce provided by the server.")
-
-
-class UploadChunkRequest(BaseModel):
-    """Request to upload a single file chunk."""
-
-    chunk_hash: str = Field(..., description="SHA256 hash of the chunk's content.")
-    chunk_index: int = Field(..., description="The zero-based index of this chunk.")
-    total_chunks: int = Field(
-        ..., description="The total number of chunks for the file."
-    )
-    classic_signature: str = Field(
-        ...,
-        description="Signature from the root classic key authorizing the chunk upload.",
-    )
-    pq_signatures: list[PqSignature] = Field(
-        ..., description="Signatures from all existing PQ keys on the account."
-    )
-    nonce: str = Field(..., description="Time-based nonce provided by the server.")
 
 
 @app.get("/supported-pq-algs")
@@ -274,7 +160,7 @@ def get_accounts():
 @app.get("/accounts/{public_key}")
 def get_account(public_key: str):
     """Retrieves a single account by public key."""
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = accounts_router.find_account(public_key)
     pq_keys_list = [
         {"public_key": pk, "alg": alg} for alg, pk in account_pq_keys.items()
     ]
@@ -282,14 +168,6 @@ def get_account(public_key: str):
         "public_key": public_key,
         "pq_keys": pq_keys_list,
     }
-
-
-def find_account(public_key: str):
-    """Finds an account by its classic public key or raises HTTPException."""
-    account = state.accounts.get(public_key)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found.")
-    return account
 
 
 @app.post("/accounts/{public_key}/add-pq-keys")
@@ -303,7 +181,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
     The message to sign is:
     f"ADD-PQ:{classic_pk}:{new_alg_1}:{new_alg_2}:...:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = accounts_router.find_account(public_key)
 
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -407,7 +285,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
     The message to sign is:
     f"REMOVE-PQ:{classic_pk}:{removed_alg_1}:{removed_alg_2}:...:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = accounts_router.find_account(public_key)
 
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -477,7 +355,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
 @app.get("/accounts/{public_key}/graveyard")
 def get_graveyard(public_key: str):
     """Retrieves the graveyard of retired PQ keys for a given account."""
-    find_account(public_key)  # Ensure account exists
+    accounts_router.find_account(public_key)  # Ensure account exists
     return {"public_key": public_key, "graveyard": state.graveyard.get(public_key, [])}
 
 
@@ -575,7 +453,7 @@ async def upload_file(
 @app.get("/storage/{public_key}")
 def list_files(public_key: str):
     """Lists all files in the user's block store."""
-    find_account(public_key)  # Ensure account exists
+    accounts_router.find_account(public_key)  # Ensure account exists
     user_files = state.block_store.get(public_key, {})
     return {"files": list(user_files.keys())}
 
@@ -583,7 +461,7 @@ def list_files(public_key: str):
 @app.get("/storage/{public_key}/{file_hash}")
 def get_file_metadata(public_key: str, file_hash: str):
     """Gets metadata for a specific file in the user's block store."""
-    find_account(public_key)
+    accounts_router.find_account(public_key)
     user_files = state.block_store.get(public_key, {})
     file_metadata = user_files.get(file_hash)
     if not file_metadata:
