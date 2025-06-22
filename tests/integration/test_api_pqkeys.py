@@ -816,3 +816,95 @@ def test_graveyard():
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
             sig.free()
+
+
+def test_pq_key_timing_attack_resistance():
+    """
+    Tests that PQ key operations execute in constant time regardless of
+    key existence to prevent timing-based enumeration attacks.
+
+    This is a critical security test for audit compliance that ensures
+    the system doesn't leak information about key existence through
+    response time variations.
+    """
+    add_pq_alg = "Falcon-512"
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        add_pq_algs=[add_pq_alg]
+    )
+
+    try:
+        pk_ml_dsa_hex = next(
+            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
+        )
+        pk_falcon_hex = next(
+            pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg
+        )
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+        sig_falcon, _ = all_pq_sks[pk_falcon_hex]
+
+        # Test removal timing for existing vs non-existent algorithms
+        # 1. Remove existing algorithm (Falcon) - measure time
+        nonce1 = get_nonce()
+        message1 = f"REMOVE-PQ:{pk_classic_hex}:{add_pq_alg}:{nonce1}".encode()
+
+        start_time = time.perf_counter()
+        response1 = client.post(
+            f"/accounts/{pk_classic_hex}/remove-pq-keys",
+            json={
+                "algs_to_remove": [add_pq_alg],
+                "classic_signature": sk_classic.sign(
+                    message1, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(message1).hex(),
+                        "alg": ML_DSA_ALG,
+                    },
+                    {
+                        "public_key": pk_falcon_hex,
+                        "signature": sig_falcon.sign(message1).hex(),
+                        "alg": add_pq_alg,
+                    },
+                ],
+                "nonce": nonce1,
+            },
+        )
+        existing_time = time.perf_counter() - start_time
+        assert response1.status_code == 200
+
+        # 2. Try to remove non-existent algorithm - measure time
+        nonce2 = get_nonce()
+        nonexistent_alg = "NonExistentAlg"
+        message2 = f"REMOVE-PQ:{pk_classic_hex}:{nonexistent_alg}:{nonce2}".encode()
+
+        start_time = time.perf_counter()
+        response2 = client.post(
+            f"/accounts/{pk_classic_hex}/remove-pq-keys",
+            json={
+                "algs_to_remove": [nonexistent_alg],
+                "classic_signature": sk_classic.sign(
+                    message2, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(message2).hex(),
+                        "alg": ML_DSA_ALG,
+                    }
+                ],
+                "nonce": nonce2,
+            },
+        )
+        nonexistent_time = time.perf_counter() - start_time
+        assert response2.status_code == 404
+
+        # 3. Verify timing difference is within acceptable bounds (<50ms)
+        time_difference = abs(existing_time - nonexistent_time)
+        assert time_difference < 0.05, (
+            f"Timing difference too large: {time_difference}s"
+        )
+
+    finally:
+        for sig in oqs_sigs_to_free:
+            sig.free()
