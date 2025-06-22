@@ -68,6 +68,26 @@ class DownloadFileRequest(BaseModel):
         ..., description="Signatures from all existing PQ keys on the account."
     )
     nonce: str = Field(..., description="Time-based nonce provided by the server.")
+    compressed: bool = Field(
+        False, description="Whether to return the file compressed if possible."
+    )
+
+
+class DownloadChunkRequest(BaseModel):
+    """Request to download a single file chunk."""
+
+    chunk_hash: str = Field(..., description="SHA256 hash of the chunk's content.")
+    classic_signature: str = Field(
+        ..., description="Signature from the root classic key authorizing the download."
+    )
+    pq_signatures: list[PqSignature] = Field(
+        ..., description="Signatures from all existing PQ keys on the account."
+    )
+    nonce: str = Field(..., description="Time-based nonce provided by the server.")
+    compressed: bool = Field(
+        False,
+        description="Whether to return the chunk compressed if stored compressed.",
+    )
 
 
 class UploadFileRequest(BaseModel):

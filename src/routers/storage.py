@@ -14,6 +14,7 @@ from security import verify_nonce
 from models import (
     PqSignature,
     DownloadFileRequest,
+    DownloadChunkRequest,
 )
 from app_state import state, find_account
 import config
@@ -181,11 +182,33 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
         raise HTTPException(status_code=404, detail="File content not found on server.")
 
     state.used_nonces.add(request.nonce)
-    return FileResponse(
-        path=file_path,
-        filename=file_metadata["filename"],
-        media_type=file_metadata.get("content_type", "application/octet-stream"),
-    )
+
+    # Handle compression if requested
+    if request.compressed:
+        # Read file content and compress it
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+
+        compressed_content = gzip.compress(file_content, compresslevel=9)
+
+        from fastapi.responses import Response
+
+        return Response(
+            content=compressed_content,
+            media_type="application/gzip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_metadata["filename"]}.gz"',
+                "X-Original-Size": str(len(file_content)),
+                "X-Compressed-Size": str(len(compressed_content)),
+            },
+        )
+    else:
+        # Return uncompressed file as before
+        return FileResponse(
+            path=file_path,
+            filename=file_metadata["filename"],
+            media_type=file_metadata.get("content_type", "application/octet-stream"),
+        )
 
 
 @router.post("/storage/{public_key}/{file_hash}/chunks")
@@ -304,3 +327,111 @@ async def upload_chunk(
     return {
         "message": f"Chunk {chunk_index}/{total_chunks} uploaded successfully{compression_info}."
     }
+
+
+@router.post("/storage/{public_key}/{file_hash}/chunks/{chunk_hash}/download")
+async def download_chunk(
+    public_key: str, file_hash: str, chunk_hash: str, request: DownloadChunkRequest
+):
+    """
+    Downloads a single chunk from the chunk store.
+    Must be authorized by all keys on the account.
+    Message to sign: f"DOWNLOAD-CHUNK:{public_key}:{file_hash}:{chunk_hash}:{nonce}"
+    """
+    account_pq_keys = find_account(public_key)
+
+    # Verify the parent file exists
+    user_files = state.block_store.get(public_key, {})
+    if file_hash not in user_files:
+        raise HTTPException(status_code=404, detail="Parent file not found.")
+
+    # Verify the chunk exists
+    if (
+        file_hash not in state.chunk_store
+        or chunk_hash not in state.chunk_store[file_hash]
+    ):
+        raise HTTPException(status_code=404, detail="Chunk not found.")
+
+    chunk_metadata = state.chunk_store[file_hash][chunk_hash]
+
+    if not verify_nonce(request.nonce):
+        raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
+
+    if request.nonce in state.used_nonces:
+        raise HTTPException(status_code=400, detail="Nonce has already been used.")
+
+    # Construct and verify signature message
+    message_to_verify = (
+        f"DOWNLOAD-CHUNK:{public_key}:{file_hash}:{chunk_hash}:{request.nonce}".encode(
+            "utf-8"
+        )
+    )
+
+    # Verify classic signature
+    if not verify_signature(public_key, request.classic_signature, message_to_verify):
+        raise HTTPException(status_code=401, detail="Invalid classic signature.")
+
+    # Verify PQ signatures
+    pks_in_req = {s.public_key for s in request.pq_signatures}
+    if pks_in_req != set(account_pq_keys.values()):
+        raise HTTPException(
+            status_code=401,
+            detail="Signatures from all existing PQ keys are required for download.",
+        )
+
+    for pq_sig in request.pq_signatures:
+        if not verify_pq_signature(
+            pq_sig.public_key, pq_sig.signature, message_to_verify, pq_sig.alg
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid signature for existing PQ key {pq_sig.public_key}",
+            )
+
+    # Read the chunk from storage
+    chunk_path = os.path.join(config.CHUNK_STORE_ROOT, chunk_hash)
+    if not os.path.exists(chunk_path):
+        raise HTTPException(
+            status_code=404, detail="Chunk content not found on server."
+        )
+
+    state.used_nonces.add(request.nonce)
+
+    # Handle compression based on client request and storage state
+    with open(chunk_path, "rb") as f:
+        chunk_data = f.read()
+
+    is_stored_compressed = chunk_metadata.get("compressed", False)
+    client_wants_compressed = request.compressed
+
+    if is_stored_compressed and not client_wants_compressed:
+        # Stored compressed, client wants uncompressed
+        try:
+            chunk_data = gzip.decompress(chunk_data)
+            media_type = "application/octet-stream"
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to decompress chunk: {e}"
+            )
+    elif not is_stored_compressed and client_wants_compressed:
+        # Stored uncompressed, client wants compressed
+        chunk_data = gzip.compress(chunk_data, compresslevel=9)
+        media_type = "application/gzip"
+    else:
+        # Return as stored (compressed->compressed or uncompressed->uncompressed)
+        media_type = (
+            "application/gzip" if is_stored_compressed else "application/octet-stream"
+        )
+
+    from fastapi.responses import Response
+
+    return Response(
+        content=chunk_data,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{chunk_hash}.chunk"',
+            "X-Chunk-Index": str(chunk_metadata["index"]),
+            "X-Original-Size": str(chunk_metadata["size"]),
+            "X-Compressed": str(is_stored_compressed).lower(),
+        },
+    )
