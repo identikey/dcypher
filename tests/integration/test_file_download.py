@@ -26,123 +26,13 @@ from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
+    setup_uploaded_file,
 )
-
-# Define a named tuple for the setup data to provide clear types
-SetupData = collections.namedtuple(
-    "SetupData",
-    [
-        "sk_classic",
-        "pk_classic_hex",
-        "all_pq_sks",
-        "oqs_sigs_to_free",
-        "file_hash",
-        "original_content",
-        "full_idk_file",
-        "uploaded_chunks",
-        "total_chunks",
-    ],
-)
-
-
-def _setup_uploaded_file(api_base_url: str) -> SetupData:
-    """A helper to set up a fully uploaded file with chunks for download tests."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-
-    original_content = (
-        b"This is a test file for downloading, with enough content to create multiple chunks."
-        * 250
-    )
-    idk_parts, file_hash = _create_test_idk_file_parts(original_content)
-    part_one = idk_parts[0]
-    data_chunks = idk_parts[1:]
-
-    # Register the file
-    register_nonce = get_nonce(api_base_url)
-    register_msg = f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
-    register_response = requests.post(
-        f"{api_base_url}/storage/{pk_classic_hex}/register",
-        files={
-            "idk_part_one": ("test.idk.part1", part_one, "application/octet-stream")
-        },
-        data={
-            "nonce": register_nonce,
-            "filename": "download_test.txt",
-            "content_type": "text/plain",
-            "total_size": str(len(original_content)),
-            "classic_signature": sk_classic.sign(
-                register_msg, hashfunc=hashlib.sha256
-            ).hex(),
-            "pq_signatures": json.dumps(
-                [
-                    {
-                        "public_key": pk_ml_dsa_hex,
-                        "signature": sig_ml_dsa.sign(register_msg).hex(),
-                        "alg": ML_DSA_ALG,
-                    }
-                ]
-            ),
-        },
-    )
-    assert register_response.status_code == 201
-
-    # Upload subsequent chunks
-    uploaded_chunks_info = []
-    for i, chunk_content in enumerate(data_chunks, start=1):
-        chunk_bytes = chunk_content.encode("utf-8")
-        chunk_hash = hashlib.blake2b(chunk_bytes).hexdigest()
-        chunk_nonce = get_nonce(api_base_url)
-        chunk_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{i}:{len(idk_parts)}:{chunk_hash}:{chunk_nonce}".encode()
-
-        chunk_response = requests.post(
-            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
-            files={"file": (f"chunk_{i}", chunk_bytes, "application/octet-stream")},
-            data={
-                "nonce": chunk_nonce,
-                "chunk_hash": chunk_hash,
-                "chunk_index": str(i),
-                "total_chunks": str(len(idk_parts)),
-                "compressed": "false",
-                "classic_signature": sk_classic.sign(
-                    chunk_msg, hashfunc=hashlib.sha256
-                ).hex(),
-                "pq_signatures": json.dumps(
-                    [
-                        {
-                            "public_key": pk_ml_dsa_hex,
-                            "signature": sig_ml_dsa.sign(chunk_msg).hex(),
-                            "alg": ML_DSA_ALG,
-                        }
-                    ]
-                ),
-            },
-        )
-        assert chunk_response.status_code == 200
-        uploaded_chunks_info.append({"hash": chunk_hash, "original_data": chunk_bytes})
-
-    # The full IDK file content is needed for verification after download
-    full_idk_file = "".join(idk_parts)
-
-    return SetupData(
-        sk_classic=sk_classic,
-        pk_classic_hex=pk_classic_hex,
-        all_pq_sks=all_pq_sks,
-        oqs_sigs_to_free=oqs_sigs_to_free,
-        file_hash=file_hash,
-        original_content=original_content,
-        full_idk_file=full_idk_file.encode("utf-8"),
-        uploaded_chunks=uploaded_chunks_info,
-        total_chunks=len(idk_parts),
-    )
 
 
 def test_download_file_successful(api_base_url: str):
     """Tests the successful download of a whole file after chunked upload."""
-    data = _setup_uploaded_file(api_base_url)
+    data = setup_uploaded_file(api_base_url)
     try:
         pk_ml_dsa_hex = next(iter(data.all_pq_sks))
         sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
@@ -178,7 +68,7 @@ def test_download_file_successful(api_base_url: str):
 
 def test_download_file_unauthorized(api_base_url: str):
     """Tests that file download fails if the signatures are invalid."""
-    data = _setup_uploaded_file(api_base_url)
+    data = setup_uploaded_file(api_base_url)
     try:
         pk_ml_dsa_hex = next(iter(data.all_pq_sks))
         sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
@@ -255,7 +145,7 @@ def test_download_file_compressed(api_base_url: str):
 
 def test_download_chunk_compressed(api_base_url: str):
     """Tests downloading individual chunks with compression handling."""
-    data = _setup_uploaded_file(api_base_url)
+    data = setup_uploaded_file(api_base_url)
     try:
         pk_ml_dsa_hex = next(iter(data.all_pq_sks))
         sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
@@ -361,7 +251,7 @@ def test_download_chunk_compressed(api_base_url: str):
 
 def test_download_chunk_unauthorized(api_base_url: str):
     """Tests that chunk download fails with invalid signatures."""
-    data = _setup_uploaded_file(api_base_url)
+    data = setup_uploaded_file(api_base_url)
     try:
         pk_ml_dsa_hex = next(iter(data.all_pq_sks))
         sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
@@ -398,7 +288,7 @@ def test_download_chunk_unauthorized(api_base_url: str):
 
 def test_download_chunk_nonexistent(api_base_url: str):
     """Tests that downloading a non-existent chunk returns a 404 error."""
-    data = _setup_uploaded_file(api_base_url)
+    data = setup_uploaded_file(api_base_url)
     try:
         pk_ml_dsa_hex = next(iter(data.all_pq_sks))
         sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
@@ -435,7 +325,7 @@ def test_download_chunk_nonexistent(api_base_url: str):
 
 def test_concatenated_chunks_download_workflow(api_base_url: str):
     """Tests downloading the fully concatenated gzip file."""
-    data = _setup_uploaded_file(api_base_url)
+    data = setup_uploaded_file(api_base_url)
     try:
         pk_ml_dsa_hex = next(iter(data.all_pq_sks))
         sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]

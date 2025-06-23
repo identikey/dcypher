@@ -21,9 +21,10 @@ from tests.integration.test_api import (
 )
 
 
-def test_upload_file_successful(api_base_url: str):
+def test_successful_upload_workflow(api_base_url: str):
     """
-    Tests the successful chunked upload of a file.
+    Tests the successful end-to-end workflow of uploading a multi-chunk file.
+    This includes registration, uploading all chunks, and verifying metadata.
     """
     # 1. Create an account
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
@@ -33,14 +34,14 @@ def test_upload_file_successful(api_base_url: str):
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Prepare file parts for chunked upload
+        # 2. Prepare file parts for a multi-chunk upload
         original_content = (
-            b"This is a test file for the block store, now with more content to ensure it spans multiple chunks."
-            * 20
+            b"This is a test file designed to span multiple chunks for upload." * 500
         )
         idk_parts, file_hash = _create_test_idk_file_parts(original_content)
         part_one = idk_parts[0]
         data_chunks = idk_parts[1:]
+        assert len(data_chunks) > 0, "Test content is too small for multiple chunks"
 
         # 3. Register the file by uploading the first part
         register_nonce = get_nonce(api_base_url)
@@ -61,7 +62,7 @@ def test_upload_file_successful(api_base_url: str):
             },
             data={
                 "nonce": register_nonce,
-                "filename": "test.txt",
+                "filename": "multi_chunk_test.txt",
                 "content_type": "text/plain",
                 "total_size": str(len(original_content)),
                 "classic_signature": classic_sig,
@@ -73,13 +74,12 @@ def test_upload_file_successful(api_base_url: str):
 
         # 4. Upload the rest of the chunks
         total_parts = len(idk_parts)
-        for i, chunk_content in enumerate(data_chunks):
-            chunk_index = i + 1  # part one is index 0
+        for i, chunk_content in enumerate(data_chunks, start=1):
             chunk_bytes = chunk_content.encode("utf-8")
             chunk_hash = hashlib.blake2b(chunk_bytes).hexdigest()
 
             upload_nonce = get_nonce(api_base_url)
-            upload_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_index}:{total_parts}:{chunk_hash}:{upload_nonce}".encode()
+            upload_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{i}:{total_parts}:{chunk_hash}:{upload_nonce}".encode()
 
             classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
             pq_sig = {
@@ -92,7 +92,7 @@ def test_upload_file_successful(api_base_url: str):
                 f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
                 files={
                     "file": (
-                        f"chunk_{chunk_index}",
+                        f"chunk_{i}",
                         chunk_bytes,
                         "application/octet-stream",
                     )
@@ -100,7 +100,7 @@ def test_upload_file_successful(api_base_url: str):
                 data={
                     "nonce": upload_nonce,
                     "chunk_hash": chunk_hash,
-                    "chunk_index": str(chunk_index),
+                    "chunk_index": str(i),
                     "total_chunks": str(total_parts),
                     "classic_signature": classic_sig,
                     "pq_signatures": json.dumps([pq_sig]),
@@ -108,17 +108,20 @@ def test_upload_file_successful(api_base_url: str):
             )
             assert chunk_response.status_code == 200, chunk_response.text
 
-        # 5. Verify file metadata and content
-        response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}")
-        assert response.status_code == 200
-        assert response.json()["files"] == [file_hash]
-
-        response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}")
-        assert response.status_code == 200
-        metadata = response.json()
-        assert metadata["filename"] == "test.txt"
+        # 5. Verify file metadata and status
+        meta_response = requests.get(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}"
+        )
+        assert meta_response.status_code == 200
+        metadata = meta_response.json()
+        assert metadata["filename"] == "multi_chunk_test.txt"
         assert metadata["size"] == len(original_content)
         assert metadata["status"] == "completed"
+
+        # 6. Verify file appears in the user's file list
+        list_response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}")
+        assert list_response.status_code == 200
+        assert file_hash in list_response.json()["files"]
 
     finally:
         for sig in oqs_sigs_to_free:
