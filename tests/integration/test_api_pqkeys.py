@@ -25,11 +25,16 @@ def test_get_supported_pq_algs(api_base_url: str):
     Tests the /supported-pq-algs endpoint.
     It verifies that the endpoint returns a 200 OK status and that the list of
     algorithms in the response body matches the list defined in the application.
+
+    This test now uses the DCypherClient for more realistic usage patterns.
     """
-    response = requests.get(f"{api_base_url}/supported-pq-algs")
-    assert response.status_code == 200
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+
+    client = DCypherClient(api_base_url)
+    algorithms = client.get_supported_algorithms()
+
     # Convert to set for order-independent comparison
-    assert set(response.json()["algorithms"]) == set(SUPPORTED_SIG_ALGS)
+    assert set(algorithms) == set(SUPPORTED_SIG_ALGS)
 
 
 def test_add_and_remove_pq_keys(api_base_url: str):
@@ -39,124 +44,141 @@ def test_add_and_remove_pq_keys(api_base_url: str):
     2. Successfully add a new PQ key.
     3. Successfully remove an optional PQ key.
     4. Verify the state of the account after each operation.
+
+    This test now uses the DCypherClient for realistic usage patterns.
     """
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+    import tempfile
+    import json
+    from pathlib import Path
+    from lib.pq_auth import generate_pq_keys
+
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    # === 1. Create an account with two PQ keys (one mandatory, one optional) ===
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url, add_pq_algs=[add_pq_alg_1]
-    )
-    try:
-        pk_ml_dsa_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
-        )
-        pk_add_pq_1_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
-        )
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-        sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # === 1. Create an account with a classic key and two PQ keys ===
+
+        # Generate classic key
+        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string().hex()
+
+        # Save classic key
+        classic_sk_path = temp_path / "classic.sk"
+        with open(classic_sk_path, "w") as f:
+            f.write(sk_classic.to_string().hex())
+
+        # Generate PQ keys
+        ml_dsa_pk, ml_dsa_sk = generate_pq_keys(ML_DSA_ALG)
+        falcon_pk_1, falcon_sk_1 = generate_pq_keys(add_pq_alg_1)
+
+        # Save PQ keys
+        ml_dsa_sk_path = temp_path / "ml_dsa.sk"
+        with open(ml_dsa_sk_path, "wb") as f:
+            f.write(ml_dsa_sk)
+
+        falcon_sk_1_path = temp_path / "falcon_1.sk"
+        with open(falcon_sk_1_path, "wb") as f:
+            f.write(falcon_sk_1)
+
+        # Create auth keys file
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
+                {
+                    "sk_path": str(ml_dsa_sk_path),
+                    "pk_hex": ml_dsa_pk.hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                {
+                    "sk_path": str(falcon_sk_1_path),
+                    "pk_hex": falcon_pk_1.hex(),
+                    "alg": add_pq_alg_1,
+                },
+            ],
+        }
+        auth_keys_file = temp_path / "auth_keys.json"
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Create API client and account
+        client = DCypherClient(api_base_url, str(auth_keys_file))
+
+        initial_pq_keys = [
+            {"pk_hex": ml_dsa_pk.hex(), "alg": ML_DSA_ALG},
+            {"pk_hex": falcon_pk_1.hex(), "alg": add_pq_alg_1},
+        ]
+        client.create_account(pk_classic_hex, initial_pq_keys)
 
         # Verify initial account state
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        assert response.status_code == 200
-        assert len(response.json()["pq_keys"]) == 2
+        account_info = client.get_account(pk_classic_hex)
+        assert len(account_info["pq_keys"]) == 2
 
         # === 2. Add a new PQ key ===
-        sig_add_pq_2 = oqs.Signature(add_pq_alg_2)
-        oqs_sigs_to_free.append(sig_add_pq_2)
-        pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
-        all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
-        nonce2 = get_nonce(api_base_url)
-        message2 = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_2}:{nonce2}".encode("utf-8")
 
-        # Sign with all keys currently on the account, plus the new key
-        classic_sig2 = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
-        existing_pq_sigs = [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(message2).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            {
-                "public_key": pk_add_pq_1_hex,
-                "signature": sig_add_pq_1.sign(message2).hex(),
-                "alg": add_pq_alg_1,
-            },
-        ]
-        new_pq_sig = {
-            "public_key": pk_add_pq_2_hex,
-            "signature": sig_add_pq_2.sign(message2).hex(),
-            "alg": add_pq_alg_2,
-        }
+        # Generate new PQ key for addition
+        falcon_pk_2, falcon_sk_2 = generate_pq_keys(add_pq_alg_2)
 
-        add_payload = {
-            "new_pq_signatures": [new_pq_sig],
-            "classic_signature": classic_sig2,
-            "existing_pq_signatures": existing_pq_sigs,
-            "nonce": nonce2,
+        # Save the new PQ key
+        falcon_sk_2_path = temp_path / "falcon_2.sk"
+        with open(falcon_sk_2_path, "wb") as f:
+            f.write(falcon_sk_2)
+
+        # Update auth keys to include the new key
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
+                {
+                    "sk_path": str(ml_dsa_sk_path),
+                    "pk_hex": ml_dsa_pk.hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                {
+                    "sk_path": str(falcon_sk_1_path),
+                    "pk_hex": falcon_pk_1.hex(),
+                    "alg": add_pq_alg_1,
+                },
+                {
+                    "sk_path": str(falcon_sk_2_path),
+                    "pk_hex": falcon_pk_2.hex(),
+                    "alg": add_pq_alg_2,
+                },
+            ],
         }
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
-        )
-        assert response.status_code == 200, response.text
-        assert response.json()["message"] == "Successfully added 1 PQ key(s)."
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Reload the client with updated auth keys
+        client = DCypherClient(api_base_url, str(auth_keys_file))
+
+        # Add the new PQ key using API client
+        new_keys = [{"pk_hex": falcon_pk_2.hex(), "alg": add_pq_alg_2}]
+        result = client.add_pq_keys(pk_classic_hex, new_keys)
+        assert "Successfully added 1 PQ key(s)" in result["message"]
 
         # Verify account state after adding key
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        assert response.status_code == 200
-        pq_keys_after_add = response.json()["pq_keys"]
+        account_info_after_add = client.get_account(pk_classic_hex)
+        pq_keys_after_add = account_info_after_add["pq_keys"]
         assert len(pq_keys_after_add) == 3
-        assert any(k["public_key"] == pk_add_pq_2_hex for k in pq_keys_after_add)
+        assert any(k["public_key"] == falcon_pk_2.hex() for k in pq_keys_after_add)
 
         # === 3. Remove an optional PQ key ===
-        alg_to_remove = add_pq_alg_1
-        pk_to_remove = pk_add_pq_1_hex
-        nonce3 = get_nonce(api_base_url)
-        message3 = f"REMOVE-PQ:{pk_classic_hex}:{alg_to_remove}:{nonce3}".encode(
-            "utf-8"
-        )
 
-        classic_sig3 = sk_classic.sign(message3, hashfunc=hashlib.sha256).hex()
-
-        # Get all active keys for signing from the API
-        active_keys_resp = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        assert active_keys_resp.status_code == 200
-        active_pq_keys = active_keys_resp.json()["pq_keys"]
-        all_pq_sigs3 = []
-        for key_info in active_pq_keys:
-            pk = key_info["public_key"]
-            alg = key_info["alg"]
-            signer, _ = all_pq_sks[pk]
-            all_pq_sigs3.append(
-                {"public_key": pk, "signature": signer.sign(message3).hex(), "alg": alg}
-            )
-
-        remove_payload = {
-            "algs_to_remove": [alg_to_remove],
-            "classic_signature": classic_sig3,
-            "pq_signatures": all_pq_sigs3,
-            "nonce": nonce3,
-        }
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
-            json=remove_payload,
-        )
-        assert response.status_code == 200, response.text
-        assert response.json()["message"] == "Successfully removed PQ key(s)."
+        # Remove the first Falcon key using API client
+        result = client.remove_pq_keys(pk_classic_hex, [add_pq_alg_1])
+        assert "Successfully removed PQ key(s)" in result["message"]
 
         # Verify final account state
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        assert response.status_code == 200
-        keys_after_remove = response.json()["pq_keys"]
+        account_info_final = client.get_account(pk_classic_hex)
+        keys_after_remove = account_info_final["pq_keys"]
         assert len(keys_after_remove) == 2
-        assert not any(k["public_key"] == pk_to_remove for k in keys_after_remove)
-        assert any(k["public_key"] == pk_ml_dsa_hex for k in keys_after_remove)
-        assert any(k["public_key"] == pk_add_pq_2_hex for k in keys_after_remove)
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+        assert not any(k["public_key"] == falcon_pk_1.hex() for k in keys_after_remove)
+        assert any(k["public_key"] == ml_dsa_pk.hex() for k in keys_after_remove)
+        assert any(k["public_key"] == falcon_pk_2.hex() for k in keys_after_remove)
 
 
 def test_remove_mandatory_pq_key_fails(api_base_url: str):
@@ -320,7 +342,12 @@ def test_add_pq_key_authorization_failures(api_base_url: str):
 
 
 def test_replace_existing_pq_key(api_base_url: str):
-    """Tests that adding a key for an existing algorithm replaces the old key."""
+    """Tests that adding a key for an existing algorithm replaces the old key.
+
+    This test now uses the DCypherClient for account and graveyard operations.
+    """
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+
     falcon_alg = "Falcon-512"
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
         api_base_url, add_pq_algs=[falcon_alg]
@@ -334,6 +361,9 @@ def test_replace_existing_pq_key(api_base_url: str):
         )
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
         sig_falcon_old, _ = all_pq_sks[pk_falcon_old_hex]
+
+        # Create API client for verification operations
+        client = DCypherClient(api_base_url)
 
         add_nonce = get_nonce(api_base_url)
         add_msg = f"ADD-PQ:{pk_classic_hex}:{falcon_alg}:{add_nonce}".encode()
@@ -378,15 +408,13 @@ def test_replace_existing_pq_key(api_base_url: str):
         # remains in all_pq_sks and will be cleaned up in the 'finally' block.
         all_pq_sks[pk_falcon_new_hex] = (sig_falcon_new, falcon_alg)
 
-        # Verify state after adding: key count should be the same
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        keys_after_add = response.json()["pq_keys"]
+        # Verify state after adding: key count should be the same using API client
+        account_info = client.get_account(pk_classic_hex)
+        keys_after_add = account_info["pq_keys"]
         assert len(keys_after_add) == 2
 
-        # Verify the old key is in the graveyard
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}/graveyard")
-        assert response.status_code == 200
-        graveyard_keys = response.json()["graveyard"]
+        # Verify the old key is in the graveyard using API client
+        graveyard_keys = client.get_account_graveyard(pk_classic_hex)
         assert len(graveyard_keys) == 1
         assert graveyard_keys[0]["public_key"] == pk_falcon_old_hex
         assert graveyard_keys[0]["alg"] == falcon_alg
@@ -631,7 +659,11 @@ def test_remove_nonexistent_pq_key_fails(api_base_url: str):
 def test_add_and_remove_multiple_pq_keys(api_base_url: str):
     """
     Tests adding and removing multiple PQ keys in a single request.
+
+    This test now uses the DCypherClient for account verification operations.
     """
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+
     # 1. Setup: Create a minimal account
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
@@ -643,8 +675,12 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str):
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        assert len(response.json()["pq_keys"]) == 1
+        # Create API client for verification operations
+        client = DCypherClient(api_base_url)
+
+        # Verify initial account state using API client
+        account_info = client.get_account(pk_classic_hex)
+        assert len(account_info["pq_keys"]) == 1
 
         # 2. Add two new PQ keys in a single request
         sig_add_pq_1 = oqs.Signature(add_pq_alg_1)
@@ -689,9 +725,9 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str):
         assert response.status_code == 200, response.text
         assert "Successfully added 2 PQ key(s)" in response.json()["message"]
 
-        # Verify state after adding
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        keys_after_add = response.json()["pq_keys"]
+        # Verify state after adding using API client
+        account_info_after_add = client.get_account(pk_classic_hex)
+        keys_after_add = account_info_after_add["pq_keys"]
         assert len(keys_after_add) == 3
         added_pks = {k["public_key"] for k in keys_after_add}
         assert pk_add_pq_1_hex in added_pks
@@ -732,9 +768,9 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str):
         assert response.status_code == 200, response.text
         assert "Successfully removed PQ key(s)" in response.json()["message"]
 
-        # Verify final state
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
-        keys_after_remove = response.json()["pq_keys"]
+        # Verify final state using API client
+        account_info_after_remove = client.get_account(pk_classic_hex)
+        keys_after_remove = account_info_after_remove["pq_keys"]
         assert len(keys_after_remove) == 1
         assert keys_after_remove[0]["public_key"] == pk_ml_dsa_hex
     finally:
@@ -749,7 +785,11 @@ def test_graveyard(api_base_url: str):
     1. Create account.
     2. Replace a key and verify the old one is in the graveyard.
     3. Remove a key and verify it is also in the graveyard.
+
+    This test now uses the DCypherClient for graveyard checks.
     """
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+
     falcon_alg = "Falcon-512"
 
     # 1. Create account with ML-DSA and one Falcon key
@@ -765,6 +805,9 @@ def test_graveyard(api_base_url: str):
         )
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
         sig_falcon_1, _ = all_pq_sks[pk_falcon_1_hex]
+
+        # Create API client for graveyard operations
+        client = DCypherClient(api_base_url)
 
         # 2. Replace the Falcon key with a new one
         sig_falcon_2 = oqs.Signature(falcon_alg)
@@ -802,10 +845,8 @@ def test_graveyard(api_base_url: str):
         )
         all_pq_sks[pk_falcon_2_hex] = (sig_falcon_2, falcon_alg)
 
-        # Verify pk_falcon_1_hex is in the graveyard
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}/graveyard")
-        assert response.status_code == 200
-        graveyard1 = response.json()["graveyard"]
+        # Verify pk_falcon_1_hex is in the graveyard using API client
+        graveyard1 = client.get_account_graveyard(pk_classic_hex)
         assert len(graveyard1) == 1
         assert graveyard1[0]["public_key"] == pk_falcon_1_hex
 
@@ -836,10 +877,8 @@ def test_graveyard(api_base_url: str):
             json=remove_payload,
         )
 
-        # Verify both keys are now in the graveyard
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}/graveyard")
-        assert response.status_code == 200
-        graveyard2 = response.json()["graveyard"]
+        # Verify both keys are now in the graveyard using API client
+        graveyard2 = client.get_account_graveyard(pk_classic_hex)
         assert len(graveyard2) == 2
         graveyard_pks = {k["public_key"] for k in graveyard2}
         assert pk_falcon_1_hex in graveyard_pks

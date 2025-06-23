@@ -280,21 +280,22 @@ class DCypherClient:
         Returns:
             API response data
         """
-        # Get current account to build message
+        # Get current account to build existing signatures
         account_info = self.get_account(public_key)
-        current_pq_keys = [key["public_key"] for key in account_info["pq_keys"]]
+        current_pq_keys = account_info["pq_keys"]
 
         # Get nonce
         nonce = self.get_nonce()
 
-        # Build message: classic_pk:existing_pq1:existing_pq2:...:new_pq1:new_pq2:...:nonce
-        all_pks = [public_key] + current_pq_keys + [key["pk_hex"] for key in new_keys]
-        message = f"{':'.join(all_pks)}:{nonce}"
+        # Build message using the format the server expects: ADD-PQ:{classic_pk}:{algorithms}:{nonce}
+        # For multiple algorithms, join them with ":"
+        algorithms_str = ":".join(sorted([key["alg"] for key in new_keys]))
+        message = f"ADD-PQ:{public_key}:{algorithms_str}:{nonce}"
 
-        # Sign the message
+        # Sign the message with all existing keys + new keys
         signatures = self._sign_message(message)
 
-        # Prepare payload
+        # Prepare new PQ signatures
         new_pq_signatures = []
         for i, new_key in enumerate(new_keys):
             # The new key signatures are at the end of the signatures list
@@ -307,17 +308,14 @@ class DCypherClient:
                 }
             )
 
+        # Prepare existing PQ signatures
         existing_pq_signatures = []
-        for i, current_pk_hex in enumerate(current_pq_keys):
+        for i, key_info in enumerate(current_pq_keys):
             existing_pq_signatures.append(
                 {
-                    "public_key": current_pk_hex,
+                    "public_key": key_info["public_key"],
                     "signature": signatures["pq_signatures"][i]["signature"],
-                    "alg": next(
-                        key["alg"]
-                        for key in account_info["pq_keys"]
-                        if key["public_key"] == current_pk_hex
-                    ),
+                    "alg": key_info["alg"],
                 }
             )
 
@@ -356,11 +354,12 @@ class DCypherClient:
         # Get nonce
         nonce = self.get_nonce()
 
-        # Build message: classic_pk:existing_pq1:existing_pq2:...:nonce
-        all_pks = [public_key] + [key["public_key"] for key in current_pq_keys]
-        message = f"{':'.join(all_pks)}:{nonce}"
+        # Build message using the format the server expects: REMOVE-PQ:{classic_pk}:{algorithms}:{nonce}
+        # For multiple algorithms, join them with ":"
+        algorithms_str = ":".join(sorted(algs_to_remove))
+        message = f"REMOVE-PQ:{public_key}:{algorithms_str}:{nonce}"
 
-        # Sign the message
+        # Sign the message with all existing keys
         signatures = self._sign_message(message)
 
         # Prepare existing PQ signatures
