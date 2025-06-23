@@ -7,6 +7,7 @@ import ecdsa
 import oqs
 from src.lib.key_manager import KeyManager
 from src.config import ML_DSA_ALG
+from .util.util import get_enabled_sigs, get_sigs_with_ctx_support
 
 
 def test_generate_classic_keypair():
@@ -23,16 +24,17 @@ def test_generate_classic_keypair():
     assert vk.to_string("uncompressed").hex() == pk_hex
 
 
-def test_generate_pq_keypair():
-    """Test PQ key pair generation."""
-    pk_bytes, sk_bytes = KeyManager.generate_pq_keypair(ML_DSA_ALG)
+@pytest.mark.parametrize("algorithm", get_enabled_sigs())
+def test_generate_pq_keypair(algorithm):
+    """Test PQ key pair generation for all enabled algorithms."""
+    pk_bytes, sk_bytes = KeyManager.generate_pq_keypair(algorithm)
 
     # Verify types
     assert isinstance(pk_bytes, bytes)
     assert isinstance(sk_bytes, bytes)
 
     # Verify keys can be used with OQS
-    with oqs.Signature(ML_DSA_ALG, sk_bytes) as sig:
+    with oqs.Signature(algorithm, sk_bytes) as sig:
         message = b"test message"
         signature = sig.sign(message)
         assert isinstance(signature, bytes)
@@ -59,14 +61,15 @@ def test_save_and_load_classic_key():
         assert vk_loaded.to_string("uncompressed").hex() == pk_hex
 
 
-def test_save_and_load_pq_key():
-    """Test saving and loading PQ keys."""
+@pytest.mark.parametrize("algorithm", get_enabled_sigs())
+def test_save_and_load_pq_key(algorithm):
+    """Test saving and loading PQ keys for all enabled algorithms."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
         # Generate and save key
-        pk_bytes, sk_bytes_original = KeyManager.generate_pq_keypair(ML_DSA_ALG)
-        key_file = temp_path / "test.pqsk"
+        pk_bytes, sk_bytes_original = KeyManager.generate_pq_keypair(algorithm)
+        key_file = temp_path / f"test_{algorithm.replace('-', '_')}.pqsk"
         KeyManager.save_pq_key(sk_bytes_original, key_file)
 
         # Verify file exists
@@ -82,8 +85,11 @@ def test_create_auth_keys_bundle():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create bundle with additional PQ algorithms
-        additional_algs = ["Falcon-512", "Falcon-1024"]
+        # Get enabled algorithms and use a subset for testing
+        enabled_algs = get_enabled_sigs()
+        # Use up to 3 additional algorithms beyond ML-DSA for testing (to keep test reasonable)
+        additional_algs = [alg for alg in enabled_algs if alg != ML_DSA_ALG][:3]
+
         pk_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(
             temp_path, additional_algs
         )
@@ -96,14 +102,17 @@ def test_create_auth_keys_bundle():
         # Verify files were created
         assert (temp_path / "classic.sk").exists()
         assert (temp_path / "pq_0.sk").exists()  # ML-DSA
-        assert (temp_path / "pq_1.sk").exists()  # Falcon-512
-        assert (temp_path / "pq_2.sk").exists()  # Falcon-1024
+
+        # Verify additional algorithm files exist
+        for i in range(len(additional_algs)):
+            assert (temp_path / f"pq_{i + 1}.sk").exists()
 
         # Load and verify the bundle
         auth_keys = KeyManager.load_auth_keys_bundle(auth_keys_file)
         assert "classic_sk" in auth_keys
         assert "pq_keys" in auth_keys
-        assert len(auth_keys["pq_keys"]) == 3  # ML-DSA + 2 additional
+        expected_count = 1 + len(additional_algs)  # ML-DSA + additional
+        assert len(auth_keys["pq_keys"]) == expected_count
 
         # Verify classic key matches
         classic_sk = auth_keys["classic_sk"]
@@ -185,27 +194,70 @@ def test_get_classic_public_key():
     assert actual_pk_hex == expected_pk_hex
 
 
-def test_multiple_pq_algorithms():
-    """Test that multiple PQ algorithms can be generated."""
-    algorithms = ["ML-DSA-87", "Falcon-512"]
+def test_algorithm_availability():
+    """Test that OQS signature algorithms are available."""
+    enabled_algorithms = get_enabled_sigs()
 
-    for alg in algorithms:
-        try:
-            pk, sk = KeyManager.generate_pq_keypair(alg)
-            assert len(pk) > 0
-            assert len(sk) > 0
-        except Exception:
-            # Skip algorithms that aren't supported
-            pass
+    # Should have at least one enabled algorithm
+    assert len(enabled_algorithms) > 0, (
+        "Should have at least one enabled signature algorithm"
+    )
+
+    # ML-DSA should be available (from config)
+    assert ML_DSA_ALG in enabled_algorithms, (
+        f"{ML_DSA_ALG} should be in enabled algorithms"
+    )
 
 
-def test_deterministic_key_generation():
-    """Test that seeded key generation attempts deterministic behavior."""
+@pytest.mark.parametrize("algorithm", get_sigs_with_ctx_support())
+def test_pq_keypair_with_context_support(algorithm):
+    """Test PQ key pair generation for algorithms that support context strings."""
+    pk_bytes, sk_bytes = KeyManager.generate_pq_keypair(algorithm)
+
+    # Verify types
+    assert isinstance(pk_bytes, bytes)
+    assert isinstance(sk_bytes, bytes)
+
+    # Verify keys can be used with OQS context functions
+    with oqs.Signature(algorithm, sk_bytes) as sig:
+        message = b"test message with context"
+        context = b"test context"
+
+        # Test signing with context
+        signature = sig.sign_with_ctx_str(message, context)
+        assert isinstance(signature, bytes)
+        assert len(signature) > 0
+
+        # Test verification with context
+        assert sig.verify_with_ctx_str(message, signature, context, pk_bytes)
+
+
+@pytest.mark.parametrize("algorithm", get_sigs_with_ctx_support())
+def test_seeded_key_generation_with_context(algorithm):
+    """Test seeded key generation for algorithms that support context strings."""
+    import hashlib
+
+    test_seed = hashlib.sha256(b"test_context_seed").digest()
+
+    # Generate seeded keys
+    pk_bytes, sk_bytes = KeyManager.generate_pq_keypair_from_seed(algorithm, test_seed)
+
+    # Verify keys work with context functions
+    with oqs.Signature(algorithm, sk_bytes) as sig:
+        message = b"seeded message with context"
+        context = b"seeded context"
+
+        signature = sig.sign_with_ctx_str(message, context)
+        assert sig.verify_with_ctx_str(message, signature, context, pk_bytes)
+
+
+@pytest.mark.parametrize("algorithm", get_enabled_sigs())
+def test_deterministic_key_generation(algorithm):
+    """Test that seeded key generation attempts deterministic behavior for all enabled algorithms."""
     import hashlib
 
     # Test with a fixed seed
     test_seed = hashlib.sha256(b"test_deterministic_seed").digest()
-    algorithm = "ML-DSA-87"
 
     # Generate keys twice with the same seed
     pk1, sk1 = KeyManager.generate_pq_keypair_from_seed(algorithm, test_seed)
