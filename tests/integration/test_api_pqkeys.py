@@ -185,40 +185,72 @@ def test_remove_mandatory_pq_key_fails(api_base_url: str):
     """
     Tests that an attempt to remove the mandatory ML-DSA key from an account
     is rejected with a 400 error.
-    """
-    # 1. Create a minimal account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Attempt to remove the mandatory key
-        nonce2 = get_nonce(api_base_url)
-        message2 = f"REMOVE-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{nonce2}".encode("utf-8")
-        classic_sig2 = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
-        pq_sig2 = {
-            "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(message2).hex(),
-            "alg": ML_DSA_ALG,
+    This test now uses the DCypherClient to demonstrate realistic error handling.
+    """
+    from src.lib.api_client import DCypherClient, ValidationError
+    import tempfile
+    import json
+    from pathlib import Path
+    from lib.pq_auth import generate_pq_keys
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Generate classic key
+        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string().hex()
+
+        # Save classic key
+        classic_sk_path = temp_path / "classic.sk"
+        with open(classic_sk_path, "w") as f:
+            f.write(sk_classic.to_string().hex())
+
+        # Generate mandatory ML-DSA key
+        ml_dsa_pk, ml_dsa_sk = generate_pq_keys(ML_DSA_ALG)
+
+        # Save ML-DSA key
+        ml_dsa_sk_path = temp_path / "ml_dsa.sk"
+        with open(ml_dsa_sk_path, "wb") as f:
+            f.write(ml_dsa_sk)
+
+        # Create auth keys file
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
+                {
+                    "sk_path": str(ml_dsa_sk_path),
+                    "pk_hex": ml_dsa_pk.hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
         }
-        remove_payload = {
-            "algs_to_remove": [ML_DSA_ALG],
-            "classic_signature": classic_sig2,
-            "pq_signatures": [pq_sig2],
-            "nonce": nonce2,
-        }
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
-            json=remove_payload,
+        auth_keys_file = temp_path / "auth_keys.json"
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Create API client and account
+        client = DCypherClient(api_base_url, str(auth_keys_file))
+
+        # Create minimal account with only mandatory ML-DSA key
+        initial_pq_keys = [{"pk_hex": ml_dsa_pk.hex(), "alg": ML_DSA_ALG}]
+        client.create_account(pk_classic_hex, initial_pq_keys)
+
+        # Verify initial account state
+        account_info = client.get_account(pk_classic_hex)
+        assert len(account_info["pq_keys"]) == 1
+        assert account_info["pq_keys"][0]["alg"] == ML_DSA_ALG
+
+        # Attempt to remove the mandatory key - should raise ValidationError
+        with pytest.raises(ValidationError) as exc_info:
+            client.remove_pq_keys(pk_classic_hex, [ML_DSA_ALG])
+
+        # Verify the error message contains the expected text
+        assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in str(
+            exc_info.value
         )
-        assert response.status_code == 400
-        assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in response.text
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
 
 
 def test_add_pq_key_authorization_failures(api_base_url: str):
@@ -461,47 +493,145 @@ def test_add_unsupported_pq_key_fails(api_base_url: str):
             sig.free()
 
 
-def test_add_mandatory_pq_key_again_fails(api_base_url: str):
-    """Tests that attempting to add another ML_DSA_ALG key fails."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        mandatory_nonce = get_nonce(api_base_url)
-        mandatory_msg = (
-            f"ADD-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{mandatory_nonce}".encode()
-        )
+def test_rotate_mandatory_pq_key_succeeds(api_base_url: str):
+    """Tests that ML-DSA key rotation works correctly for security purposes.
 
-        sig_ml_dsa_new = oqs.Signature(ML_DSA_ALG)
-        oqs_sigs_to_free.append(sig_ml_dsa_new)
-        pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
-        all_pq_sks[pk_ml_dsa_new_hex] = (sig_ml_dsa_new, ML_DSA_ALG)
+    This test demonstrates that users can rotate their mandatory ML-DSA key
+    if it becomes compromised or for routine security maintenance.
+    """
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+    import tempfile
+    import json
+    from pathlib import Path
+    from lib.pq_auth import generate_pq_keys
 
-        payload = {
-            "new_pq_signatures": [
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # === 1. Create account with initial ML-DSA key ===
+
+        # Generate classic key
+        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string().hex()
+
+        # Save classic key
+        classic_sk_path = temp_path / "classic.sk"
+        with open(classic_sk_path, "w") as f:
+            f.write(sk_classic.to_string().hex())
+
+        # Generate initial ML-DSA key
+        ml_dsa_pk_old, ml_dsa_sk_old = generate_pq_keys(ML_DSA_ALG)
+
+        # Save initial ML-DSA key
+        ml_dsa_sk_old_path = temp_path / "ml_dsa_old.sk"
+        with open(ml_dsa_sk_old_path, "wb") as f:
+            f.write(ml_dsa_sk_old)
+
+        # Create auth keys file with initial ML-DSA key
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
                 {
-                    "public_key": pk_ml_dsa_new_hex,
-                    "signature": sig_ml_dsa_new.sign(mandatory_msg).hex(),
+                    "sk_path": str(ml_dsa_sk_old_path),
+                    "pk_hex": ml_dsa_pk_old.hex(),
                     "alg": ML_DSA_ALG,
                 }
             ],
-            "classic_signature": sk_classic.sign(
-                mandatory_msg, hashfunc=hashlib.sha256
-            ).hex(),
-            "existing_pq_signatures": [],
-            "nonce": mandatory_nonce,
         }
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-        )
-        assert response.status_code == 400
+        auth_keys_file = temp_path / "auth_keys.json"
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Create API client and initial account
+        client = DCypherClient(api_base_url, str(auth_keys_file))
+
+        initial_pq_keys = [{"pk_hex": ml_dsa_pk_old.hex(), "alg": ML_DSA_ALG}]
+        client.create_account(pk_classic_hex, initial_pq_keys)
+
+        # Verify initial account state
+        account_info = client.get_account(pk_classic_hex)
+        assert len(account_info["pq_keys"]) == 1
+        assert account_info["pq_keys"][0]["alg"] == ML_DSA_ALG
+        assert account_info["pq_keys"][0]["public_key"] == ml_dsa_pk_old.hex()
+
+        # === 2. Rotate the ML-DSA key ===
+
+        # Generate new ML-DSA key
+        ml_dsa_pk_new, ml_dsa_sk_new = generate_pq_keys(ML_DSA_ALG)
+
+        # Save new ML-DSA key
+        ml_dsa_sk_new_path = temp_path / "ml_dsa_new.sk"
+        with open(ml_dsa_sk_new_path, "wb") as f:
+            f.write(ml_dsa_sk_new)
+
+        # Update auth keys to include both old and new ML-DSA keys for the rotation
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
+                {
+                    "sk_path": str(ml_dsa_sk_old_path),
+                    "pk_hex": ml_dsa_pk_old.hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                {
+                    "sk_path": str(ml_dsa_sk_new_path),
+                    "pk_hex": ml_dsa_pk_new.hex(),
+                    "alg": ML_DSA_ALG,
+                },
+            ],
+        }
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Reload client with updated auth keys
+        client = DCypherClient(api_base_url, str(auth_keys_file))
+
+        # Rotate the ML-DSA key using API client
+        new_keys = [{"pk_hex": ml_dsa_pk_new.hex(), "alg": ML_DSA_ALG}]
+        result = client.add_pq_keys(pk_classic_hex, new_keys)
+        assert "Successfully added 1 PQ key(s)" in result["message"]
+
+        # === 3. Verify the rotation succeeded ===
+
+        # Verify account state after rotation
+        account_info_after = client.get_account(pk_classic_hex)
+        assert len(account_info_after["pq_keys"]) == 1  # Still only one ML-DSA key
+        assert account_info_after["pq_keys"][0]["alg"] == ML_DSA_ALG
         assert (
-            f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}"
-            in response.text
-        )
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+            account_info_after["pq_keys"][0]["public_key"] == ml_dsa_pk_new.hex()
+        )  # New key is active
+
+        # Verify old key is in graveyard
+        graveyard = client.get_account_graveyard(pk_classic_hex)
+        assert len(graveyard) == 1
+        assert graveyard[0]["public_key"] == ml_dsa_pk_old.hex()
+        assert graveyard[0]["alg"] == ML_DSA_ALG
+
+        # === 4. Verify the new key works for authentication ===
+
+        # Update auth keys to only include the new ML-DSA key
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
+                {
+                    "sk_path": str(ml_dsa_sk_new_path),
+                    "pk_hex": ml_dsa_pk_new.hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+        }
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Create new client with rotated key and verify it can perform operations
+        client_new = DCypherClient(api_base_url, str(auth_keys_file))
+
+        # Should be able to query account with new key
+        final_account_info = client_new.get_account(pk_classic_hex)
+        assert len(final_account_info["pq_keys"]) == 1
+        assert final_account_info["pq_keys"][0]["public_key"] == ml_dsa_pk_new.hex()
 
 
 def test_remove_pq_key_authorization_failures(api_base_url: str):

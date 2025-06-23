@@ -147,11 +147,6 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
             raise HTTPException(
                 status_code=400, detail=f"Unsupported PQ algorithm: {new_sig.alg}."
             )
-        if new_sig.alg == ML_DSA_ALG:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}.",
-            )
 
     new_pks_to_add = {s.public_key for s in request.new_pq_signatures}
     if len(new_pks_to_add) != len(request.new_pq_signatures):
