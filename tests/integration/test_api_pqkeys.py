@@ -5,8 +5,8 @@ import pytest
 import time
 import os
 import json
+import requests
 from unittest import mock
-from fastapi.testclient import TestClient
 from main import (
     app,
 )
@@ -15,28 +15,24 @@ from lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
 
 from tests.integration.test_api import (
-    storage_paths,
-    cleanup,
     _create_test_account,
     get_nonce,
 )
 
-client = TestClient(app)
 
-
-def test_get_supported_pq_algs():
+def test_get_supported_pq_algs(api_base_url: str):
     """
     Tests the /supported-pq-algs endpoint.
     It verifies that the endpoint returns a 200 OK status and that the list of
     algorithms in the response body matches the list defined in the application.
     """
-    response = client.get("/supported-pq-algs")
+    response = requests.get(f"{api_base_url}/supported-pq-algs")
     assert response.status_code == 200
     # Convert to set for order-independent comparison
     assert set(response.json()["algorithms"]) == set(SUPPORTED_SIG_ALGS)
 
 
-def test_add_and_remove_pq_keys():
+def test_add_and_remove_pq_keys(api_base_url: str):
     """
     Tests the full lifecycle of an account's post-quantum keys:
     1. Create an account with a classic key and two PQ keys.
@@ -49,7 +45,7 @@ def test_add_and_remove_pq_keys():
 
     # === 1. Create an account with two PQ keys (one mandatory, one optional) ===
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        add_pq_algs=[add_pq_alg_1]
+        api_base_url, add_pq_algs=[add_pq_alg_1]
     )
     try:
         pk_ml_dsa_hex = next(
@@ -62,7 +58,7 @@ def test_add_and_remove_pq_keys():
         sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
 
         # Verify initial account state
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         assert response.status_code == 200
         assert len(response.json()["pq_keys"]) == 2
 
@@ -71,7 +67,7 @@ def test_add_and_remove_pq_keys():
         oqs_sigs_to_free.append(sig_add_pq_2)
         pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
         all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
-        nonce2 = get_nonce()
+        nonce2 = get_nonce(api_base_url)
         message2 = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_2}:{nonce2}".encode("utf-8")
 
         # Sign with all keys currently on the account, plus the new key
@@ -100,14 +96,14 @@ def test_add_and_remove_pq_keys():
             "existing_pq_signatures": existing_pq_sigs,
             "nonce": nonce2,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
         )
         assert response.status_code == 200, response.text
         assert response.json()["message"] == "Successfully added 1 PQ key(s)."
 
         # Verify account state after adding key
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         assert response.status_code == 200
         pq_keys_after_add = response.json()["pq_keys"]
         assert len(pq_keys_after_add) == 3
@@ -116,17 +112,21 @@ def test_add_and_remove_pq_keys():
         # === 3. Remove an optional PQ key ===
         alg_to_remove = add_pq_alg_1
         pk_to_remove = pk_add_pq_1_hex
-        nonce3 = get_nonce()
+        nonce3 = get_nonce(api_base_url)
         message3 = f"REMOVE-PQ:{pk_classic_hex}:{alg_to_remove}:{nonce3}".encode(
             "utf-8"
         )
 
         classic_sig3 = sk_classic.sign(message3, hashfunc=hashlib.sha256).hex()
 
-        # Get all active keys for signing
-        active_pks = state.accounts[pk_classic_hex]
+        # Get all active keys for signing from the API
+        active_keys_resp = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
+        assert active_keys_resp.status_code == 200
+        active_pq_keys = active_keys_resp.json()["pq_keys"]
         all_pq_sigs3 = []
-        for alg, pk in active_pks.items():
+        for key_info in active_pq_keys:
+            pk = key_info["public_key"]
+            alg = key_info["alg"]
             signer, _ = all_pq_sks[pk]
             all_pq_sigs3.append(
                 {"public_key": pk, "signature": signer.sign(message3).hex(), "alg": alg}
@@ -138,14 +138,15 @@ def test_add_and_remove_pq_keys():
             "pq_signatures": all_pq_sigs3,
             "nonce": nonce3,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=remove_payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
+            json=remove_payload,
         )
         assert response.status_code == 200, response.text
         assert response.json()["message"] == "Successfully removed PQ key(s)."
 
         # Verify final account state
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         assert response.status_code == 200
         keys_after_remove = response.json()["pq_keys"]
         assert len(keys_after_remove) == 2
@@ -158,19 +159,21 @@ def test_add_and_remove_pq_keys():
             sig.free()
 
 
-def test_remove_mandatory_pq_key_fails():
+def test_remove_mandatory_pq_key_fails(api_base_url: str):
     """
     Tests that an attempt to remove the mandatory ML-DSA key from an account
     is rejected with a 400 error.
     """
     # 1. Create a minimal account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # 2. Attempt to remove the mandatory key
-        nonce2 = get_nonce()
+        nonce2 = get_nonce(api_base_url)
         message2 = f"REMOVE-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{nonce2}".encode("utf-8")
         classic_sig2 = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
         pq_sig2 = {
@@ -184,8 +187,9 @@ def test_remove_mandatory_pq_key_fails():
             "pq_signatures": [pq_sig2],
             "nonce": nonce2,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=remove_payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
+            json=remove_payload,
         )
         assert response.status_code == 400
         assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in response.text
@@ -195,7 +199,7 @@ def test_remove_mandatory_pq_key_fails():
             sig.free()
 
 
-def test_add_pq_key_authorization_failures():
+def test_add_pq_key_authorization_failures(api_base_url: str):
     """
     Tests various authorization failure scenarios when adding a PQ key.
     - Invalid classic signature.
@@ -212,7 +216,7 @@ def test_add_pq_key_authorization_failures():
         pk_classic_hex,
         all_pq_sks,
         oqs_sigs_to_free,
-    ) = _create_test_account(add_pq_algs=[add_pq_alg_1])
+    ) = _create_test_account(api_base_url, add_pq_algs=[add_pq_alg_1])
     try:
         pk_ml_dsa_hex = next(
             pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
@@ -229,7 +233,7 @@ def test_add_pq_key_authorization_failures():
         all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
 
         # 2. Prepare for a valid "add" operation
-        add_nonce = get_nonce()
+        add_nonce = get_nonce(api_base_url)
         correct_add_msg = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_2}:{add_nonce}".encode()
         incorrect_msg = b"this is not the correct message"
 
@@ -265,14 +269,18 @@ def test_add_pq_key_authorization_failures():
             "existing_pq_signatures": valid_existing_sigs,
             "nonce": add_nonce,
         }
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 401
         assert "Invalid classic signature" in response.text
 
         # Case 2: Missing signature from an existing PQ key
         payload["classic_signature"] = valid_classic_sig
         payload["existing_pq_signatures"] = [valid_existing_sigs[0]]  # Missing one
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 401
         assert "Signatures from all existing PQ keys are required" in response.text
 
@@ -286,7 +294,9 @@ def test_add_pq_key_authorization_failures():
             },
         ]
         payload["existing_pq_signatures"] = invalid_existing_sigs
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 401
         assert "Invalid signature for existing PQ key" in response.text
 
@@ -298,7 +308,9 @@ def test_add_pq_key_authorization_failures():
         }
         payload["existing_pq_signatures"] = valid_existing_sigs
         payload["new_pq_signatures"] = [invalid_new_sig]
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 401
         assert "Invalid signature for new PQ key" in response.text
     finally:
@@ -307,11 +319,11 @@ def test_add_pq_key_authorization_failures():
             sig.free()
 
 
-def test_replace_existing_pq_key():
+def test_replace_existing_pq_key(api_base_url: str):
     """Tests that adding a key for an existing algorithm replaces the old key."""
     falcon_alg = "Falcon-512"
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        add_pq_algs=[falcon_alg]
+        api_base_url, add_pq_algs=[falcon_alg]
     )
     try:
         pk_ml_dsa_hex = next(
@@ -323,7 +335,7 @@ def test_replace_existing_pq_key():
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
         sig_falcon_old, _ = all_pq_sks[pk_falcon_old_hex]
 
-        add_nonce = get_nonce()
+        add_nonce = get_nonce(api_base_url)
         add_msg = f"ADD-PQ:{pk_classic_hex}:{falcon_alg}:{add_nonce}".encode()
 
         # Create a new key pair for the same algorithm
@@ -356,7 +368,9 @@ def test_replace_existing_pq_key():
             ],
             "nonce": add_nonce,
         }
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 200, response.text
         assert "Successfully added 1 PQ key(s)" in response.json()["message"]
 
@@ -365,12 +379,12 @@ def test_replace_existing_pq_key():
         all_pq_sks[pk_falcon_new_hex] = (sig_falcon_new, falcon_alg)
 
         # Verify state after adding: key count should be the same
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         keys_after_add = response.json()["pq_keys"]
         assert len(keys_after_add) == 2
 
         # Verify the old key is in the graveyard
-        response = client.get(f"/accounts/{pk_classic_hex}/graveyard")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}/graveyard")
         assert response.status_code == 200
         graveyard_keys = response.json()["graveyard"]
         assert len(graveyard_keys) == 1
@@ -387,12 +401,14 @@ def test_replace_existing_pq_key():
             sig.free()
 
 
-def test_add_unsupported_pq_key_fails():
+def test_add_unsupported_pq_key_fails(api_base_url: str):
     """Tests adding a key with an unsupported algorithm fails."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         unsupported_alg = "Unsupported-Alg"
-        unsupported_nonce = get_nonce()
+        unsupported_nonce = get_nonce(api_base_url)
         unsupported_msg = (
             f"ADD-PQ:{pk_classic_hex}:{unsupported_alg}:{unsupported_nonce}".encode()
         )
@@ -407,7 +423,9 @@ def test_add_unsupported_pq_key_fails():
             "existing_pq_signatures": [],
             "nonce": unsupported_nonce,
         }
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 400
         assert f"Unsupported PQ algorithm: {unsupported_alg}" in response.text
     finally:
@@ -415,11 +433,13 @@ def test_add_unsupported_pq_key_fails():
             sig.free()
 
 
-def test_add_mandatory_pq_key_again_fails():
+def test_add_mandatory_pq_key_again_fails(api_base_url: str):
     """Tests that attempting to add another ML_DSA_ALG key fails."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
-        mandatory_nonce = get_nonce()
+        mandatory_nonce = get_nonce(api_base_url)
         mandatory_msg = (
             f"ADD-PQ:{pk_classic_hex}:{ML_DSA_ALG}:{mandatory_nonce}".encode()
         )
@@ -443,7 +463,9 @@ def test_add_mandatory_pq_key_again_fails():
             "existing_pq_signatures": [],
             "nonce": mandatory_nonce,
         }
-        response = client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=payload)
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+        )
         assert response.status_code == 400
         assert (
             f"Cannot add another key for the mandatory algorithm {ML_DSA_ALG}"
@@ -454,7 +476,7 @@ def test_add_mandatory_pq_key_again_fails():
             sig.free()
 
 
-def test_remove_pq_key_authorization_failures():
+def test_remove_pq_key_authorization_failures(api_base_url: str):
     """
     Tests various authorization failure scenarios when removing a PQ key.
     - Invalid classic signature.
@@ -466,7 +488,7 @@ def test_remove_pq_key_authorization_failures():
     add_pq_alg_2 = "Falcon-1024"
 
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        add_pq_algs=[add_pq_alg_1, add_pq_alg_2]
+        api_base_url, add_pq_algs=[add_pq_alg_1, add_pq_alg_2]
     )
     try:
         pk_ml_dsa_hex = next(
@@ -485,7 +507,7 @@ def test_remove_pq_key_authorization_failures():
         # 2. Prepare for a valid "remove" operation
         pk_to_remove = pk_add_pq_1_hex
         alg_to_remove = add_pq_alg_1
-        remove_nonce = get_nonce()
+        remove_nonce = get_nonce(api_base_url)
         correct_remove_msg = (
             f"REMOVE-PQ:{pk_classic_hex}:{alg_to_remove}:{remove_nonce}".encode()
         )
@@ -523,8 +545,8 @@ def test_remove_pq_key_authorization_failures():
             "pq_signatures": valid_pq_sigs,
             "nonce": remove_nonce,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
         )
         assert response.status_code == 401
         assert "Invalid classic signature" in response.text
@@ -532,8 +554,8 @@ def test_remove_pq_key_authorization_failures():
         # Case 2: Missing signature from an existing PQ key
         payload["classic_signature"] = valid_classic_sig
         payload["pq_signatures"] = [valid_pq_sigs[0], valid_pq_sigs[2]]  # Missing one
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
         )
         assert response.status_code == 401
         assert "Signatures from all existing PQ keys are required" in response.text
@@ -549,8 +571,8 @@ def test_remove_pq_key_authorization_failures():
             },
         ]
         payload["pq_signatures"] = invalid_pq_sigs
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
         )
         assert response.status_code == 401
         assert "Invalid signature for existing PQ key" in response.text
@@ -560,19 +582,21 @@ def test_remove_pq_key_authorization_failures():
             sig.free()
 
 
-def test_remove_nonexistent_pq_key_fails():
+def test_remove_nonexistent_pq_key_fails(api_base_url: str):
     """
     Tests that removing a PQ key not on the account fails.
     """
     # 1. Setup: Create a standard account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         # 2. Attempt to remove a key that doesn't exist
         alg_to_remove = "nonexistent-alg"
-        remove_nonce = get_nonce()
+        remove_nonce = get_nonce(api_base_url)
         remove_msg = (
             f"REMOVE-PQ:{pk_classic_hex}:{alg_to_remove}:{remove_nonce}".encode()
         )
@@ -590,8 +614,8 @@ def test_remove_nonexistent_pq_key_fails():
             ],
             "nonce": remove_nonce,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
         )
         assert response.status_code == 404
         assert (
@@ -604,7 +628,7 @@ def test_remove_nonexistent_pq_key_fails():
             sig.free()
 
 
-def test_add_and_remove_multiple_pq_keys():
+def test_add_and_remove_multiple_pq_keys(api_base_url: str):
     """
     Tests adding and removing multiple PQ keys in a single request.
     """
@@ -612,12 +636,14 @@ def test_add_and_remove_multiple_pq_keys():
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         assert len(response.json()["pq_keys"]) == 1
 
         # 2. Add two new PQ keys in a single request
@@ -628,7 +654,7 @@ def test_add_and_remove_multiple_pq_keys():
         pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
         all_pq_sks[pk_add_pq_1_hex] = (sig_add_pq_1, add_pq_alg_1)
         all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
-        add_nonce = get_nonce()
+        add_nonce = get_nonce(api_base_url)
         add_algs_str = ":".join(sorted([add_pq_alg_1, add_pq_alg_2]))
         add_msg = f"ADD-PQ:{pk_classic_hex}:{add_algs_str}:{add_nonce}".encode()
 
@@ -657,14 +683,14 @@ def test_add_and_remove_multiple_pq_keys():
             ],
             "nonce": add_nonce,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
         )
         assert response.status_code == 200, response.text
         assert "Successfully added 2 PQ key(s)" in response.json()["message"]
 
         # Verify state after adding
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         keys_after_add = response.json()["pq_keys"]
         assert len(keys_after_add) == 3
         added_pks = {k["public_key"] for k in keys_after_add}
@@ -672,7 +698,7 @@ def test_add_and_remove_multiple_pq_keys():
         assert pk_add_pq_2_hex in added_pks
 
         # 3. Remove the two added PQ keys in a single request
-        remove_nonce = get_nonce()
+        remove_nonce = get_nonce(api_base_url)
         algs_to_remove = sorted([add_pq_alg_1, add_pq_alg_2])
         remove_msg = f"REMOVE-PQ:{pk_classic_hex}:{':'.join(algs_to_remove)}:{remove_nonce}".encode()
         remove_payload = {
@@ -699,14 +725,15 @@ def test_add_and_remove_multiple_pq_keys():
             ],
             "nonce": remove_nonce,
         }
-        response = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys", json=remove_payload
+        response = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
+            json=remove_payload,
         )
         assert response.status_code == 200, response.text
         assert "Successfully removed PQ key(s)" in response.json()["message"]
 
         # Verify final state
-        response = client.get(f"/accounts/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
         keys_after_remove = response.json()["pq_keys"]
         assert len(keys_after_remove) == 1
         assert keys_after_remove[0]["public_key"] == pk_ml_dsa_hex
@@ -716,7 +743,7 @@ def test_add_and_remove_multiple_pq_keys():
             sig.free()
 
 
-def test_graveyard():
+def test_graveyard(api_base_url: str):
     """
     Tests the graveyard functionality:
     1. Create account.
@@ -727,7 +754,7 @@ def test_graveyard():
 
     # 1. Create account with ML-DSA and one Falcon key
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        add_pq_algs=[falcon_alg]
+        api_base_url, add_pq_algs=[falcon_alg]
     )
     try:
         pk_ml_dsa_hex = next(
@@ -743,7 +770,7 @@ def test_graveyard():
         sig_falcon_2 = oqs.Signature(falcon_alg)
         oqs_sigs_to_free.append(sig_falcon_2)
         pk_falcon_2_hex = sig_falcon_2.generate_keypair().hex()
-        add_nonce = get_nonce()
+        add_nonce = get_nonce(api_base_url)
         add_msg = f"ADD-PQ:{pk_classic_hex}:{falcon_alg}:{add_nonce}".encode()
         add_payload = {
             "new_pq_signatures": [
@@ -770,18 +797,20 @@ def test_graveyard():
             ],
             "nonce": add_nonce,
         }
-        client.post(f"/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload)
+        requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
+        )
         all_pq_sks[pk_falcon_2_hex] = (sig_falcon_2, falcon_alg)
 
         # Verify pk_falcon_1_hex is in the graveyard
-        response = client.get(f"/accounts/{pk_classic_hex}/graveyard")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}/graveyard")
         assert response.status_code == 200
         graveyard1 = response.json()["graveyard"]
         assert len(graveyard1) == 1
         assert graveyard1[0]["public_key"] == pk_falcon_1_hex
 
         # 3. Remove the second Falcon key
-        remove_nonce = get_nonce()
+        remove_nonce = get_nonce(api_base_url)
         remove_msg = f"REMOVE-PQ:{pk_classic_hex}:{falcon_alg}:{remove_nonce}".encode()
         remove_payload = {
             "algs_to_remove": [falcon_alg],
@@ -802,10 +831,13 @@ def test_graveyard():
             ],
             "nonce": remove_nonce,
         }
-        client.post(f"/accounts/{pk_classic_hex}/remove-pq-keys", json=remove_payload)
+        requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
+            json=remove_payload,
+        )
 
         # Verify both keys are now in the graveyard
-        response = client.get(f"/accounts/{pk_classic_hex}/graveyard")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}/graveyard")
         assert response.status_code == 200
         graveyard2 = response.json()["graveyard"]
         assert len(graveyard2) == 2
@@ -818,7 +850,7 @@ def test_graveyard():
             sig.free()
 
 
-def test_pq_key_timing_attack_resistance():
+def test_pq_key_timing_attack_resistance(api_base_url: str):
     """
     Tests that PQ key operations execute in constant time regardless of
     key existence to prevent timing-based enumeration attacks.
@@ -829,7 +861,7 @@ def test_pq_key_timing_attack_resistance():
     """
     add_pq_alg = "Falcon-512"
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        add_pq_algs=[add_pq_alg]
+        api_base_url, add_pq_algs=[add_pq_alg]
     )
 
     try:
@@ -844,12 +876,12 @@ def test_pq_key_timing_attack_resistance():
 
         # Test removal timing for existing vs non-existent algorithms
         # 1. Remove existing algorithm (Falcon) - measure time
-        nonce1 = get_nonce()
+        nonce1 = get_nonce(api_base_url)
         message1 = f"REMOVE-PQ:{pk_classic_hex}:{add_pq_alg}:{nonce1}".encode()
 
         start_time = time.perf_counter()
-        response1 = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys",
+        response1 = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
             json={
                 "algs_to_remove": [add_pq_alg],
                 "classic_signature": sk_classic.sign(
@@ -874,13 +906,13 @@ def test_pq_key_timing_attack_resistance():
         assert response1.status_code == 200
 
         # 2. Try to remove non-existent algorithm - measure time
-        nonce2 = get_nonce()
+        nonce2 = get_nonce(api_base_url)
         nonexistent_alg = "NonExistentAlg"
         message2 = f"REMOVE-PQ:{pk_classic_hex}:{nonexistent_alg}:{nonce2}".encode()
 
         start_time = time.perf_counter()
-        response2 = client.post(
-            f"/accounts/{pk_classic_hex}/remove-pq-keys",
+        response2 = requests.post(
+            f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys",
             json={
                 "algs_to_remove": [nonexistent_alg],
                 "classic_signature": sk_classic.sign(

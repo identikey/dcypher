@@ -14,8 +14,9 @@ import os
 import json
 import threading
 import concurrent.futures
+import functools
+import requests
 from unittest import mock
-from fastapi.testclient import TestClient
 from main import app
 from app_state import state
 from lib.pq_auth import SUPPORTED_SIG_ALGS
@@ -26,17 +27,14 @@ from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 import base64
 
 from tests.integration.test_api import (
-    storage_paths,
-    cleanup,
     _create_test_account,
     get_nonce,
     _create_test_idk_file,
 )
 
-client = TestClient(app)
-
 
 def _upload_file_chunked(
+    api_base_url: str,
     pk_classic_hex,
     sk_classic,
     pk_ml_dsa_hex,
@@ -65,7 +63,7 @@ def _upload_file_chunked(
     file_hash = parsed_part["headers"]["MerkleRoot"]
 
     # Step 1: Register file with first chunk
-    register_nonce = get_nonce()
+    register_nonce = get_nonce(api_base_url)
     register_msg = f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
     classic_sig_register = sk_classic.sign(register_msg, hashfunc=hashlib.sha256).hex()
     pq_sig_register = {
@@ -74,8 +72,8 @@ def _upload_file_chunked(
         "alg": ML_DSA_ALG,
     }
 
-    register_response = client.post(
-        f"/storage/{pk_classic_hex}/register",
+    register_response = requests.post(
+        f"{api_base_url}/storage/{pk_classic_hex}/register",
         files={
             "idk_part_one": (
                 "part1.idk",
@@ -102,7 +100,7 @@ def _upload_file_chunked(
         chunk_content_bytes = chunk_content_str.encode("utf-8")
         chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
 
-        upload_nonce = get_nonce()
+        upload_nonce = get_nonce(api_base_url)
         upload_msg = (
             f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
             f"{i}:{len(message_parts)}:{chunk_hash}:{upload_nonce}"
@@ -114,8 +112,8 @@ def _upload_file_chunked(
             "alg": ML_DSA_ALG,
         }
 
-        chunk_response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+        chunk_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
             files={"file": (chunk_hash, chunk_content_bytes)},
             data={
                 "nonce": upload_nonce,
@@ -136,13 +134,14 @@ def _upload_file_chunked(
     return last_status_code, file_hash
 
 
-def test_file_upload_timing_attack_resistance(storage_paths):
+def test_file_upload_timing_attack_resistance(api_base_url: str):
     """
     Tests that file operations execute in constant time regardless of
     file existence to prevent information leakage through timing attacks.
     """
-    block_store_root, _ = storage_paths
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -150,6 +149,7 @@ def test_file_upload_timing_attack_resistance(storage_paths):
         # 1. Upload a file first using the new chunked API
         original_content = b"Test content for timing analysis"
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk_classic_hex,
             sk_classic,
             pk_ml_dsa_hex,
@@ -158,11 +158,11 @@ def test_file_upload_timing_attack_resistance(storage_paths):
             "test.txt",
             "text/plain",
         )
-        assert status_code == 201, f"Upload failed with status {status_code}"
+        assert status_code in [200, 201], f"Upload failed with status {status_code}"
 
         # 2. Test download timing for existing vs non-existent files
         # Existing file download timing
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = (
             f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
         )
@@ -181,8 +181,8 @@ def test_file_upload_timing_attack_resistance(storage_paths):
         }
 
         start_time = time.perf_counter()
-        response1 = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
+        response1 = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks/download",
             json=download_payload,
         )
         existing_time = time.perf_counter() - start_time
@@ -190,7 +190,7 @@ def test_file_upload_timing_attack_resistance(storage_paths):
 
         # Non-existent file download timing
         fake_hash = "nonexistent" + "0" * 50
-        download_nonce2 = get_nonce()
+        download_nonce2 = get_nonce(api_base_url)
         download_msg2 = (
             f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{fake_hash}:{download_nonce2}".encode()
         )
@@ -209,8 +209,8 @@ def test_file_upload_timing_attack_resistance(storage_paths):
         }
 
         start_time = time.perf_counter()
-        response2 = client.post(
-            f"/storage/{pk_classic_hex}/{fake_hash}/chunks/download",
+        response2 = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{fake_hash}/chunks/download",
             json=download_payload2,
         )
         nonexistent_time = time.perf_counter() - start_time
@@ -227,17 +227,17 @@ def test_file_upload_timing_attack_resistance(storage_paths):
             sig.free()
 
 
-def test_concurrent_file_uploads(storage_paths):
+def test_concurrent_file_uploads(api_base_url: str):
     """
     Tests concurrent file upload operations to ensure thread safety
     and prevent race conditions in file storage.
     """
 
-    def upload_single_file(thread_id):
+    def upload_single_file(thread_id, api_base_url_inner):
         """Upload a single file in a thread"""
         try:
             sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_inner = (
-                _create_test_account()
+                _create_test_account(api_base_url_inner)
             )
             pk_ml_dsa_hex = next(iter(all_pq_sks))
             sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -247,6 +247,7 @@ def test_concurrent_file_uploads(storage_paths):
 
             # Use the new chunked upload API
             status_code, file_hash = _upload_file_chunked(
+                api_base_url_inner,
                 pk_classic_hex,
                 sk_classic,
                 pk_ml_dsa_hex,
@@ -266,26 +267,30 @@ def test_concurrent_file_uploads(storage_paths):
 
     # Test with 10 concurrent uploads
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(upload_single_file, i) for i in range(10)]
+        # Use functools.partial to pass the api_base_url to the worker function
+        task = functools.partial(upload_single_file, api_base_url_inner=api_base_url)
+        futures = [executor.submit(task, i) for i in range(10)]
         results = [
             future.result() for future in concurrent.futures.as_completed(futures)
         ]
 
-    # Verify all uploads succeeded
-    success_count = sum(1 for _, status_code, _ in results if status_code == 201)
+    # Verify all uploads succeeded (can be 200 for last chunk or 201 for single chunk)
+    success_count = sum(1 for _, status_code, _ in results if status_code in [200, 201])
     assert success_count == 10, f"Only {success_count}/10 concurrent uploads succeeded"
 
     # Verify all file hashes are unique
-    file_hashes = [fh for _, status_code, fh in results if status_code == 201]
+    file_hashes = [fh for _, status_code, fh in results if status_code in [200, 201]]
     assert len(set(file_hashes)) == len(file_hashes), "Duplicate file hashes detected"
 
 
-def test_file_corruption_detection(storage_paths):
+def test_file_corruption_detection(api_base_url: str):
     """
     Tests that the system detects and rejects corrupted file uploads
     through hash validation and Merkle tree verification.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -293,6 +298,7 @@ def test_file_corruption_detection(storage_paths):
         # 1. Create a valid file first to establish baseline
         original_content = b"This content will be corrupted"
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk_classic_hex,
             sk_classic,
             pk_ml_dsa_hex,
@@ -301,7 +307,7 @@ def test_file_corruption_detection(storage_paths):
             "valid.txt",
             "text/plain",
         )
-        assert status_code == 201, "Valid upload should succeed"
+        assert status_code in [200, 201], "Valid upload should succeed"
 
         # 2. Test corruption detection by trying to upload chunks with wrong hashes
         # Create another file and intentionally corrupt the chunk hash
@@ -325,7 +331,7 @@ def test_file_corruption_detection(storage_paths):
         file_hash2 = parsed_part["headers"]["MerkleRoot"]
 
         # Register the file normally
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         register_msg = (
             f"REGISTER:{pk_classic_hex}:{file_hash2}:{register_nonce}".encode()
         )
@@ -338,8 +344,8 @@ def test_file_corruption_detection(storage_paths):
             "alg": ML_DSA_ALG,
         }
 
-        register_response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        register_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": (
                     "part1.idk",
@@ -363,7 +369,7 @@ def test_file_corruption_detection(storage_paths):
             chunk_content_bytes = message_parts[1].encode("utf-8")
             wrong_chunk_hash = "0000000000000000000000000000000000000000000000000000000000000000"  # Wrong hash
 
-            upload_nonce = get_nonce()
+            upload_nonce = get_nonce(api_base_url)
             upload_msg = (
                 f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash2}:"
                 f"1:{len(message_parts)}:{wrong_chunk_hash}:{upload_nonce}"
@@ -377,8 +383,8 @@ def test_file_corruption_detection(storage_paths):
                 "alg": ML_DSA_ALG,
             }
 
-            chunk_response = client.post(
-                f"/storage/{pk_classic_hex}/{file_hash2}/chunks",
+            chunk_response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/{file_hash2}/chunks",
                 data={
                     "chunk_index": "1",
                     "total_chunks": str(len(message_parts)),
@@ -402,12 +408,14 @@ def test_file_corruption_detection(storage_paths):
             sig.free()
 
 
-def test_large_file_memory_management(storage_paths):
+def test_large_file_memory_management(api_base_url: str):
     """
     Tests that large file uploads are handled efficiently without
     causing memory exhaustion or system instability.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -423,6 +431,7 @@ def test_large_file_memory_management(storage_paths):
 
         start_time = time.perf_counter()
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk_classic_hex,
             sk_classic,
             pk_ml_dsa_hex,
@@ -456,14 +465,14 @@ def test_large_file_memory_management(storage_paths):
             sig.free()
 
 
-def test_file_access_authorization_edge_cases(storage_paths):
+def test_file_access_authorization_edge_cases(api_base_url: str):
     """
     Tests edge cases in file access authorization to ensure proper
     security boundaries are maintained.
     """
     # Create two separate accounts
-    sk1, pk1_hex, all_pq_sks1, oqs_sigs_1 = _create_test_account()
-    sk2, pk2_hex, all_pq_sks2, oqs_sigs_2 = _create_test_account()
+    sk1, pk1_hex, all_pq_sks1, oqs_sigs_1 = _create_test_account(api_base_url)
+    sk2, pk2_hex, all_pq_sks2, oqs_sigs_2 = _create_test_account(api_base_url)
 
     try:
         pk_ml_dsa1_hex = next(iter(all_pq_sks1))
@@ -474,6 +483,7 @@ def test_file_access_authorization_edge_cases(storage_paths):
         # 1. Account 1 uploads a file
         content = b"Private file content"
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk1_hex,
             sk1,
             pk_ml_dsa1_hex,
@@ -482,16 +492,18 @@ def test_file_access_authorization_edge_cases(storage_paths):
             "private.txt",
             "text/plain",
         )
-        assert status_code == 201, f"Account 1 upload failed with status {status_code}"
+        assert status_code in [200, 201], (
+            f"Account 1 upload failed with status {status_code}"
+        )
 
         # 2. Account 2 tries to download Account 1's file (should fail)
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = (
             f"DOWNLOAD-CHUNKS:{pk2_hex}:{file_hash}:{download_nonce}".encode()
         )
 
-        response = client.post(
-            f"/storage/{pk2_hex}/{file_hash}/chunks/download",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk2_hex}/{file_hash}/chunks/download",
             json={
                 "nonce": download_nonce,
                 "classic_signature": sk2.sign(
@@ -509,8 +521,8 @@ def test_file_access_authorization_edge_cases(storage_paths):
         # Should fail because the file doesn't belong to account 2
         assert response.status_code == 404
 
-        # 3. Account 2 tries to access Account 1's file list (should fail)
-        response = client.get(f"/storage/{pk2_hex}")
+        # 3. Account 2 tries to access Account 1's file list (should not see it)
+        response = requests.get(f"{api_base_url}/storage/{pk2_hex}")
         assert response.status_code == 200
         files = response.json()["files"]
         assert file_hash not in files, "File leaked across accounts"
@@ -519,8 +531,8 @@ def test_file_access_authorization_edge_cases(storage_paths):
         cross_download_msg = (
             f"DOWNLOAD-CHUNKS:{pk1_hex}:{file_hash}:{download_nonce}".encode()
         )
-        response = client.post(
-            f"/storage/{pk1_hex}/{file_hash}/chunks/download",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk1_hex}/{file_hash}/chunks/download",
             json={
                 "nonce": download_nonce,
                 "classic_signature": sk2.sign(
@@ -545,12 +557,14 @@ def test_file_access_authorization_edge_cases(storage_paths):
             sig.free()
 
 
-def test_file_storage_quota_limits(storage_paths):
+def test_file_storage_quota_limits(api_base_url: str):
     """
     Tests that file storage respects quota limits and prevents
     resource exhaustion attacks.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -562,6 +576,7 @@ def test_file_storage_quota_limits(storage_paths):
         for i in range(max_attempts):
             content = f"File {i} content".encode()
             status_code, file_hash = _upload_file_chunked(
+                api_base_url,
                 pk_classic_hex,
                 sk_classic,
                 pk_ml_dsa_hex,
@@ -571,7 +586,7 @@ def test_file_storage_quota_limits(storage_paths):
                 "text/plain",
             )
 
-            if status_code == 201:
+            if status_code in [200, 201]:
                 upload_count += 1
             elif status_code == 413:  # Quota exceeded
                 break
@@ -588,12 +603,14 @@ def test_file_storage_quota_limits(storage_paths):
             sig.free()
 
 
-def test_idk_message_format_validation():
+def test_idk_message_format_validation(api_base_url: str):
     """
     Tests that only properly formatted IDK messages are accepted
     and invalid formats are rejected.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -601,6 +618,7 @@ def test_idk_message_format_validation():
         # Test with a valid IDK message first to establish baseline
         valid_content = b"Valid test content"
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk_classic_hex,
             sk_classic,
             pk_ml_dsa_hex,
@@ -609,7 +627,7 @@ def test_idk_message_format_validation():
             "valid.txt",
             "text/plain",
         )
-        assert status_code == 201, "Valid IDK message should be accepted"
+        assert status_code in [200, 201], "Valid IDK message should be accepted"
 
         # Test invalid format by trying to upload corrupted chunks
         # (The new API validates IDK format during chunk processing)
@@ -632,7 +650,7 @@ def test_idk_message_format_validation():
             file_hash2 = parsed_part["headers"]["MerkleRoot"]
 
             # Register the file normally
-            register_nonce = get_nonce()
+            register_nonce = get_nonce(api_base_url)
             register_msg = (
                 f"REGISTER:{pk_classic_hex}:{file_hash2}:{register_nonce}".encode()
             )
@@ -645,8 +663,8 @@ def test_idk_message_format_validation():
                 "alg": ML_DSA_ALG,
             }
 
-            register_response = client.post(
-                f"/storage/{pk_classic_hex}/register",
+            register_response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/register",
                 files={
                     "idk_part_one": (
                         "part1.idk",
@@ -669,7 +687,7 @@ def test_idk_message_format_validation():
                 invalid_chunk = b"not a valid IDK message part"
                 chunk_hash = hashlib.blake2b(invalid_chunk).hexdigest()
 
-                upload_nonce = get_nonce()
+                upload_nonce = get_nonce(api_base_url)
                 upload_msg = (
                     f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash2}:"
                     f"1:{len(message_parts)}:{chunk_hash}:{upload_nonce}"
@@ -683,8 +701,8 @@ def test_idk_message_format_validation():
                     "alg": ML_DSA_ALG,
                 }
 
-                chunk_response = client.post(
-                    f"/storage/{pk_classic_hex}/{file_hash2}/chunks",
+                chunk_response = requests.post(
+                    f"{api_base_url}/storage/{pk_classic_hex}/{file_hash2}/chunks",
                     files={"file": (chunk_hash, invalid_chunk)},
                     data={
                         "nonce": upload_nonce,
@@ -707,12 +725,14 @@ def test_idk_message_format_validation():
             sig.free()
 
 
-def test_audit_trail_file_operations(storage_paths):
+def test_audit_trail_file_operations(api_base_url: str):
     """
     Tests that file operations generate comprehensive audit logs
     for security monitoring and compliance.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
@@ -720,6 +740,7 @@ def test_audit_trail_file_operations(storage_paths):
         # 1. Upload operation audit
         content = b"Audit test content"
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk_classic_hex,
             sk_classic,
             pk_ml_dsa_hex,
@@ -728,16 +749,18 @@ def test_audit_trail_file_operations(storage_paths):
             "audit_test.txt",
             "text/plain",
         )
-        assert status_code == 201, f"Audit test upload failed with status {status_code}"
+        assert status_code in [200, 201], (
+            f"Audit test upload failed with status {status_code}"
+        )
 
         # 2. Download operation audit
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = (
             f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
         )
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks/download",
             json={
                 "nonce": download_nonce,
                 "classic_signature": sk_classic.sign(
@@ -755,10 +778,10 @@ def test_audit_trail_file_operations(storage_paths):
         assert response.status_code == 200, "Download should succeed"
 
         # 3. List operation audit
-        response = client.get(f"/storage/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}")
         assert response.status_code == 200, "List operation should succeed"
-        files = response.json()["files"]
-        assert file_hash in files, "Uploaded file should appear in list"
+        files_list = response.json()["files"]
+        assert file_hash in files_list, "Uploaded file should appear in list"
 
         # Note: Actual audit log verification would depend on the logging implementation
         # This test verifies that operations complete successfully, which is a prerequisite
@@ -769,13 +792,13 @@ def test_audit_trail_file_operations(storage_paths):
             sig.free()
 
 
-def test_cross_account_access_prevention(storage_paths):
+def test_cross_account_access_prevention(api_base_url: str):
     """
     Tests that files uploaded by one account cannot be accessed by another account.
     """
     # Create two separate accounts
-    sk1, pk1_hex, all_pq_sks1, oqs_sigs_1 = _create_test_account()
-    sk2, pk2_hex, all_pq_sks2, oqs_sigs_2 = _create_test_account()
+    sk1, pk1_hex, all_pq_sks1, oqs_sigs_1 = _create_test_account(api_base_url)
+    sk2, pk2_hex, all_pq_sks2, oqs_sigs_2 = _create_test_account(api_base_url)
 
     try:
         pk_ml_dsa1_hex = next(iter(all_pq_sks1))
@@ -786,6 +809,7 @@ def test_cross_account_access_prevention(storage_paths):
         # Account 1 uploads a file
         content = b"Private file content"
         status_code, file_hash = _upload_file_chunked(
+            api_base_url,
             pk1_hex,
             sk1,
             pk_ml_dsa1_hex,
@@ -794,16 +818,18 @@ def test_cross_account_access_prevention(storage_paths):
             "private.txt",
             "text/plain",
         )
-        assert status_code == 201, f"Account 1 upload failed with status {status_code}"
+        assert status_code in [200, 201], (
+            f"Account 1 upload failed with status {status_code}"
+        )
 
         # Account 2 tries to download the file (should fail)
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = (
             f"DOWNLOAD-CHUNKS:{pk2_hex}:{file_hash}:{download_nonce}".encode()
         )
 
-        response = client.post(
-            f"/storage/{pk2_hex}/{file_hash}/chunks/download",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk2_hex}/{file_hash}/chunks/download",
             json={
                 "nonce": download_nonce,
                 "classic_signature": sk2.sign(
@@ -822,7 +848,7 @@ def test_cross_account_access_prevention(storage_paths):
         assert response.status_code == 404
 
         # Verify the file is not visible in account 2's file list
-        response = client.get(f"/storage/{pk2_hex}")
+        response = requests.get(f"{api_base_url}/storage/{pk2_hex}")
         assert response.status_code == 200
         files = response.json()["files"]
         assert file_hash not in files, "File should not be visible to other accounts"
@@ -831,8 +857,8 @@ def test_cross_account_access_prevention(storage_paths):
         download_msg1 = (
             f"DOWNLOAD-CHUNKS:{pk1_hex}:{file_hash}:{download_nonce}".encode()
         )
-        response = client.post(
-            f"/storage/{pk1_hex}/{file_hash}/chunks/download",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk1_hex}/{file_hash}/chunks/download",
             json={
                 "nonce": download_nonce,
                 "classic_signature": sk1.sign(

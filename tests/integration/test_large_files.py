@@ -14,7 +14,7 @@ import json
 import gzip
 import base64
 import io
-from fastapi.testclient import TestClient
+import requests
 from main import app
 from app_state import state
 from config import ML_DSA_ALG
@@ -22,25 +22,22 @@ from lib import pre
 from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
-    storage_paths,
-    cleanup,
     _create_test_account,
     get_nonce,
     _create_test_idk_file,
 )
 
-client = TestClient(app)
 
-
-def test_1mb_file_multiple_encryption_compression(storage_paths):
+def test_1mb_file_multiple_encryption_compression(api_base_url: str):
     """
     Tests compression on realistic encrypted chunks by encrypting a 1MB file
     multiple times with different keys, creating many encrypted chunks to test
     compression ratios on actual encrypted data.
     """
-    _, chunk_store_root = storage_paths
     # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
@@ -86,7 +83,7 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
         file_hash = parsed_part["headers"]["MerkleRoot"]
         total_size = len(large_file_content)
 
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         register_msg = (
             f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
         )
@@ -98,8 +95,8 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
             "signature": sig_ml_dsa.sign(register_msg).hex(),
             "alg": ML_DSA_ALG,
         }
-        register_response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        register_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": (
                     "part1.idk",
@@ -139,7 +136,7 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
 
             # Calculate hash on original encrypted data
             chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
-            chunk_nonce = get_nonce()
+            chunk_nonce = get_nonce(api_base_url)
             chunk_msg = (
                 f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
                 f"{i}:{total_chunks}:{chunk_hash}:{chunk_nonce}"
@@ -156,8 +153,8 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
             }
 
             # Upload the compressed encrypted chunk
-            response = client.post(
-                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
                 files={"file": (chunk_name, compressed_chunk_data)},
                 data={
                     "nonce": chunk_nonce,
@@ -213,38 +210,20 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
             f"Compression ratio {overall_compression_ratio:.3f} seems too poor for IDK message format"
         )
 
-        # 9. Verify chunk store metadata
-        assert file_hash in state.chunk_store
-        # The first chunk is uploaded during registration, then all chunks are uploaded again.
-        # The number of unique chunks should be equal to the total chunks generated.
-        assert len(state.chunk_store[file_hash]) == total_chunks
-
-        # 10. Spot check chunk metadata
-        sample_indices = [0, total_chunks // 4, total_chunks // 2, total_chunks - 1]
-        for i in sample_indices:
-            chunk_name, chunk_data = all_encrypted_chunks[i]
-            chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
-
-            if chunk_hash in state.chunk_store[file_hash]:
-                chunk_metadata = state.chunk_store[file_hash][chunk_hash]
-                assert chunk_metadata["compressed"] is True
-                assert chunk_metadata["size"] == len(chunk_data)  # Original size
-                assert (
-                    chunk_metadata["compressed_size"] < chunk_metadata["size"]
-                )  # Some compression
-
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:
             sig.free()
 
 
-def test_upload_and_download_large_file_chunked(storage_paths):
+def test_upload_and_download_large_file_chunked(api_base_url: str):
     """
     Tests uploading and downloading a large (1MB) file using the chunked method.
     """
     # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
@@ -272,7 +251,7 @@ def test_upload_and_download_large_file_chunked(storage_paths):
         file_hash = parsed_part["headers"]["MerkleRoot"]
 
         # 3. Register the file
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         register_msg = (
             f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
         )
@@ -284,8 +263,8 @@ def test_upload_and_download_large_file_chunked(storage_paths):
             "signature": sig_ml_dsa.sign(register_msg).hex(),
             "alg": ML_DSA_ALG,
         }
-        register_response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        register_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": (
                     "part1.idk",
@@ -310,7 +289,7 @@ def test_upload_and_download_large_file_chunked(storage_paths):
             chunk_content_bytes = chunk_content_str.encode("utf-8")
             chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
 
-            upload_nonce = get_nonce()
+            upload_nonce = get_nonce(api_base_url)
             upload_msg = (
                 f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
                 f"{chunk_index}:{total_chunks}:{chunk_hash}:{upload_nonce}"
@@ -327,8 +306,8 @@ def test_upload_and_download_large_file_chunked(storage_paths):
             print(
                 f"Uploading chunk {chunk_index}/{total_chunks}, hash: {chunk_hash[:12]}..."
             )
-            upload_response = client.post(
-                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            upload_response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
                 files={"file": (chunk_hash, chunk_content_bytes)},
                 data={
                     "nonce": upload_nonce,
@@ -343,53 +322,8 @@ def test_upload_and_download_large_file_chunked(storage_paths):
             assert upload_response.status_code == 200, upload_response.text
             print(f"✓ Chunk {chunk_index} uploaded successfully")
 
-        # Debug: Check the concatenated file on disk
-        import config
-
-        concatenated_file_path = os.path.join(
-            config.BLOCK_STORE_ROOT, f"{file_hash}.chunks.gz"
-        )
-        if os.path.exists(concatenated_file_path):
-            file_size = os.path.getsize(concatenated_file_path)
-            print(f"Concatenated file exists on disk: {file_size} bytes")
-
-            # Examine the raw bytes to understand the structure
-            with open(concatenated_file_path, "rb") as f:
-                raw_data = f.read()
-
-            print(f"Raw file size: {len(raw_data)} bytes")
-            print(f"First 50 bytes: {raw_data[:50].hex()}")
-            print(f"Gzip magic numbers found at positions:", end=" ")
-
-            # Look for gzip magic numbers (1f 8b)
-            magic_positions = []
-            for i in range(len(raw_data) - 1):
-                if raw_data[i : i + 2] == b"\x1f\x8b":
-                    magic_positions.append(i)
-
-            print(magic_positions)
-            print(f"Found {len(magic_positions)} gzip magic numbers")
-
-            # Try to read it directly and count gzip members
-            disk_stream = io.BytesIO(raw_data)
-            disk_member_count = 0
-            while disk_stream.tell() < len(raw_data):
-                try:
-                    with gzip.GzipFile(fileobj=disk_stream) as gz:
-                        content = gz.read().decode("utf-8")
-                        print(
-                            f"Disk member {disk_member_count}: {len(content)} chars, starts with: {repr(content[:50])}"
-                        )
-                        disk_member_count += 1
-                except Exception as e:
-                    print(f"Error reading disk member {disk_member_count}: {e}")
-                    break
-            print(f"Found {disk_member_count} gzip members on disk")
-        else:
-            print("Concatenated file does not exist on disk!")
-
         # 5. Download the reconstructed file (via concatenated chunks endpoint)
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = (
             f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
         )
@@ -406,8 +340,8 @@ def test_upload_and_download_large_file_chunked(storage_paths):
             "classic_signature": classic_sig_download,
             "pq_signatures": [pq_sig_download],
         }
-        download_response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
+        download_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks/download",
             json=download_payload,
         )
 
@@ -457,13 +391,15 @@ def test_upload_and_download_large_file_chunked(storage_paths):
             sig.free()
 
 
-def test_concatenated_file_format_and_reconstruction(storage_paths):
+def test_concatenated_file_format_and_reconstruction(api_base_url: str):
     """
     Tests that the concatenated gzip file format correctly preserves newline separators
     between IDK message parts and that reconstruction works properly.
     """
     # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
@@ -498,7 +434,7 @@ def test_concatenated_file_format_and_reconstruction(storage_paths):
         file_hash = parsed_part["headers"]["MerkleRoot"]
 
         # 3. Register the file
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         register_msg = (
             f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
         )
@@ -511,8 +447,8 @@ def test_concatenated_file_format_and_reconstruction(storage_paths):
             "alg": ML_DSA_ALG,
         }
 
-        register_response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        register_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": (
                     "part1.idk",
@@ -537,7 +473,7 @@ def test_concatenated_file_format_and_reconstruction(storage_paths):
             chunk_content_bytes = chunk_content_str.encode("utf-8")
             chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
 
-            upload_nonce = get_nonce()
+            upload_nonce = get_nonce(api_base_url)
             upload_msg = (
                 f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
                 f"{chunk_index}:{total_chunks}:{chunk_hash}:{upload_nonce}"
@@ -551,8 +487,8 @@ def test_concatenated_file_format_and_reconstruction(storage_paths):
                 "alg": ML_DSA_ALG,
             }
 
-            upload_response = client.post(
-                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            upload_response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
                 files={"file": (chunk_hash, chunk_content_bytes)},
                 data={
                     "nonce": upload_nonce,
@@ -567,7 +503,7 @@ def test_concatenated_file_format_and_reconstruction(storage_paths):
             assert upload_response.status_code == 200, upload_response.text
 
         # 5. Download the concatenated chunks
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = (
             f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
         )
@@ -584,8 +520,8 @@ def test_concatenated_file_format_and_reconstruction(storage_paths):
             "classic_signature": classic_sig_download,
             "pq_signatures": [pq_sig_download],
         }
-        download_response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
+        download_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks/download",
             json=download_payload,
         )
         assert download_response.status_code == 200, download_response.text

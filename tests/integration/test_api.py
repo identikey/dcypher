@@ -5,8 +5,8 @@ import pytest
 import time
 import os
 import json
+import requests
 from unittest import mock
-from fastapi.testclient import TestClient
 from main import (
     app,
 )
@@ -15,16 +15,21 @@ from lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
 from lib import idk_message, pre
 
-client = TestClient(app)
-
 
 @pytest.fixture
 def storage_paths(tmp_path, monkeypatch):
-    """Provides isolated temporary storage paths for tests."""
+    """
+    NOTE: This is a temporary fixture to allow other tests to import it
+    without breaking. It will be removed once all integration tests are
+    refactored to use the `live_api_server` fixture, which handles
+    storage isolation automatically.
+
+    Provides isolated temporary storage paths for tests.
+    """
     block_store_path = tmp_path / "block_store"
     chunk_store_path = tmp_path / "chunk_store"
-    block_store_path.mkdir()
-    chunk_store_path.mkdir()
+    block_store_path.mkdir(exist_ok=True)
+    chunk_store_path.mkdir(exist_ok=True)
 
     # Patch the config module attributes
     monkeypatch.setattr("config.BLOCK_STORE_ROOT", str(block_store_path))
@@ -36,8 +41,9 @@ def storage_paths(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def cleanup():
     """
-    Pytest fixture to reset application state.
-    This ensures tests are isolated, especially when running in parallel with pytest-xdist.
+    NOTE: This is a temporary fixture to allow other tests to import it
+    without breaking. It will be removed once all integration tests are
+    refactored.
     """
     # Reset in-memory state before each test
     state.accounts.clear()
@@ -57,6 +63,7 @@ def cleanup():
 
 
 def _create_test_account(
+    api_base_url: str,
     add_pq_algs: list[str] | None = None,
 ) -> tuple[
     ecdsa.SigningKey, str, dict[str, tuple[oqs.Signature, str]], list[oqs.Signature]
@@ -103,7 +110,7 @@ def _create_test_account(
         all_pq_sks[pk_add_pq_hex] = (sig_add_pq, alg)
 
     # Create message and signatures
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
     message = f"{':'.join(all_pks_hex)}:{nonce}".encode("utf-8")
 
     sig_classic_hex = sk_classic.sign(message, hashfunc=hashlib.sha256).hex()
@@ -133,27 +140,27 @@ def _create_test_account(
     if additional_pq_payload:
         payload["additional_pq_signatures"] = additional_pq_payload
 
-    response = client.post("/accounts", json=payload)
+    response = requests.post(f"{api_base_url}/accounts", json=payload)
     assert response.status_code == 200, response.text
 
     return sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs
 
 
-def get_nonce():
+def get_nonce(api_base_url: str):
     """
     Helper function to request a nonce from the /nonce endpoint.
     Asserts that the request is successful and returns the nonce.
     """
-    response = client.get("/nonce")
+    response = requests.get(f"{api_base_url}/nonce")
     assert response.status_code == 200
     return response.json()["nonce"]
 
 
-def test_get_nonce_endpoint():
+def test_get_nonce_endpoint(api_base_url: str):
     """
     Tests the /nonce endpoint to ensure it returns a valid, well-formed nonce.
     """
-    response = client.get("/nonce")
+    response = requests.get(f"{api_base_url}/nonce")
     assert response.status_code == 200
     data = response.json()
     assert "nonce" in data

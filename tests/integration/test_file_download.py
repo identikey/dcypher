@@ -13,27 +13,43 @@ import json
 import gzip
 import base64
 import os
-from fastapi.testclient import TestClient
+import requests
+import subprocess
+import tempfile
+import collections
 from main import app
 from config import ML_DSA_ALG
 from lib import pre
 from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
-    storage_paths,
-    cleanup,
     _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
 )
 
-client = TestClient(app)
+# Define a named tuple for the setup data to provide clear types
+SetupData = collections.namedtuple(
+    "SetupData",
+    [
+        "sk_classic",
+        "pk_classic_hex",
+        "all_pq_sks",
+        "oqs_sigs_to_free",
+        "file_hash",
+        "original_content",
+        "full_idk_file",
+        "uploaded_chunks",
+        "total_chunks",
+    ],
+)
 
 
-@pytest.fixture
-def setup_uploaded_file(storage_paths):
-    """A fixture to set up a fully uploaded file with chunks for download tests."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+def _setup_uploaded_file(api_base_url: str) -> SetupData:
+    """A helper to set up a fully uploaded file with chunks for download tests."""
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     pk_ml_dsa_hex = next(iter(all_pq_sks))
     sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
@@ -46,10 +62,10 @@ def setup_uploaded_file(storage_paths):
     data_chunks = idk_parts[1:]
 
     # Register the file
-    register_nonce = get_nonce()
+    register_nonce = get_nonce(api_base_url)
     register_msg = f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
-    register_response = client.post(
-        f"/storage/{pk_classic_hex}/register",
+    register_response = requests.post(
+        f"{api_base_url}/storage/{pk_classic_hex}/register",
         files={
             "idk_part_one": ("test.idk.part1", part_one, "application/octet-stream")
         },
@@ -79,11 +95,11 @@ def setup_uploaded_file(storage_paths):
     for i, chunk_content in enumerate(data_chunks, start=1):
         chunk_bytes = chunk_content.encode("utf-8")
         chunk_hash = hashlib.blake2b(chunk_bytes).hexdigest()
-        chunk_nonce = get_nonce()
+        chunk_nonce = get_nonce(api_base_url)
         chunk_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{i}:{len(idk_parts)}:{chunk_hash}:{chunk_nonce}".encode()
 
-        chunk_response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+        chunk_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
             files={"file": (f"chunk_{i}", chunk_bytes, "application/octet-stream")},
             data={
                 "nonce": chunk_nonce,
@@ -111,111 +127,100 @@ def setup_uploaded_file(storage_paths):
     # The full IDK file content is needed for verification after download
     full_idk_file = "".join(idk_parts)
 
-    yield {
-        "sk_classic": sk_classic,
-        "pk_classic_hex": pk_classic_hex,
-        "all_pq_sks": all_pq_sks,
-        "file_hash": file_hash,
-        "original_content": original_content,
-        "full_idk_file": full_idk_file.encode("utf-8"),
-        "uploaded_chunks": uploaded_chunks_info,
-        "total_chunks": len(idk_parts),
-    }
-
-    # Cleanup
-    for sig in oqs_sigs_to_free:
-        sig.free()
+    return SetupData(
+        sk_classic=sk_classic,
+        pk_classic_hex=pk_classic_hex,
+        all_pq_sks=all_pq_sks,
+        oqs_sigs_to_free=oqs_sigs_to_free,
+        file_hash=file_hash,
+        original_content=original_content,
+        full_idk_file=full_idk_file.encode("utf-8"),
+        uploaded_chunks=uploaded_chunks_info,
+        total_chunks=len(idk_parts),
+    )
 
 
-def test_download_file_successful(setup_uploaded_file):
+def test_download_file_successful(api_base_url: str):
     """Tests the successful download of a whole file after chunked upload."""
-    data = setup_uploaded_file
-    sk_classic, pk_classic_hex, all_pq_sks, file_hash = (
-        data["sk_classic"],
-        data["pk_classic_hex"],
-        data["all_pq_sks"],
-        data["file_hash"],
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    data = _setup_uploaded_file(api_base_url)
+    try:
+        pk_ml_dsa_hex = next(iter(data.all_pq_sks))
+        sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
 
-    download_nonce = get_nonce()
-    download_msg = (
-        f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
-    )
-    classic_sig_download = sk_classic.sign(download_msg, hashfunc=hashlib.sha256).hex()
-    pq_sig_download = {
-        "public_key": pk_ml_dsa_hex,
-        "signature": sig_ml_dsa.sign(download_msg).hex(),
-        "alg": ML_DSA_ALG,
-    }
+        download_nonce = get_nonce(api_base_url)
+        download_msg = f"DOWNLOAD-CHUNKS:{data.pk_classic_hex}:{data.file_hash}:{download_nonce}".encode()
+        classic_sig_download = data.sk_classic.sign(
+            download_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
 
-    download_payload = {
-        "nonce": download_nonce,
-        "classic_signature": classic_sig_download,
-        "pq_signatures": [pq_sig_download],
-    }
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": classic_sig_download,
+            "pq_signatures": [pq_sig_download],
+        }
 
-    # This endpoint does not exist anymore. We should download the concatenated file.
-    # The test for downloading individual chunks is separate.
-    download_response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
-        json=download_payload,
-    )
+        download_response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/download",
+            json=download_payload,
+        )
 
-    assert download_response.status_code == 200, download_response.text
-    # We can't easily verify the content of the concatenated Gzip file byte-for-byte,
-    # but we can verify its headers and that it's a valid Gzip file.
-    assert download_response.headers["content-type"] == "application/gzip"
+        assert download_response.status_code == 200, download_response.text
+        assert download_response.headers["content-type"] == "application/gzip"
+    finally:
+        for sig in data.oqs_sigs_to_free:
+            sig.free()
 
 
-def test_download_file_unauthorized(setup_uploaded_file):
+def test_download_file_unauthorized(api_base_url: str):
     """Tests that file download fails if the signatures are invalid."""
-    data = setup_uploaded_file
-    sk_classic, pk_classic_hex, all_pq_sks, file_hash = (
-        data["sk_classic"],
-        data["pk_classic_hex"],
-        data["all_pq_sks"],
-        data["file_hash"],
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    data = _setup_uploaded_file(api_base_url)
+    try:
+        pk_ml_dsa_hex = next(iter(data.all_pq_sks))
+        sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
 
-    download_nonce = get_nonce()
-    incorrect_msg = b"wrong message for download"
-    invalid_sig = sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
-    correct_download_msg = (
-        f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
-    )
-    pq_sig_download = {
-        "public_key": pk_ml_dsa_hex,
-        "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
-        "alg": ML_DSA_ALG,
-    }
+        download_nonce = get_nonce(api_base_url)
+        incorrect_msg = b"wrong message for download"
+        invalid_sig = data.sk_classic.sign(incorrect_msg, hashfunc=hashlib.sha256).hex()
+        correct_download_msg = f"DOWNLOAD-CHUNKS:{data.pk_classic_hex}:{data.file_hash}:{download_nonce}".encode()
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
 
-    download_payload = {
-        "nonce": download_nonce,
-        "classic_signature": invalid_sig,
-        "pq_signatures": [pq_sig_download],
-    }
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": invalid_sig,
+            "pq_signatures": [pq_sig_download],
+        }
 
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
-        json=download_payload,
-    )
-    assert response.status_code == 401
-    assert "Invalid classic signature" in response.text
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/download",
+            json=download_payload,
+        )
+        assert response.status_code == 401
+        assert "Invalid classic signature" in response.text
+    finally:
+        for sig in data.oqs_sigs_to_free:
+            sig.free()
 
 
-def test_download_file_nonexistent():
+def test_download_file_nonexistent(api_base_url: str):
     """Tests that downloading a non-existent file returns a 404 error."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
         fake_file_hash = "nonexistent-file-hash-12345"
-        download_nonce = get_nonce()
+        download_nonce = get_nonce(api_base_url)
         download_msg = f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{fake_file_hash}:{download_nonce}".encode()
         classic_sig_download = sk_classic.sign(
             download_msg, hashfunc=hashlib.sha256
@@ -232,8 +237,8 @@ def test_download_file_nonexistent():
             "pq_signatures": [pq_sig_download],
         }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/{fake_file_hash}/chunks/download",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/{fake_file_hash}/chunks/download",
             json=download_payload,
         )
         assert response.status_code == 404
@@ -243,237 +248,232 @@ def test_download_file_nonexistent():
             sig.free()
 
 
-def test_download_file_compressed(setup_uploaded_file):
+def test_download_file_compressed(api_base_url: str):
     """This test is now covered by test_download_chunk_compressed, as whole-file compression is a client concern."""
     pass
 
 
-def test_download_chunk_compressed(setup_uploaded_file):
+def test_download_chunk_compressed(api_base_url: str):
     """Tests downloading individual chunks with compression handling."""
-    data = setup_uploaded_file
-    sk_classic, pk_classic_hex, all_pq_sks, file_hash = (
-        data["sk_classic"],
-        data["pk_classic_hex"],
-        data["all_pq_sks"],
-        data["file_hash"],
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    data = _setup_uploaded_file(api_base_url)
+    try:
+        pk_ml_dsa_hex = next(iter(data.all_pq_sks))
+        sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
 
-    # We will re-upload one chunk with compression to test this feature
-    chunk_to_compress = data["uploaded_chunks"][0]
-    original_chunk_data = chunk_to_compress["original_data"]
-    compressed_chunk_data = gzip.compress(original_chunk_data, compresslevel=9)
-    chunk_hash = chunk_to_compress["hash"]
-    total_chunks = data["total_chunks"]
-    chunk_index = 1
+        # We will re-upload one chunk with compression to test this feature
+        chunk_to_compress = data.uploaded_chunks[0]
+        original_chunk_data = chunk_to_compress["original_data"]
+        compressed_chunk_data = gzip.compress(original_chunk_data, compresslevel=9)
+        chunk_hash = chunk_to_compress["hash"]
+        total_chunks = data.total_chunks
+        chunk_index = 1
 
-    chunk_nonce = get_nonce()
-    chunk_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_index}:{total_chunks}:{chunk_hash}:{chunk_nonce}".encode()
+        chunk_nonce = get_nonce(api_base_url)
+        chunk_msg = f"UPLOAD-CHUNK:{data.pk_classic_hex}:{data.file_hash}:{chunk_index}:{total_chunks}:{chunk_hash}:{chunk_nonce}".encode()
 
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks",
-        files={
-            "file": ("chunk_1_compressed", compressed_chunk_data, "application/gzip")
-        },
-        data={
-            "nonce": chunk_nonce,
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks",
+            files={
+                "file": (
+                    "chunk_1_compressed",
+                    compressed_chunk_data,
+                    "application/gzip",
+                )
+            },
+            data={
+                "nonce": chunk_nonce,
+                "chunk_hash": chunk_hash,
+                "chunk_index": str(chunk_index),
+                "total_chunks": str(total_chunks),
+                "compressed": "true",
+                "classic_signature": data.sk_classic.sign(
+                    chunk_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "pq_signatures": json.dumps(
+                    [
+                        {
+                            "public_key": pk_ml_dsa_hex,
+                            "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ]
+                ),
+            },
+        )
+        assert response.status_code == 200
+
+        # Test 1: Download compressed chunk as compressed
+        download_nonce = get_nonce(api_base_url)
+        download_msg = f"DOWNLOAD-CHUNK:{data.pk_classic_hex}:{data.file_hash}:{chunk_hash}:{download_nonce}".encode()
+        download_payload = {
             "chunk_hash": chunk_hash,
-            "chunk_index": str(chunk_index),
-            "total_chunks": str(total_chunks),
-            "compressed": "true",
-            "classic_signature": sk_classic.sign(
-                chunk_msg, hashfunc=hashlib.sha256
+            "nonce": download_nonce,
+            "classic_signature": data.sk_classic.sign(
+                download_msg, hashfunc=hashlib.sha256
             ).hex(),
-            "pq_signatures": json.dumps(
-                [
-                    {
-                        "public_key": pk_ml_dsa_hex,
-                        "signature": sig_ml_dsa.sign(chunk_msg).hex(),
-                        "alg": ML_DSA_ALG,
-                    }
-                ]
-            ),
-        },
-    )
-    assert response.status_code == 200
+            "pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(download_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+            "compressed": True,
+        }
 
-    # Test 1: Download compressed chunk as compressed
-    download_nonce = get_nonce()
-    download_msg = f"DOWNLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_hash}:{download_nonce}".encode()
-    download_payload = {
-        "chunk_hash": chunk_hash,
-        "nonce": download_nonce,
-        "classic_signature": sk_classic.sign(
-            download_msg, hashfunc=hashlib.sha256
-        ).hex(),
-        "pq_signatures": [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(download_msg).hex(),
-                "alg": ML_DSA_ALG,
-            }
-        ],
-        "compressed": True,
-    }
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/{chunk_hash}/download",
+            json=download_payload,
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/gzip"
+        assert response.content == compressed_chunk_data
 
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/{chunk_hash}/download",
-        json=download_payload,
-    )
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/gzip"
-    assert response.content == compressed_chunk_data
-
-    # Test 2: Download compressed chunk as decompressed
-    download_nonce = get_nonce()
-    download_msg = f"DOWNLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_hash}:{download_nonce}".encode()
-    download_payload = {
-        "chunk_hash": chunk_hash,
-        "nonce": download_nonce,
-        "classic_signature": sk_classic.sign(
-            download_msg, hashfunc=hashlib.sha256
-        ).hex(),
-        "pq_signatures": [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(download_msg).hex(),
-                "alg": ML_DSA_ALG,
-            }
-        ],
-        "compressed": False,
-    }
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/{chunk_hash}/download",
-        json=download_payload,
-    )
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/octet-stream"
-    assert response.content == original_chunk_data
+        # Test 2: Download compressed chunk as decompressed
+        download_nonce = get_nonce(api_base_url)
+        download_msg = f"DOWNLOAD-CHUNK:{data.pk_classic_hex}:{data.file_hash}:{chunk_hash}:{download_nonce}".encode()
+        download_payload = {
+            "chunk_hash": chunk_hash,
+            "nonce": download_nonce,
+            "classic_signature": data.sk_classic.sign(
+                download_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(download_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+            "compressed": False,
+        }
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/{chunk_hash}/download",
+            json=download_payload,
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/octet-stream"
+        assert response.content == original_chunk_data
+    finally:
+        for sig in data.oqs_sigs_to_free:
+            sig.free()
 
 
-def test_download_chunk_unauthorized(setup_uploaded_file):
+def test_download_chunk_unauthorized(api_base_url: str):
     """Tests that chunk download fails with invalid signatures."""
-    data = setup_uploaded_file
-    sk_classic, pk_classic_hex, all_pq_sks, file_hash = (
-        data["sk_classic"],
-        data["pk_classic_hex"],
-        data["all_pq_sks"],
-        data["file_hash"],
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-    chunk_hash = data["uploaded_chunks"][0]["hash"]
+    data = _setup_uploaded_file(api_base_url)
+    try:
+        pk_ml_dsa_hex = next(iter(data.all_pq_sks))
+        sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
+        chunk_hash = data.uploaded_chunks[0]["hash"]
 
-    download_nonce = get_nonce()
-    invalid_msg = b"wrong message for chunk download"
-    invalid_sig = sk_classic.sign(invalid_msg, hashfunc=hashlib.sha256).hex()
-    correct_download_msg = f"DOWNLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_hash}:{download_nonce}".encode()
-    pq_sig_download = {
-        "public_key": pk_ml_dsa_hex,
-        "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
-        "alg": ML_DSA_ALG,
-    }
+        download_nonce = get_nonce(api_base_url)
+        invalid_msg = b"wrong message for chunk download"
+        invalid_sig = data.sk_classic.sign(invalid_msg, hashfunc=hashlib.sha256).hex()
+        correct_download_msg = f"DOWNLOAD-CHUNK:{data.pk_classic_hex}:{data.file_hash}:{chunk_hash}:{download_nonce}".encode()
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(correct_download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
 
-    download_payload = {
-        "chunk_hash": chunk_hash,
-        "nonce": download_nonce,
-        "classic_signature": invalid_sig,
-        "pq_signatures": [pq_sig_download],
-        "compressed": False,
-    }
+        download_payload = {
+            "chunk_hash": chunk_hash,
+            "nonce": download_nonce,
+            "classic_signature": invalid_sig,
+            "pq_signatures": [pq_sig_download],
+            "compressed": False,
+        }
 
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/{chunk_hash}/download",
-        json=download_payload,
-    )
-    assert response.status_code == 401
-    assert "Invalid classic signature" in response.text
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/{chunk_hash}/download",
+            json=download_payload,
+        )
+        assert response.status_code == 401
+        assert "Invalid classic signature" in response.text
+    finally:
+        for sig in data.oqs_sigs_to_free:
+            sig.free()
 
 
-def test_download_chunk_nonexistent(setup_uploaded_file):
+def test_download_chunk_nonexistent(api_base_url: str):
     """Tests that downloading a non-existent chunk returns a 404 error."""
-    data = setup_uploaded_file
-    sk_classic, pk_classic_hex, all_pq_sks, file_hash = (
-        data["sk_classic"],
-        data["pk_classic_hex"],
-        data["all_pq_sks"],
-        data["file_hash"],
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    data = _setup_uploaded_file(api_base_url)
+    try:
+        pk_ml_dsa_hex = next(iter(data.all_pq_sks))
+        sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
 
-    fake_chunk_hash = "nonexistent-chunk-hash-12345"
-    download_nonce = get_nonce()
-    download_msg = f"DOWNLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{fake_chunk_hash}:{download_nonce}".encode()
-    download_payload = {
-        "chunk_hash": fake_chunk_hash,
-        "nonce": download_nonce,
-        "classic_signature": sk_classic.sign(
-            download_msg, hashfunc=hashlib.sha256
-        ).hex(),
-        "pq_signatures": [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(download_msg).hex(),
-                "alg": ML_DSA_ALG,
-            }
-        ],
-        "compressed": False,
-    }
+        fake_chunk_hash = "nonexistent-chunk-hash-12345"
+        download_nonce = get_nonce(api_base_url)
+        download_msg = f"DOWNLOAD-CHUNK:{data.pk_classic_hex}:{data.file_hash}:{fake_chunk_hash}:{download_nonce}".encode()
+        download_payload = {
+            "chunk_hash": fake_chunk_hash,
+            "nonce": download_nonce,
+            "classic_signature": data.sk_classic.sign(
+                download_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(download_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+            "compressed": False,
+        }
 
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/{fake_chunk_hash}/download",
-        json=download_payload,
-    )
-    assert response.status_code == 404
-    assert "Chunk not found" in response.text
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/{fake_chunk_hash}/download",
+            json=download_payload,
+        )
+        assert response.status_code == 404
+        assert "Chunk not found" in response.text
+    finally:
+        for sig in data.oqs_sigs_to_free:
+            sig.free()
 
 
-def test_concatenated_chunks_download_workflow(setup_uploaded_file):
+def test_concatenated_chunks_download_workflow(api_base_url: str):
     """Tests downloading the fully concatenated gzip file."""
-    data = setup_uploaded_file
-    sk_classic, pk_classic_hex, all_pq_sks, file_hash = (
-        data["sk_classic"],
-        data["pk_classic_hex"],
-        data["all_pq_sks"],
-        data["file_hash"],
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    data = _setup_uploaded_file(api_base_url)
+    try:
+        pk_ml_dsa_hex = next(iter(data.all_pq_sks))
+        sig_ml_dsa, _ = data.all_pq_sks[pk_ml_dsa_hex]
 
-    download_nonce = get_nonce()
-    download_msg = (
-        f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
-    )
-    download_payload = {
-        "nonce": download_nonce,
-        "classic_signature": sk_classic.sign(
-            download_msg, hashfunc=hashlib.sha256
-        ).hex(),
-        "pq_signatures": [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(download_msg).hex(),
-                "alg": ML_DSA_ALG,
-            }
-        ],
-    }
+        download_nonce = get_nonce(api_base_url)
+        download_msg = f"DOWNLOAD-CHUNKS:{data.pk_classic_hex}:{data.file_hash}:{download_nonce}".encode()
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": data.sk_classic.sign(
+                download_msg, hashfunc=hashlib.sha256
+            ).hex(),
+            "pq_signatures": [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(download_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+        }
 
-    response = client.post(
-        f"/storage/{pk_classic_hex}/{file_hash}/chunks/download", json=download_payload
-    )
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/gzip"
-    assert "x-chunk-count" in response.headers
-    assert int(response.headers["x-chunk-count"]) > 1
+        response = requests.post(
+            f"{api_base_url}/storage/{data.pk_classic_hex}/{data.file_hash}/chunks/download",
+            json=download_payload,
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/gzip"
+        assert "x-chunk-count" in response.headers
+        assert int(response.headers["x-chunk-count"]) > 1
 
-    # Basic verification: can gunzip decompress it without error?
-    import subprocess
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(suffix=".gz", delete=True) as temp_file:
-        temp_file.write(response.content)
-        temp_file.flush()
-        result = subprocess.run(["gunzip", "-t", temp_file.name], capture_output=True)
-        assert result.returncode == 0, f"gunzip test failed: {result.stderr.decode()}"
+        with tempfile.NamedTemporaryFile(suffix=".gz", delete=True) as temp_file:
+            temp_file.write(response.content)
+            temp_file.flush()
+            result = subprocess.run(
+                ["gunzip", "-t", temp_file.name], capture_output=True
+            )
+            assert result.returncode == 0, (
+                f"gunzip test failed: {result.stderr.decode()}"
+            )
+    finally:
+        for sig in data.oqs_sigs_to_free:
+            sig.free()

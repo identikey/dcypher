@@ -10,28 +10,25 @@ import hashlib
 import oqs
 import pytest
 import json
-from fastapi.testclient import TestClient
+import requests
 from main import app
 from config import ML_DSA_ALG
 
 from tests.integration.test_api import (
-    storage_paths,
-    cleanup,
     _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
 )
 
-client = TestClient(app)
 
-
-def test_upload_file_successful(storage_paths):
+def test_upload_file_successful(api_base_url: str):
     """
     Tests the successful chunked upload of a file.
     """
-    block_store_root, _ = storage_paths
     # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
@@ -46,7 +43,7 @@ def test_upload_file_successful(storage_paths):
         data_chunks = idk_parts[1:]
 
         # 3. Register the file by uploading the first part
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         register_msg = (
             f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
         )
@@ -57,8 +54,8 @@ def test_upload_file_successful(storage_paths):
             "alg": ML_DSA_ALG,
         }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": ("test.idk.part1", part_one, "application/octet-stream")
             },
@@ -81,7 +78,7 @@ def test_upload_file_successful(storage_paths):
             chunk_bytes = chunk_content.encode("utf-8")
             chunk_hash = hashlib.blake2b(chunk_bytes).hexdigest()
 
-            upload_nonce = get_nonce()
+            upload_nonce = get_nonce(api_base_url)
             upload_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{chunk_index}:{total_parts}:{chunk_hash}:{upload_nonce}".encode()
 
             classic_sig = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
@@ -91,8 +88,8 @@ def test_upload_file_successful(storage_paths):
                 "alg": ML_DSA_ALG,
             }
 
-            chunk_response = client.post(
-                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+            chunk_response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
                 files={
                     "file": (
                         f"chunk_{chunk_index}",
@@ -112,11 +109,11 @@ def test_upload_file_successful(storage_paths):
             assert chunk_response.status_code == 200, chunk_response.text
 
         # 5. Verify file metadata and content
-        response = client.get(f"/storage/{pk_classic_hex}")
+        response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}")
         assert response.status_code == 200
         assert response.json()["files"] == [file_hash]
 
-        response = client.get(f"/storage/{pk_classic_hex}/{file_hash}")
+        response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}")
         assert response.status_code == 200
         metadata = response.json()
         assert metadata["filename"] == "test.txt"
@@ -128,14 +125,16 @@ def test_upload_file_successful(storage_paths):
             sig.free()
 
 
-def test_register_file_invalid_merkle_root():
+def test_register_file_invalid_merkle_root(api_base_url: str):
     """
     Tests that file registration fails if the MerkleRoot in the IDK part
     does not match the hash derived from the content (simulated).
     The server now derives the hash, so the client cannot lie. This test
     checks if a malformed IDK part is rejected.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
@@ -147,7 +146,7 @@ def test_register_file_invalid_merkle_root():
 
         # The signature is now invalid, but let's test the server's parsing
         # by creating a new valid signature for a fake hash.
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         register_msg = (
             f"REGISTER:{pk_classic_hex}:{real_file_hash}:{register_nonce}".encode()
         )
@@ -158,8 +157,8 @@ def test_register_file_invalid_merkle_root():
             "alg": ML_DSA_ALG,
         }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": (
                     "test.idk.part1",
@@ -186,11 +185,13 @@ def test_register_file_invalid_merkle_root():
             sig.free()
 
 
-def test_upload_unauthorized_registration():
+def test_upload_unauthorized_registration(api_base_url: str):
     """
     Tests that file registration fails if signatures are invalid.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
+        api_base_url
+    )
     try:
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
@@ -198,7 +199,7 @@ def test_upload_unauthorized_registration():
         idk_parts, file_hash = _create_test_idk_file_parts(b"content")
         part_one = idk_parts[0]
 
-        register_nonce = get_nonce()
+        register_nonce = get_nonce(api_base_url)
         # Sign the wrong message
         invalid_msg = b"this is not the message to sign"
         classic_sig = sk_classic.sign(invalid_msg, hashfunc=hashlib.sha256).hex()
@@ -213,8 +214,8 @@ def test_upload_unauthorized_registration():
             "alg": ML_DSA_ALG,
         }
 
-        response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": ("test.idk.part1", part_one, "application/octet-stream")
             },
@@ -234,14 +235,14 @@ def test_upload_unauthorized_registration():
             sig.free()
 
 
-def test_register_file_malformed_pq_signatures():
+def test_register_file_malformed_pq_signatures(api_base_url: str):
     """
     Tests that file registration fails if pq_signatures is not valid JSON.
     """
-    _, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account()
+    _, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account(api_base_url)
     try:
-        response = client.post(
-            f"/storage/{pk_classic_hex}/register",
+        response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
             files={
                 "idk_part_one": (
                     "test.idk.part1",
@@ -250,7 +251,7 @@ def test_register_file_malformed_pq_signatures():
                 )
             },
             data={
-                "nonce": get_nonce(),
+                "nonce": get_nonce(api_base_url),
                 "filename": "test.txt",
                 "content_type": "text/plain",
                 "total_size": "12",

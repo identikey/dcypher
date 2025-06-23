@@ -6,8 +6,8 @@ import time
 import os
 import json
 import hmac
+import requests
 from unittest import mock
-from fastapi.testclient import TestClient
 from main import (
     app,
 )
@@ -17,16 +17,12 @@ from config import ML_DSA_ALG
 from security import SERVER_SECRET
 
 from tests.integration.test_api import (
-    storage_paths,
-    cleanup,
     _create_test_account,
     get_nonce,
 )
 
-client = TestClient(app)
 
-
-def test_create_account_successful():
+def test_create_account_successful(api_base_url: str):
     """
     Tests the successful creation of a hybrid account with one mandatory classic
     signature, one mandatory PQ signature (ML-DSA), and one additional optional
@@ -34,7 +30,7 @@ def test_create_account_successful():
     hybrid account.
     """
     # 1. Get nonce
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
 
     # 2. Prepare classic key
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -78,28 +74,34 @@ def test_create_account_successful():
                 ],
                 "nonce": nonce,
             }
-            response = client.post("/accounts", json=payload)
+            response = requests.post(f"{api_base_url}/accounts", json=payload)
 
             # 8. Assert success
             assert response.status_code == 200, response.text
             assert response.json()["message"] == "Account created successfully"
-            assert len(state.accounts) == 1
-            account = state.accounts[pk_classic_hex]
+
+            # Verify on server-side
+            get_resp = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
+            assert get_resp.status_code == 200
+            account_details = get_resp.json()
+            retrieved_pq_keys = {
+                item["alg"]: item["public_key"] for item in account_details["pq_keys"]
+            }
             expected_pq_keys = {
                 ML_DSA_ALG: pk_ml_dsa_hex,
                 add_pq_alg: pk_add_pq_hex,
             }
-            assert account == expected_pq_keys
+            assert retrieved_pq_keys == expected_pq_keys
 
 
-def test_create_account_successful_mandatory_only():
+def test_create_account_successful_mandatory_only(api_base_url: str):
     """
     Tests the successful creation of a hybrid account with only the mandatory
     classic and PQ signatures (ML-DSA), without any additional PQ signatures.
     This is the minimal successful account creation scenario.
     """
     # 1. Get nonce
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
 
     # 2. Prepare classic key
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -130,24 +132,30 @@ def test_create_account_successful_mandatory_only():
             },
             "nonce": nonce,
         }
-        response = client.post("/accounts", json=payload)
+        response = requests.post(f"{api_base_url}/accounts", json=payload)
 
         # 7. Assert success
         assert response.status_code == 200, response.text
         assert response.json()["message"] == "Account created successfully"
-        assert len(state.accounts) == 1
-        account = state.accounts[pk_classic_hex]
+
+        # Verify on server-side
+        get_resp = requests.get(f"{api_base_url}/accounts/{pk_classic_hex}")
+        assert get_resp.status_code == 200
+        account_details = get_resp.json()
+        retrieved_pq_keys = {
+            item["alg"]: item["public_key"] for item in account_details["pq_keys"]
+        }
         expected_pq_keys = {ML_DSA_ALG: pk_ml_dsa_hex}
-        assert account == expected_pq_keys
+        assert retrieved_pq_keys == expected_pq_keys
 
 
-def test_create_account_invalid_nonce():
+def test_create_account_invalid_nonce(api_base_url: str):
     """
     Tests that an account creation request fails if an invalid nonce is provided.
     An invalid nonce is one that does not match the expected format or signature.
     """
-    response = client.post(
-        "/accounts",
+    response = requests.post(
+        f"{api_base_url}/accounts",
         json={
             "public_key": "test",
             "signature": "test",
@@ -163,39 +171,62 @@ def test_create_account_invalid_nonce():
     assert "Invalid or expired nonce" in response.text
 
 
-def test_create_account_used_nonce():
+def test_create_account_used_nonce(api_base_url: str):
     """
     Tests that an account creation request fails if a valid but already used
     nonce is provided. This prevents replay attacks.
     """
-    nonce = get_nonce()
-    state.used_nonces.add(nonce)  # Manually add to used nonces
-    response = client.post(
-        "/accounts",
-        json={
-            "public_key": "test",
-            "signature": "test",
-            "ml_dsa_signature": {
-                "public_key": "test",
-                "signature": "test",
-                "alg": ML_DSA_ALG,
-            },
-            "nonce": nonce,
-        },
-    )
-    assert response.status_code == 400
-    assert "Nonce has already been used" in response.text
+    # Create a valid account first to use its nonce
+    _, _, _, oqs_sigs_to_free = _create_test_account(api_base_url)
+    try:
+        # Now try to re-use the nonce from the `state` object by accessing it
+        # via the live server instance.
+        nonce = get_nonce(api_base_url)
+
+        # To simulate a used nonce, we have to create an account first.
+        # The _create_test_account helper already does that. Let's make a new one.
+        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+        with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+            pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+            message = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce}".encode("utf-8")
+            sig_classic = sk_classic.sign(message, hashfunc=hashlib.sha256).hex()
+            sig_ml_dsa_hex = sig_ml_dsa.sign(message).hex()
+
+            payload = {
+                "public_key": pk_classic_hex,
+                "signature": sig_classic,
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa_hex,
+                    "alg": ML_DSA_ALG,
+                },
+                "nonce": nonce,
+            }
+            # This one should succeed
+            response = requests.post(f"{api_base_url}/accounts", json=payload)
+            assert response.status_code == 200
+
+            # This one should fail with a used nonce
+            response = requests.post(f"{api_base_url}/accounts", json=payload)
+            assert response.status_code == 400
+            assert "Nonce has already been used" in response.text
+    finally:
+        for sig in oqs_sigs_to_free:
+            sig.free()
 
 
-def test_create_account_incorrect_mandatory_pq_alg():
+def test_create_account_incorrect_mandatory_pq_alg(api_base_url: str):
     """
     Tests that account creation fails if the mandatory PQ algorithm is not the
     expected one (ML-DSA-87). The server must enforce this specific algorithm
     for the mandatory PQ signature.
     """
-    nonce = get_nonce()
-    response = client.post(
-        "/accounts",
+    nonce = get_nonce(api_base_url)
+    response = requests.post(
+        f"{api_base_url}/accounts",
         json={
             "public_key": "test",
             "signature": "test",
@@ -211,14 +242,14 @@ def test_create_account_incorrect_mandatory_pq_alg():
     assert "Incorrect mandatory PQ algorithm" in response.text
 
 
-def test_create_account_unsupported_additional_pq_alg():
+def test_create_account_unsupported_additional_pq_alg(api_base_url: str):
     """
     Tests that account creation fails if an additional PQ signature uses an
     algorithm that is not supported by the server.
     """
-    nonce = get_nonce()
-    response = client.post(
-        "/accounts",
+    nonce = get_nonce(api_base_url)
+    response = requests.post(
+        f"{api_base_url}/accounts",
         json={
             "public_key": "test",
             "signature": "test",
@@ -241,15 +272,15 @@ def test_create_account_unsupported_additional_pq_alg():
     assert "Unsupported PQ algorithm" in response.text
 
 
-def test_create_account_duplicate_pq_alg():
+def test_create_account_duplicate_pq_alg(api_base_url: str):
     """
     Tests that account creation fails if the request contains multiple signatures
     for the same post-quantum algorithm.
     """
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
     # Prepare a payload where an additional signature uses the mandatory alg
-    response = client.post(
-        "/accounts",
+    response = requests.post(
+        f"{api_base_url}/accounts",
         json={
             "public_key": "test",
             "signature": "test",
@@ -272,7 +303,7 @@ def test_create_account_duplicate_pq_alg():
     assert "Duplicate algorithm types are not allowed" in response.text
 
 
-def test_create_account_invalid_classic_signature():
+def test_create_account_invalid_classic_signature(api_base_url: str):
     """
     Tests that account creation fails when the classic ECDSA signature is
     invalid. A signature is considered invalid if it was not created by the
@@ -280,7 +311,7 @@ def test_create_account_invalid_classic_signature():
     message. This test simulates this by signing a different message.
     """
     # 1. Get nonce
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
 
     # 2. Prepare keys
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -302,8 +333,8 @@ def test_create_account_invalid_classic_signature():
         ).hex()
 
         # 5. Attempt to create account with the invalid signature
-        response = client.post(
-            "/accounts",
+        response = requests.post(
+            f"{api_base_url}/accounts",
             json={
                 "public_key": pk_classic_hex,
                 "signature": invalid_sig_classic_hex,
@@ -321,14 +352,14 @@ def test_create_account_invalid_classic_signature():
         assert "Invalid classic signature" in response.text
 
 
-def test_create_account_invalid_mandatory_pq_signature():
+def test_create_account_invalid_mandatory_pq_signature(api_base_url: str):
     """
     Tests that account creation fails when the mandatory post-quantum signature
     is invalid. This is simulated by providing a valid signature for the wrong
     message.
     """
     # 1. Get nonce
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
 
     # 2. Prepare keys
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -348,8 +379,8 @@ def test_create_account_invalid_mandatory_pq_signature():
         invalid_sig_ml_dsa_hex = sig_ml_dsa.sign(incorrect_message).hex()
 
         # 5. Attempt account creation
-        response = client.post(
-            "/accounts",
+        response = requests.post(
+            f"{api_base_url}/accounts",
             json={
                 "public_key": pk_classic_hex,
                 "signature": sig_classic_hex,
@@ -370,14 +401,14 @@ def test_create_account_invalid_mandatory_pq_signature():
         )
 
 
-def test_create_account_invalid_additional_pq_signature():
+def test_create_account_invalid_additional_pq_signature(api_base_url: str):
     """
     Tests that account creation fails when one of the additional post-quantum
     signatures is invalid. This is simulated by providing a valid signature for
     the wrong message.
     """
     # 1. Get nonce
-    nonce = get_nonce()
+    nonce = get_nonce(api_base_url)
 
     # 2. Prepare keys
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -407,8 +438,8 @@ def test_create_account_invalid_additional_pq_signature():
         invalid_sig_add_pq_hex = sig_add_pq.sign(incorrect_message).hex()
 
         # 6. Attempt account creation
-        response = client.post(
-            "/accounts",
+        response = requests.post(
+            f"{api_base_url}/accounts",
             json={
                 "public_key": pk_classic_hex,
                 "signature": sig_classic_hex,
@@ -436,25 +467,25 @@ def test_create_account_invalid_additional_pq_signature():
         )
 
 
-def test_create_account_already_exists():
+def test_create_account_already_exists(api_base_url: str):
     """
     Tests that the server prevents creating a new account with a classic public
     key that is already in use. The classic public key must be unique across
     all accounts.
     """
     # 1. Create an initial account
-    sk_classic, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account()
+    sk_classic, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account(api_base_url)
     try:
         # 2. Attempt to create a second account with the same classic public key
-        nonce2 = get_nonce()
+        nonce2 = get_nonce(api_base_url)
         with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
             pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
             message2 = f"{pk_classic_hex}:{pk_ml_dsa_new_hex}:{nonce2}".encode("utf-8")
             sig2_classic = sk_classic.sign(message2, hashfunc=hashlib.sha256).hex()
             sig2_ml_dsa = sig_ml_dsa_new.sign(message2).hex()
 
-            response2 = client.post(
-                "/accounts",
+            response2 = requests.post(
+                f"{api_base_url}/accounts",
                 json={
                     "public_key": pk_classic_hex,  # Same classic PK
                     "signature": sig2_classic,
@@ -475,7 +506,7 @@ def test_create_account_already_exists():
             sig.free()
 
 
-def test_create_account_expired_nonce():
+def test_create_account_expired_nonce(api_base_url: str):
     """
     Tests that an account creation request fails if a nonce has expired.
     Nonces are time-sensitive and should be rejected after their validity
@@ -489,8 +520,8 @@ def test_create_account_expired_nonce():
     expired_nonce = f"{expired_timestamp}:{mac}"
 
     # 2. Attempt to use the expired nonce
-    response = client.post(
-        "/accounts",
+    response = requests.post(
+        f"{api_base_url}/accounts",
         json={
             "public_key": "test",
             "signature": "test",
@@ -506,13 +537,13 @@ def test_create_account_expired_nonce():
     assert "Invalid or expired nonce" in response.text
 
 
-def test_create_account_malformed_nonce():
+def test_create_account_malformed_nonce(api_base_url: str):
     """
     Tests that an account creation request fails if the nonce is malformed and
     does not fit the 'timestamp:mac' format.
     """
-    response = client.post(
-        "/accounts",
+    response = requests.post(
+        f"{api_base_url}/accounts",
         json={
             "public_key": "test",
             "signature": "test",
@@ -528,7 +559,7 @@ def test_create_account_malformed_nonce():
     assert "Invalid or expired nonce" in response.text
 
 
-def test_create_account_missing_field():
+def test_create_account_missing_field(api_base_url: str):
     """
     Tests that account creation fails if a required field is missing from the
     request payload. This ensures Pydantic model validation is working.
@@ -547,11 +578,11 @@ def test_create_account_missing_field():
     for field in valid_payload:
         payload = valid_payload.copy()
         del payload[field]
-        response = client.post("/accounts", json=payload)
+        response = requests.post(f"{api_base_url}/accounts", json=payload)
         assert response.status_code == 422, f"Failed for missing field: {field}"
 
 
-def test_get_accounts_and_account_by_id():
+def test_get_accounts_and_account_by_id(api_base_url: str):
     """
     Tests listing all accounts and retrieving individual accounts by public key.
     This test creates multiple accounts to ensure the endpoints handle more than
@@ -559,13 +590,13 @@ def test_get_accounts_and_account_by_id():
     """
     # 1. Create two distinct accounts
     # Account 1
-    _, pk_classic_1_hex, _, oqs_sigs_to_free_1 = _create_test_account()
+    _, pk_classic_1_hex, _, oqs_sigs_to_free_1 = _create_test_account(api_base_url)
     # Account 2
-    _, pk_classic_2_hex, _, oqs_sigs_to_free_2 = _create_test_account()
+    _, pk_classic_2_hex, _, oqs_sigs_to_free_2 = _create_test_account(api_base_url)
 
     try:
         # 2. Test get all accounts
-        response = client.get("/accounts")
+        response = requests.get(f"{api_base_url}/accounts")
         assert response.status_code == 200
         # Use sets for order-independent comparison
         assert set(response.json()["accounts"]) == {
@@ -574,7 +605,7 @@ def test_get_accounts_and_account_by_id():
         }
 
         # 3. Test get single account (Account 1)
-        response = client.get(f"/accounts/{pk_classic_1_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_1_hex}")
         assert response.status_code == 200
         account_details = response.json()
         assert account_details["public_key"] == pk_classic_1_hex
@@ -582,7 +613,7 @@ def test_get_accounts_and_account_by_id():
         assert account_details["pq_keys"][0]["alg"] == ML_DSA_ALG
 
         # 4. Test get single account (Account 2)
-        response = client.get(f"/accounts/{pk_classic_2_hex}")
+        response = requests.get(f"{api_base_url}/accounts/{pk_classic_2_hex}")
         assert response.status_code == 200
         account_details_2 = response.json()
         assert account_details_2["public_key"] == pk_classic_2_hex
@@ -590,7 +621,7 @@ def test_get_accounts_and_account_by_id():
         assert account_details_2["pq_keys"][0]["alg"] == ML_DSA_ALG
 
         # 5. Test get non-existent account
-        response = client.get("/accounts/nonexistentkey")
+        response = requests.get(f"{api_base_url}/accounts/nonexistentkey")
         assert response.status_code == 404
     finally:
         for sig in oqs_sigs_to_free_1:
