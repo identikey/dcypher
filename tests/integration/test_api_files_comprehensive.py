@@ -958,21 +958,25 @@ def test_audit_trail_file_operations(api_base_url: str):
             sig.free()
 
 
-def test_cross_account_access_prevention(api_base_url: str):
+def test_cross_account_access_prevention(api_base_url: str, tmp_path):
     """
     Tests that files uploaded by one account cannot be accessed by another account.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Create two separate accounts
-    sk1, pk1_hex, all_pq_sks1, oqs_sigs_1 = _create_test_account(api_base_url)
-    sk2, pk2_hex, all_pq_sks2, oqs_sigs_2 = _create_test_account(api_base_url)
+    # Create two separate accounts using the new context manager pattern
+    client1, pk1_hex = create_test_account_with_context(
+        api_base_url, tmp_path / "account1"
+    )
+    client2, pk2_hex = create_test_account_with_context(
+        api_base_url, tmp_path / "account2"
+    )
 
-    try:
-        pk_ml_dsa1_hex = next(iter(all_pq_sks1))
-        sig_ml_dsa1 = all_pq_sks1[pk_ml_dsa1_hex][0]
-        pk_ml_dsa2_hex = next(iter(all_pq_sks2))
-        sig_ml_dsa2 = all_pq_sks2[pk_ml_dsa2_hex][0]
+    # Account 1 uploads a file
+    with client1.signing_keys() as keys1:
+        sk1 = keys1["classic_sk"]
+        pk_ml_dsa1_hex = keys1["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa1 = keys1["pq_sigs"][0]["sig"]
 
-        # 1. Account 1 uploads a file
         content = b"Private file content"
         status_code, file_hash = _upload_file_chunked(
             api_base_url,
@@ -987,6 +991,12 @@ def test_cross_account_access_prevention(api_base_url: str):
         assert status_code in [200, 201], (
             f"Account 1 upload failed with status {status_code}"
         )
+
+    # Account 2 tries to access Account 1's file
+    with client2.signing_keys() as keys2:
+        sk2 = keys2["classic_sk"]
+        pk_ml_dsa2_hex = keys2["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa2 = keys2["pq_sigs"][0]["sig"]
 
         # 2. Account 2 tries to download Account 1's file (should fail)
         download_nonce = get_nonce(api_base_url)
@@ -1018,9 +1028,15 @@ def test_cross_account_access_prevention(api_base_url: str):
 
         client = DCypherClient(api_base_url)
         files = client.list_files(pk2_hex)
-        assert file_hash not in files, "File leaked across accounts"
+        assert file_hash not in files, "File should not be visible to other accounts"
 
-        # Verify the file is still accessible to account 1
+    # Verify the file is still accessible to account 1
+    with client1.signing_keys() as keys1:
+        sk1 = keys1["classic_sk"]
+        pk_ml_dsa1_hex = keys1["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa1 = keys1["pq_sigs"][0]["sig"]
+
+        download_nonce = get_nonce(api_base_url)
         download_msg1 = (
             f"DOWNLOAD-CHUNKS:{pk1_hex}:{file_hash}:{download_nonce}".encode()
         )
@@ -1043,9 +1059,3 @@ def test_cross_account_access_prevention(api_base_url: str):
         assert response.status_code == 200, (
             "Account 1 should still be able to access its file"
         )
-
-    finally:
-        for sig in oqs_sigs_1:
-            sig.free()
-        for sig in oqs_sigs_2:
-            sig.free()

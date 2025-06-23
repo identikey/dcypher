@@ -25,6 +25,7 @@ from tests.integration.test_api import (
     get_nonce,
     _create_test_idk_file_parts,
     setup_test_account_with_client,
+    create_test_account_with_context,
 )
 
 
@@ -126,17 +127,20 @@ def test_upload_chunk_compression_ratio(api_base_url: str, monkeypatch):
         # by verifying no exception was raised and the compression ratio is good
 
 
-def test_upload_chunk_unauthorized(api_base_url: str, monkeypatch):
+def test_upload_chunk_unauthorized(api_base_url: str, tmp_path, monkeypatch):
     """
     Tests that uploading a file chunk with an invalid signature fails.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
     monkeypatch.setattr("src.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+    # Create account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
 
         idk_parts, file_hash = _create_test_idk_file_parts(
             b"some content that is long enough for two parts maybe" * 500
@@ -204,9 +208,7 @@ def test_upload_chunk_unauthorized(api_base_url: str, monkeypatch):
         )
         assert response.status_code == 401
         assert "Invalid classic signature" in response.text
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_upload_chunk_for_unregistered_file(api_base_url: str, tmp_path):

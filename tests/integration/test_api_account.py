@@ -207,51 +207,50 @@ def test_create_account_invalid_nonce(api_base_url: str):
     assert "Invalid or expired nonce" in response.text
 
 
-def test_create_account_used_nonce(api_base_url: str):
+def test_create_account_used_nonce(api_base_url: str, tmp_path):
     """
     Tests that an account creation request fails if a valid but already used
     nonce is provided. This prevents replay attacks.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Create a valid account first to use its nonce
-    _, _, _, oqs_sigs_to_free = _create_test_account(api_base_url)
-    try:
-        # Now try to re-use the nonce from the `state` object by accessing it
-        # via the live server instance.
-        nonce = get_nonce(api_base_url)
+    # Create a valid account first using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
 
-        # To simulate a used nonce, we have to create an account first.
-        # The _create_test_account helper already does that. Let's make a new one.
-        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-        vk_classic = sk_classic.get_verifying_key()
-        assert vk_classic is not None
-        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-        with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-            pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-            message = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce}".encode("utf-8")
-            sig_classic = sk_classic.sign(message, hashfunc=hashlib.sha256).hex()
-            sig_ml_dsa_hex = sig_ml_dsa.sign(message).hex()
+    # Now try to re-use the nonce from the `state` object by accessing it
+    # via the live server instance.
+    nonce = get_nonce(api_base_url)
 
-            payload = {
-                "public_key": pk_classic_hex,
-                "signature": sig_classic,
-                "ml_dsa_signature": {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa_hex,
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce,
-            }
-            # This one should succeed
-            response = requests.post(f"{api_base_url}/accounts", json=payload)
-            assert response.status_code == 200
+    # To simulate a used nonce, we have to create an account first.
+    # The create_test_account_with_context helper already does that. Let's make a new one.
+    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic = sk_classic.get_verifying_key()
+    assert vk_classic is not None
+    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
+        pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
+        message = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce}".encode("utf-8")
+        sig_classic = sk_classic.sign(message, hashfunc=hashlib.sha256).hex()
+        sig_ml_dsa_hex = sig_ml_dsa.sign(message).hex()
 
-            # This one should fail with a used nonce
-            response = requests.post(f"{api_base_url}/accounts", json=payload)
-            assert response.status_code == 400
-            assert "Nonce has already been used" in response.text
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+        payload = {
+            "public_key": pk_classic_hex,
+            "signature": sig_classic,
+            "ml_dsa_signature": {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa_hex,
+                "alg": ML_DSA_ALG,
+            },
+            "nonce": nonce,
+        }
+        # This one should succeed
+        response = requests.post(f"{api_base_url}/accounts", json=payload)
+        assert response.status_code == 200
+
+        # This one should fail with a used nonce
+        response = requests.post(f"{api_base_url}/accounts", json=payload)
+        assert response.status_code == 400
+        assert "Nonce has already been used" in response.text
+    # OQS signature is automatically freed when exiting the context
 
 
 def test_create_account_incorrect_mandatory_pq_alg(api_base_url: str):
@@ -620,54 +619,52 @@ def test_create_account_missing_field(api_base_url: str):
         assert response.status_code == 422, f"Failed for missing field: {field}"
 
 
-def test_get_accounts_and_account_by_id(api_base_url: str):
+def test_get_accounts_and_account_by_id(api_base_url: str, tmp_path):
     """
     Tests listing all accounts and retrieving individual accounts by public key.
     This test creates multiple accounts to ensure the endpoints handle more than
     one account correctly.
 
-    This test demonstrates using the new DCypherClient for account retrieval.
+    This test demonstrates using the new DCypherClient for account retrieval
+    with automatic resource management.
     """
     from src.lib.api_client import DCypherClient, ResourceNotFoundError
 
-    # 1. Create two distinct accounts
-    # Account 1
-    _, pk_classic_1_hex, _, oqs_sigs_to_free_1 = _create_test_account(api_base_url)
-    # Account 2
-    _, pk_classic_2_hex, _, oqs_sigs_to_free_2 = _create_test_account(api_base_url)
+    # 1. Create two distinct accounts using the new context manager pattern
+    client1, pk_classic_1_hex = create_test_account_with_context(
+        api_base_url, tmp_path / "account1"
+    )
+    client2, pk_classic_2_hex = create_test_account_with_context(
+        api_base_url, tmp_path / "account2"
+    )
 
-    # Initialize API client
+    # Initialize API client for general operations
     client = DCypherClient(api_base_url)
 
+    # 2. Test get all accounts - using client
+    accounts = client.list_accounts()
+    # Use sets for order-independent comparison
+    assert set(accounts) == {
+        pk_classic_1_hex,
+        pk_classic_2_hex,
+    }
+
+    # 3. Test get single account (Account 1) - using client
+    account_details = client.get_account(pk_classic_1_hex)
+    assert account_details["public_key"] == pk_classic_1_hex
+    assert len(account_details["pq_keys"]) == 1
+    assert account_details["pq_keys"][0]["alg"] == ML_DSA_ALG
+
+    # 4. Test get single account (Account 2) - using client
+    account_details_2 = client.get_account(pk_classic_2_hex)
+    assert account_details_2["public_key"] == pk_classic_2_hex
+    assert len(account_details_2["pq_keys"]) == 1
+    assert account_details_2["pq_keys"][0]["alg"] == ML_DSA_ALG
+
+    # 5. Test get non-existent account - using client with exception handling
     try:
-        # 2. Test get all accounts - using client
-        accounts = client.list_accounts()
-        # Use sets for order-independent comparison
-        assert set(accounts) == {
-            pk_classic_1_hex,
-            pk_classic_2_hex,
-        }
-
-        # 3. Test get single account (Account 1) - using client
-        account_details = client.get_account(pk_classic_1_hex)
-        assert account_details["public_key"] == pk_classic_1_hex
-        assert len(account_details["pq_keys"]) == 1
-        assert account_details["pq_keys"][0]["alg"] == ML_DSA_ALG
-
-        # 4. Test get single account (Account 2) - using client
-        account_details_2 = client.get_account(pk_classic_2_hex)
-        assert account_details_2["public_key"] == pk_classic_2_hex
-        assert len(account_details_2["pq_keys"]) == 1
-        assert account_details_2["pq_keys"][0]["alg"] == ML_DSA_ALG
-
-        # 5. Test get non-existent account - using client with exception handling
-        try:
-            client.get_account("nonexistentkey")
-            assert False, "Expected ResourceNotFoundError"
-        except ResourceNotFoundError:
-            pass  # Expected behavior
-    finally:
-        for sig in oqs_sigs_to_free_1:
-            sig.free()
-        for sig in oqs_sigs_to_free_2:
-            sig.free()
+        client.get_account("nonexistentkey")
+        assert False, "Expected ResourceNotFoundError"
+    except ResourceNotFoundError:
+        pass  # Expected behavior
+    # OQS signatures are automatically freed when accounts are cleaned up

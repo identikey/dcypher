@@ -19,21 +19,26 @@ from tests.integration.test_api import (
     get_nonce,
     _create_test_idk_file_parts,
     setup_test_account_with_client,
+    create_test_account_with_context,
 )
 
 
-def test_successful_upload_workflow(api_base_url: str):
+def test_successful_upload_workflow(api_base_url: str, tmp_path):
     """
     Tests the successful end-to-end workflow of uploading a multi-chunk file.
     This includes registration, uploading all chunks, and verifying metadata.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # Import the new helper function
+    from tests.integration.test_api import create_test_account_with_context
+
+    # 1. Create an account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
 
         # 2. Prepare file parts for a multi-chunk upload
         original_content = (
@@ -119,17 +124,11 @@ def test_successful_upload_workflow(api_base_url: str):
         assert metadata["size"] == len(original_content)
         assert metadata["status"] == "completed"
 
-        # 6. Verify file appears in the user's file list using API client
-        from src.lib.api_client import DCypherClient
-
-        client = DCypherClient(api_base_url)
-        files = client.list_files(pk_classic_hex)
-        # The list_files method returns a list of file hashes directly
-        assert file_hash in files
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # 6. Verify file appears in the user's file list using API client
+    files = client.list_files(pk_classic_hex)
+    # The list_files method returns a list of file hashes directly
+    assert file_hash in files
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_register_file_invalid_merkle_root(api_base_url: str):
