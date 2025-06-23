@@ -79,6 +79,21 @@ def test_bytes_to_coefficients_padding():
     assert recovered_data == odd_length_data
 
 
+def test_coefficients_to_bytes_strict_behavior():
+    """
+    Tests that coefficients_to_bytes raises an error in strict mode
+    when a coefficient is out of range.
+    """
+    # A coefficient that is too large for an unsigned short (max 65535)
+    invalid_coeffs = [100, 200, 65536, 300]
+    with pytest.raises(pre.CoefficientOutOfRangeError):
+        pre.coefficients_to_bytes(invalid_coeffs, 8, strict=True)
+
+    # Also test default behavior is strict
+    with pytest.raises(pre.CoefficientOutOfRangeError):
+        pre.coefficients_to_bytes(invalid_coeffs, 8)
+
+
 def test_bytes_to_coefficients_oversized_data():
     """
     Tests that byte-to-coefficient conversion fails for data larger than the slot count.
@@ -109,7 +124,7 @@ def test_decrypt_with_wrong_key(crypto_setup):
         cc, mallory_keys.secretKey, ciphertext, len(coeffs)
     )
     decrypted_data_wrong = pre.coefficients_to_bytes(
-        decrypted_coeffs_wrong, len(original_data)
+        decrypted_coeffs_wrong, len(original_data), strict=False
     )
 
     assert decrypted_data_wrong != original_data

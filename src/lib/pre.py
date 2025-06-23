@@ -7,6 +7,12 @@ import struct
 from typing import List
 
 
+class CoefficientOutOfRangeError(ValueError):
+    """Raised when a coefficient is outside the valid range for packing."""
+
+    pass
+
+
 def create_crypto_context(
     plaintext_modulus=65537, scaling_mod_size=60, security_level=128
 ):
@@ -200,13 +206,29 @@ def deserialize_re_encryption_key(encoded_str):
     return _deserialize_from_base64_string(encoded_str, fhe.DeserializeEvalKey)
 
 
-def coefficients_to_bytes(coeffs: List[int], total_bytes: int) -> bytes:
+def coefficients_to_bytes(
+    coeffs: List[int], total_bytes: int, strict: bool = True
+) -> bytes:
     """
     Converts a list of plaintext coefficients (unsigned shorts) back into a
     byte string, truncating to the original data's byte length.
+
+    Args:
+        coeffs: The list of integer coefficients.
+        total_bytes: The expected length of the final byte string.
+        strict: If True, raises CoefficientOutOfRangeError for coefficients
+                outside the 16-bit unsigned integer range. If False,
+                such coefficients are reduced modulo 2**16.
     """
     byte_array = bytearray()
     for coeff in coeffs:
         # Pack each coefficient as an unsigned short (H)
-        byte_array.extend(struct.pack("<H", coeff))
+        value_to_pack = coeff
+        if not (0 <= value_to_pack < 2**16):
+            if strict:
+                raise CoefficientOutOfRangeError(
+                    f"Coefficient {coeff} is out of range for unsigned short (0-65535)."
+                )
+            value_to_pack %= 2**16
+        byte_array.extend(struct.pack("<H", value_to_pack))
     return bytes(byte_array[:total_bytes])
