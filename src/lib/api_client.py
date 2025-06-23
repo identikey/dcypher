@@ -134,6 +134,19 @@ class DCypherClient:
         except (requests.exceptions.RequestException, KeyError) as e:
             raise DCypherAPIError(f"Failed to get supported algorithms: {e}")
 
+    def get_classic_public_key(self) -> str:
+        """
+        Get the classic public key hex from the loaded auth keys.
+
+        Returns:
+            Hex-encoded uncompressed SECP256k1 public key
+        """
+        auth_keys = self._load_auth_keys()
+        classic_sk = auth_keys["classic_sk"]
+        classic_vk = classic_sk.get_verifying_key()
+        assert classic_vk is not None
+        return classic_vk.to_string("uncompressed").hex()
+
     def create_account(
         self, classic_pk_hex: str, pq_keys: List[Dict[str, str]]
     ) -> Dict[str, Any]:

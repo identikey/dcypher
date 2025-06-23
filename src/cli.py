@@ -488,55 +488,25 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
 )
 def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_url):
     """Downloads a file from the remote storage API with integrity verification."""
-    from lib.auth import sign_message_with_keys
+    from lib.api_client import DCypherClient, DCypherAPIError
     from lib import idk_message
 
     click.echo(f"Starting download for file hash: {file_hash}...", err=True)
-    nonce = get_nonce(api_url)
 
     try:
-        auth_keys_data = json.loads(Path(auth_keys_path).read_text())
-        classic_sk = ecdsa.SigningKey.from_string(
-            bytes.fromhex(Path(auth_keys_data["classic_sk_path"]).read_text()),
-            curve=ecdsa.SECP256k1,
-        )
-        classic_vk = classic_sk.get_verifying_key()
-        assert classic_vk is not None
-        pk_classic_hex = classic_vk.to_string("uncompressed").hex()
-        pq_keys = []
-        for pq_key_info in auth_keys_data["pq_keys"]:
-            pq_keys.append(
-                {
-                    "sk": Path(pq_key_info["sk_path"]).read_bytes(),
-                    "pk_hex": pq_key_info["pk_hex"],
-                    "alg": pq_key_info["alg"],
-                }
-            )
-    except Exception as e:
-        raise click.ClickException(f"Error loading auth keys: {e}")
+        # Initialize API client with auth keys
+        client = DCypherClient(api_url, str(auth_keys_path))
 
-    message = f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{nonce}".encode("utf-8")
-    signatures = sign_message_with_keys(
-        message, {"classic_sk": classic_sk, "pq_keys": pq_keys}
-    )
+        # Get the classic public key from the auth keys
+        pk_classic_hex = client.get_classic_public_key()
 
-    url = f"{api_url}/storage/{pk_classic_hex}/{file_hash}/download"
-    payload = {
-        "nonce": nonce,
-        "classic_signature": signatures["classic_signature"],
-        "pq_signatures": signatures["pq_signatures"],
-        "compressed": compressed,
-    }
-
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-
-        # Get the downloaded content
-        downloaded_content = response.content
+        # Download file using the client
+        downloaded_content = client.download_file(pk_classic_hex, file_hash, compressed)
 
         # Check if server sent compressed data
-        is_compressed = response.headers.get("content-type") == "application/gzip"
+        is_compressed = (
+            compressed  # We requested compression, so assume we got it if requested
+        )
 
         click.echo("Verifying downloaded content integrity...", err=True)
 
@@ -594,9 +564,10 @@ def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_ur
                 err=True,
             )
 
-    except requests.exceptions.RequestException as e:
-        error_text = e.response.text if e.response else str(e)
-        raise click.ClickException(f"API request failed: {error_text}")
+    except DCypherAPIError as e:
+        raise click.ClickException(f"API request failed: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
 
 
 @cli.command("download-chunks")
@@ -617,63 +588,36 @@ def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_ur
 )
 def download_chunks(pk_path, auth_keys_path, file_hash, output_path, api_url):
     """Downloads all chunks for a file as a single concatenated gzip file."""
-    from lib.auth import sign_message_with_keys
+    from lib.api_client import DCypherClient, DCypherAPIError
 
     click.echo(
         f"Starting download for concatenated chunks of file hash: {file_hash}...",
         err=True,
     )
-    nonce = get_nonce(api_url)
 
     try:
-        auth_keys_data = json.loads(Path(auth_keys_path).read_text())
-        classic_sk = ecdsa.SigningKey.from_string(
-            bytes.fromhex(Path(auth_keys_data["classic_sk_path"]).read_text()),
-            curve=ecdsa.SECP256k1,
-        )
-        classic_vk = classic_sk.get_verifying_key()
-        assert classic_vk is not None
-        pk_classic_hex = classic_vk.to_string("uncompressed").hex()
-        pq_keys = []
-        for pq_key_info in auth_keys_data["pq_keys"]:
-            pq_keys.append(
-                {
-                    "sk": Path(pq_key_info["sk_path"]).read_bytes(),
-                    "pk_hex": pq_key_info["pk_hex"],
-                    "alg": pq_key_info["alg"],
-                }
-            )
-    except Exception as e:
-        raise click.ClickException(f"Error loading auth keys: {e}")
+        # Initialize API client with auth keys
+        client = DCypherClient(api_url, str(auth_keys_path))
 
-    message = f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{nonce}".encode("utf-8")
-    signatures = sign_message_with_keys(
-        message, {"classic_sk": classic_sk, "pq_keys": pq_keys}
-    )
+        # Get the classic public key from the auth keys
+        pk_classic_hex = client.get_classic_public_key()
 
-    url = f"{api_url}/storage/{pk_classic_hex}/{file_hash}/chunks/download"
-    payload = {
-        "nonce": nonce,
-        "classic_signature": signatures["classic_signature"],
-        "pq_signatures": signatures["pq_signatures"],
-    }
-
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
+        # Download chunks using the client
+        downloaded_content = client.download_chunks(pk_classic_hex, file_hash)
 
         # Save the downloaded content
         with open(output_path, "wb") as f:
-            f.write(response.content)
+            f.write(downloaded_content)
 
         click.echo(
             f"Concatenated chunks for '{file_hash}' downloaded successfully to '{output_path}'.",
             err=True,
         )
 
-    except requests.exceptions.RequestException as e:
-        error_text = e.response.text if e.response else str(e)
-        raise click.ClickException(f"API request failed: {error_text}")
+    except DCypherAPIError as e:
+        raise click.ClickException(f"API request failed: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
 
 
 @cli.command("supported-algorithms")
