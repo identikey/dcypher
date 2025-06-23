@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
 from .auth import sign_message_with_keys
-from lib.pq_auth import generate_pq_keys
+from .key_manager import KeyManager
 import ecdsa
 import oqs
 
@@ -70,50 +70,19 @@ class DCypherClient:
         Returns:
             tuple: (DCypherClient instance, classic_public_key_hex)
         """
-        from src.config import ML_DSA_ALG
-
-        if additional_pq_algs is None:
-            additional_pq_algs = []
-
-        # Ensure temp directory exists
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        # Generate classic keys
-        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-        vk_classic = sk_classic.get_verifying_key()
-        assert vk_classic is not None
-        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-
-        # Save classic key to file
-        classic_sk_path = temp_dir / "classic.sk"
-        with open(classic_sk_path, "w") as f:
-            f.write(sk_classic.to_string().hex())
-
-        # Generate PQ keys and save to files
-        pq_keys_data = []
-        all_algs = [ML_DSA_ALG] + additional_pq_algs
-
-        for i, alg in enumerate(all_algs):
-            pq_pk, pq_sk = generate_pq_keys(alg)
-            pq_sk_path = temp_dir / f"pq_{i}.sk"
-            with open(pq_sk_path, "wb") as f:
-                f.write(pq_sk)
-            pq_keys_data.append(
-                {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": alg}
-            )
-
-        # Create auth keys file
-        auth_keys_data = {
-            "classic_sk_path": str(classic_sk_path),
-            "pq_keys": pq_keys_data,
-        }
-        auth_keys_file = temp_dir / "auth_keys.json"
-        with open(auth_keys_file, "w") as f:
-            json.dump(auth_keys_data, f)
+        # Use KeyManager to create auth keys bundle
+        pk_classic_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(
+            temp_dir, additional_pq_algs
+        )
 
         # Create API client and account
         client = cls(api_url, str(auth_keys_file))
-        pq_keys = [{"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in pq_keys_data]
+
+        # Load the keys to get PQ key info for account creation
+        auth_keys = KeyManager.load_auth_keys_bundle(auth_keys_file)
+        pq_keys = [
+            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in auth_keys["pq_keys"]
+        ]
         client.create_account(pk_classic_hex, pq_keys)
 
         return client, pk_classic_hex
@@ -133,25 +102,12 @@ class DCypherClient:
         Yields:
             dict: Contains 'classic_sk' (ecdsa.SigningKey) and 'pq_sigs' (list of oqs.Signature objects)
         """
-        auth_keys = self._load_auth_keys()
+        if not self.auth_keys_path:
+            raise AuthenticationError("No authentication keys configured")
 
-        # Create OQS signature objects for PQ keys
-        pq_sigs = []
-        oqs_objects = []  # Keep track for cleanup
-
-        try:
-            for pq_key in auth_keys["pq_keys"]:
-                sig_obj = oqs.Signature(pq_key["alg"], pq_key["sk"])
-                oqs_objects.append(sig_obj)
-                pq_sigs.append(
-                    {"sig": sig_obj, "pk_hex": pq_key["pk_hex"], "alg": pq_key["alg"]}
-                )
-
-            yield {"classic_sk": auth_keys["classic_sk"], "pq_sigs": pq_sigs}
-        finally:
-            # Automatically free all OQS signature objects
-            for sig_obj in oqs_objects:
-                sig_obj.free()
+        # Use KeyManager's signing context
+        with KeyManager.signing_context(Path(self.auth_keys_path)) as keys:
+            yield keys
 
     def get_signing_keys(self) -> Dict[str, Any]:
         """
@@ -265,35 +221,11 @@ class DCypherClient:
             raise AuthenticationError("No authentication keys configured")
 
         try:
-            with open(self.auth_keys_path, "r") as f:
-                auth_keys_data = json.load(f)
-
-            # Load classic signing key
-            classic_sk_path = auth_keys_data["classic_sk_path"]
-            with open(classic_sk_path, "r") as f:
-                sk_hex = f.read().strip()
-                classic_sk = ecdsa.SigningKey.from_string(
-                    bytes.fromhex(sk_hex), curve=ecdsa.SECP256k1
-                )
-
-            # Load PQ keys
-            pq_keys = []
-            for pq_key_info in auth_keys_data["pq_keys"]:
-                pq_sk_path = pq_key_info["sk_path"]
-                with open(pq_sk_path, "rb") as f:
-                    pq_sk = f.read()
-                pq_keys.append(
-                    {
-                        "sk": pq_sk,
-                        "pk_hex": pq_key_info["pk_hex"],
-                        "alg": pq_key_info["alg"],
-                    }
-                )
-
-            self._auth_keys = {"classic_sk": classic_sk, "pq_keys": pq_keys}
-
+            # Use KeyManager to load auth keys
+            self._auth_keys = KeyManager.load_auth_keys_bundle(
+                Path(self.auth_keys_path)
+            )
             return self._auth_keys
-
         except Exception as e:
             raise AuthenticationError(f"Failed to load authentication keys: {e}")
 
@@ -352,10 +284,7 @@ class DCypherClient:
             Hex-encoded uncompressed SECP256k1 public key
         """
         auth_keys = self._load_auth_keys()
-        classic_sk = auth_keys["classic_sk"]
-        classic_vk = classic_sk.get_verifying_key()
-        assert classic_vk is not None
-        return classic_vk.to_string("uncompressed").hex()
+        return KeyManager.get_classic_public_key(auth_keys["classic_sk"])
 
     def create_account(
         self, classic_pk_hex: str, pq_keys: List[Dict[str, str]]
