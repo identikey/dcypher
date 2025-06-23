@@ -25,7 +25,6 @@ from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 from tests.integration.test_api import (
     get_nonce,
     _create_test_idk_file_parts,
-    setup_uploaded_file,
     create_test_account_with_keymanager,
 )
 

@@ -15,7 +15,6 @@ from lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
     create_test_account_with_keymanager,
 )

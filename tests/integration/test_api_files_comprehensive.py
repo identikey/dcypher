@@ -32,9 +32,7 @@ from lib.pq_auth import generate_pq_keys
 from lib import idk_message
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
-    _create_test_idk_file,
     create_test_account_with_keymanager,
 )
 

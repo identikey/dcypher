@@ -17,7 +17,6 @@ from config import ML_DSA_ALG
 from security import SERVER_SECRET
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
     create_test_account_with_keymanager,
