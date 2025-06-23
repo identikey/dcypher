@@ -17,6 +17,7 @@ from config import ML_DSA_ALG
 from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
+    create_test_account_with_context,
 )
 
 
@@ -253,124 +254,132 @@ def test_remove_mandatory_pq_key_fails(api_base_url: str):
         )
 
 
-def test_add_pq_key_authorization_failures(api_base_url: str):
+def test_add_pq_key_authorization_failures(api_base_url: str, tmp_path):
     """
     Tests various authorization failure scenarios when adding a PQ key.
     - Invalid classic signature.
     - Missing signature from an existing PQ key.
     - Invalid signature from an existing PQ key.
     - Invalid signature for the new PQ key itself.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Setup: Create an account with one mandatory and one optional key
+    # 1. Setup: Create an account with one mandatory and one optional key using new pattern
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    (
-        sk_classic,
-        pk_classic_hex,
-        all_pq_sks,
-        oqs_sigs_to_free,
-    ) = _create_test_account(api_base_url, add_pq_algs=[add_pq_alg_1])
-    try:
-        pk_ml_dsa_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
-        )
-        pk_add_pq_1_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
-        )
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-        sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
+    # Create account with additional PQ algorithm using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(
+        api_base_url, tmp_path, additional_pq_algs=[add_pq_alg_1]
+    )
 
-        sig_add_pq_2 = oqs.Signature(add_pq_alg_2)
-        oqs_sigs_to_free.append(sig_add_pq_2)
-        pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
-        all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
 
-        # 2. Prepare for a valid "add" operation
-        add_nonce = get_nonce(api_base_url)
-        correct_add_msg = f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_2}:{add_nonce}".encode()
-        incorrect_msg = b"this is not the correct message"
+        # Get the existing PQ keys from the signing keys
+        ml_dsa_key = None
+        falcon_key = None
+        for pq_key in keys["pq_sigs"]:
+            if pq_key["alg"] == ML_DSA_ALG:
+                ml_dsa_key = pq_key
+            elif pq_key["alg"] == add_pq_alg_1:
+                falcon_key = pq_key
 
-        valid_classic_sig = sk_classic.sign(
-            correct_add_msg, hashfunc=hashlib.sha256
-        ).hex()
-        valid_existing_sigs = [
-            {
-                "public_key": pk_ml_dsa_hex,
-                "signature": sig_ml_dsa.sign(correct_add_msg).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            {
-                "public_key": pk_add_pq_1_hex,
-                "signature": sig_add_pq_1.sign(correct_add_msg).hex(),
-                "alg": add_pq_alg_1,
-            },
-        ]
-        valid_new_sig = {
-            "public_key": pk_add_pq_2_hex,
-            "signature": sig_add_pq_2.sign(correct_add_msg).hex(),
-            "alg": add_pq_alg_2,
-        }
+        assert ml_dsa_key is not None, "ML-DSA key should be present"
+        assert falcon_key is not None, "Falcon key should be present"
 
-        # --- Test Cases ---
+        pk_ml_dsa_hex = ml_dsa_key["pk_hex"]
+        sig_ml_dsa = ml_dsa_key["sig"]
+        pk_add_pq_1_hex = falcon_key["pk_hex"]
+        sig_add_pq_1 = falcon_key["sig"]
 
-        # Case 1: Invalid classic signature
-        payload = {
-            "new_pq_signatures": [valid_new_sig],
-            "classic_signature": sk_classic.sign(
-                incorrect_msg, hashfunc=hashlib.sha256
-            ).hex(),
-            "existing_pq_signatures": valid_existing_sigs,
-            "nonce": add_nonce,
-        }
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Invalid classic signature" in response.text
+        # Create a new key for the test
+        with oqs.Signature(add_pq_alg_2) as sig_add_pq_2:
+            pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
 
-        # Case 2: Missing signature from an existing PQ key
-        payload["classic_signature"] = valid_classic_sig
-        payload["existing_pq_signatures"] = [valid_existing_sigs[0]]  # Missing one
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Signatures from all existing PQ keys are required" in response.text
+            # 2. Prepare for a valid "add" operation
+            add_nonce = get_nonce(api_base_url)
+            correct_add_msg = (
+                f"ADD-PQ:{pk_classic_hex}:{add_pq_alg_2}:{add_nonce}".encode()
+            )
+            incorrect_msg = b"this is not the correct message"
 
-        # Case 3: Invalid signature from an existing PQ key
-        invalid_existing_sigs = [
-            valid_existing_sigs[0],
-            {
-                "public_key": pk_add_pq_1_hex,
-                "signature": sig_add_pq_1.sign(incorrect_msg).hex(),
-                "alg": add_pq_alg_1,
-            },
-        ]
-        payload["existing_pq_signatures"] = invalid_existing_sigs
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Invalid signature for existing PQ key" in response.text
+            valid_classic_sig = sk_classic.sign(
+                correct_add_msg, hashfunc=hashlib.sha256
+            ).hex()
+            valid_existing_sigs = [
+                {
+                    "public_key": pk_ml_dsa_hex,
+                    "signature": sig_ml_dsa.sign(correct_add_msg).hex(),
+                    "alg": ML_DSA_ALG,
+                },
+                {
+                    "public_key": pk_add_pq_1_hex,
+                    "signature": sig_add_pq_1.sign(correct_add_msg).hex(),
+                    "alg": add_pq_alg_1,
+                },
+            ]
+            valid_new_sig = {
+                "public_key": pk_add_pq_2_hex,
+                "signature": sig_add_pq_2.sign(correct_add_msg).hex(),
+                "alg": add_pq_alg_2,
+            }
 
-        # Case 4: Invalid signature for the new PQ key itself
-        invalid_new_sig = {
-            "public_key": pk_add_pq_2_hex,
-            "signature": sig_add_pq_2.sign(incorrect_msg).hex(),
-            "alg": add_pq_alg_2,
-        }
-        payload["existing_pq_signatures"] = valid_existing_sigs
-        payload["new_pq_signatures"] = [invalid_new_sig]
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-        )
-        assert response.status_code == 401
-        assert "Invalid signature for new PQ key" in response.text
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+            # --- Test Cases ---
+
+            # Case 1: Invalid classic signature
+            payload = {
+                "new_pq_signatures": [valid_new_sig],
+                "classic_signature": sk_classic.sign(
+                    incorrect_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "existing_pq_signatures": valid_existing_sigs,
+                "nonce": add_nonce,
+            }
+            response = requests.post(
+                f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+            )
+            assert response.status_code == 401
+            assert "Invalid classic signature" in response.text
+
+            # Case 2: Missing signature from an existing PQ key
+            payload["classic_signature"] = valid_classic_sig
+            payload["existing_pq_signatures"] = [valid_existing_sigs[0]]  # Missing one
+            response = requests.post(
+                f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+            )
+            assert response.status_code == 401
+            assert "Signatures from all existing PQ keys are required" in response.text
+
+            # Case 3: Invalid signature from an existing PQ key
+            invalid_existing_sigs = [
+                valid_existing_sigs[0],
+                {
+                    "public_key": pk_add_pq_1_hex,
+                    "signature": sig_add_pq_1.sign(incorrect_msg).hex(),
+                    "alg": add_pq_alg_1,
+                },
+            ]
+            payload["existing_pq_signatures"] = invalid_existing_sigs
+            response = requests.post(
+                f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+            )
+            assert response.status_code == 401
+            assert "Invalid signature for existing PQ key" in response.text
+
+            # Case 4: Invalid signature for the new PQ key itself
+            invalid_new_sig = {
+                "public_key": pk_add_pq_2_hex,
+                "signature": sig_add_pq_2.sign(incorrect_msg).hex(),
+                "alg": add_pq_alg_2,
+            }
+            payload["existing_pq_signatures"] = valid_existing_sigs
+            payload["new_pq_signatures"] = [invalid_new_sig]
+            response = requests.post(
+                f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+            )
+            assert response.status_code == 401
+            assert "Invalid signature for new PQ key" in response.text
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_replace_existing_pq_key(api_base_url: str):
@@ -634,33 +643,48 @@ def test_rotate_mandatory_pq_key_succeeds(api_base_url: str):
         assert final_account_info["pq_keys"][0]["public_key"] == ml_dsa_pk_new.hex()
 
 
-def test_remove_pq_key_authorization_failures(api_base_url: str):
+def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
     """
     Tests various authorization failure scenarios when removing a PQ key.
     - Invalid classic signature.
     - Missing signature from an existing PQ key.
     - Invalid signature from an existing PQ key.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Setup: Create an account with one mandatory and two optional keys
+    # 1. Setup: Create an account with one mandatory and two optional keys using new pattern
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url, add_pq_algs=[add_pq_alg_1, add_pq_alg_2]
+    # Create account with additional PQ algorithms using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(
+        api_base_url, tmp_path, additional_pq_algs=[add_pq_alg_1, add_pq_alg_2]
     )
-    try:
-        pk_ml_dsa_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
-        )
-        pk_add_pq_1_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_1
-        )
-        pk_add_pq_2_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg_2
-        )
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-        sig_add_pq_1, _ = all_pq_sks[pk_add_pq_1_hex]
-        sig_add_pq_2, _ = all_pq_sks[pk_add_pq_2_hex]
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+
+        # Get the existing PQ keys from the signing keys
+        ml_dsa_key = None
+        falcon_1_key = None
+        falcon_2_key = None
+        for pq_key in keys["pq_sigs"]:
+            if pq_key["alg"] == ML_DSA_ALG:
+                ml_dsa_key = pq_key
+            elif pq_key["alg"] == add_pq_alg_1:
+                falcon_1_key = pq_key
+            elif pq_key["alg"] == add_pq_alg_2:
+                falcon_2_key = pq_key
+
+        assert ml_dsa_key is not None, "ML-DSA key should be present"
+        assert falcon_1_key is not None, "Falcon-512 key should be present"
+        assert falcon_2_key is not None, "Falcon-1024 key should be present"
+
+        pk_ml_dsa_hex = ml_dsa_key["pk_hex"]
+        sig_ml_dsa = ml_dsa_key["sig"]
+        pk_add_pq_1_hex = falcon_1_key["pk_hex"]
+        sig_add_pq_1 = falcon_1_key["sig"]
+        pk_add_pq_2_hex = falcon_2_key["pk_hex"]
+        sig_add_pq_2 = falcon_2_key["sig"]
 
         # 2. Prepare for a valid "remove" operation
         pk_to_remove = pk_add_pq_1_hex
@@ -734,10 +758,7 @@ def test_remove_pq_key_authorization_failures(api_base_url: str):
         )
         assert response.status_code == 401
         assert "Invalid signature for existing PQ key" in response.text
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_remove_nonexistent_pq_key_fails(api_base_url: str):
