@@ -224,6 +224,69 @@ class TestDCypherClient:
         ):
             client.get_account("nonexistent_key")
 
+    @patch("requests.get")
+    def test_list_accounts_success(self, mock_get):
+        """Test successful account listing"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "accounts": ["account1", "account2", "account3"]
+        }
+        mock_get.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000")
+        result = client.list_accounts()
+
+        assert result == ["account1", "account2", "account3"]
+        mock_get.assert_called_once_with("http://localhost:8000/accounts")
+
+    @patch("requests.get")
+    def test_get_account_graveyard_success(self, mock_get):
+        """Test successful graveyard retrieval"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "graveyard": [
+                {"public_key": "retired_key1", "alg": "ML-DSA-87"},
+                {"public_key": "retired_key2", "alg": "Falcon-512"},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000")
+        result = client.get_account_graveyard("test_account")
+
+        assert len(result) == 2
+        assert result[0]["public_key"] == "retired_key1"
+        assert result[1]["alg"] == "Falcon-512"
+        mock_get.assert_called_once_with(
+            "http://localhost:8000/accounts/test_account/graveyard"
+        )
+
+    @patch("requests.get")
+    def test_list_files_success(self, mock_get):
+        """Test successful file listing"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "files": [
+                {"hash": "file1_hash", "filename": "file1.txt", "size": 1024},
+                {"hash": "file2_hash", "filename": "file2.txt", "size": 2048},
+            ]
+        }
+        mock_get.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000")
+        result = client.list_files("test_account")
+
+        assert len(result) == 2
+        assert result[0]["filename"] == "file1.txt"
+        assert result[1]["size"] == 2048
+        mock_get.assert_called_once_with("http://localhost:8000/storage/test_account")
+
     @patch("src.lib.api_client.DCypherClient.get_nonce")
     @patch("src.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")

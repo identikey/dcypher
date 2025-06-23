@@ -602,5 +602,91 @@ def supported_algorithms(api_url):
         raise click.ClickException(f"Failed to get supported algorithms: {e}")
 
 
+@cli.command("list-accounts")
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def list_accounts(api_url):
+    """Lists all accounts."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url)
+        accounts = client.list_accounts()
+
+        if not accounts:
+            click.echo("No accounts found.", err=True)
+        else:
+            click.echo(f"Found {len(accounts)} account(s):", err=True)
+            for account in accounts:
+                click.echo(f"  - {account}")
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to list accounts: {e}")
+
+
+@cli.command("list-files")
+@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def list_files(auth_keys_path, api_url):
+    """Lists files for the authenticated account."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, str(auth_keys_path))
+        pk_classic_hex = client.get_classic_public_key()
+        files = client.list_files(pk_classic_hex)
+
+        if not files:
+            click.echo("No files found.", err=True)
+        else:
+            click.echo(f"Found {len(files)} file(s):", err=True)
+            for file_info in files:
+                click.echo(
+                    f"  - {file_info.get('filename', 'N/A')} (hash: {file_info.get('hash', 'N/A')})"
+                )
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to list files: {e}")
+
+
+@cli.command("get-graveyard")
+@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def get_graveyard(auth_keys_path, api_url):
+    """Gets retired keys (graveyard) for the authenticated account."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, str(auth_keys_path))
+        pk_classic_hex = client.get_classic_public_key()
+        graveyard = client.get_account_graveyard(pk_classic_hex)
+
+        if not graveyard:
+            click.echo("No retired keys found.", err=True)
+        else:
+            click.echo(f"Found {len(graveyard)} retired key(s):", err=True)
+            for key_info in graveyard:
+                click.echo(
+                    f"  - {key_info.get('alg', 'N/A')}: {key_info.get('public_key', 'N/A')[:20]}..."
+                )
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to get graveyard: {e}")
+
+
 if __name__ == "__main__":
     cli()

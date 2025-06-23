@@ -222,6 +222,51 @@ class DCypherClient:
         except requests.exceptions.RequestException as e:
             raise DCypherAPIError(f"Failed to get account: {e}")
 
+    def list_accounts(self) -> List[str]:
+        """
+        List all account public keys.
+
+        Returns:
+            List of hex-encoded public keys
+        """
+        try:
+            response = requests.get(f"{self.api_url}/accounts")
+            return self._handle_response(response)["accounts"]
+        except (requests.exceptions.RequestException, KeyError) as e:
+            raise DCypherAPIError(f"Failed to list accounts: {e}")
+
+    def get_account_graveyard(self, public_key: str) -> List[Dict[str, Any]]:
+        """
+        Get the graveyard (retired keys) for the given account.
+
+        Args:
+            public_key: Hex-encoded public key
+
+        Returns:
+            List of retired key information
+        """
+        try:
+            response = requests.get(f"{self.api_url}/accounts/{public_key}/graveyard")
+            return self._handle_response(response)["graveyard"]
+        except (requests.exceptions.RequestException, KeyError) as e:
+            raise DCypherAPIError(f"Failed to get account graveyard: {e}")
+
+    def list_files(self, public_key: str) -> List[Dict[str, Any]]:
+        """
+        List files stored for the given account.
+
+        Args:
+            public_key: Account's classic public key
+
+        Returns:
+            List of file information
+        """
+        try:
+            response = requests.get(f"{self.api_url}/storage/{public_key}")
+            return self._handle_response(response)["files"]
+        except (requests.exceptions.RequestException, KeyError) as e:
+            raise DCypherAPIError(f"Failed to list files: {e}")
+
     def add_pq_keys(
         self, public_key: str, new_keys: List[Dict[str, str]]
     ) -> Dict[str, Any]:
