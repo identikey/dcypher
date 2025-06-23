@@ -16,16 +16,6 @@ import gzip
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
 
 
-def get_nonce(api_url):
-    """Helper to get a nonce from the API server."""
-    try:
-        nonce_resp = requests.get(f"{api_url}/nonce")
-        nonce_resp.raise_for_status()
-        return nonce_resp.json()["nonce"]
-    except (requests.exceptions.RequestException, KeyError) as e:
-        raise click.ClickException(f"Failed to get nonce from API: {e}")
-
-
 @click.group()
 def cli():
     """A CLI tool for demonstrating proxy re-encryption."""
@@ -314,7 +304,6 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
     Encrypts and uploads a file to the remote storage API using a chunked method.
     """
     from lib import idk_message
-    from lib.auth import sign_message_with_keys
 
     # --- 1. Prepare for encryption and upload ---
     click.echo("Preparing keys and crypto context...", err=True)
@@ -382,39 +371,25 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
 
     # --- 3. Register the file with the first part ---
     click.echo(f"Registering file with hash: {file_hash}", err=True)
-    nonce = get_nonce(api_url)
-    message_to_sign = f"REGISTER:{pk_classic_hex}:{file_hash}:{nonce}".encode("utf-8")
-    signatures = sign_message_with_keys(
-        message_to_sign,
-        {"classic_sk": classic_sk_auth, "pq_keys": pq_keys_auth},
-    )
 
-    url = f"{api_url}/storage/{pk_classic_hex}/register"
+    # Initialize API client
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    client = DCypherClient(api_url, str(auth_keys_path))
+
     try:
-        files = {
-            "idk_part_one": (
-                f"{file_hash}.part1.idk",
-                part_one_content,
-                "application/octet-stream",
-            )
-        }
         file_stat = os.stat(file_path)
-        data = {
-            "nonce": nonce,
-            "filename": Path(file_path).name,
-            "content_type": "application/octet-stream",  # Or be more specific
-            "total_size": file_stat.st_size,
-            "classic_signature": signatures["classic_signature"],
-            "pq_signatures": json.dumps(signatures["pq_signatures"]),
-        }
-        response = requests.post(url, files=files, data=data)
-        response.raise_for_status()
-        click.echo("File registered, first chunk uploaded.", err=True)
-    except requests.exceptions.RequestException as e:
-        error_text = e.response.text if e.response else str(e)
-        raise click.ClickException(
-            f"API request failed during registration: {error_text}"
+        client.register_file(
+            public_key=pk_classic_hex,
+            file_hash=file_hash,
+            idk_part_one=part_one_content,
+            filename=Path(file_path).name,
+            content_type="application/octet-stream",
+            total_size=file_stat.st_size,
         )
+        click.echo("File registered, first chunk uploaded.", err=True)
+    except DCypherAPIError as e:
+        raise click.ClickException(f"API request failed during registration: {e}")
 
     # --- 4. Upload remaining data chunks ---
     click.echo(f"Uploading {len(data_chunks)} data chunks...", err=True)
@@ -431,35 +406,19 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
             err=True,
         )
 
-        nonce = get_nonce(api_url)
-        message_to_sign = (
-            f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
-            f"{chunk_index}:{total_chunks}:{chunk_hash}:{nonce}"
-        ).encode("utf-8")
-        signatures = sign_message_with_keys(
-            message_to_sign,
-            {"classic_sk": classic_sk_auth, "pq_keys": pq_keys_auth},
-        )
-
-        url = f"{api_url}/storage/{pk_classic_hex}/{file_hash}/chunks"
-        files = {"file": (chunk_hash, compressed_chunk, "application/gzip")}
-        data = {
-            "nonce": nonce,
-            "chunk_hash": chunk_hash,
-            "chunk_index": chunk_index,
-            "total_chunks": total_chunks,
-            "compressed": True,
-            "classic_signature": signatures["classic_signature"],
-            "pq_signatures": json.dumps(signatures["pq_signatures"]),
-        }
-
         try:
-            response = requests.post(url, files=files, data=data)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            error_text = e.response.text if e.response else str(e)
+            client.upload_chunk(
+                public_key=pk_classic_hex,
+                file_hash=file_hash,
+                chunk_data=compressed_chunk,
+                chunk_hash=chunk_hash,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+                compressed=True,
+            )
+        except DCypherAPIError as e:
             raise click.ClickException(
-                f"API request failed for chunk {chunk_index}: {error_text}"
+                f"API request failed for chunk {chunk_index}: {e}"
             )
 
     click.echo("All chunks uploaded successfully.", err=True)
