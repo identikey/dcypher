@@ -11,6 +11,7 @@ import ecdsa
 import base64
 import sys
 import gzip
+from lib.key_manager import KeyManager
 
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
@@ -38,6 +39,29 @@ def gen_cc(output, plaintext_modulus, scaling_mod_size):
         json.dump({"cc": serialized_cc}, f)
 
     click.echo(f"Crypto context saved to {output}", err=True)
+
+
+@cli.command("gen-signing-keys")
+@click.option(
+    "--output-prefix", default="idk_signing", help="Prefix for the output key files."
+)
+def gen_signing_keys(output_prefix):
+    """Generates a classic ECDSA key pair for signing."""
+    click.echo("Generating ECDSA signing key pair...", err=True)
+
+    sk, pk_hex = KeyManager.generate_classic_keypair()
+
+    pk_path = f"{output_prefix}.pub"
+    sk_path = f"{output_prefix}.sec"
+
+    with open(pk_path, "w") as f:
+        f.write(pk_hex)
+
+    with open(sk_path, "w") as f:
+        f.write(sk.to_string().hex())
+
+    click.echo(f"Signing public key saved to {pk_path}", err=True)
+    click.echo(f"Signing secret key saved to {sk_path}", err=True)
 
 
 @cli.command("gen-keys")

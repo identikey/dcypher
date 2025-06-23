@@ -76,7 +76,7 @@ class KeyManager:
     @classmethod
     def create_auth_keys_bundle(
         cls,
-        temp_dir: Path,
+        key_dir: Path,
         additional_pq_algs: Optional[List[str]] = None,
     ) -> Tuple[str, Path]:
         """
@@ -86,7 +86,7 @@ class KeyManager:
         for both testing and production use.
 
         Args:
-            temp_dir: Directory to store key files
+            key_dir: Directory to store key files
             additional_pq_algs: Additional PQ algorithms beyond ML-DSA
 
         Returns:
@@ -96,11 +96,11 @@ class KeyManager:
             additional_pq_algs = []
 
         # Ensure temp directory exists
-        temp_dir.mkdir(parents=True, exist_ok=True)
+        key_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate and save classic key
         sk_classic, pk_classic_hex = cls.generate_classic_keypair()
-        classic_sk_path = temp_dir / "classic.sk"
+        classic_sk_path = key_dir / "classic.sk"
         cls.save_classic_key(sk_classic, classic_sk_path)
 
         # Generate and save PQ keys
@@ -109,7 +109,7 @@ class KeyManager:
 
         for i, alg in enumerate(all_algs):
             pq_pk, pq_sk = cls.generate_pq_keypair(alg)
-            pq_sk_path = temp_dir / f"pq_{i}.sk"
+            pq_sk_path = key_dir / f"pq_{i}.sk"
             cls.save_pq_key(pq_sk, pq_sk_path)
             pq_keys_data.append(
                 {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": alg}
@@ -120,7 +120,7 @@ class KeyManager:
             "classic_sk_path": str(classic_sk_path),
             "pq_keys": pq_keys_data,
         }
-        auth_keys_file = temp_dir / "auth_keys.json"
+        auth_keys_file = key_dir / "auth_keys.json"
         with open(auth_keys_file, "w") as f:
             json.dump(auth_keys_data, f)
 
