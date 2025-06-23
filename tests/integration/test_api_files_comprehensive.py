@@ -678,10 +678,11 @@ def test_file_access_authorization_edge_cases(api_base_url: str):
         # Should fail because the file doesn't belong to account 2
         assert response.status_code == 404
 
-        # 3. Account 2 tries to access Account 1's file list (should not see it)
-        response = requests.get(f"{api_base_url}/storage/{pk2_hex}")
-        assert response.status_code == 200
-        files = response.json()["files"]
+        # 3. Account 2 tries to access Account 1's file list (should not see it) using API client
+        from src.lib.api_client import DCypherClient
+
+        client = DCypherClient(api_base_url)
+        files = client.list_files(pk2_hex)
         assert file_hash not in files, "File leaked across accounts"
 
         # 4. Try cross-account signature attack (Account 2 signs Account 1's download)
@@ -934,10 +935,11 @@ def test_audit_trail_file_operations(api_base_url: str):
         )
         assert response.status_code == 200, "Download should succeed"
 
-        # 3. List operation audit
-        response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}")
-        assert response.status_code == 200, "List operation should succeed"
-        files_list = response.json()["files"]
+        # 3. List operation audit using API client
+        from src.lib.api_client import DCypherClient
+
+        client = DCypherClient(api_base_url)
+        files_list = client.list_files(pk_classic_hex)
         assert file_hash in files_list, "Uploaded file should appear in list"
 
         # Note: Actual audit log verification would depend on the logging implementation
@@ -1004,10 +1006,11 @@ def test_cross_account_access_prevention(api_base_url: str):
         # Should fail - file doesn't exist in account 2's namespace
         assert response.status_code == 404
 
-        # Verify the file is not visible in account 2's file list
-        response = requests.get(f"{api_base_url}/storage/{pk2_hex}")
-        assert response.status_code == 200
-        files = response.json()["files"]
+        # Verify the file is not visible in account 2's file list using API client
+        from src.lib.api_client import DCypherClient
+
+        client = DCypherClient(api_base_url)
+        files = client.list_files(pk2_hex)
         assert file_hash not in files, "File should not be visible to other accounts"
 
         # Verify the file is still accessible to account 1

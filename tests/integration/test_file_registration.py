@@ -118,10 +118,13 @@ def test_successful_upload_workflow(api_base_url: str):
         assert metadata["size"] == len(original_content)
         assert metadata["status"] == "completed"
 
-        # 6. Verify file appears in the user's file list
-        list_response = requests.get(f"{api_base_url}/storage/{pk_classic_hex}")
-        assert list_response.status_code == 200
-        assert file_hash in list_response.json()["files"]
+        # 6. Verify file appears in the user's file list using API client
+        from src.lib.api_client import DCypherClient
+
+        client = DCypherClient(api_base_url)
+        files = client.list_files(pk_classic_hex)
+        # The list_files method returns a list of file hashes directly
+        assert file_hash in files
 
     finally:
         for sig in oqs_sigs_to_free:
