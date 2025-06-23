@@ -29,4 +29,4 @@ docker-exec command:
     docker run --rm -it dcypher {{command}}
 
 test:
-    uv run pytest -n auto tests/
+    uv run pytest -n auto --dist worksteal tests/
