@@ -19,18 +19,23 @@ from security import SERVER_SECRET
 from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
+    create_test_account_with_context,
 )
 
 
-def test_account_creation_timing_attack_resistance(api_base_url: str):
+def test_account_creation_timing_attack_resistance(api_base_url: str, tmp_path):
     """
     Tests that account creation operations execute in constant time
     regardless of whether the account already exists, preventing
     timing-based user enumeration attacks.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Create an existing account
-    sk_classic, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account(api_base_url)
-    try:
+    # 1. Create an existing account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+
         # 2. Measure time for existing account creation attempt
         start_time = time.perf_counter()
         nonce2 = get_nonce(api_base_url)
@@ -56,46 +61,40 @@ def test_account_creation_timing_attack_resistance(api_base_url: str):
         existing_account_time = time.perf_counter() - start_time
         assert response2.status_code == 409
 
-        # 3. Measure time for new account creation
-        sk_classic_new = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-        vk_classic_new = sk_classic_new.get_verifying_key()
-        assert vk_classic_new is not None
-        pk_classic_new_hex = vk_classic_new.to_string("uncompressed").hex()
+    # 3. Measure time for new account creation
+    sk_classic_new = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    vk_classic_new = sk_classic_new.get_verifying_key()
+    assert vk_classic_new is not None
+    pk_classic_new_hex = vk_classic_new.to_string("uncompressed").hex()
 
-        start_time = time.perf_counter()
-        nonce3 = get_nonce(api_base_url)
-        with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new2:
-            pk_ml_dsa_new2_hex = sig_ml_dsa_new2.generate_keypair().hex()
-            message3 = f"{pk_classic_new_hex}:{pk_ml_dsa_new2_hex}:{nonce3}".encode(
-                "utf-8"
-            )
-            sig3_classic = sk_classic_new.sign(message3, hashfunc=hashlib.sha256).hex()
-            sig3_ml_dsa = sig_ml_dsa_new2.sign(message3).hex()
+    start_time = time.perf_counter()
+    nonce3 = get_nonce(api_base_url)
+    with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new2:
+        pk_ml_dsa_new2_hex = sig_ml_dsa_new2.generate_keypair().hex()
+        message3 = f"{pk_classic_new_hex}:{pk_ml_dsa_new2_hex}:{nonce3}".encode("utf-8")
+        sig3_classic = sk_classic_new.sign(message3, hashfunc=hashlib.sha256).hex()
+        sig3_ml_dsa = sig_ml_dsa_new2.sign(message3).hex()
 
-            response3 = requests.post(
-                f"{api_base_url}/accounts",
-                json={
-                    "public_key": pk_classic_new_hex,
-                    "signature": sig3_classic,
-                    "ml_dsa_signature": {
-                        "public_key": pk_ml_dsa_new2_hex,
-                        "signature": sig3_ml_dsa,
-                        "alg": ML_DSA_ALG,
-                    },
-                    "nonce": nonce3,
+        response3 = requests.post(
+            f"{api_base_url}/accounts",
+            json={
+                "public_key": pk_classic_new_hex,
+                "signature": sig3_classic,
+                "ml_dsa_signature": {
+                    "public_key": pk_ml_dsa_new2_hex,
+                    "signature": sig3_ml_dsa,
+                    "alg": ML_DSA_ALG,
                 },
-            )
-        new_account_time = time.perf_counter() - start_time
-        assert response3.status_code == 200
-
-        # 4. Verify timing difference is within acceptable bounds (< 50ms difference)
-        time_difference = abs(existing_account_time - new_account_time)
-        assert time_difference < 0.05, (
-            f"Timing difference too large: {time_difference}s"
+                "nonce": nonce3,
+            },
         )
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    new_account_time = time.perf_counter() - start_time
+    assert response3.status_code == 200
+
+    # 4. Verify timing difference is within acceptable bounds (< 50ms difference)
+    time_difference = abs(existing_account_time - new_account_time)
+    assert time_difference < 0.05, f"Timing difference too large: {time_difference}s"
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_concurrent_account_creation(api_base_url: str):

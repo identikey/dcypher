@@ -131,19 +131,21 @@ def test_successful_upload_workflow(api_base_url: str, tmp_path):
     # OQS signatures are automatically freed when exiting the context
 
 
-def test_register_file_invalid_merkle_root(api_base_url: str):
+def test_register_file_invalid_merkle_root(api_base_url: str, tmp_path):
     """
     Tests that file registration fails if the MerkleRoot in the IDK part
     does not match the hash derived from the content (simulated).
     The server now derives the hash, so the client cannot lie. This test
     checks if a malformed IDK part is rejected.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # Create account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
 
         # Create a valid IDK part, then tamper with the MerkleRoot header
         idk_parts, real_file_hash = _create_test_idk_file_parts(b"content")
@@ -185,22 +187,21 @@ def test_register_file_invalid_merkle_root(api_base_url: str):
         # from the body ("fakehash123") won't match the one used for the signature.
         assert response.status_code == 401, response.text
         assert "Invalid classic signature" in response.text
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_upload_unauthorized_registration(api_base_url: str):
+def test_upload_unauthorized_registration(api_base_url: str, tmp_path):
     """
     Tests that file registration fails if signatures are invalid.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # Create account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
 
         idk_parts, file_hash = _create_test_idk_file_parts(b"content")
         part_one = idk_parts[0]
@@ -236,9 +237,7 @@ def test_upload_unauthorized_registration(api_base_url: str):
         )
         assert response.status_code == 401, response.text
         assert "Invalid classic signature" in response.text
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_register_file_malformed_pq_signatures(api_base_url: str, tmp_path):

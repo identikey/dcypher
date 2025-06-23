@@ -27,6 +27,7 @@ from tests.integration.test_api import (
     get_nonce,
     _create_test_idk_file_parts,
     setup_uploaded_file,
+    create_test_account_with_context,
 )
 
 
@@ -100,14 +101,18 @@ def test_download_file_unauthorized(api_base_url: str):
             sig.free()
 
 
-def test_download_file_nonexistent(api_base_url: str):
-    """Tests that downloading a non-existent file returns a 404 error."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+def test_download_file_nonexistent(api_base_url: str, tmp_path):
+    """
+    Tests that downloading a non-existent file returns a 404 error.
+    This test demonstrates the new API client pattern with automatic resource management.
+    """
+    # Create account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
 
         fake_file_hash = "nonexistent-file-hash-12345"
         download_nonce = get_nonce(api_base_url)
@@ -133,9 +138,7 @@ def test_download_file_nonexistent(api_base_url: str):
         )
         assert response.status_code == 404
         assert "File not found" in response.text
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_download_file_compressed(api_base_url: str):
