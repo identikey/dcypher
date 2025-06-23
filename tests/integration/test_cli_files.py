@@ -25,6 +25,44 @@ import socket
 import gzip
 import base64
 from lib import idk_message
+from src.lib.api_client import DCypherClient
+
+
+def _setup_api_client_with_auth(test_dir, api_base_url):
+    """Helper function to create authentication keys and API client."""
+    # Generate authentication keys for API
+    classic_sk_api = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    classic_vk_api = classic_sk_api.get_verifying_key()
+    assert classic_vk_api is not None
+    pk_classic_hex = classic_vk_api.to_string("uncompressed").hex()
+    classic_sk_api_path = test_dir / "user_auth_api.sk"
+    with open(classic_sk_api_path, "w") as f:
+        f.write(classic_sk_api.to_string().hex())
+
+    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
+    pq_sk_path = test_dir / "user_auth_pq.sk"
+    with open(pq_sk_path, "wb") as f:
+        f.write(pq_sk)
+
+    # Create auth keys file for API client
+    auth_keys_data = {
+        "classic_sk_path": str(classic_sk_api_path),
+        "pq_keys": [
+            {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}
+        ],
+    }
+    auth_keys_file = test_dir / "auth_keys.json"
+    with open(auth_keys_file, "w") as f:
+        json.dump(auth_keys_data, f)
+
+    # Create API client
+    client = DCypherClient(api_base_url, str(auth_keys_file))
+
+    # Create account
+    pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
+    client.create_account(pk_classic_hex, pq_keys)
+
+    return client, pk_classic_hex, auth_keys_file
 
 
 def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
@@ -40,19 +78,10 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     run_command(["gen-cc", "--output", str(cc_path)])
     run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])
 
-    # b. Authentication keys for API
-    classic_sk_api = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    classic_vk_api = classic_sk_api.get_verifying_key()
-    assert classic_vk_api is not None
-    pk_classic_hex = classic_vk_api.to_string("uncompressed").hex()
-    classic_sk_api_path = test_dir / "user_auth_api.sk"
-    with open(classic_sk_api_path, "w") as f:
-        f.write(classic_sk_api.to_string().hex())
-
-    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
-    pq_sk_path = test_dir / "user_auth_pq.sk"
-    with open(pq_sk_path, "wb") as f:
-        f.write(pq_sk)
+    # b. Setup API client and create account
+    client, pk_classic_hex, auth_keys_file = _setup_api_client_with_auth(
+        test_dir, api_base_url
+    )
 
     # c. Signing keys for IDK Message Format
     sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -65,44 +94,13 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     with open(vk_idk_path, "w") as f:
         f.write(vk_idk_verifier.to_string("uncompressed").hex())
 
-    # --- 2. Create Account on the API ---
-    nonce_resp = requests.get(f"{api_base_url}/nonce")
-    assert nonce_resp.status_code == 200
-    nonce = nonce_resp.json()["nonce"]
-
-    message = f"{pk_classic_hex}:{pq_pk.hex()}:{nonce}".encode("utf-8")
-    with oqs.Signature(ML_DSA_ALG, pq_sk) as sig_ml_dsa:
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": classic_sk_api.sign(message, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pq_pk.hex(),
-                "signature": sig_ml_dsa.sign(message).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "nonce": nonce,
-        }
-    response = requests.post(f"{api_base_url}/accounts", json=create_payload)
-    assert response.status_code == 200, response.text
-
-    # --- 3. Prepare auth keys file for CLI ---
-    auth_keys_data = {
-        "classic_sk_path": str(classic_sk_api_path),
-        "pq_keys": [
-            {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}
-        ],
-    }
-    auth_keys_file = test_dir / "auth_keys.json"
-    with open(auth_keys_file, "w") as f:
-        json.dump(auth_keys_data, f)
-
-    # --- 4. Create a 1MB file (no pre-encryption needed for upload command) ---
+    # --- 2. Create a 1MB file (no pre-encryption needed for upload command) ---
     original_data = os.urandom(1024 * 1024)  # 1MB
     original_file = test_dir / "original_1mb.dat"
     with open(original_file, "wb") as f:
         f.write(original_data)
 
-    # --- 5. Upload the file using the CLI ---
+    # --- 3. Upload the file using the CLI ---
     result = run_command(
         [
             "upload",
@@ -129,7 +127,7 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
             break
     assert file_hash, "Could not find file hash in upload output."
 
-    # --- 6. Download the chunks using the new command ---
+    # --- 4. Download the chunks using the new command ---
     downloaded_chunks_file = test_dir / "downloaded_1mb.chunks.gz"
     result = run_command(
         [
@@ -149,7 +147,7 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     assert result.returncode == 0, f"Download failed: {result.stderr}"
     assert downloaded_chunks_file.exists()
 
-    # --- 7. Manually decompress and decrypt for verification ---
+    # --- 5. Manually decompress and decrypt for verification ---
     # Since the CLI doesn't have a re-assembler, we can't use `cli decrypt`.
     # We will test the downloaded content's integrity manually.
     # This test primarily verifies the CLI can upload and download.
@@ -169,46 +167,14 @@ def test_cli_download_compressed_verification(cli_test_env, api_base_url):
     cc_path = test_dir / "cc.json"
     run_command(["gen-cc", "--output", str(cc_path)])
     run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])
-    classic_sk_api = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    classic_vk_api = classic_sk_api.get_verifying_key()
-    assert classic_vk_api is not None
-    pk_classic_hex = classic_vk_api.to_string("uncompressed").hex()
-    classic_sk_api_path = test_dir / "user_auth_api.sk"
-    (test_dir / "user_auth_api.sk").write_text(classic_sk_api.to_string().hex())
-    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
-    (test_dir / "user_auth_pq.sk").write_bytes(pq_sk)
+
+    # Setup API client and create account
+    client, pk_classic_hex, auth_keys_file = _setup_api_client_with_auth(
+        test_dir, api_base_url
+    )
+
     sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     (test_dir / "idk_signer.sk").write_text(sk_idk_signer.to_string().hex())
-
-    # Create Account
-    nonce_resp = requests.get(f"{api_base_url}/nonce")
-    nonce = nonce_resp.json()["nonce"]
-    message = f"{pk_classic_hex}:{pq_pk.hex()}:{nonce}".encode("utf-8")
-    with oqs.Signature(ML_DSA_ALG, pq_sk) as sig_ml_dsa:
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": classic_sk_api.sign(message, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pq_pk.hex(),
-                "signature": sig_ml_dsa.sign(message).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "nonce": nonce,
-        }
-    requests.post(f"{api_base_url}/accounts", json=create_payload)
-
-    auth_keys_data = {
-        "classic_sk_path": str(classic_sk_api_path),
-        "pq_keys": [
-            {
-                "sk_path": str(test_dir / "user_auth_pq.sk"),
-                "pk_hex": pq_pk.hex(),
-                "alg": ML_DSA_ALG,
-            }
-        ],
-    }
-    auth_keys_file = test_dir / "auth_keys.json"
-    auth_keys_file.write_text(json.dumps(auth_keys_data))
 
     # Create and upload a compressible test file
     original_data = b"This is a repeating pattern for compression testing! " * 1000
@@ -321,27 +287,7 @@ def test_single_part_idk_message_flow(cli_test_env, api_base_url):
         vk_idk_verifier.to_string("uncompressed").hex()
     )
 
-    # Create Account
-    nonce_resp = requests.get(f"{api_base_url}/nonce")
-    nonce = nonce_resp.json()["nonce"]
-    message = f"{pk_classic_hex}:{pq_pk.hex()}:{nonce}".encode("utf-8")
-    with oqs.Signature(ML_DSA_ALG, pq_sk) as sig_ml_dsa:
-        requests.post(
-            f"{api_base_url}/accounts",
-            json={
-                "public_key": pk_classic_hex,
-                "signature": classic_sk_api.sign(
-                    message, hashfunc=hashlib.sha256
-                ).hex(),
-                "ml_dsa_signature": {
-                    "public_key": pq_pk.hex(),
-                    "signature": sig_ml_dsa.sign(message).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                "nonce": nonce,
-            },
-        )
-
+    # Create auth keys file
     auth_keys_data = {
         "classic_sk_path": str(classic_sk_api_path),
         "pq_keys": [
@@ -354,6 +300,11 @@ def test_single_part_idk_message_flow(cli_test_env, api_base_url):
     }
     auth_keys_file = test_dir / "auth_keys.json"
     auth_keys_file.write_text(json.dumps(auth_keys_data))
+
+    # Create Account using API client
+    client = DCypherClient(api_base_url, str(auth_keys_file))
+    pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
+    client.create_account(pk_classic_hex, pq_keys)
 
     # Create a small file that should result in one header + one data chunk
     original_data = b"Small single-part IDK message test data"
@@ -459,23 +410,7 @@ def test_cli_download_integrity_failure(cli_test_env, api_base_url):
     sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     (test_dir / "idk_signer.sk").write_text(sk_idk_signer.to_string().hex())
 
-    # Create Account
-    nonce_resp = requests.get(f"{api_base_url}/nonce")
-    nonce = nonce_resp.json()["nonce"]
-    message = f"{pk_classic_hex}:{pq_pk.hex()}:{nonce}".encode("utf-8")
-    with oqs.Signature(ML_DSA_ALG, pq_sk) as sig_ml_dsa:
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": classic_sk_api.sign(message, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pq_pk.hex(),
-                "signature": sig_ml_dsa.sign(message).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "nonce": nonce,
-        }
-    requests.post(f"{api_base_url}/accounts", json=create_payload)
-
+    # Create auth keys file
     auth_keys_data = {
         "classic_sk_path": str(classic_sk_api_path),
         "pq_keys": [
@@ -488,6 +423,11 @@ def test_cli_download_integrity_failure(cli_test_env, api_base_url):
     }
     auth_keys_file = test_dir / "auth_keys.json"
     auth_keys_file.write_text(json.dumps(auth_keys_data))
+
+    # Create Account using API client
+    client = DCypherClient(api_base_url, str(auth_keys_file))
+    pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
+    client.create_account(pk_classic_hex, pq_keys)
 
     # Create and upload a compressible test file
     original_data = b"This is a repeating pattern for compression testing! " * 1000

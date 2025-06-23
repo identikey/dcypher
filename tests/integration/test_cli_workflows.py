@@ -23,6 +23,7 @@ import click
 import hashlib
 import socket
 import gzip
+from src.lib.api_client import DCypherClient
 
 
 def test_full_workflow(cli_test_env):
@@ -597,27 +598,7 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     with open(vk_idk_path, "w") as f:
         f.write(vk_idk_verifier.to_string("uncompressed").hex())
 
-    # --- 2. Create Account on the API (using requests) ---
-    nonce_resp = requests.get(f"{api_base_url}/nonce")
-    assert nonce_resp.status_code == 200
-    nonce = nonce_resp.json()["nonce"]
-
-    message = f"{pk_classic_hex}:{pq_pk.hex()}:{nonce}".encode("utf-8")
-    with oqs.Signature(ML_DSA_ALG, pq_sk) as sig_ml_dsa:
-        create_payload = {
-            "public_key": pk_classic_hex,
-            "signature": classic_sk_api.sign(message, hashfunc=hashlib.sha256).hex(),
-            "ml_dsa_signature": {
-                "public_key": pq_pk.hex(),
-                "signature": sig_ml_dsa.sign(message).hex(),
-                "alg": ML_DSA_ALG,
-            },
-            "nonce": nonce,
-        }
-    response = requests.post(f"{api_base_url}/accounts", json=create_payload)
-    assert response.status_code == 200, response.text
-
-    # --- 3. Prepare auth keys file for CLI ---
+    # --- 2. Create Account using API client ---
     auth_keys_data = {
         "classic_sk_path": str(classic_sk_api_path),
         "pq_keys": [
@@ -627,6 +608,10 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     auth_keys_file = test_dir / "auth_keys.json"
     with open(auth_keys_file, "w") as f:
         json.dump(auth_keys_data, f)
+
+    client = DCypherClient(api_base_url, str(auth_keys_file))
+    pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
+    client.create_account(pk_classic_hex, pq_keys)
 
     # --- 4. Encrypt a LARGE file ---
     # Use a size guaranteed to be > slot_count to test chunking
