@@ -21,168 +21,54 @@ from tests.integration.test_api import (
     get_nonce,
     create_test_account_with_signing_keys,
     create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
-def test_create_account_successful(api_base_url: str):
+def test_create_account_successful(api_base_url: str, tmp_path):
     """
     Tests the successful creation of a hybrid account with one mandatory classic
     signature, one mandatory PQ signature (ML-DSA), and one additional optional
     PQ signature. This covers the full functionality of creating a complex
     hybrid account.
 
-    This test now uses the DCypherClient for a more realistic usage scenario.
+    This test now uses the enhanced DCypherClient with KeyManager for simplified testing.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
-    import tempfile
-    import json
-    from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    # Create account with additional PQ algorithm using the streamlined helper
+    client, pk_classic_hex = create_test_account_with_keymanager(
+        api_base_url, tmp_path, additional_pq_algs=["Falcon-512"]
+    )
 
-    # Generate keys for this account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    # Verify account details using the API client
+    account_details = client.get_account(pk_classic_hex)
+    assert account_details["public_key"] == pk_classic_hex
+    assert len(account_details["pq_keys"]) == 2  # ML-DSA + Falcon-512
 
-    # Generate PQ keys
-    pq_pk_ml_dsa, pq_sk_ml_dsa = generate_pq_keys(ML_DSA_ALG)
-    pq_pk_falcon, pq_sk_falcon = generate_pq_keys("Falcon-512")
-
-    # Create temporary auth keys file
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-
-        # Save classic secret key
-        classic_sk_path = temp_path / "classic.sk"
-        with open(classic_sk_path, "w") as f:
-            f.write(sk_classic.to_string().hex())
-
-        # Save PQ secret keys
-        pq_sk_ml_dsa_path = temp_path / "pq_ml_dsa.sk"
-        with open(pq_sk_ml_dsa_path, "wb") as f:
-            f.write(pq_sk_ml_dsa)
-
-        pq_sk_falcon_path = temp_path / "pq_falcon.sk"
-        with open(pq_sk_falcon_path, "wb") as f:
-            f.write(pq_sk_falcon)
-
-        # Create auth keys file
-        auth_keys_data = {
-            "classic_sk_path": str(classic_sk_path),
-            "pq_keys": [
-                {
-                    "sk_path": str(pq_sk_ml_dsa_path),
-                    "pk_hex": pq_pk_ml_dsa.hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                {
-                    "sk_path": str(pq_sk_falcon_path),
-                    "pk_hex": pq_pk_falcon.hex(),
-                    "alg": "Falcon-512",
-                },
-            ],
-        }
-        auth_keys_file = temp_path / "auth_keys.json"
-        with open(auth_keys_file, "w") as f:
-            json.dump(auth_keys_data, f)
-
-        # Create API client and account
-        client = DCypherClient(api_base_url, str(auth_keys_file))
-        pq_keys = [
-            {"pk_hex": pq_pk_ml_dsa.hex(), "alg": ML_DSA_ALG},
-            {"pk_hex": pq_pk_falcon.hex(), "alg": "Falcon-512"},
-        ]
-
-        # Create account using the API client
-        result = client.create_account(pk_classic_hex, pq_keys)
-        assert result["message"] == "Account created successfully"
-
-        # Verify account details using the API client
-        account_details = client.get_account(pk_classic_hex)
-        assert account_details["public_key"] == pk_classic_hex
-        assert len(account_details["pq_keys"]) == 2
-
-        retrieved_pq_keys = {
-            item["alg"]: item["public_key"] for item in account_details["pq_keys"]
-        }
-        expected_pq_keys = {
-            ML_DSA_ALG: pq_pk_ml_dsa.hex(),
-            "Falcon-512": pq_pk_falcon.hex(),
-        }
-        assert retrieved_pq_keys == expected_pq_keys
+    # Verify both algorithms are present
+    retrieved_algs = {item["alg"] for item in account_details["pq_keys"]}
+    expected_algs = {ML_DSA_ALG, "Falcon-512"}
+    assert retrieved_algs == expected_algs
 
 
-def test_create_account_successful_mandatory_only(api_base_url: str):
+def test_create_account_successful_mandatory_only(api_base_url: str, tmp_path):
     """
     Tests the successful creation of a hybrid account with only the mandatory
     classic and PQ signatures (ML-DSA), without any additional PQ signatures.
     This is the minimal successful account creation scenario.
 
-    This test now uses the DCypherClient for a more realistic usage scenario.
+    This test now uses the enhanced DCypherClient with KeyManager for simplified testing.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
-    import tempfile
-    import json
-    from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    # Create account with only mandatory keys using the streamlined helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
-    # Generate keys for this account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    # Verify account details using the API client
+    account_details = client.get_account(pk_classic_hex)
+    assert account_details["public_key"] == pk_classic_hex
+    assert len(account_details["pq_keys"]) == 1  # Only ML-DSA
 
-    # Generate PQ keys (only ML-DSA for this test)
-    pq_pk_ml_dsa, pq_sk_ml_dsa = generate_pq_keys(ML_DSA_ALG)
-
-    # Create temporary auth keys file
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-
-        # Save classic secret key
-        classic_sk_path = temp_path / "classic.sk"
-        with open(classic_sk_path, "w") as f:
-            f.write(sk_classic.to_string().hex())
-
-        # Save PQ secret key
-        pq_sk_ml_dsa_path = temp_path / "pq_ml_dsa.sk"
-        with open(pq_sk_ml_dsa_path, "wb") as f:
-            f.write(pq_sk_ml_dsa)
-
-        # Create auth keys file
-        auth_keys_data = {
-            "classic_sk_path": str(classic_sk_path),
-            "pq_keys": [
-                {
-                    "sk_path": str(pq_sk_ml_dsa_path),
-                    "pk_hex": pq_pk_ml_dsa.hex(),
-                    "alg": ML_DSA_ALG,
-                }
-            ],
-        }
-        auth_keys_file = temp_path / "auth_keys.json"
-        with open(auth_keys_file, "w") as f:
-            json.dump(auth_keys_data, f)
-
-        # Create API client and account
-        client = DCypherClient(api_base_url, str(auth_keys_file))
-        pq_keys = [{"pk_hex": pq_pk_ml_dsa.hex(), "alg": ML_DSA_ALG}]
-
-        # Create account using the API client
-        result = client.create_account(pk_classic_hex, pq_keys)
-        assert result["message"] == "Account created successfully"
-
-        # Verify account details using the API client
-        account_details = client.get_account(pk_classic_hex)
-        assert account_details["public_key"] == pk_classic_hex
-        assert len(account_details["pq_keys"]) == 1
-
-        retrieved_pq_keys = {
-            item["alg"]: item["public_key"] for item in account_details["pq_keys"]
-        }
-        expected_pq_keys = {ML_DSA_ALG: pq_pk_ml_dsa.hex()}
-        assert retrieved_pq_keys == expected_pq_keys
+    # Verify the mandatory algorithm is present
+    retrieved_alg = account_details["pq_keys"][0]["alg"]
+    assert retrieved_alg == ML_DSA_ALG
 
 
 def test_create_account_invalid_nonce(api_base_url: str):

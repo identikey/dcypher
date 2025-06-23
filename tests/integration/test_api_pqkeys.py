@@ -18,6 +18,7 @@ from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
     create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
@@ -263,12 +264,12 @@ def test_add_pq_key_authorization_failures(api_base_url: str, tmp_path):
     - Invalid signature for the new PQ key itself.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Setup: Create an account with one mandatory and one optional key using new pattern
+    # 1. Setup: Create an account with one mandatory and one optional key using streamlined helper
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    # Create account with additional PQ algorithm using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(
+    # Create account with additional PQ algorithm using the streamlined helper
+    client, pk_classic_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path, additional_pq_algs=[add_pq_alg_1]
     )
 
@@ -651,12 +652,12 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
     - Invalid signature from an existing PQ key.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Setup: Create an account with one mandatory and two optional keys using new pattern
+    # 1. Setup: Create an account with one mandatory and two optional keys using streamlined helper
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    # Create account with additional PQ algorithms using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(
+    # Create account with additional PQ algorithms using the streamlined helper
+    client, pk_classic_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path, additional_pq_algs=[add_pq_alg_1, add_pq_alg_2]
     )
 

@@ -462,3 +462,52 @@ def setup_uploaded_file(api_base_url: str) -> SetupData:
         uploaded_chunks=uploaded_chunks_info,
         total_chunks=len(idk_parts),
     )
+
+
+def create_test_account_with_keymanager(
+    api_base_url: str, tmp_path, additional_pq_algs: list[str] | None = None
+):
+    """
+    Creates a test account using KeyManager directly for maximum simplicity.
+    This is the most streamlined approach for tests that just need a working account.
+
+    Usage pattern:
+        client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+        # Account is ready to use with client
+
+    Args:
+        api_base_url: API server URL
+        tmp_path: Temporary directory for auth files
+        additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+    Returns:
+        tuple: (DCypherClient, pk_classic_hex)
+    """
+    from src.lib.api_client import DCypherClient
+    from pathlib import Path
+
+    # Use the enhanced factory method with KeyManager
+    return DCypherClient.create_test_account(
+        api_base_url, Path(tmp_path), additional_pq_algs
+    )
+
+
+def create_test_keys_with_keymanager(
+    tmp_path, additional_pq_algs: list[str] | None = None
+):
+    """
+    Creates test keys using KeyManager without creating an account.
+    Useful for tests that need keys but want to handle account creation manually.
+
+    Args:
+        tmp_path: Temporary directory for auth files
+        additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+    Returns:
+        tuple: (pk_classic_hex, auth_keys_file_path)
+    """
+    from src.lib.key_manager import KeyManager
+    from pathlib import Path
+
+    # Use KeyManager to create auth keys bundle
+    return KeyManager.create_auth_keys_bundle(Path(tmp_path), additional_pq_algs)
