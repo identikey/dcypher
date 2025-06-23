@@ -718,17 +718,18 @@ def test_file_access_authorization_edge_cases(api_base_url: str, tmp_path):
     # OQS signatures are automatically freed when exiting the context
 
 
-def test_file_storage_quota_limits(api_base_url: str):
+def test_file_storage_quota_limits(api_base_url: str, tmp_path):
     """
     Tests that file storage respects quota limits and prevents
     resource exhaustion attacks.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # Try to upload many files rapidly
         upload_count = 0
@@ -758,23 +759,21 @@ def test_file_storage_quota_limits(api_base_url: str):
         # Should have either succeeded with all uploads or hit quota limit
         assert upload_count > 0, "No files uploaded successfully"
         # If quota limiting is implemented, should hit limit before max_attempts
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_idk_message_format_validation(api_base_url: str):
+def test_idk_message_format_validation(api_base_url: str, tmp_path):
     """
     Tests that only properly formatted IDK messages are accepted
     and invalid formats are rejected.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # Test with a valid IDK message first to establish baseline
         valid_content = b"Valid test content"
@@ -797,11 +796,11 @@ def test_idk_message_format_validation(api_base_url: str):
 
         # Create IDK message parts manually
         cc = pre.create_crypto_context()
-        keys = pre.generate_keys(cc)
+        keys_pre = pre.generate_keys(cc)
         sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 
         message_parts = create_idk_message_parts(
-            content2, cc, keys.publicKey, sk_idk_signer
+            content2, cc, keys_pre.publicKey, sk_idk_signer
         )
 
         if message_parts:
@@ -880,23 +879,21 @@ def test_idk_message_format_validation(api_base_url: str):
                 assert chunk_response.status_code in [400, 422], (
                     f"Invalid format should be rejected, got {chunk_response.status_code}"
                 )
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_audit_trail_file_operations(api_base_url: str):
+def test_audit_trail_file_operations(api_base_url: str, tmp_path):
     """
     Tests that file operations generate comprehensive audit logs
     for security monitoring and compliance.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 1. Upload operation audit
         content = b"Audit test content"
@@ -941,17 +938,14 @@ def test_audit_trail_file_operations(api_base_url: str):
         # 3. List operation audit using API client
         from src.lib.api_client import DCypherClient
 
-        client = DCypherClient(api_base_url)
-        files_list = client.list_files(pk_classic_hex)
+        api_client = DCypherClient(api_base_url)
+        files_list = api_client.list_files(pk_classic_hex)
         assert file_hash in files_list, "Uploaded file should appear in list"
 
         # Note: Actual audit log verification would depend on the logging implementation
         # This test verifies that operations complete successfully, which is a prerequisite
         # for audit logging
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_cross_account_access_prevention(api_base_url: str, tmp_path):

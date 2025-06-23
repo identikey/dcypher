@@ -266,99 +266,107 @@ SetupData = collections.namedtuple(
 )
 
 
-def setup_uploaded_file(api_base_url: str) -> SetupData:
+def setup_uploaded_file(api_base_url: str, tmp_path) -> SetupData:
     """A helper to set up a fully uploaded file with chunks for download tests."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    pk_ml_dsa_hex = next(iter(all_pq_sks))
-    sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
-    original_content = (
-        b"This is a test file for downloading, with enough content to create multiple chunks."
-        * 250
-    )
-    idk_parts, file_hash = _create_test_idk_file_parts(original_content)
-    part_one = idk_parts[0]
-    data_chunks = idk_parts[1:]
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
-    # Register the file
-    register_nonce = get_nonce(api_base_url)
-    register_msg = f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
-    register_response = requests.post(
-        f"{api_base_url}/storage/{pk_classic_hex}/register",
-        files={
-            "idk_part_one": ("test.idk.part1", part_one, "application/octet-stream")
-        },
-        data={
-            "nonce": register_nonce,
-            "filename": "download_test.txt",
-            "content_type": "text/plain",
-            "total_size": str(len(original_content)),
-            "classic_signature": sk_classic.sign(
-                register_msg, hashfunc=hashlib.sha256
-            ).hex(),
-            "pq_signatures": json.dumps(
-                [
-                    {
-                        "public_key": pk_ml_dsa_hex,
-                        "signature": sig_ml_dsa.sign(register_msg).hex(),
-                        "alg": ML_DSA_ALG,
-                    }
-                ]
-            ),
-        },
-    )
-    assert register_response.status_code == 201
+        original_content = (
+            b"This is a test file for downloading, with enough content to create multiple chunks."
+            * 250
+        )
+        idk_parts, file_hash = _create_test_idk_file_parts(original_content)
+        part_one = idk_parts[0]
+        data_chunks = idk_parts[1:]
 
-    # Upload subsequent chunks
-    uploaded_chunks_info = []
-    for i, chunk_content in enumerate(data_chunks, start=1):
-        chunk_bytes = chunk_content.encode("utf-8")
-        chunk_hash = hashlib.blake2b(chunk_bytes).hexdigest()
-        chunk_nonce = get_nonce(api_base_url)
-        chunk_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{i}:{len(idk_parts)}:{chunk_hash}:{chunk_nonce}".encode()
-
-        chunk_response = requests.post(
-            f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
-            files={"file": (f"chunk_{i}", chunk_bytes, "application/octet-stream")},
+        # Register the file
+        register_nonce = get_nonce(api_base_url)
+        register_msg = (
+            f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        )
+        register_response = requests.post(
+            f"{api_base_url}/storage/{pk_classic_hex}/register",
+            files={
+                "idk_part_one": ("test.idk.part1", part_one, "application/octet-stream")
+            },
             data={
-                "nonce": chunk_nonce,
-                "chunk_hash": chunk_hash,
-                "chunk_index": str(i),
-                "total_chunks": str(len(idk_parts)),
-                "compressed": "false",
+                "nonce": register_nonce,
+                "filename": "download_test.txt",
+                "content_type": "text/plain",
+                "total_size": str(len(original_content)),
                 "classic_signature": sk_classic.sign(
-                    chunk_msg, hashfunc=hashlib.sha256
+                    register_msg, hashfunc=hashlib.sha256
                 ).hex(),
                 "pq_signatures": json.dumps(
                     [
                         {
                             "public_key": pk_ml_dsa_hex,
-                            "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+                            "signature": sig_ml_dsa.sign(register_msg).hex(),
                             "alg": ML_DSA_ALG,
                         }
                     ]
                 ),
             },
         )
-        assert chunk_response.status_code == 200
-        uploaded_chunks_info.append({"hash": chunk_hash, "original_data": chunk_bytes})
+        assert register_response.status_code == 201
 
-    # The full IDK file content is needed for verification after download
-    full_idk_file = "".join(idk_parts)
+        # Upload subsequent chunks
+        uploaded_chunks_info = []
+        for i, chunk_content in enumerate(data_chunks, start=1):
+            chunk_bytes = chunk_content.encode("utf-8")
+            chunk_hash = hashlib.blake2b(chunk_bytes).hexdigest()
+            chunk_nonce = get_nonce(api_base_url)
+            chunk_msg = f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:{i}:{len(idk_parts)}:{chunk_hash}:{chunk_nonce}".encode()
 
-    return SetupData(
-        sk_classic=sk_classic,
-        pk_classic_hex=pk_classic_hex,
-        all_pq_sks=all_pq_sks,
-        oqs_sigs_to_free=oqs_sigs_to_free,
-        file_hash=file_hash,
-        original_content=original_content,
-        full_idk_file=full_idk_file.encode("utf-8"),
-        uploaded_chunks=uploaded_chunks_info,
-        total_chunks=len(idk_parts),
-    )
+            chunk_response = requests.post(
+                f"{api_base_url}/storage/{pk_classic_hex}/{file_hash}/chunks",
+                files={"file": (f"chunk_{i}", chunk_bytes, "application/octet-stream")},
+                data={
+                    "nonce": chunk_nonce,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": str(i),
+                    "total_chunks": str(len(idk_parts)),
+                    "compressed": "false",
+                    "classic_signature": sk_classic.sign(
+                        chunk_msg, hashfunc=hashlib.sha256
+                    ).hex(),
+                    "pq_signatures": json.dumps(
+                        [
+                            {
+                                "public_key": pk_ml_dsa_hex,
+                                "signature": sig_ml_dsa.sign(chunk_msg).hex(),
+                                "alg": ML_DSA_ALG,
+                            }
+                        ]
+                    ),
+                },
+            )
+            assert chunk_response.status_code == 200
+            uploaded_chunks_info.append(
+                {"hash": chunk_hash, "original_data": chunk_bytes}
+            )
+
+        # The full IDK file content is needed for verification after download
+        full_idk_file = "".join(idk_parts)
+
+        # Note: OQS signatures will be automatically freed when exiting the context
+        # For this helper function, we return empty lists for backward compatibility
+        return SetupData(
+            sk_classic=sk_classic,
+            pk_classic_hex=pk_classic_hex,
+            all_pq_sks={},  # Empty for compatibility - caller should use context manager pattern
+            oqs_sigs_to_free=[],  # Empty for compatibility - automatic cleanup now
+            file_hash=file_hash,
+            original_content=original_content,
+            full_idk_file=full_idk_file.encode("utf-8"),
+            uploaded_chunks=uploaded_chunks_info,
+            total_chunks=len(idk_parts),
+        )
 
 
 def create_test_account_with_keymanager(

@@ -706,17 +706,17 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
     # OQS signatures are automatically freed when exiting the context
 
 
-def test_remove_nonexistent_pq_key_fails(api_base_url: str):
+def test_remove_nonexistent_pq_key_fails(api_base_url: str, tmp_path):
     """
     Tests that removing a PQ key not on the account fails.
     """
-    # 1. Setup: Create a standard account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # 1. Setup: Create a standard account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 2. Attempt to remove a key that doesn't exist
         alg_to_remove = "nonexistent-alg"
@@ -746,13 +746,10 @@ def test_remove_nonexistent_pq_key_fails(api_base_url: str):
             f"PQ key for algorithm {alg_to_remove} not found on account."
             in response.text
         )
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_add_and_remove_multiple_pq_keys(api_base_url: str):
+def test_add_and_remove_multiple_pq_keys(api_base_url: str, tmp_path):
     """
     Tests adding and removing multiple PQ keys in a single request.
 
@@ -760,32 +757,29 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str):
     """
     from src.lib.api_client import DCypherClient, DCypherAPIError
 
-    # 1. Setup: Create a minimal account
+    # 1. Setup: Create a minimal account using KeyManager-based helper
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
 
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # Create API client for verification operations
-        client = DCypherClient(api_base_url)
+        api_client = DCypherClient(api_base_url)
 
         # Verify initial account state using API client
-        account_info = client.get_account(pk_classic_hex)
+        account_info = api_client.get_account(pk_classic_hex)
         assert len(account_info["pq_keys"]) == 1
 
         # 2. Add two new PQ keys in a single request
         sig_add_pq_1 = oqs.Signature(add_pq_alg_1)
         sig_add_pq_2 = oqs.Signature(add_pq_alg_2)
-        oqs_sigs_to_free.extend([sig_add_pq_1, sig_add_pq_2])
         pk_add_pq_1_hex = sig_add_pq_1.generate_keypair().hex()
         pk_add_pq_2_hex = sig_add_pq_2.generate_keypair().hex()
-        all_pq_sks[pk_add_pq_1_hex] = (sig_add_pq_1, add_pq_alg_1)
-        all_pq_sks[pk_add_pq_2_hex] = (sig_add_pq_2, add_pq_alg_2)
         add_nonce = get_nonce(api_base_url)
         add_algs_str = ":".join(sorted([add_pq_alg_1, add_pq_alg_2]))
         add_msg = f"ADD-PQ:{pk_classic_hex}:{add_algs_str}:{add_nonce}".encode()
@@ -822,7 +816,7 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str):
         assert "Successfully added 2 PQ key(s)" in response.json()["message"]
 
         # Verify state after adding using API client
-        account_info_after_add = client.get_account(pk_classic_hex)
+        account_info_after_add = api_client.get_account(pk_classic_hex)
         keys_after_add = account_info_after_add["pq_keys"]
         assert len(keys_after_add) == 3
         added_pks = {k["public_key"] for k in keys_after_add}
@@ -865,17 +859,18 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str):
         assert "Successfully removed PQ key(s)" in response.json()["message"]
 
         # Verify final state using API client
-        account_info_after_remove = client.get_account(pk_classic_hex)
+        account_info_after_remove = api_client.get_account(pk_classic_hex)
         keys_after_remove = account_info_after_remove["pq_keys"]
         assert len(keys_after_remove) == 1
         assert keys_after_remove[0]["public_key"] == pk_ml_dsa_hex
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+
+        # Clean up the additional OQS signatures we created
+        sig_add_pq_1.free()
+        sig_add_pq_2.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_graveyard(api_base_url: str):
+def test_graveyard(api_base_url: str, tmp_path):
     """
     Tests the graveyard functionality:
     1. Create account.
@@ -888,26 +883,35 @@ def test_graveyard(api_base_url: str):
 
     falcon_alg = "Falcon-512"
 
-    # 1. Create account with ML-DSA and one Falcon key
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url, add_pq_algs=[falcon_alg]
+    # 1. Create account with ML-DSA and one Falcon key using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(
+        api_base_url, tmp_path, additional_pq_algs=[falcon_alg]
     )
-    try:
-        pk_ml_dsa_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
-        )
-        pk_falcon_1_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == falcon_alg
-        )
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-        sig_falcon_1, _ = all_pq_sks[pk_falcon_1_hex]
+
+    with client.signing_keys() as keys:
+        # Find the ML-DSA and Falcon keys
+        ml_dsa_key = None
+        falcon_key = None
+        for pq_key in keys["pq_sigs"]:
+            if pq_key["alg"] == ML_DSA_ALG:
+                ml_dsa_key = pq_key
+            elif pq_key["alg"] == falcon_alg:
+                falcon_key = pq_key
+
+        assert ml_dsa_key is not None, "ML-DSA key should be present"
+        assert falcon_key is not None, "Falcon key should be present"
+
+        pk_ml_dsa_hex = ml_dsa_key["pk_hex"]
+        sig_ml_dsa = ml_dsa_key["sig"]
+        pk_falcon_1_hex = falcon_key["pk_hex"]
+        sig_falcon_1 = falcon_key["sig"]
+        sk_classic = keys["classic_sk"]
 
         # Create API client for graveyard operations
-        client = DCypherClient(api_base_url)
+        api_client = DCypherClient(api_base_url)
 
         # 2. Replace the Falcon key with a new one
         sig_falcon_2 = oqs.Signature(falcon_alg)
-        oqs_sigs_to_free.append(sig_falcon_2)
         pk_falcon_2_hex = sig_falcon_2.generate_keypair().hex()
         add_nonce = get_nonce(api_base_url)
         add_msg = f"ADD-PQ:{pk_classic_hex}:{falcon_alg}:{add_nonce}".encode()
@@ -939,10 +943,9 @@ def test_graveyard(api_base_url: str):
         requests.post(
             f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=add_payload
         )
-        all_pq_sks[pk_falcon_2_hex] = (sig_falcon_2, falcon_alg)
 
         # Verify pk_falcon_1_hex is in the graveyard using API client
-        graveyard1 = client.get_account_graveyard(pk_classic_hex)
+        graveyard1 = api_client.get_account_graveyard(pk_classic_hex)
         assert len(graveyard1) == 1
         assert graveyard1[0]["public_key"] == pk_falcon_1_hex
 
@@ -974,18 +977,18 @@ def test_graveyard(api_base_url: str):
         )
 
         # Verify both keys are now in the graveyard using API client
-        graveyard2 = client.get_account_graveyard(pk_classic_hex)
+        graveyard2 = api_client.get_account_graveyard(pk_classic_hex)
         assert len(graveyard2) == 2
         graveyard_pks = {k["public_key"] for k in graveyard2}
         assert pk_falcon_1_hex in graveyard_pks
         assert pk_falcon_2_hex in graveyard_pks
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+
+        # Clean up the additional OQS signature we created
+        sig_falcon_2.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_pq_key_timing_attack_resistance(api_base_url: str):
+def test_pq_key_timing_attack_resistance(api_base_url: str, tmp_path):
     """
     Tests that PQ key operations execute in constant time regardless of
     key existence to prevent timing-based enumeration attacks.
@@ -995,19 +998,30 @@ def test_pq_key_timing_attack_resistance(api_base_url: str):
     response time variations.
     """
     add_pq_alg = "Falcon-512"
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url, add_pq_algs=[add_pq_alg]
+
+    # Create account with additional Falcon key using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(
+        api_base_url, tmp_path, additional_pq_algs=[add_pq_alg]
     )
 
-    try:
-        pk_ml_dsa_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
-        )
-        pk_falcon_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == add_pq_alg
-        )
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-        sig_falcon, _ = all_pq_sks[pk_falcon_hex]
+    with client.signing_keys() as keys:
+        # Find the ML-DSA and Falcon keys
+        ml_dsa_key = None
+        falcon_key = None
+        for pq_key in keys["pq_sigs"]:
+            if pq_key["alg"] == ML_DSA_ALG:
+                ml_dsa_key = pq_key
+            elif pq_key["alg"] == add_pq_alg:
+                falcon_key = pq_key
+
+        assert ml_dsa_key is not None, "ML-DSA key should be present"
+        assert falcon_key is not None, "Falcon key should be present"
+
+        pk_ml_dsa_hex = ml_dsa_key["pk_hex"]
+        sig_ml_dsa = ml_dsa_key["sig"]
+        pk_falcon_hex = falcon_key["pk_hex"]
+        sig_falcon = falcon_key["sig"]
+        sk_classic = keys["classic_sk"]
 
         # Test removal timing for existing vs non-existent algorithms
         # 1. Remove existing algorithm (Falcon) - measure time
@@ -1071,7 +1085,4 @@ def test_pq_key_timing_attack_resistance(api_base_url: str):
         assert time_difference < 0.05, (
             f"Timing difference too large: {time_difference}s"
         )
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
