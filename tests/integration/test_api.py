@@ -268,13 +268,26 @@ SetupData = collections.namedtuple(
 
 def setup_uploaded_file(api_base_url: str, tmp_path) -> SetupData:
     """A helper to set up a fully uploaded file with chunks for download tests."""
-    # Create account using KeyManager-based helper
+    # Create account using KeyManager-based helper, but extract the data for legacy compatibility
     client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
+    # We need to extract the actual signature objects and keys for backward compatibility
+    # This is a transitional approach until all calling tests are refactored
     with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+        # Reconstruct the legacy all_pq_sks format for backward compatibility
+        all_pq_sks = {}
+        oqs_sigs_to_free = []
+
+        for pq_key in keys["pq_sigs"]:
+            pk_hex = pq_key["pk_hex"]
+            sig = pq_key["sig"]
+            alg = pq_key["alg"]
+            all_pq_sks[pk_hex] = (sig, alg)
+            oqs_sigs_to_free.append(sig)
+
         pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
         sig_ml_dsa = keys["pq_sigs"][0]["sig"]
-        sk_classic = keys["classic_sk"]
 
         original_content = (
             b"This is a test file for downloading, with enough content to create multiple chunks."
@@ -354,13 +367,11 @@ def setup_uploaded_file(api_base_url: str, tmp_path) -> SetupData:
         # The full IDK file content is needed for verification after download
         full_idk_file = "".join(idk_parts)
 
-        # Note: OQS signatures will be automatically freed when exiting the context
-        # For this helper function, we return empty lists for backward compatibility
         return SetupData(
             sk_classic=sk_classic,
             pk_classic_hex=pk_classic_hex,
-            all_pq_sks={},  # Empty for compatibility - caller should use context manager pattern
-            oqs_sigs_to_free=[],  # Empty for compatibility - automatic cleanup now
+            all_pq_sks=all_pq_sks,
+            oqs_sigs_to_free=oqs_sigs_to_free,
             file_hash=file_hash,
             original_content=original_content,
             full_idk_file=full_idk_file.encode("utf-8"),
