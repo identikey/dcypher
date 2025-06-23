@@ -216,3 +216,131 @@ def test_identity_file_deterministic():
         assert pq_key["derivable"] == True, (
             "PQ key should always be derivable (no fallbacks)"
         )
+
+
+def test_load_identity_file():
+    """Test loading an identity file and converting to auth_keys format."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create an identity file
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_identity", temp_path
+        )
+
+        # Load the identity file
+        auth_keys = KeyManager.load_identity_file(identity_file)
+
+        # Verify structure matches auth_keys format
+        assert isinstance(auth_keys, dict)
+        assert "classic_sk" in auth_keys
+        assert "pq_keys" in auth_keys
+        assert isinstance(auth_keys["classic_sk"], ecdsa.SigningKey)
+        assert isinstance(auth_keys["pq_keys"], list)
+        assert len(auth_keys["pq_keys"]) >= 1
+
+        # Verify PQ key structure
+        pq_key = auth_keys["pq_keys"][0]
+        assert "sk" in pq_key
+        assert "pk_hex" in pq_key
+        assert "alg" in pq_key
+        assert isinstance(pq_key["sk"], bytes)
+        assert isinstance(pq_key["pk_hex"], str)
+        assert pq_key["alg"] == ML_DSA_ALG
+
+        # Verify classic key can be used for signing
+        test_message = b"test message"
+        signature = auth_keys["classic_sk"].sign(test_message)
+        assert len(signature) > 0
+
+        # Verify PQ key can be used with OQS
+        with oqs.Signature(pq_key["alg"], pq_key["sk"]) as sig:
+            pq_signature = sig.sign(test_message)
+            assert len(pq_signature) > 0
+
+
+def test_load_keys_unified_with_auth_keys():
+    """Test unified loader with auth_keys file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create auth_keys bundle
+        pk_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(temp_path)
+
+        # Load using unified loader
+        auth_keys = KeyManager.load_keys_unified(auth_keys_file)
+
+        # Verify structure
+        assert isinstance(auth_keys, dict)
+        assert "classic_sk" in auth_keys
+        assert "pq_keys" in auth_keys
+
+
+def test_load_keys_unified_with_identity():
+    """Test unified loader with identity file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create identity file
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_identity", temp_path
+        )
+
+        # Load using unified loader
+        auth_keys = KeyManager.load_keys_unified(identity_file)
+
+        # Verify structure
+        assert isinstance(auth_keys, dict)
+        assert "classic_sk" in auth_keys
+        assert "pq_keys" in auth_keys
+
+
+def test_load_keys_unified_invalid_file():
+    """Test unified loader with invalid file format."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create invalid JSON file
+        invalid_file = temp_path / "invalid.json"
+        with open(invalid_file, "w") as f:
+            json.dump({"invalid": "structure"}, f)
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="Unrecognized key file format"):
+            KeyManager.load_keys_unified(invalid_file)
+
+
+def test_signing_context_with_identity():
+    """Test signing context with identity file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create identity file
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_identity", temp_path
+        )
+
+        # Test signing context with identity file
+        with KeyManager.signing_context(identity_file) as keys:
+            assert "classic_sk" in keys
+            assert "pq_sigs" in keys
+            assert isinstance(keys["classic_sk"], ecdsa.SigningKey)
+            assert isinstance(keys["pq_sigs"], list)
+            assert len(keys["pq_sigs"]) >= 1
+
+            # Verify PQ signature object
+            pq_sig_info = keys["pq_sigs"][0]
+            assert "sig" in pq_sig_info
+            assert "pk_hex" in pq_sig_info
+            assert "alg" in pq_sig_info
+            assert isinstance(pq_sig_info["sig"], oqs.Signature)
+
+            # Test signing
+            message = b"test message"
+            classic_sig = keys["classic_sk"].sign(message)
+            pq_sig = pq_sig_info["sig"].sign(message)
+
+            assert isinstance(classic_sig, bytes)
+            assert isinstance(pq_sig, bytes)
+            assert len(classic_sig) > 0
+            assert len(pq_sig) > 0

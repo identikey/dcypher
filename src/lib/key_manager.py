@@ -623,25 +623,115 @@ class KeyManager:
         return {"classic_sk": classic_sk, "pq_keys": pq_keys}
 
     @classmethod
+    def load_identity_file(cls, identity_file: Path) -> Dict[str, Any]:
+        """
+        Load a complete identity file and convert to auth_keys format.
+
+        This method loads an identity file and converts it to the same format
+        as load_auth_keys_bundle() for compatibility with existing code.
+
+        Args:
+            identity_file: Path to identity JSON file
+
+        Returns:
+            dict: Contains 'classic_sk' and 'pq_keys' list (same format as auth_keys)
+        """
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        # Verify identity file structure
+        if "auth_keys" not in identity_data:
+            raise ValueError("Invalid identity file: missing 'auth_keys' section")
+
+        auth_keys = identity_data["auth_keys"]
+
+        if "classic" not in auth_keys:
+            raise ValueError("Invalid identity file: missing classic keys")
+
+        if "pq" not in auth_keys:
+            raise ValueError("Invalid identity file: missing PQ keys")
+
+        # Load classic signing key from hex
+        classic_data = auth_keys["classic"]
+        classic_sk_hex = classic_data["sk_hex"]
+        classic_sk = ecdsa.SigningKey.from_string(
+            bytes.fromhex(classic_sk_hex), curve=ecdsa.SECP256k1
+        )
+
+        # Load PQ keys from hex
+        pq_keys = []
+        for pq_key_info in auth_keys["pq"]:
+            pq_sk_hex = pq_key_info["sk_hex"]
+            pq_sk = bytes.fromhex(pq_sk_hex)
+            pq_keys.append(
+                {
+                    "sk": pq_sk,
+                    "pk_hex": pq_key_info["pk_hex"],
+                    "alg": pq_key_info["alg"],
+                }
+            )
+
+        return {"classic_sk": classic_sk, "pq_keys": pq_keys}
+
+    @classmethod
+    def load_keys_unified(cls, keys_file: Path) -> Dict[str, Any]:
+        """
+        Load keys from either auth_keys bundle or identity file automatically.
+
+        This method detects the file type and loads keys appropriately,
+        returning a unified format compatible with existing code.
+
+        Args:
+            keys_file: Path to either auth_keys.json or identity file
+
+        Returns:
+            dict: Contains 'classic_sk' and 'pq_keys' list
+
+        Raises:
+            ValueError: If file format is not recognized
+        """
+        try:
+            with open(keys_file, "r") as f:
+                data = json.load(f)
+
+            # Detect file type by structure
+            if "classic_sk_path" in data and "pq_keys" in data:
+                # This is an auth_keys file
+                return cls.load_auth_keys_bundle(keys_file)
+            elif "auth_keys" in data and "mnemonic" in data:
+                # This is an identity file
+                return cls.load_identity_file(keys_file)
+            else:
+                raise ValueError("Unrecognized key file format")
+
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in key file: {e}")
+        except FileNotFoundError:
+            raise ValueError(f"Key file not found: {keys_file}")
+
+    @classmethod
     @contextmanager
     def signing_context(cls, auth_keys_file: Path):
         """
         Context manager for signing operations with automatic cleanup.
 
+        Now supports both auth_keys files and identity files automatically.
+
         Usage:
-            with KeyManager.signing_context(auth_keys_file) as keys:
+            with KeyManager.signing_context(keys_file) as keys:
                 classic_sk = keys["classic_sk"]
                 pq_sigs = keys["pq_sigs"]
                 # Use signing keys...
             # OQS signatures are automatically freed
 
         Args:
-            auth_keys_file: Path to auth keys JSON file
+            auth_keys_file: Path to auth keys JSON file or identity file
 
         Yields:
             dict: Contains 'classic_sk' and 'pq_sigs' with OQS objects
         """
-        auth_keys = cls.load_auth_keys_bundle(auth_keys_file)
+        # Use unified loader to support both auth_keys and identity files
+        auth_keys = cls.load_keys_unified(auth_keys_file)
 
         # Create OQS signature objects for PQ keys
         pq_sigs = []

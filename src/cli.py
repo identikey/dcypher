@@ -12,6 +12,8 @@ import base64
 import sys
 import gzip
 from lib.key_manager import KeyManager
+from bip_utils import Bip39MnemonicGenerator, Bip39WordsNum
+from typing import List, Dict, Any
 
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
@@ -60,6 +62,144 @@ def identity_new(name, path, overwrite):
     except Exception as e:
         click.echo(f"An unexpected error occurred: {e}", err=True)
         sys.exit(1)
+
+
+@identity_group.command("migrate")
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to existing auth keys file to migrate.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(file_okay=False, dir_okay=True, writable=True),
+    default=str(Path.home() / ".dcypher"),
+    help="Directory to store the new identity file.",
+)
+@click.option(
+    "--identity-name", default="migrated", help="Name for the migrated identity."
+)
+@click.option("--overwrite", is_flag=True, help="Overwrite existing identity file.")
+def identity_migrate(auth_keys_path, output_dir, identity_name, overwrite):
+    """Migrates an existing auth_keys file to the new identity system."""
+    try:
+        output_path = Path(output_dir)
+        identity_file = output_path / f"{identity_name}.json"
+
+        if identity_file.exists() and not overwrite:
+            raise click.ClickException(
+                f"Identity '{identity_name}' already exists at {identity_file}. Use --overwrite to replace it."
+            )
+
+        click.echo(f"Migrating auth keys from {auth_keys_path}...", err=True)
+
+        # Load the existing auth keys
+        auth_keys = KeyManager.load_auth_keys_bundle(Path(auth_keys_path))
+
+        # Generate a new mnemonic for the identity
+        mnemonic = Bip39MnemonicGenerator().FromWordsNumber(Bip39WordsNum.WORDS_NUM_24)
+
+        # Create PQ keys list with proper typing
+        pq_keys_list: List[Dict[str, Any]] = []
+        for pq_key in auth_keys["pq_keys"]:
+            pq_keys_list.append(
+                {
+                    "alg": pq_key["alg"],
+                    "sk_hex": pq_key["sk"].hex(),
+                    "pk_hex": pq_key["pk_hex"],
+                    "derivable": False,  # Migrated keys are not derivable
+                }
+            )
+
+        # Create identity data structure
+        identity_data = {
+            "mnemonic": str(mnemonic),
+            "version": "migrated",  # Mark as migrated from auth_keys
+            "derivable": False,  # Migrated keys are not derivable from mnemonic
+            "auth_keys": {
+                "classic": {
+                    "sk_hex": auth_keys["classic_sk"].to_string().hex(),
+                    "pk_hex": KeyManager.get_classic_public_key(
+                        auth_keys["classic_sk"]
+                    ),
+                },
+                "pq": pq_keys_list,
+            },
+        }
+
+        # Save the identity file
+        output_path.mkdir(parents=True, exist_ok=True)
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
+
+        click.echo("Migration completed successfully!", err=True)
+        click.echo(f"Identity file created: {identity_file}", err=True)
+        click.echo("", err=True)
+        click.echo("🔑 Your new mnemonic phrase (for backup purposes):", err=True)
+        click.echo("-" * 60, err=True)
+        click.echo(str(mnemonic), err=True)
+        click.echo("-" * 60, err=True)
+        click.echo("", err=True)
+        click.echo("⚠️  Note: This is a MIGRATED identity.", err=True)
+        click.echo("The keys are NOT derivable from the mnemonic phrase.", err=True)
+        click.echo(
+            "The mnemonic is only provided for consistency with the identity format.",
+            err=True,
+        )
+        click.echo("", err=True)
+        click.echo("You can now use this identity file with:")
+        click.echo(f"  --identity-path {identity_file}")
+        click.echo("", err=True)
+        click.echo("For new identities with derivable keys, use:")
+        click.echo("  dcypher identity new --name <name>")
+
+    except Exception as e:
+        raise click.ClickException(f"Migration failed: {e}")
+
+
+@identity_group.command("info")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to identity file.",
+)
+def identity_info(identity_path):
+    """Shows information about an identity file."""
+    try:
+        with open(identity_path, "r") as f:
+            identity_data = json.load(f)
+
+        click.echo(f"Identity File: {identity_path}")
+        click.echo(f"Version: {identity_data.get('version', 'unknown')}")
+        click.echo(f"Derivable: {identity_data.get('derivable', 'unknown')}")
+
+        if "auth_keys" in identity_data:
+            auth_keys = identity_data["auth_keys"]
+
+            # Show classic key info
+            if "classic" in auth_keys:
+                classic_pk = auth_keys["classic"]["pk_hex"]
+                click.echo(
+                    f"Classic Public Key: {classic_pk[:16]}...{classic_pk[-16:]}"
+                )
+
+            # Show PQ keys info
+            if "pq" in auth_keys:
+                click.echo(f"PQ Keys: {len(auth_keys['pq'])}")
+                for i, pq_key in enumerate(auth_keys["pq"]):
+                    alg = pq_key.get("alg", "unknown")
+                    derivable = pq_key.get("derivable", False)
+                    click.echo(f"  {i + 1}. {alg} (derivable: {derivable})")
+
+        # Show mnemonic info (but not the actual mnemonic)
+        if "mnemonic" in identity_data:
+            mnemonic_words = identity_data["mnemonic"].split()
+            click.echo(f"Mnemonic: {len(mnemonic_words)} words (hidden for security)")
+
+    except Exception as e:
+        raise click.ClickException(f"Failed to read identity info: {e}")
 
 
 cli.add_command(identity_group)
@@ -351,7 +491,16 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
 
 @cli.command("upload")
 @click.option("--pk-path", type=str, required=True)
-@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
 @click.option("--file-path", type=click.Path(exists=True), required=True)
 @click.option("--cc-path", default="cc.json", help="Path to the crypto context file.")
 @click.option(
@@ -365,14 +514,37 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_url):
-    """
-    Encrypts and uploads a file to the remote storage API using a chunked method.
-    """
+def upload(
+    pk_path,
+    auth_keys_path,
+    identity_path,
+    file_path,
+    cc_path,
+    signing_key_path,
+    api_url,
+):
+    """Uploads a file to the remote storage API."""
+    from lib.api_client import DCypherClient, DCypherAPIError
     from lib import idk_message
+    from lib import pre
+    import gzip
+    import hashlib
 
-    # --- 1. Prepare for encryption and upload ---
-    click.echo("Preparing keys and crypto context...", err=True)
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
+    # --- 1. Load Keys and Crypto Context ---
+    click.echo("Loading keys and crypto context...", err=True)
+
     try:
         # Load crypto context
         with open(cc_path, "r") as f:
@@ -391,25 +563,15 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
                 bytes.fromhex(sk_hex), curve=ecdsa.SECP256k1
             )
 
-        # Load authentication keys
-        auth_keys_data = json.loads(Path(auth_keys_path).read_text())
-        classic_sk_auth = ecdsa.SigningKey.from_string(
-            bytes.fromhex(Path(auth_keys_data["classic_sk_path"]).read_text()),
-            curve=ecdsa.SECP256k1,
-        )
-        classic_vk_auth = classic_sk_auth.get_verifying_key()
-        assert classic_vk_auth is not None
-        pk_classic_hex = classic_vk_auth.to_string("uncompressed").hex()
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
 
-        pq_keys_auth = []
-        for pq_key_info in auth_keys_data["pq_keys"]:
-            pq_keys_auth.append(
-                {
-                    "sk": Path(pq_key_info["sk_path"]).read_bytes(),
-                    "pk_hex": pq_key_info["pk_hex"],
-                    "alg": pq_key_info["alg"],
-                }
-            )
+        # Get classic public key for API operations
+        pk_classic_hex = client.get_classic_public_key()
+
     except Exception as e:
         raise click.ClickException(f"Error loading keys or crypto context: {e}")
 
@@ -426,73 +588,85 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
     )
     part_one_content = message_parts[0]
     data_chunks = message_parts[1:]
-    total_chunks = len(message_parts)  # Part one + data chunks
+    total_chunks = len(message_parts)
 
-    # Extract MerkleRoot which is the file_hash
+    click.echo(
+        f"File split into {total_chunks} parts (1 header + {len(data_chunks)} data chunks)",
+        err=True,
+    )
+
+    # --- 3. Parse the header to get file hash ---
     try:
-        parsed_part = idk_message.parse_idk_message_part(part_one_content)
-        file_hash = parsed_part["headers"]["MerkleRoot"]
+        part_one_parsed = idk_message.parse_idk_message_part(part_one_content)
+        file_hash = part_one_parsed["headers"]["MerkleRoot"]
+        click.echo(f"File hash: {file_hash}", err=True)
+        click.echo(f"Registering file with hash: {file_hash}", err=True)
     except Exception as e:
-        raise click.ClickException(f"Error parsing IDK message header: {e}")
+        raise click.ClickException(f"Failed to parse IDK message header: {e}")
 
-    # --- 3. Register the file with the first part ---
-    click.echo(f"Registering file with hash: {file_hash}", err=True)
-
-    # Initialize API client
-    from lib.api_client import DCypherClient, DCypherAPIError
-
-    client = DCypherClient(api_url, str(auth_keys_path))
-
+    # --- 4. Upload to API ---
     try:
-        file_stat = os.stat(file_path)
-        client.register_file(
-            public_key=pk_classic_hex,
-            file_hash=file_hash,
-            idk_part_one=part_one_content,
-            filename=Path(file_path).name,
-            content_type="application/octet-stream",
-            total_size=file_stat.st_size,
+        click.echo("Registering file with API...", err=True)
+
+        # Register the file
+        result = client.register_file(
+            pk_classic_hex,
+            file_hash,
+            part_one_content,
+            Path(file_path).name,
+            "application/octet-stream",
+            len(file_content_bytes),
         )
-        click.echo("File registered, first chunk uploaded.", err=True)
+        click.echo(f"File registered: {result.get('message', 'Success')}", err=True)
+
+        # Upload data chunks
+        if data_chunks:
+            click.echo(f"Uploading {len(data_chunks)} data chunks...", err=True)
+            for i, chunk_content in enumerate(data_chunks):
+                # Compress chunk for upload
+                compressed_chunk = gzip.compress(chunk_content.encode("utf-8"))
+
+                # Calculate hash of the original (decompressed) chunk content (what server expects)
+                # Server uses blake2b hash of the original content for verification
+                chunk_hash = hashlib.blake2b(chunk_content.encode("utf-8")).hexdigest()
+
+                click.echo(
+                    f"  Uploading chunk {i + 1}/{len(data_chunks)} (hash: {chunk_hash[:16]}...)",
+                    err=True,
+                )
+
+                result = client.upload_chunk(
+                    pk_classic_hex,
+                    file_hash,
+                    compressed_chunk,
+                    chunk_hash,
+                    i + 1,  # chunk_index (1-based)
+                    len(data_chunks),
+                    compressed=True,
+                )
+        else:
+            click.echo("Uploading 0 data chunks...", err=True)
+
+        click.echo(f"✓ Upload completed successfully! File hash: {file_hash}")
+
     except DCypherAPIError as e:
-        raise click.ClickException(f"API request failed during registration: {e}")
-
-    # --- 4. Upload remaining data chunks ---
-    click.echo(f"Uploading {len(data_chunks)} data chunks...", err=True)
-    for i, chunk_content in enumerate(data_chunks):
-        chunk_index = i + 1  # Index 0 was the header
-        chunk_content_bytes = chunk_content.encode("utf-8")
-
-        # Compress the chunk before uploading
-        compressed_chunk = gzip.compress(chunk_content_bytes, compresslevel=9)
-        chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
-
-        click.echo(
-            f"Uploading chunk {chunk_index}/{total_chunks - 1} (hash: {chunk_hash[:12]}...)",
-            err=True,
-        )
-
-        try:
-            client.upload_chunk(
-                public_key=pk_classic_hex,
-                file_hash=file_hash,
-                chunk_data=compressed_chunk,
-                chunk_hash=chunk_hash,
-                chunk_index=chunk_index,
-                total_chunks=total_chunks,
-                compressed=True,
-            )
-        except DCypherAPIError as e:
-            raise click.ClickException(
-                f"API request failed for chunk {chunk_index}: {e}"
-            )
-
-    click.echo("All chunks uploaded successfully.", err=True)
+        raise click.ClickException(f"API request failed: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Upload failed: {e}")
 
 
 @cli.command("download")
 @click.option("--pk-path", type=str, required=True)
-@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
 @click.option("--file-hash", type=str, required=True)
 @click.option(
     "--output-path",
@@ -511,18 +685,35 @@ def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_ur
     default="https://api.dcypher.io",
     help="API base URL.",
 )
-def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_url):
+def download(
+    pk_path, auth_keys_path, identity_path, file_hash, output_path, compressed, api_url
+):
     """Downloads a file from the remote storage API with integrity verification."""
     from lib.api_client import DCypherClient, DCypherAPIError
     from lib import idk_message
 
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
     click.echo(f"Starting download for file hash: {file_hash}...", err=True)
 
     try:
-        # Initialize API client with auth keys
-        client = DCypherClient(api_url, str(auth_keys_path))
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
 
-        # Get the classic public key from the auth keys
+        # Get the classic public key from the keys
         pk_classic_hex = client.get_classic_public_key()
 
         # Download file using the client
@@ -570,24 +761,14 @@ def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_ur
         except Exception as e:
             raise click.ClickException(f"Failed to verify IDK message integrity: {e}")
 
-        # Save the verified content (as originally downloaded, compressed or not)
+        # Write the verified content to the output file
         with open(output_path, "wb") as f:
-            f.write(downloaded_content)
+            f.write(content_to_verify if not is_compressed else downloaded_content)
 
-        # Provide helpful output information
-        if is_compressed:
-            original_size = len(content_to_verify)
-            compressed_size = len(downloaded_content)
-            click.echo(
-                f"File '{file_hash}' downloaded and verified successfully to '{output_path}' "
-                f"(compressed: {compressed_size} bytes, original: {original_size} bytes).",
-                err=True,
-            )
-        else:
-            click.echo(
-                f"File '{file_hash}' downloaded and verified successfully to '{output_path}'.",
-                err=True,
-            )
+        click.echo(
+            f"✓ File '{file_hash}' downloaded successfully to '{output_path}'.",
+            err=True,
+        )
 
     except DCypherAPIError as e:
         raise click.ClickException(f"API request failed: {e}")
@@ -695,19 +876,45 @@ def list_accounts(api_url):
 
 
 @cli.command("list-files")
-@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
 @click.option(
     "--api-url",
     envvar="DCY_API_URL",
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def list_files(auth_keys_path, api_url):
+def list_files(auth_keys_path, identity_path, api_url):
     """Lists files for the authenticated account."""
     from lib.api_client import DCypherClient, DCypherAPIError
 
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
     try:
-        client = DCypherClient(api_url, str(auth_keys_path))
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+
         pk_classic_hex = client.get_classic_public_key()
         files = client.list_files(pk_classic_hex)
 
@@ -722,6 +929,8 @@ def list_files(auth_keys_path, api_url):
 
     except DCypherAPIError as e:
         raise click.ClickException(f"Failed to list files: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
 
 
 @cli.command("get-graveyard")

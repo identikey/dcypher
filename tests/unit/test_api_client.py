@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 import requests
+import tempfile
 
 from src.lib.api_client import (
     DCypherClient,
@@ -11,6 +12,8 @@ from src.lib.api_client import (
     ResourceNotFoundError,
     ValidationError,
 )
+from src.lib.key_manager import KeyManager
+from src.config import ML_DSA_ALG
 
 
 class TestDCypherClient:
@@ -406,3 +409,154 @@ class TestDCypherClient:
         payload = call_args[1]["json"]
         assert payload["nonce"] == "test_nonce"
         assert payload["classic_signature"] == "classic_sig_hex"
+
+
+def test_dcypher_client_with_auth_keys():
+    """Test DCypherClient with traditional auth_keys file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create auth_keys bundle
+        pk_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(temp_path)
+
+        # Create client with auth_keys
+        client = DCypherClient(
+            "http://localhost:8000", auth_keys_path=str(auth_keys_file)
+        )
+
+        # Verify client can load keys
+        with client.signing_keys() as keys:
+            assert "classic_sk" in keys
+            assert "pq_sigs" in keys
+            assert len(keys["pq_sigs"]) >= 1
+
+        # Verify public key extraction works
+        public_key = client.get_classic_public_key()
+        assert isinstance(public_key, str)
+        assert len(public_key) > 0
+
+
+def test_dcypher_client_with_identity():
+    """Test DCypherClient with new identity file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create identity file
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_identity", temp_path
+        )
+
+        # Create client with identity file
+        client = DCypherClient(
+            "http://localhost:8000", identity_path=str(identity_file)
+        )
+
+        # Verify client can load keys
+        with client.signing_keys() as keys:
+            assert "classic_sk" in keys
+            assert "pq_sigs" in keys
+            assert len(keys["pq_sigs"]) >= 1
+
+        # Verify public key extraction works
+        public_key = client.get_classic_public_key()
+        assert isinstance(public_key, str)
+        assert len(public_key) > 0
+
+
+def test_dcypher_client_identity_precedence():
+    """Test that identity_path takes precedence over auth_keys_path."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create both auth_keys and identity files
+        pk_hex_auth, auth_keys_file = KeyManager.create_auth_keys_bundle(temp_path)
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_identity", temp_path
+        )
+
+        # Create client with both paths - identity should take precedence
+        client = DCypherClient(
+            "http://localhost:8000",
+            auth_keys_path=str(auth_keys_file),
+            identity_path=str(identity_file),
+        )
+
+        # The client should be using the identity file (keys_path should point to identity)
+        assert client.keys_path == str(identity_file)
+
+        # Should be able to load keys from identity file
+        with client.signing_keys() as keys:
+            assert "classic_sk" in keys
+            assert "pq_sigs" in keys
+
+
+def test_dcypher_client_no_keys_configured():
+    """Test DCypherClient error handling when no keys are configured."""
+    client = DCypherClient("http://localhost:8000")
+
+    # Should raise error when trying to access keys
+    with pytest.raises(AuthenticationError, match="No authentication keys configured"):
+        with client.signing_keys():
+            pass
+
+    with pytest.raises(AuthenticationError, match="No authentication keys configured"):
+        client.get_classic_public_key()
+
+
+def test_dcypher_client_create_test_account_with_identity():
+    """Test DCypherClient.create_test_account with identity system."""
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Should not actually try to create account (no API server)
+        # But should create identity file and client properly
+        try:
+            client, pk_hex = DCypherClient.create_test_account(
+                "http://localhost:8000", temp_path, use_identity=True
+            )
+        except Exception as e:
+            # Expected to fail at API call, but client setup should work
+            if "Failed to get nonce" not in str(
+                e
+            ) and "Failed to create account" not in str(e):
+                # If it fails for a different reason, re-raise
+                raise
+
+        # Verify identity file was created
+        identity_files = list(temp_path.glob("*.json"))
+        assert len(identity_files) == 1, "Should have created one identity file"
+
+        # Verify client can load the identity
+        identity_file = identity_files[0]
+        client = DCypherClient(
+            "http://localhost:8000", identity_path=str(identity_file)
+        )
+
+        with client.signing_keys() as keys:
+            assert "classic_sk" in keys
+            assert "pq_sigs" in keys
+
+
+def test_dcypher_client_backward_compatibility():
+    """Test that legacy auth_keys_path parameter still works."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create auth_keys bundle
+        pk_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(temp_path)
+
+        # Create client using legacy parameter name
+        client = DCypherClient(
+            "http://localhost:8000", auth_keys_path=str(auth_keys_file)
+        )
+
+        # Should work exactly as before
+        assert client.auth_keys_path == str(auth_keys_file)
+        assert client.keys_path == str(auth_keys_file)
+
+        with client.signing_keys() as keys:
+            assert "classic_sk" in keys
+            assert "pq_sigs" in keys

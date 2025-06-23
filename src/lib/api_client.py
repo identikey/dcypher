@@ -37,16 +37,42 @@ class ValidationError(DCypherAPIError):
 class DCypherClient:
     """Unified client for DCypher API operations"""
 
-    def __init__(self, api_url: str, auth_keys_path: Optional[str] = None):
+    def __init__(
+        self,
+        api_url: str,
+        auth_keys_path: Optional[str] = None,
+        identity_path: Optional[str] = None,
+    ):
         """
         Initialize the DCypher API client.
 
         Args:
             api_url: Base URL for the DCypher API
-            auth_keys_path: Optional path to auth keys JSON file
+            auth_keys_path: Optional path to auth keys JSON file (legacy)
+            identity_path: Optional path to identity file (preferred)
+
+        Note:
+            You can provide either auth_keys_path OR identity_path, not both.
+            If both are provided, identity_path takes precedence.
         """
         self.api_url = api_url.rstrip("/")
-        self.auth_keys_path = auth_keys_path
+
+        # Handle backward compatibility
+        if identity_path and auth_keys_path:
+            # If both provided, prefer identity and warn
+            self.keys_path = identity_path
+            print(
+                "Warning: Both auth_keys_path and identity_path provided. Using identity_path."
+            )
+        elif identity_path:
+            self.keys_path = identity_path
+        elif auth_keys_path:
+            self.keys_path = auth_keys_path
+        else:
+            self.keys_path = None
+
+        # Keep auth_keys_path for backward compatibility
+        self.auth_keys_path = self.keys_path
         self._auth_keys = None
 
     @classmethod
@@ -55,6 +81,7 @@ class DCypherClient:
         api_url: str,
         temp_dir: Path,
         additional_pq_algs: Optional[List[str]] = None,
+        use_identity: bool = False,
     ) -> Tuple["DCypherClient", str]:
         """
         Factory method to create a test account with generated keys.
@@ -66,22 +93,39 @@ class DCypherClient:
             api_url: Base URL for the DCypher API
             temp_dir: Directory to store temporary auth files
             additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+            use_identity: If True, create identity file; if False, use auth_keys (default)
 
         Returns:
             tuple: (DCypherClient instance, classic_public_key_hex)
         """
-        # Use KeyManager to create auth keys bundle
-        pk_classic_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(
-            temp_dir, additional_pq_algs
-        )
+        if use_identity:
+            # Use new identity system
+            mnemonic, identity_file = KeyManager.create_identity_file(
+                "test_account", temp_dir
+            )
 
-        # Create API client and account
-        client = cls(api_url, str(auth_keys_file))
+            # Load identity to get public key
+            keys_data = KeyManager.load_identity_file(identity_file)
+            pk_classic_hex = KeyManager.get_classic_public_key(keys_data["classic_sk"])
+
+            # Create API client with identity file
+            client = cls(api_url, identity_path=str(identity_file))
+        else:
+            # Use legacy auth_keys system for backward compatibility
+            pk_classic_hex, auth_keys_file = KeyManager.create_auth_keys_bundle(
+                temp_dir, additional_pq_algs
+            )
+
+            # Create API client with auth_keys file
+            client = cls(api_url, auth_keys_path=str(auth_keys_file))
 
         # Load the keys to get PQ key info for account creation
-        auth_keys = KeyManager.load_auth_keys_bundle(auth_keys_file)
+        if not client.keys_path:
+            raise ValueError("No keys path configured for client")
+
+        keys_data = KeyManager.load_keys_unified(Path(client.keys_path))
         pq_keys = [
-            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in auth_keys["pq_keys"]
+            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
         ]
         client.create_account(pk_classic_hex, pq_keys)
 
@@ -91,6 +135,8 @@ class DCypherClient:
     def signing_keys(self):
         """
         Context manager for accessing signing keys with automatic cleanup.
+
+        Now supports both auth_keys and identity files automatically.
 
         Usage:
             with client.signing_keys() as keys:
@@ -102,11 +148,12 @@ class DCypherClient:
         Yields:
             dict: Contains 'classic_sk' (ecdsa.SigningKey) and 'pq_sigs' (list of oqs.Signature objects)
         """
-        if not self.auth_keys_path:
+        if not self.keys_path:
             raise AuthenticationError("No authentication keys configured")
 
-        # Use KeyManager's signing context
-        with KeyManager.signing_context(Path(self.auth_keys_path)) as keys:
+        # Use KeyManager's unified signing context
+        assert self.keys_path is not None
+        with KeyManager.signing_context(Path(self.keys_path)) as keys:
             yield keys
 
     def get_signing_keys(self) -> Dict[str, Any]:
@@ -217,14 +264,13 @@ class DCypherClient:
         if self._auth_keys is not None:
             return self._auth_keys
 
-        if not self.auth_keys_path:
+        if not self.keys_path:
             raise AuthenticationError("No authentication keys configured")
 
         try:
-            # Use KeyManager to load auth keys
-            self._auth_keys = KeyManager.load_auth_keys_bundle(
-                Path(self.auth_keys_path)
-            )
+            # Use KeyManager's unified loader to support both auth_keys and identity files
+            assert self.keys_path is not None
+            self._auth_keys = KeyManager.load_keys_unified(Path(self.keys_path))
             return self._auth_keys
         except Exception as e:
             raise AuthenticationError(f"Failed to load authentication keys: {e}")
