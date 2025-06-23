@@ -23,6 +23,85 @@ import sys
 import os
 import random
 import time
+import logging
+import secrets
+
+
+class SecureBytes:
+    """
+    A secure wrapper for sensitive byte data that:
+    1. Uses mutable bytearray instead of immutable bytes
+    2. Explicitly wipes memory on deallocation
+    3. Provides controlled access to the underlying data
+    """
+
+    def __init__(self, data: bytes):
+        self._length = len(data)
+        # Use bytearray for mutable memory that we can wipe
+        self._data: Optional[bytearray] = bytearray(data)
+
+    def __len__(self) -> int:
+        return self._length
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.wipe()
+
+    def get_bytes(self) -> bytes:
+        """Get the underlying bytes. Use sparingly and wipe returned data when done."""
+        if self._data is None:
+            raise RuntimeError("SecureBytes has been wiped")
+        return bytes(self._data)
+
+    def wipe(self):
+        """Securely wipe the memory by overwriting with random data."""
+        if self._data is not None:
+            # Multiple passes of random data to overwrite memory
+            for _ in range(3):
+                for i in range(len(self._data)):
+                    self._data[i] = secrets.randbits(8)
+
+            self._data = None
+            KeyManager._log("debug", "Wiped secure memory")
+
+    def __del__(self):
+        self.wipe()
+
+
+class SecureKeyHandle:
+    """
+    A handle for cryptographic keys that provides:
+    1. Secure memory storage using SecureBytes
+    2. Controlled access through context managers
+    3. Automatic cleanup
+    """
+
+    def __init__(self, key_material: bytes, key_type: str):
+        self._secure_data = SecureBytes(key_material)
+        self._key_type = key_type
+        self._is_valid = True
+
+    @contextmanager
+    def access(self):
+        """Context manager for accessing key material."""
+        if not self._is_valid:
+            raise RuntimeError("Key handle has been invalidated")
+
+        try:
+            yield self._secure_data.get_bytes()
+        finally:
+            # Additional security: force garbage collection of any copies
+            pass
+
+    def invalidate(self):
+        """Invalidate this handle and wipe memory."""
+        self._secure_data.wipe()
+        self._is_valid = False
+
+    def __del__(self):
+        self.invalidate()
 
 
 class KeyManager:
@@ -38,67 +117,109 @@ class KeyManager:
     _original_func = None
     _is_patched = False
 
+    # Logger for key management operations
+    _logger = logging.getLogger("dcypher.key_manager")
+
     @staticmethod
-    def _debug_print(message: str, level: str = "INFO"):
-        """Print debug messages if DEBUG_MONKEY_PATCH is set."""
-        if os.getenv("DEBUG_MONKEY_PATCH"):
-            timestamp = time.strftime("%H:%M:%S.%f")[:-3]
-            print(f"[{timestamp}] {level}: {message}")
+    def _setup_logging():
+        """Setup logging configuration for key manager."""
+        if not KeyManager._logger.handlers:
+            handler = logging.StreamHandler()
+
+            # Use different log levels based on environment
+            debug_level = os.getenv("DCYPHER_LOG_LEVEL", "INFO").upper()
+            if os.getenv("DEBUG_MONKEY_PATCH"):
+                debug_level = "DEBUG"
+
+            KeyManager._logger.setLevel(getattr(logging, debug_level, logging.INFO))
+
+            # Structured formatting
+            formatter = logging.Formatter(
+                "[%(asctime)s.%(msecs)03d] %(levelname)s [%(name)s]: %(message)s",
+                datefmt="%H:%M:%S",
+            )
+            handler.setFormatter(formatter)
+            KeyManager._logger.addHandler(handler)
+
+    @staticmethod
+    def _log(level: str, message: str, **kwargs):
+        """Structured logging with optional context."""
+        KeyManager._setup_logging()
+        log_method = getattr(KeyManager._logger, level.lower(), KeyManager._logger.info)
+
+        if kwargs:
+            # Add context to message
+            context = " ".join([f"{k}={v}" for k, v in kwargs.items()])
+            message = f"{message} | {context}"
+
+        log_method(message)
 
     @staticmethod
     def _safe_getattr(obj, attr, default=None):
         """Safely get attribute with debugging."""
         try:
             result = getattr(obj, attr, default)
-            KeyManager._debug_print(f"getattr({obj}, '{attr}') = {type(result)}")
+            KeyManager._log(
+                "debug",
+                f"getattr success",
+                obj=type(obj).__name__,
+                attr=attr,
+                result_type=type(result).__name__,
+            )
             return result
         except Exception as e:
-            KeyManager._debug_print(f"getattr({obj}, '{attr}') failed: {e}", "ERROR")
+            KeyManager._log(
+                "warning",
+                f"getattr failed",
+                obj=type(obj).__name__,
+                attr=attr,
+                error=str(e),
+            )
             return default
 
     @staticmethod
     def _find_liboqs_library():
         """Find the liboqs shared library with extensive debugging."""
-        KeyManager._debug_print("Starting library search...")
+        KeyManager._log("info", "Starting library search...")
 
         # Method 1: Check if oqs module has internal library reference
         try:
             import oqs.oqs as oqs_module
 
-            KeyManager._debug_print(f"oqs module loaded: {oqs_module}")
-            KeyManager._debug_print(f"oqs module dir: {dir(oqs_module)}")
+            KeyManager._log("info", f"oqs module loaded: {oqs_module}")
+            KeyManager._log("info", f"oqs module dir: {dir(oqs_module)}")
 
             # Look for various possible library attributes
             for attr_name in ["_liboqs", "liboqs", "_lib", "lib", "_C"]:
                 lib_obj = KeyManager._safe_getattr(oqs_module, attr_name)
                 if lib_obj is not None:
-                    KeyManager._debug_print(
-                        f"Found library object via {attr_name}: {type(lib_obj)}"
+                    KeyManager._log(
+                        "info", f"Found library object via {attr_name}: {type(lib_obj)}"
                     )
                     if hasattr(lib_obj, "_name"):
-                        KeyManager._debug_print(f"Library name: {lib_obj._name}")
+                        KeyManager._log("info", f"Library name: {lib_obj._name}")
                     if hasattr(lib_obj, "_handle"):
-                        KeyManager._debug_print(f"Library handle: {lib_obj._handle}")
+                        KeyManager._log("info", f"Library handle: {lib_obj._handle}")
                     return lib_obj
 
         except Exception as e:
-            KeyManager._debug_print(f"Method 1 failed: {e}", "ERROR")
+            KeyManager._log("error", f"Method 1 failed: {e}", error=str(e))
 
         # Method 2: Use ctypes.util to find library
         try:
             lib_name = ctypes.util.find_library("oqs")
-            KeyManager._debug_print(f"ctypes.util.find_library('oqs'): {lib_name}")
+            KeyManager._log("info", f"ctypes.util.find_library('oqs'): {lib_name}")
             if lib_name:
                 lib = ctypes.CDLL(lib_name)
-                KeyManager._debug_print(f"Successfully loaded library: {lib}")
+                KeyManager._log("info", f"Successfully loaded library: {lib}")
                 return lib
         except Exception as e:
-            KeyManager._debug_print(f"Method 2 failed: {e}", "ERROR")
+            KeyManager._log("error", f"Method 2 failed: {e}", error=str(e))
 
         # Method 3: Platform-specific common paths
         try:
             system = platform.system().lower()
-            KeyManager._debug_print(f"Platform: {system}")
+            KeyManager._log("info", f"Platform: {system}")
 
             if system == "linux":
                 common_paths = [
@@ -124,39 +245,39 @@ class KeyManager:
                 common_paths = []
 
             for path in common_paths:
-                KeyManager._debug_print(f"Trying path: {path}")
+                KeyManager._log("info", f"Trying path: {path}")
                 try:
                     lib = ctypes.CDLL(path)
-                    KeyManager._debug_print(f"Successfully loaded: {path}")
+                    KeyManager._log("info", f"Successfully loaded: {path}")
                     return lib
                 except OSError as e:
-                    KeyManager._debug_print(f"Failed to load {path}: {e}")
+                    KeyManager._log("warning", f"Failed to load {path}: {e}")
 
         except Exception as e:
-            KeyManager._debug_print(f"Method 3 failed: {e}", "ERROR")
+            KeyManager._log("error", f"Method 3 failed: {e}", error=str(e))
 
-        KeyManager._debug_print("No library found", "ERROR")
+        KeyManager._log("error", "No library found", error="No library found")
         return None
 
     @staticmethod
     def _introspect_library(lib):
         """Deeply introspect the library object to understand its structure."""
-        KeyManager._debug_print("=== Library Introspection ===")
-        KeyManager._debug_print(f"Library type: {type(lib)}")
-        KeyManager._debug_print(f"Library dir: {dir(lib)}")
+        KeyManager._log("info", "=== Library Introspection ===")
+        KeyManager._log("info", f"Library type: {type(lib)}")
+        KeyManager._log("info", f"Library dir: {dir(lib)}")
 
         # Check for common attributes
         for attr in ["_name", "_handle", "__dict__", "__class__"]:
             value = KeyManager._safe_getattr(lib, attr)
             if value is not None:
-                KeyManager._debug_print(f"lib.{attr} = {value}")
+                KeyManager._log("info", f"lib.{attr} = {value}")
 
         # Try to list available functions
         try:
             if hasattr(lib, "_FuncPtr"):
-                KeyManager._debug_print(f"Library has _FuncPtr: {lib._FuncPtr}")
+                KeyManager._log("info", f"Library has _FuncPtr: {lib._FuncPtr}")
         except Exception as e:
-            KeyManager._debug_print(f"Error checking _FuncPtr: {e}")
+            KeyManager._log("warning", f"Error checking _FuncPtr: {e}")
 
     @staticmethod
     def _find_seeded_function(lib):
@@ -175,16 +296,16 @@ class KeyManager:
         ]
 
         for func_name in function_names:
-            KeyManager._debug_print(f"Searching for function: {func_name}")
+            KeyManager._log("info", f"Searching for function: {func_name}")
 
             # Method 1: Direct getattr
             try:
                 func = getattr(lib, func_name, None)
                 if func is not None:
-                    KeyManager._debug_print(f"Found {func_name} via getattr: {func}")
+                    KeyManager._log("info", f"Found {func_name} via getattr: {func}")
                     return func
             except Exception as e:
-                KeyManager._debug_print(f"getattr failed for {func_name}: {e}")
+                KeyManager._log("warning", f"getattr failed for {func_name}: {e}")
 
             # Method 2: Check if library has a _handle for dlsym
             if hasattr(lib, "_handle"):
@@ -192,8 +313,9 @@ class KeyManager:
                     # Use dlsym to find the function
                     func_addr = ctypes.pythonapi.dlsym(lib._handle, func_name.encode())
                     if func_addr:
-                        KeyManager._debug_print(
-                            f"Found {func_name} via dlsym at address: {hex(func_addr)}"
+                        KeyManager._log(
+                            "info",
+                            f"Found {func_name} via dlsym at address: {hex(func_addr)}",
                         )
                         # Create function prototype
                         func_type = ctypes.CFUNCTYPE(
@@ -205,61 +327,69 @@ class KeyManager:
                         )
                         return func_type(func_addr)
                 except Exception as e:
-                    KeyManager._debug_print(f"dlsym failed for {func_name}: {e}")
+                    KeyManager._log("warning", f"dlsym failed for {func_name}: {e}")
 
-        KeyManager._debug_print("No seeded function found", "ERROR")
+        KeyManager._log(
+            "error", "No seeded function found", error="No seeded function found"
+        )
         return None
 
     @staticmethod
     def _test_seeded_function(func, algorithm: str):
         """Safely test the seeded function before using it."""
-        KeyManager._debug_print(f"Testing seeded function: {func}")
+        KeyManager._log("info", f"Testing seeded function: {func}")
 
         try:
             # Create a test signature object
             sig_obj = oqs.Signature(algorithm)
-            KeyManager._debug_print(f"Created sig object: {sig_obj}")
-            KeyManager._debug_print(f"Sig object details: {sig_obj.details}")
+            KeyManager._log("info", f"Created sig object: {sig_obj}")
+            KeyManager._log("info", f"Sig object details: {sig_obj.details}")
 
             # Try to get the internal signature pointer
             sig_ptr = None
             for attr_name in ["_sig_ptr", "_sig", "sig", "_handle"]:
                 ptr = KeyManager._safe_getattr(sig_obj, attr_name)
                 if ptr is not None:
-                    KeyManager._debug_print(f"Found sig pointer via {attr_name}: {ptr}")
+                    KeyManager._log("info", f"Found sig pointer via {attr_name}: {ptr}")
                     sig_ptr = ptr
                     break
 
             if sig_ptr is None:
-                KeyManager._debug_print("Could not find signature pointer", "ERROR")
+                KeyManager._log(
+                    "error",
+                    "Could not find signature pointer",
+                    error="Could not find signature pointer",
+                )
                 return False
 
             # Create test buffers
             pk_len = sig_obj.details["length_public_key"]
             sk_len = sig_obj.details["length_secret_key"]
 
-            KeyManager._debug_print(f"Key lengths - PK: {pk_len}, SK: {sk_len}")
+            KeyManager._log("info", f"Key lengths - PK: {pk_len}, SK: {sk_len}")
 
             public_key = (ctypes.c_ubyte * pk_len)()
             secret_key = (ctypes.c_ubyte * sk_len)()
             test_seed = (ctypes.c_ubyte * 32)(*([0x42] * 32))  # Test seed
 
-            KeyManager._debug_print("Calling seeded function...")
+            KeyManager._log("info", "Calling seeded function...")
 
             # This is the dangerous part - wrap in extensive error handling
             result = func(sig_ptr, public_key, secret_key, test_seed)
 
-            KeyManager._debug_print(f"Function returned: {result}")
+            KeyManager._log("info", f"Function returned: {result}")
 
             if result == 0:  # OQS_SUCCESS
-                KeyManager._debug_print("✅ Seeded function test successful!")
+                KeyManager._log("info", "✅ Seeded function test successful!")
                 return True
             else:
-                KeyManager._debug_print(f"❌ Function returned error code: {result}")
+                KeyManager._log("error", f"❌ Function returned error code: {result}")
                 return False
 
         except Exception as e:
-            KeyManager._debug_print(f"❌ Seeded function test failed: {e}", "ERROR")
+            KeyManager._log(
+                "error", f"❌ Seeded function test failed: {e}", error=str(e)
+            )
             return False
 
     @staticmethod
@@ -270,7 +400,7 @@ class KeyManager:
         This approach patches the underlying random number generation to be deterministic
         by directly replacing the function in memory.
         """
-        KeyManager._debug_print("=== Attempting Memory Patching ===")
+        KeyManager._log("info", "=== Attempting Memory Patching ===")
 
         try:
             # Get the liboqs library
@@ -283,7 +413,7 @@ class KeyManager:
             if rand_func is None:
                 raise RuntimeError("Could not find OQS_randombytes function")
 
-            KeyManager._debug_print(f"Found OQS_randombytes: {rand_func}")
+            KeyManager._log("info", f"Found OQS_randombytes: {rand_func}")
 
             # Create a deterministic replacement function using the seed
             # Use a proper PRNG for better determinism
@@ -302,8 +432,9 @@ class KeyManager:
             def deterministic_randombytes(buf_ptr, buf_len):
                 """Deterministic replacement for OQS_randombytes."""
                 call_counter[0] += 1
-                KeyManager._debug_print(
-                    f"CALL #{call_counter[0]}: Generating {buf_len} deterministic bytes from PRNG"
+                KeyManager._log(
+                    "info",
+                    f"CALL #{call_counter[0]}: Generating {buf_len} deterministic bytes from PRNG",
                 )
 
                 # Ensure PRNG is initialized (it should be, but safety check)
@@ -320,8 +451,9 @@ class KeyManager:
                         bytes_generated.append(f"{byte_val:02x}")
 
                 if buf_len > 0:
-                    KeyManager._debug_print(
-                        f"CALL #{call_counter[0]}: First bytes: {' '.join(bytes_generated[: min(8, buf_len)])}"
+                    KeyManager._log(
+                        "info",
+                        f"CALL #{call_counter[0]}: First bytes: {' '.join(bytes_generated[: min(8, buf_len)])}",
                     )
 
                 return 0  # OQS_SUCCESS
@@ -336,8 +468,8 @@ class KeyManager:
 
             # Create the replacement function
             deterministic_func = RANDOMBYTES_TYPE(deterministic_randombytes)
-            KeyManager._debug_print(
-                f"Created deterministic function: {deterministic_func}"
+            KeyManager._log(
+                "info", f"Created deterministic function: {deterministic_func}"
             )
 
             # Now perform the actual memory patching!
@@ -348,11 +480,11 @@ class KeyManager:
             replacement_addr = ctypes.cast(deterministic_func, ctypes.c_void_p).value
 
             if original_addr and replacement_addr:
-                KeyManager._debug_print(
-                    f"Original function address: {hex(original_addr)}"
+                KeyManager._log(
+                    "info", f"Original function address: {hex(original_addr)}"
                 )
-                KeyManager._debug_print(
-                    f"Replacement function address: {hex(replacement_addr)}"
+                KeyManager._log(
+                    "info", f"Replacement function address: {hex(replacement_addr)}"
                 )
             else:
                 raise RuntimeError("Could not get function addresses")
@@ -361,8 +493,8 @@ class KeyManager:
             try:
                 # Replace the function pointer in the library's dictionary
                 lib.__dict__["OQS_randombytes"] = deterministic_func
-                KeyManager._debug_print(
-                    "✅ Successfully patched function pointer in library dict"
+                KeyManager._log(
+                    "info", "✅ Successfully patched function pointer in library dict"
                 )
                 KeyManager._patched_func = deterministic_func
                 KeyManager._original_func = rand_func
@@ -370,7 +502,7 @@ class KeyManager:
                 return deterministic_func, rand_func, KeyManager._global_prng
 
             except Exception as e:
-                KeyManager._debug_print(f"Dict patching failed: {e}")
+                KeyManager._log("error", f"Dict patching failed: {e}")
 
             # Method 2: Memory-level patching (more dangerous but more thorough)
             try:
@@ -395,12 +527,12 @@ class KeyManager:
                         + replacement_addr.to_bytes(8, "little")
                     )
 
-                    KeyManager._debug_print(f"Jump instruction: {jump_bytes.hex()}")
+                    KeyManager._log("info", f"Jump instruction: {jump_bytes.hex()}")
 
                     # For safety, we'll skip the actual memory write for now
                     # Direct memory patching can crash the process
-                    KeyManager._debug_print(
-                        "⚠️  Skipping direct memory write for safety"
+                    KeyManager._log(
+                        "warning", "⚠️  Skipping direct memory write for safety"
                     )
 
                     return deterministic_func, rand_func, KeyManager._global_prng
@@ -408,11 +540,11 @@ class KeyManager:
                     raise RuntimeError("Could not get function addresses")
 
             except Exception as e:
-                KeyManager._debug_print(f"Memory patching failed: {e}")
+                KeyManager._log("error", f"Memory patching failed: {e}")
                 return deterministic_func, rand_func, KeyManager._global_prng
 
         except Exception as e:
-            KeyManager._debug_print(f"Randomness patching failed: {e}", "ERROR")
+            KeyManager._log("error", f"Randomness patching failed: {e}", error=str(e))
             raise RuntimeError(f"Failed to patch randomness: {e}")
 
     @staticmethod
@@ -435,12 +567,12 @@ class KeyManager:
         Raises:
             RuntimeError: If key generation fails
         """
-        KeyManager._debug_print("=== Starting Memory Patch Key Generation ===")
-        KeyManager._debug_print(f"Algorithm: {algorithm}")
-        KeyManager._debug_print(f"Seed length: {len(seed)}")
+        KeyManager._log("info", "=== Starting Memory Patch Key Generation ===")
+        KeyManager._log("info", f"Algorithm: {algorithm}")
+        KeyManager._log("info", f"Seed length: {len(seed)}")
 
         # Always apply fresh patch to ensure clean state
-        KeyManager._debug_print("Applying fresh patch...")
+        KeyManager._log("info", "Applying fresh patch...")
 
         # Store current seed for this generation
         KeyManager._current_seed = seed
@@ -450,7 +582,7 @@ class KeyManager:
 
         try:
             # Now generate keys using the patched library
-            KeyManager._debug_print("Generating keys with patched randomness...")
+            KeyManager._log("info", "Generating keys with patched randomness...")
 
             # Use the normal OQS interface - it will now use our deterministic randomness!
             sig_obj = oqs.Signature(algorithm)
@@ -459,13 +591,16 @@ class KeyManager:
             pk_bytes = sig_obj.generate_keypair()
             sk_bytes = sig_obj.export_secret_key()
 
-            KeyManager._debug_print("✅ Successfully generated deterministic keys!")
-            print(f"✅ Successfully used native seeded key generation for {algorithm}")
+            KeyManager._log("info", "✅ Successfully generated deterministic keys!")
+            KeyManager._log(
+                "info",
+                f"✅ Successfully used native seeded key generation for {algorithm}",
+            )
 
             return pk_bytes, sk_bytes
 
         except Exception as e:
-            KeyManager._debug_print(f"Key generation failed: {e}", "ERROR")
+            KeyManager._log("error", f"Key generation failed: {e}", error=str(e))
             raise RuntimeError(f"Seeded key generation failed: {e}")
 
         finally:
@@ -475,11 +610,11 @@ class KeyManager:
                     lib = KeyManager._find_liboqs_library()
                     if lib:
                         lib.__dict__["OQS_randombytes"] = original_func
-                        KeyManager._debug_print("Restored original randomness function")
+                        KeyManager._log("info", "Restored original randomness function")
                         KeyManager._is_patched = False
             except Exception as e:
-                KeyManager._debug_print(
-                    f"Failed to restore original function: {e}", "ERROR"
+                KeyManager._log(
+                    "error", f"Failed to restore original function: {e}", error=str(e)
                 )
 
     @staticmethod
@@ -835,3 +970,202 @@ class KeyManager:
             json.dump(identity_data, f, indent=2)
 
         return str(mnemonic), identity_path
+
+    @staticmethod
+    def derive_key_at_path(
+        master_seed: bytes, derivation_path: str, key_type: str
+    ) -> bytes:
+        """
+        Derive a key at a specific derivation path from master seed.
+
+        Args:
+            master_seed: Master seed bytes
+            derivation_path: Derivation path (e.g., "m/44'/0'/0'/0/0")
+            key_type: Type of key ("classic" or algorithm name for PQ)
+
+        Returns:
+            Derived key material as bytes
+        """
+        KeyManager._log("info", f"Deriving key", path=derivation_path, type=key_type)
+
+        # Create deterministic seed for this specific path and type
+        path_data = f"{derivation_path}:{key_type}".encode("utf-8")
+        derived_seed = hashlib.pbkdf2_hmac("sha256", master_seed, path_data, 100000, 32)
+
+        return derived_seed
+
+    @staticmethod
+    def rotate_keys_in_identity(
+        identity_file: Path, rotation_reason: str = "scheduled"
+    ) -> Dict[str, Any]:
+        """
+        Rotate keys in an identity file while preserving the mnemonic.
+
+        Args:
+            identity_file: Path to identity file
+            rotation_reason: Reason for rotation (for audit trail)
+
+        Returns:
+            dict: Rotation result with old/new key info
+        """
+        KeyManager._log(
+            "info",
+            f"Starting key rotation",
+            file=str(identity_file),
+            reason=rotation_reason,
+        )
+
+        # Load existing identity
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        if not identity_data.get("derivable", False):
+            raise ValueError("Cannot rotate keys in non-derivable identity")
+
+        # Get master seed from mnemonic
+        mnemonic = identity_data["mnemonic"]
+        seed_generator = Bip39SeedGenerator(mnemonic)
+        master_seed = seed_generator.Generate()
+
+        # Store old keys for audit
+        old_keys = identity_data["auth_keys"].copy()
+
+        # Derive new classic key with rotation counter
+        rotation_count = identity_data.get("rotation_count", 0) + 1
+        classic_seed = KeyManager.derive_key_at_path(
+            master_seed, f"m/44'/0'/0'/{rotation_count}/0", "classic"
+        )
+
+        # Generate new classic key from derived seed
+        import hmac
+
+        classic_entropy = hmac.new(
+            classic_seed, b"CLASSIC_KEY", hashlib.sha256
+        ).digest()
+        sk_classic = ecdsa.SigningKey.from_string(
+            classic_entropy[:32], curve=ecdsa.SECP256k1
+        )
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+
+        # Derive new PQ key
+        pq_seed = KeyManager.derive_key_at_path(
+            master_seed, f"m/44'/0'/1'/{rotation_count}/0", ML_DSA_ALG
+        )
+        pq_pk, pq_sk = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
+
+        # Update identity with new keys
+        identity_data["auth_keys"] = {
+            "classic": {
+                "sk_hex": sk_classic.to_string().hex(),
+                "pk_hex": pk_classic_hex,
+            },
+            "pq": [
+                {
+                    "alg": ML_DSA_ALG,
+                    "sk_hex": pq_sk.hex(),
+                    "pk_hex": pq_pk.hex(),
+                    "derivable": True,
+                }
+            ],
+        }
+
+        # Add rotation metadata
+        import time
+
+        identity_data["rotation_count"] = rotation_count
+        identity_data["last_rotation"] = time.time()
+        identity_data["rotation_reason"] = rotation_reason
+
+        # Add to rotation history
+        if "rotation_history" not in identity_data:
+            identity_data["rotation_history"] = []
+
+        identity_data["rotation_history"].append(
+            {
+                "rotation_count": rotation_count,
+                "timestamp": time.time(),
+                "reason": rotation_reason,
+                "old_classic_pk": old_keys["classic"]["pk_hex"],
+                "old_pq_pk": old_keys["pq"][0]["pk_hex"],
+                "new_classic_pk": pk_classic_hex,
+                "new_pq_pk": pq_pk.hex(),
+            }
+        )
+
+        # Write updated identity
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
+
+        KeyManager._log(
+            "info", f"Key rotation completed", rotation_count=rotation_count
+        )
+
+        return {
+            "rotation_count": rotation_count,
+            "old_keys": old_keys,
+            "new_classic_pk": pk_classic_hex,
+            "new_pq_pk": pq_pk.hex(),
+        }
+
+    @staticmethod
+    def backup_identity_securely(
+        identity_file: Path, backup_dir: Path, encryption_key: Optional[bytes] = None
+    ) -> Path:
+        """
+        Create a secure backup of an identity file.
+
+        Args:
+            identity_file: Source identity file
+            backup_dir: Directory for backups
+            encryption_key: Optional key for encrypting backup (if None, uses identity's own keys)
+
+        Returns:
+            Path to backup file
+        """
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create timestamped backup filename
+        import time
+
+        timestamp = int(time.time())
+        backup_name = f"{identity_file.stem}_backup_{timestamp}.json"
+        backup_path = backup_dir / backup_name
+
+        # Load identity for encryption
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        if encryption_key is None:
+            # Use identity's own classic key for encryption
+            classic_sk_hex = identity_data["auth_keys"]["classic"]["sk_hex"]
+            encryption_key = hashlib.sha256(bytes.fromhex(classic_sk_hex)).digest()
+
+        # Encrypt the backup
+        from cryptography.fernet import Fernet
+        import base64
+
+        # Derive Fernet key from encryption_key
+        fernet_key = base64.urlsafe_b64encode(encryption_key)
+        fernet = Fernet(fernet_key)
+
+        # Encrypt identity data
+        identity_json = json.dumps(identity_data, indent=2).encode("utf-8")
+        encrypted_data = fernet.encrypt(identity_json)
+
+        # Create backup file with metadata
+        backup_data = {
+            "encrypted_identity": base64.b64encode(encrypted_data).decode("utf-8"),
+            "backup_timestamp": timestamp,
+            "original_file": str(identity_file),
+            "encryption_method": "fernet_with_identity_key",
+        }
+
+        with open(backup_path, "w") as f:
+            json.dump(backup_data, f, indent=2)
+
+        KeyManager._log(
+            "info", f"Identity backup created", backup_path=str(backup_path)
+        )
+        return backup_path

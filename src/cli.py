@@ -171,35 +171,141 @@ def identity_info(identity_path):
         with open(identity_path, "r") as f:
             identity_data = json.load(f)
 
-        click.echo(f"Identity File: {identity_path}")
-        click.echo(f"Version: {identity_data.get('version', 'unknown')}")
-        click.echo(f"Derivable: {identity_data.get('derivable', 'unknown')}")
+        click.echo(f"Identity Information for: {identity_path}", err=True)
+        click.echo(f"  Version: {identity_data.get('version', 'unknown')}", err=True)
+        click.echo(f"  Derivable: {identity_data.get('derivable', False)}", err=True)
 
-        if "auth_keys" in identity_data:
-            auth_keys = identity_data["auth_keys"]
+        # Show rotation info if available
+        if "rotation_count" in identity_data:
+            click.echo(f"  Rotation Count: {identity_data['rotation_count']}", err=True)
+            if "last_rotation" in identity_data:
+                import time
 
-            # Show classic key info
-            if "classic" in auth_keys:
-                classic_pk = auth_keys["classic"]["pk_hex"]
+                last_rotation = time.ctime(identity_data["last_rotation"])
+                click.echo(f"  Last Rotation: {last_rotation}", err=True)
+            if "rotation_reason" in identity_data:
                 click.echo(
-                    f"Classic Public Key: {classic_pk[:16]}...{classic_pk[-16:]}"
+                    f"  Last Rotation Reason: {identity_data['rotation_reason']}",
+                    err=True,
                 )
 
-            # Show PQ keys info
-            if "pq" in auth_keys:
-                click.echo(f"PQ Keys: {len(auth_keys['pq'])}")
-                for i, pq_key in enumerate(auth_keys["pq"]):
-                    alg = pq_key.get("alg", "unknown")
-                    derivable = pq_key.get("derivable", False)
-                    click.echo(f"  {i + 1}. {alg} (derivable: {derivable})")
-
-        # Show mnemonic info (but not the actual mnemonic)
+        # Show mnemonic if present (be careful about this in production)
         if "mnemonic" in identity_data:
-            mnemonic_words = identity_data["mnemonic"].split()
-            click.echo(f"Mnemonic: {len(mnemonic_words)} words (hidden for security)")
+            if click.confirm("Show mnemonic phrase? (Keep this secure!)", err=True):
+                click.echo(f"  Mnemonic: {identity_data['mnemonic']}", err=True)
+
+        # Show key information
+        auth_keys = identity_data.get("auth_keys", {})
+        if "classic" in auth_keys:
+            click.echo(
+                f"  Classic Public Key: {auth_keys['classic']['pk_hex'][:16]}...",
+                err=True,
+            )
+
+        if "pq" in auth_keys:
+            click.echo(f"  Post-Quantum Keys:", err=True)
+            for i, pq_key in enumerate(auth_keys["pq"]):
+                click.echo(
+                    f"    {i + 1}. {pq_key['alg']}: {pq_key['pk_hex'][:16]}...",
+                    err=True,
+                )
+
+        # Show rotation history if available
+        if "rotation_history" in identity_data and identity_data["rotation_history"]:
+            click.echo(f"  Rotation History:", err=True)
+            for rotation in identity_data["rotation_history"][-3:]:  # Show last 3
+                import time
+
+                timestamp = time.ctime(rotation["timestamp"])
+                click.echo(
+                    f"    {rotation['rotation_count']}: {timestamp} ({rotation['reason']})",
+                    err=True,
+                )
 
     except Exception as e:
-        raise click.ClickException(f"Failed to read identity info: {e}")
+        raise click.ClickException(f"Failed to read identity file: {e}")
+
+
+@identity_group.command("rotate")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to identity file.",
+)
+@click.option(
+    "--reason",
+    default="manual",
+    help="Reason for key rotation (for audit trail).",
+)
+@click.option(
+    "--backup",
+    is_flag=True,
+    help="Create backup before rotation.",
+)
+def identity_rotate(identity_path, reason, backup):
+    """Rotates keys in an identity file."""
+    try:
+        identity_file = Path(identity_path)
+
+        if backup:
+            backup_dir = identity_file.parent / "backups"
+            click.echo(f"Creating backup before rotation...", err=True)
+            backup_path = KeyManager.backup_identity_securely(identity_file, backup_dir)
+            click.echo(f"Backup created: {backup_path}", err=True)
+
+        click.echo(f"Rotating keys in {identity_path}...", err=True)
+        result = KeyManager.rotate_keys_in_identity(identity_file, reason)
+
+        click.echo(f"✅ Key rotation completed!", err=True)
+        click.echo(f"  Rotation count: {result['rotation_count']}", err=True)
+        click.echo(f"  New classic key: {result['new_classic_pk'][:16]}...", err=True)
+        click.echo(f"  New PQ key: {result['new_pq_pk'][:16]}...", err=True)
+
+        click.echo(f"⚠️  Update your account on the server with the new keys!", err=True)
+
+    except Exception as e:
+        raise click.ClickException(f"Key rotation failed: {e}")
+
+
+@identity_group.command("backup")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to identity file.",
+)
+@click.option(
+    "--backup-dir",
+    type=click.Path(file_okay=False, dir_okay=True, writable=True),
+    default="./backups",
+    help="Directory to store backup files.",
+)
+@click.option(
+    "--encryption-key",
+    help="Custom encryption key (hex). If not provided, uses identity's own key.",
+)
+def identity_backup(identity_path, backup_dir, encryption_key):
+    """Creates a secure backup of an identity file."""
+    try:
+        identity_file = Path(identity_path)
+        backup_directory = Path(backup_dir)
+
+        enc_key = None
+        if encryption_key:
+            enc_key = bytes.fromhex(encryption_key)
+
+        click.echo(f"Creating secure backup of {identity_path}...", err=True)
+        backup_path = KeyManager.backup_identity_securely(
+            identity_file, backup_directory, enc_key
+        )
+
+        click.echo(f"✅ Backup created successfully!", err=True)
+        click.echo(f"  Backup file: {backup_path}", err=True)
+        click.echo(f"  Backup is encrypted and safe to store externally.", err=True)
+
+    except Exception as e:
+        raise click.ClickException(f"Backup failed: {e}")
 
 
 cli.add_command(identity_group)
