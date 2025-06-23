@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "bip-utils>=2.9.1",
     "ecdsa>=0.19.1",
     "fastapi>=0.115.13",
     "liboqs-python>=0.12.0",

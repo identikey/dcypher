@@ -23,6 +23,48 @@ def cli():
     pass
 
 
+@click.group("identity")
+def identity_group():
+    """Manages user identities and wallets."""
+    pass
+
+
+@identity_group.command("new")
+@click.option("--name", default="default", help="The name for the new identity.")
+@click.option(
+    "--path",
+    type=click.Path(file_okay=False, dir_okay=True, writable=True),
+    default=str(Path.home() / ".dcypher"),
+    help="Directory to store identity files.",
+)
+@click.option("--overwrite", is_flag=True, help="Overwrite existing identity file.")
+def identity_new(name, path, overwrite):
+    """Creates a new user identity file."""
+    try:
+        identity_dir = Path(path)
+        mnemonic, file_path = KeyManager.create_identity_file(
+            name, identity_dir, overwrite
+        )
+
+        click.echo(
+            "Identity created successfully. Please back up your mnemonic phrase securely!"
+        )
+        click.echo("-" * 60)
+        click.echo(mnemonic)
+        click.echo("-" * 60)
+        click.echo(f"Identity file saved to: {file_path}")
+
+    except FileExistsError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"An unexpected error occurred: {e}", err=True)
+        sys.exit(1)
+
+
+cli.add_command(identity_group)
+
+
 @cli.command("gen-cc")
 @click.option("--output", default="cc.json", help="Path to save the crypto context.")
 @click.option("--plaintext-modulus", default=65537, type=int, help="Plaintext modulus.")

@@ -14,6 +14,7 @@ from contextlib import contextmanager
 import oqs
 from lib.pq_auth import generate_pq_keys
 from config import ML_DSA_ALG
+from bip_utils import Bip39MnemonicGenerator, Bip39WordsNum
 
 
 class KeyManager:
@@ -212,3 +213,45 @@ class KeyManager:
         classic_vk = classic_sk.get_verifying_key()
         assert classic_vk is not None
         return classic_vk.to_string("uncompressed").hex()
+
+    @staticmethod
+    def create_identity_file(
+        identity_name: str, key_dir: Path, overwrite: bool = False
+    ) -> Tuple[str, Path]:
+        identity_path = key_dir / f"{identity_name}.json"
+        if identity_path.exists() and not overwrite:
+            raise FileExistsError(
+                f"Identity '{identity_name}' already exists at {identity_path}. Use --overwrite to replace it."
+            )
+
+        # 1. Generate mnemonic
+        mnemonic = Bip39MnemonicGenerator().FromWordsNumber(Bip39WordsNum.WORDS_NUM_24)
+
+        # 2. Generate auth keys
+        sk_classic, pk_classic_hex = KeyManager.generate_classic_keypair()
+        pq_pk, pq_sk = KeyManager.generate_pq_keypair(ML_DSA_ALG)
+
+        # 3. Create identity data structure
+        identity_data = {
+            "mnemonic": str(mnemonic),
+            "auth_keys": {
+                "classic": {
+                    "sk_hex": sk_classic.to_string().hex(),
+                    "pk_hex": pk_classic_hex,
+                },
+                "pq": [
+                    {
+                        "alg": ML_DSA_ALG,
+                        "sk_hex": pq_sk.hex(),
+                        "pk_hex": pq_pk.hex(),
+                    }
+                ],
+            },
+        }
+
+        # 4. Save to file
+        key_dir.mkdir(parents=True, exist_ok=True)
+        with open(identity_path, "w") as f:
+            json.dump(identity_data, f, indent=4)
+
+        return str(mnemonic), identity_path
