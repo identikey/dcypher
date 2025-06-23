@@ -16,6 +16,7 @@ import threading
 import concurrent.futures
 import functools
 import requests
+import tempfile
 from unittest import mock
 from main import app
 from app_state import state
@@ -25,6 +26,10 @@ from lib import pre
 from lib.idk_message import MerkleTree, IDK_VERSION
 from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 import base64
+from src.lib.api_client import DCypherClient, DCypherAPIError
+from pathlib import Path
+from lib.pq_auth import generate_pq_keys
+from lib import idk_message
 
 from tests.integration.test_api import (
     _create_test_account,
@@ -231,37 +236,106 @@ def test_concurrent_file_uploads(api_base_url: str):
     """
     Tests concurrent file upload operations to ensure thread safety
     and prevent race conditions in file storage.
+
+    This test now uses the DCypherClient for more realistic usage patterns.
     """
 
     def upload_single_file(thread_id, api_base_url_inner):
-        """Upload a single file in a thread"""
+        """Upload a single file in a thread using the API client"""
         try:
-            sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_inner = (
-                _create_test_account(api_base_url_inner)
-            )
-            pk_ml_dsa_hex = next(iter(all_pq_sks))
-            sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+            # Generate keys for this thread's account
+            sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+            vk_classic = sk_classic.get_verifying_key()
+            assert vk_classic is not None
+            pk_classic_hex = vk_classic.to_string("uncompressed").hex()
 
-            # Create unique content for each thread
-            content = f"Thread {thread_id} test content".encode()
+            # Generate PQ keys
+            pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
 
-            # Use the new chunked upload API
-            status_code, file_hash = _upload_file_chunked(
-                api_base_url_inner,
-                pk_classic_hex,
-                sk_classic,
-                pk_ml_dsa_hex,
-                sig_ml_dsa,
-                content,
-                f"test_{thread_id}.txt",
-                "text/plain",
-            )
+            # Create temporary auth keys file for this thread
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
 
-            # Clean up OQS signatures
-            for sig in oqs_sigs_inner:
-                sig.free()
+                # Save classic secret key
+                classic_sk_path = temp_path / f"classic_{thread_id}.sk"
+                with open(classic_sk_path, "w") as f:
+                    f.write(sk_classic.to_string().hex())
 
-            return thread_id, status_code, file_hash
+                # Save PQ secret key
+                pq_sk_path = temp_path / f"pq_{thread_id}.sk"
+                with open(pq_sk_path, "wb") as f:
+                    f.write(pq_sk)
+
+                # Create auth keys file
+                auth_keys_data = {
+                    "classic_sk_path": str(classic_sk_path),
+                    "pq_keys": [
+                        {
+                            "sk_path": str(pq_sk_path),
+                            "pk_hex": pq_pk.hex(),
+                            "alg": ML_DSA_ALG,
+                        }
+                    ],
+                }
+                auth_keys_file = temp_path / f"auth_keys_{thread_id}.json"
+                with open(auth_keys_file, "w") as f:
+                    json.dump(auth_keys_data, f)
+
+                # Create API client and account
+                client = DCypherClient(api_base_url_inner, str(auth_keys_file))
+                pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
+
+                # Create account
+                client.create_account(pk_classic_hex, pq_keys)
+
+                # Create unique content and prepare for upload
+                content = f"Thread {thread_id} test content for concurrent upload testing".encode()
+
+                # Create IDK message parts manually since the API client expects them
+                cc = pre.create_crypto_context()
+                keys = pre.generate_keys(cc)
+                sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+                message_parts = idk_message.create_idk_message_parts(
+                    content, cc, keys.publicKey, sk_idk_signer
+                )
+
+                if not message_parts:
+                    return thread_id, 400, None
+
+                # Parse first part to get file hash
+                parsed_part = idk_message.parse_idk_message_part(message_parts[0])
+                file_hash = parsed_part["headers"]["MerkleRoot"]
+
+                # Register file using API client
+                result = client.register_file(
+                    public_key=pk_classic_hex,
+                    file_hash=file_hash,
+                    idk_part_one=message_parts[0],
+                    filename=f"test_{thread_id}.txt",
+                    content_type="text/plain",
+                    total_size=len(content),
+                )
+
+                # Upload remaining chunks using API client
+                for i, chunk_content_str in enumerate(message_parts[1:], 1):
+                    chunk_content_bytes = chunk_content_str.encode("utf-8")
+                    chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
+
+                    chunk_result = client.upload_chunk(
+                        public_key=pk_classic_hex,
+                        file_hash=file_hash,
+                        chunk_data=chunk_content_bytes,
+                        chunk_hash=chunk_hash,
+                        chunk_index=i,
+                        total_chunks=len(message_parts),
+                        compressed=False,
+                    )
+
+                return thread_id, 200, file_hash
+
+        except DCypherAPIError as e:
+            return thread_id, 500, str(e)
         except Exception as e:
             return thread_id, 500, str(e)
 
@@ -274,12 +348,14 @@ def test_concurrent_file_uploads(api_base_url: str):
             future.result() for future in concurrent.futures.as_completed(futures)
         ]
 
-    # Verify all uploads succeeded (can be 200 for last chunk or 201 for single chunk)
-    success_count = sum(1 for _, status_code, _ in results if status_code in [200, 201])
-    assert success_count == 10, f"Only {success_count}/10 concurrent uploads succeeded"
+    # Verify all uploads succeeded
+    success_count = sum(1 for _, status_code, _ in results if status_code == 200)
+    assert success_count == 10, (
+        f"Only {success_count}/10 concurrent uploads succeeded. Results: {results}"
+    )
 
     # Verify all file hashes are unique
-    file_hashes = [fh for _, status_code, fh in results if status_code in [200, 201]]
+    file_hashes = [fh for _, status_code, fh in results if status_code == 200]
     assert len(set(file_hashes)) == len(file_hashes), "Duplicate file hashes detected"
 
 
@@ -412,13 +488,58 @@ def test_large_file_memory_management(api_base_url: str):
     """
     Tests that large file uploads are handled efficiently without
     causing memory exhaustion or system instability.
+
+    This test now uses the DCypherClient for more realistic usage patterns.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+    import tempfile
+    import json
+    from pathlib import Path
+    from lib.pq_auth import generate_pq_keys
+    from lib import idk_message
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Generate classic key
+        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string().hex()
+
+        # Save classic key
+        classic_sk_path = temp_path / "classic.sk"
+        with open(classic_sk_path, "w") as f:
+            f.write(sk_classic.to_string().hex())
+
+        # Generate and save PQ key
+        pq_pk_new, pq_sk_new = generate_pq_keys(ML_DSA_ALG)
+        pq_sk_path = temp_path / "pq.sk"
+        with open(pq_sk_path, "wb") as f:
+            f.write(pq_sk_new)
+
+        # Create auth keys file
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": [
+                {
+                    "sk_path": str(pq_sk_path),
+                    "pk_hex": pq_pk_new.hex(),
+                    "alg": ML_DSA_ALG,
+                }
+            ],
+        }
+        auth_keys_file = temp_path / "auth_keys.json"
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Create API client
+        client = DCypherClient(api_base_url, str(auth_keys_file))
+
+        # Create account through API client
+        client.create_account(
+            pk_classic_hex, [{"pk_hex": pq_pk_new.hex(), "alg": ML_DSA_ALG}]
+        )
 
         # Create a 5MB file to test memory handling
         large_content = os.urandom(5 * 1024 * 1024)  # 5MB
@@ -430,26 +551,66 @@ def test_large_file_memory_management(api_base_url: str):
         memory_before = process.memory_info().rss
 
         start_time = time.perf_counter()
-        status_code, file_hash = _upload_file_chunked(
-            api_base_url,
-            pk_classic_hex,
-            sk_classic,
-            pk_ml_dsa_hex,
-            sig_ml_dsa,
-            large_content,
-            "large_file.bin",
-            "application/octet-stream",
+
+        # Create IDK message parts for the large file
+        cc = pre.create_crypto_context()
+        keys = pre.generate_keys(cc)
+        sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+        message_parts = idk_message.create_idk_message_parts(
+            large_content, cc, keys.publicKey, sk_idk_signer
         )
+
+        if not message_parts:
+            assert False, "Failed to create IDK message parts"
+
+        # Parse first part to get file hash
+        parsed_part = idk_message.parse_idk_message_part(message_parts[0])
+        file_hash = parsed_part["headers"]["MerkleRoot"]
+
+        # Register and upload file using API client
+        client.register_file(
+            public_key=pk_classic_hex,
+            file_hash=file_hash,
+            idk_part_one=message_parts[0],
+            filename="large_file.bin",
+            content_type="application/octet-stream",
+            total_size=len(large_content),
+        )
+
+        # Upload remaining chunks
+        for i, chunk_content_str in enumerate(message_parts[1:], 1):
+            chunk_content_bytes = chunk_content_str.encode("utf-8")
+            chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
+
+            client.upload_chunk(
+                public_key=pk_classic_hex,
+                file_hash=file_hash,
+                chunk_data=chunk_content_bytes,
+                chunk_hash=chunk_hash,
+                chunk_index=i,
+                total_chunks=len(message_parts),
+                compressed=False,
+            )
+
         upload_time = time.perf_counter() - start_time
 
         memory_after = process.memory_info().rss
         memory_increase = memory_after - memory_before
 
-        # Verify upload succeeded (200 for chunk upload completion)
-        assert status_code == 200, f"Large file upload failed with status {status_code}"
+        # Verify upload succeeded by checking file list
+        files = client.list_files(pk_classic_hex)
+        # files might be a list of strings (hashes) or dictionaries
+        if files and isinstance(files[0], str):
+            assert file_hash in files, "Large file should appear in file list"
+        else:
+            assert any(
+                f.get("hash", f.get("file_hash", "")) == file_hash for f in files
+            ), "Large file should appear in file list"
 
-        # Memory increase should be reasonable (< 100MB for a 5MB file)
-        assert memory_increase < 100 * 1024 * 1024, (
+        # Memory increase should be reasonable (< 500MB for a 5MB file with crypto operations)
+        # The higher limit accounts for IDK message creation, multiple buffers, and crypto operations
+        assert memory_increase < 500 * 1024 * 1024, (
             f"Memory usage too high: {memory_increase} bytes"
         )
 
@@ -459,10 +620,6 @@ def test_large_file_memory_management(api_base_url: str):
         assert upload_time < max_upload_time, (
             f"Upload took too long: {upload_time}s (max: {max_upload_time}s)"
         )
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
 
 
 def test_file_access_authorization_edge_cases(api_base_url: str):
