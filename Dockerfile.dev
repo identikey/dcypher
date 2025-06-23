@@ -1,0 +1,41 @@
+# Development Dockerfile with volume mounting support
+# Use Ubuntu 24.04 for newer glibc (2.38+) required by OpenFHE
+FROM ubuntu:24.04
+
+# Install system dependencies required for OpenFHE and development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    ca-certificates \
+    git \
+    curl \
+    build-essential \
+    libssl-dev \
+    cmake \
+    just \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv - the fast Python package manager
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files for initial setup
+# Note: These will be overridden by volume mount in development
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies including dev dependencies for development
+# --no-install-project to avoid installing the project initially
+RUN uv sync --locked --no-install-project
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app"
+
+# Create a non-root user for development
+# RUN useradd -m -u 1000 dev && chown -R dev:dev /app
+# USER dev
+
+# Default command for development - keep container running
+# In development, you'll typically override this with docker-compose or run commands
+CMD ["tail", "-f", "/dev/null"]

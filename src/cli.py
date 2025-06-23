@@ -357,29 +357,46 @@ def gen_signing_keys(output_prefix):
 @click.option("--output-prefix", default="key", help="Prefix for the output key files.")
 def gen_keys(cc_path, output_prefix):
     """Generates a public/private key pair."""
-    click.echo(f"Loading crypto context from {cc_path}...", err=True)
-    with open(cc_path, "r") as f:
-        cc_data = json.load(f)
+    try:
+        click.echo(f"Loading crypto context from {cc_path}...", err=True)
+        with open(cc_path, "r") as f:
+            cc_data = json.load(f)
+    except FileNotFoundError:
+        raise click.ClickException(f"Crypto context file not found: {cc_path}")
+    except PermissionError:
+        raise click.ClickException(f"Permission denied accessing file: {cc_path}")
+    except json.JSONDecodeError as e:
+        raise click.ClickException(f"Invalid JSON in crypto context file: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error reading crypto context file: {e}")
 
-    cc = pre.deserialize_cc(cc_data["cc"])
+    try:
+        cc = pre.deserialize_cc(cc_data["cc"])
+    except KeyError:
+        raise click.ClickException("Invalid crypto context file: missing 'cc' field")
+    except Exception as e:
+        raise click.ClickException(f"Error deserializing crypto context: {e}")
 
-    click.echo("Generating keys...", err=True)
-    keys = pre.generate_keys(cc)
+    try:
+        click.echo("Generating keys...", err=True)
+        keys = pre.generate_keys(cc)
 
-    serialized_pk = pre.serialize(keys.publicKey)
-    serialized_sk = pre.serialize(keys.secretKey)
+        serialized_pk = pre.serialize(keys.publicKey)
+        serialized_sk = pre.serialize(keys.secretKey)
 
-    pk_path = f"{output_prefix}.pub"
-    sk_path = f"{output_prefix}.sec"
+        pk_path = f"{output_prefix}.pub"
+        sk_path = f"{output_prefix}.sec"
 
-    with open(pk_path, "w") as f:
-        json.dump({"key": serialized_pk}, f)
+        with open(pk_path, "w") as f:
+            json.dump({"key": serialized_pk}, f)
 
-    with open(sk_path, "w") as f:
-        json.dump({"key": serialized_sk}, f)
+        with open(sk_path, "w") as f:
+            json.dump({"key": serialized_sk}, f)
 
-    click.echo(f"Public key saved to {pk_path}", err=True)
-    click.echo(f"Secret key saved to {sk_path}", err=True)
+        click.echo(f"Public key saved to {pk_path}", err=True)
+        click.echo(f"Secret key saved to {sk_path}", err=True)
+    except Exception as e:
+        raise click.ClickException(f"Error generating or saving keys: {e}")
 
 
 @cli.command()

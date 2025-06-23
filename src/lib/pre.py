@@ -222,6 +222,9 @@ def coefficients_to_bytes(
     """
     byte_array = bytearray()
     for coeff in coeffs:
+        # Clamp coefficient to valid unsigned short range (0-65535)
+        # This handles cases where decryption with wrong key produces invalid values
+        clamped_coeff = max(0, min(65535, coeff))
         # Pack each coefficient as an unsigned short (H)
         value_to_pack = coeff
         if not (0 <= value_to_pack < 2**16):
