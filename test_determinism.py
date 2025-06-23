@@ -24,20 +24,29 @@ print(pk[:10].hex())
     # Run the same script twice in separate processes
     result1 = subprocess.run(
         ["uv", "run", "python", "-c", test_script],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
         cwd=".",
     )
     result2 = subprocess.run(
         ["uv", "run", "python", "-c", test_script],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
         cwd=".",
     )
 
-    print(f"First run: {result1.stdout.strip()}")
-    print(f"Second run: {result2.stdout.strip()}")
-    print(f"Same result: {result1.stdout.strip() == result2.stdout.strip()}")
+    print(f"--- First run output ---\n{result1.stdout.strip()}")
+    print(f"--- Second run output ---\n{result2.stdout.strip()}")
+
+    # Extract last line for comparison
+    pk1 = result1.stdout.strip().split("\n")[-1]
+    pk2 = result2.stdout.strip().split("\n")[-1]
+
+    print(f"First key: {pk1}")
+    print(f"Second key: {pk2}")
+    print(f"Same result: {pk1 == pk2}")
 
 
 if __name__ == "__main__":
