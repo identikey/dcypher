@@ -1,8 +1,11 @@
 import requests
 import json
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
+from contextlib import contextmanager
 from .auth import sign_message_with_keys
+from lib.pq_auth import generate_pq_keys
 import ecdsa
 import oqs
 
@@ -45,6 +48,210 @@ class DCypherClient:
         self.api_url = api_url.rstrip("/")
         self.auth_keys_path = auth_keys_path
         self._auth_keys = None
+
+    @classmethod
+    def create_test_account(
+        cls,
+        api_url: str,
+        temp_dir: Path,
+        additional_pq_algs: Optional[List[str]] = None,
+    ) -> Tuple["DCypherClient", str]:
+        """
+        Factory method to create a test account with generated keys.
+
+        This is the preferred method for tests - it handles all key generation,
+        file management, and account creation automatically.
+
+        Args:
+            api_url: Base URL for the DCypher API
+            temp_dir: Directory to store temporary auth files
+            additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+        Returns:
+            tuple: (DCypherClient instance, classic_public_key_hex)
+        """
+        from src.config import ML_DSA_ALG
+
+        if additional_pq_algs is None:
+            additional_pq_algs = []
+
+        # Generate classic keys
+        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None
+        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+
+        # Save classic key to file
+        classic_sk_path = temp_dir / "classic.sk"
+        with open(classic_sk_path, "w") as f:
+            f.write(sk_classic.to_string().hex())
+
+        # Generate PQ keys and save to files
+        pq_keys_data = []
+        all_algs = [ML_DSA_ALG] + additional_pq_algs
+
+        for i, alg in enumerate(all_algs):
+            pq_pk, pq_sk = generate_pq_keys(alg)
+            pq_sk_path = temp_dir / f"pq_{i}.sk"
+            with open(pq_sk_path, "wb") as f:
+                f.write(pq_sk)
+            pq_keys_data.append(
+                {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": alg}
+            )
+
+        # Create auth keys file
+        auth_keys_data = {
+            "classic_sk_path": str(classic_sk_path),
+            "pq_keys": pq_keys_data,
+        }
+        auth_keys_file = temp_dir / "auth_keys.json"
+        with open(auth_keys_file, "w") as f:
+            json.dump(auth_keys_data, f)
+
+        # Create API client and account
+        client = cls(api_url, str(auth_keys_file))
+        pq_keys = [{"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in pq_keys_data]
+        client.create_account(pk_classic_hex, pq_keys)
+
+        return client, pk_classic_hex
+
+    @contextmanager
+    def signing_keys(self):
+        """
+        Context manager for accessing signing keys with automatic cleanup.
+
+        Usage:
+            with client.signing_keys() as keys:
+                sk_classic = keys["classic_sk"]
+                pq_sigs = keys["pq_sigs"]
+                # Use signing keys...
+            # OQS signatures are automatically freed when exiting the context
+
+        Yields:
+            dict: Contains 'classic_sk' (ecdsa.SigningKey) and 'pq_sigs' (list of oqs.Signature objects)
+        """
+        auth_keys = self._load_auth_keys()
+
+        # Create OQS signature objects for PQ keys
+        pq_sigs = []
+        oqs_objects = []  # Keep track for cleanup
+
+        try:
+            for pq_key in auth_keys["pq_keys"]:
+                sig_obj = oqs.Signature(pq_key["alg"], pq_key["sk"])
+                oqs_objects.append(sig_obj)
+                pq_sigs.append(
+                    {"sig": sig_obj, "pk_hex": pq_key["pk_hex"], "alg": pq_key["alg"]}
+                )
+
+            yield {"classic_sk": auth_keys["classic_sk"], "pq_sigs": pq_sigs}
+        finally:
+            # Automatically free all OQS signature objects
+            for sig_obj in oqs_objects:
+                sig_obj.free()
+
+    def get_signing_keys(self) -> Dict[str, Any]:
+        """
+        Get direct access to signing keys for tests that need to perform
+        custom signing operations.
+
+        Returns:
+            dict: Contains 'classic_sk' (ecdsa.SigningKey) and 'pq_sigs' (list of oqs.Signature objects)
+        """
+        auth_keys = self._load_auth_keys()
+
+        # Create OQS signature objects for PQ keys
+        pq_sigs = []
+        for pq_key in auth_keys["pq_keys"]:
+            sig_obj = oqs.Signature(pq_key["alg"], pq_key["sk"])
+            pq_sigs.append(
+                {"sig": sig_obj, "pk_hex": pq_key["pk_hex"], "alg": pq_key["alg"]}
+            )
+
+        return {"classic_sk": auth_keys["classic_sk"], "pq_sigs": pq_sigs}
+
+    def free_signing_keys(self, signing_keys: Dict[str, Any]) -> None:
+        """
+        Free OQS signature objects to prevent memory leaks.
+
+        Args:
+            signing_keys: Result from get_signing_keys()
+        """
+        for pq_sig_info in signing_keys["pq_sigs"]:
+            pq_sig_info["sig"].free()
+
+    def sign_message_directly(self, message: str) -> Dict[str, Any]:
+        """
+        Sign a message directly with the loaded keys.
+        Useful for tests that need to create custom signatures.
+
+        Args:
+            message: Message to sign (will be encoded to bytes)
+
+        Returns:
+            dict: Contains 'classic_signature' and 'pq_signatures' list
+        """
+        return self._sign_message(message)
+
+    def create_account_with_custom_signature(
+        self,
+        classic_pk_hex: str,
+        pq_keys: List[Dict[str, str]],
+        message: str,
+        classic_signature: str,
+        pq_signatures: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Create account with custom signatures (for testing edge cases).
+
+        Args:
+            classic_pk_hex: Classic public key hex
+            pq_keys: List of PQ key info
+            message: The message that was signed
+            classic_signature: Custom classic signature
+            pq_signatures: Custom PQ signatures
+
+        Returns:
+            API response data
+        """
+        # Extract nonce from message (assumes format ends with :nonce)
+        nonce = message.split(":")[-1]
+
+        # Prepare payload
+        payload: Dict[str, Any] = {
+            "public_key": classic_pk_hex,
+            "signature": classic_signature,
+            "nonce": nonce,
+        }
+
+        # Add PQ signatures
+        if pq_keys and pq_signatures:
+            ml_dsa_key = pq_keys[0]  # Assume first is ML-DSA
+            ml_dsa_sig = pq_signatures[0]
+            payload["ml_dsa_signature"] = {
+                "public_key": ml_dsa_key["pk_hex"],
+                "signature": ml_dsa_sig["signature"],
+                "alg": ml_dsa_key["alg"],
+            }
+
+            # Additional PQ keys
+            if len(pq_keys) > 1:
+                additional_pq_sigs = []
+                for i, pq_key in enumerate(pq_keys[1:], 1):
+                    additional_pq_sigs.append(
+                        {
+                            "public_key": pq_key["pk_hex"],
+                            "signature": pq_signatures[i]["signature"],
+                            "alg": pq_key["alg"],
+                        }
+                    )
+                payload["additional_pq_signatures"] = additional_pq_sigs
+
+        try:
+            response = requests.post(f"{self.api_url}/accounts", json=payload)
+            return self._handle_response(response)
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to create account: {e}")
 
     def _load_auth_keys(self) -> Dict[str, Any]:
         """Load authentication keys from the configured path."""

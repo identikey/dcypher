@@ -164,6 +164,109 @@ def get_nonce(api_base_url: str):
     return client.get_nonce()
 
 
+def setup_test_account_with_client(
+    test_dir, api_base_url: str, add_pq_algs: list[str] | None = None
+):
+    """
+    Creates a test account with proper API client setup.
+    Now uses the enhanced API client factory method.
+
+    Args:
+        test_dir: Directory to store temporary auth files
+        api_base_url: API server URL
+        add_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+    Returns:
+        tuple: (DCypherClient, pk_classic_hex, auth_keys_file_path)
+    """
+    from src.lib.api_client import DCypherClient
+    from pathlib import Path
+
+    # Use the new factory method
+    client, pk_classic_hex = DCypherClient.create_test_account(
+        api_base_url, Path(test_dir), add_pq_algs
+    )
+
+    # Return the auth keys file path for compatibility
+    auth_keys_file = Path(test_dir) / "auth_keys.json"
+
+    return client, pk_classic_hex, auth_keys_file
+
+
+def create_test_account_with_signing_keys(
+    api_base_url: str, tmp_path, additional_pq_algs: list[str] | None = None
+):
+    """
+    Creates a test account with API client for tests that need signing keys.
+
+    DEPRECATED: Use create_test_account_with_context() instead for automatic resource management.
+
+    Usage pattern:
+        client, pk_classic_hex, signing_keys = create_test_account_with_signing_keys(api_base_url, tmp_path)
+        try:
+            # Use signing_keys["classic_sk"] and signing_keys["pq_sigs"] for custom operations
+            sk_classic = signing_keys["classic_sk"]
+            pq_sigs = signing_keys["pq_sigs"]
+            # ... test logic ...
+        finally:
+            client.free_signing_keys(signing_keys)
+
+    Args:
+        api_base_url: API server URL
+        tmp_path: Temporary directory for auth files
+        additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+    Returns:
+        tuple: (DCypherClient, pk_classic_hex, signing_keys_dict)
+    """
+    from src.lib.api_client import DCypherClient
+    from pathlib import Path
+
+    # Create account using the factory method
+    client, pk_classic_hex = DCypherClient.create_test_account(
+        api_base_url, Path(tmp_path), additional_pq_algs
+    )
+
+    # Get signing keys for custom operations
+    signing_keys = client.get_signing_keys()
+
+    return client, pk_classic_hex, signing_keys
+
+
+def create_test_account_with_context(
+    api_base_url: str, tmp_path, additional_pq_algs: list[str] | None = None
+):
+    """
+    Creates a test account with API client using context manager for automatic resource management.
+    This is the PREFERRED method for tests that need signing keys.
+
+    Usage pattern:
+        client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+        with client.signing_keys() as keys:
+            sk_classic = keys["classic_sk"]
+            pq_sigs = keys["pq_sigs"]
+            # ... test logic ...
+        # OQS signatures are automatically freed when exiting the context
+
+    Args:
+        api_base_url: API server URL
+        tmp_path: Temporary directory for auth files
+        additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+    Returns:
+        tuple: (DCypherClient, pk_classic_hex)
+    """
+    from src.lib.api_client import DCypherClient
+    from pathlib import Path
+
+    # Create account using the factory method
+    client, pk_classic_hex = DCypherClient.create_test_account(
+        api_base_url, Path(tmp_path), additional_pq_algs
+    )
+
+    return client, pk_classic_hex
+
+
 def test_get_nonce_endpoint(api_base_url: str):
     """
     Tests the /nonce endpoint to ensure it returns a valid, well-formed nonce.

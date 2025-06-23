@@ -24,6 +24,7 @@ from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
+    setup_test_account_with_client,
 )
 
 
@@ -208,28 +209,29 @@ def test_upload_chunk_unauthorized(api_base_url: str, monkeypatch):
             sig.free()
 
 
-def test_upload_chunk_for_unregistered_file(api_base_url: str):
+def test_upload_chunk_for_unregistered_file(api_base_url: str, tmp_path):
     """
     Tests that uploading a chunk for a file that has not been registered fails.
+    This test demonstrates the new API client pattern for validation tests.
     """
-    sk_classic, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account(api_base_url)
-    try:
-        chunk_data = b"some data"
-        response = requests.post(
-            f"{api_base_url}/storage/{pk_classic_hex}/unregistered-file-hash/chunks",
-            files={"file": ("chunk_0", chunk_data)},
-            data={
-                "nonce": get_nonce(api_base_url),
-                "chunk_hash": hashlib.blake2b(chunk_data).hexdigest(),
-                "chunk_index": "0",
-                "total_chunks": "1",
-                "compressed": "false",
-                "classic_signature": "doesnt-matter",
-                "pq_signatures": "doesnt-matter",
-            },
-        )
-        assert response.status_code == 404
-        assert "File record not found" in response.json()["detail"]
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # Create account using the new API client pattern
+    client, pk_classic_hex, _ = setup_test_account_with_client(tmp_path, api_base_url)
+
+    chunk_data = b"some data"
+    response = requests.post(
+        f"{api_base_url}/storage/{pk_classic_hex}/unregistered-file-hash/chunks",
+        files={"file": ("chunk_0", chunk_data)},
+        data={
+            "nonce": get_nonce(api_base_url),
+            "chunk_hash": hashlib.blake2b(chunk_data).hexdigest(),
+            "chunk_index": "0",
+            "total_chunks": "1",
+            "compressed": "false",
+            "classic_signature": "doesnt-matter",
+            "pq_signatures": "doesnt-matter",
+        },
+    )
+    assert response.status_code == 404
+    assert "File record not found" in response.json()["detail"]
+
+    # Note: No manual cleanup needed - the new API client manages resources properly

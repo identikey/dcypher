@@ -18,6 +18,7 @@ from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
+    setup_test_account_with_client,
 )
 
 
@@ -241,32 +242,33 @@ def test_upload_unauthorized_registration(api_base_url: str):
             sig.free()
 
 
-def test_register_file_malformed_pq_signatures(api_base_url: str):
+def test_register_file_malformed_pq_signatures(api_base_url: str, tmp_path):
     """
     Tests that file registration fails if pq_signatures is not valid JSON.
+    This test demonstrates the new API client pattern for simple validation tests.
     """
-    _, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account(api_base_url)
-    try:
-        response = requests.post(
-            f"{api_base_url}/storage/{pk_classic_hex}/register",
-            files={
-                "idk_part_one": (
-                    "test.idk.part1",
-                    b"some content",
-                    "application/octet-stream",
-                )
-            },
-            data={
-                "nonce": get_nonce(api_base_url),
-                "filename": "test.txt",
-                "content_type": "text/plain",
-                "total_size": "12",
-                "classic_signature": "does-not-matter",
-                "pq_signatures": "this-is-not-json",
-            },
-        )
-        assert response.status_code == 400
-        assert "Invalid format for pq_signatures" in response.json()["detail"]
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # Create account using the new API client pattern
+    client, pk_classic_hex, _ = setup_test_account_with_client(tmp_path, api_base_url)
+
+    response = requests.post(
+        f"{api_base_url}/storage/{pk_classic_hex}/register",
+        files={
+            "idk_part_one": (
+                "test.idk.part1",
+                b"some content",
+                "application/octet-stream",
+            )
+        },
+        data={
+            "nonce": get_nonce(api_base_url),
+            "filename": "test.txt",
+            "content_type": "text/plain",
+            "total_size": "12",
+            "classic_signature": "does-not-matter",
+            "pq_signatures": "this-is-not-json",
+        },
+    )
+    assert response.status_code == 400
+    assert "Invalid format for pq_signatures" in response.json()["detail"]
+
+    # Note: No manual cleanup needed - the new API client manages resources properly

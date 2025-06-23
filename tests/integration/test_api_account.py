@@ -19,6 +19,8 @@ from security import SERVER_SECRET
 from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
+    create_test_account_with_signing_keys,
+    create_test_account_with_context,
 )
 
 
@@ -501,17 +503,21 @@ def test_create_account_invalid_additional_pq_signature(api_base_url: str):
         )
 
 
-def test_create_account_already_exists(api_base_url: str):
+def test_create_account_already_exists(api_base_url: str, tmp_path):
     """
     Tests that the server prevents creating a new account with a classic public
     key that is already in use. The classic public key must be unique across
     all accounts.
+    This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Create an initial account
-    sk_classic, pk_classic_hex, _, oqs_sigs_to_free = _create_test_account(api_base_url)
-    try:
-        # 2. Attempt to create a second account with the same classic public key
+    # 1. Create an initial account using the new context manager pattern
+    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+
+    # 2. Attempt to create a second account with the same classic public key
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
         nonce2 = get_nonce(api_base_url)
+
         with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa_new:
             pk_ml_dsa_new_hex = sig_ml_dsa_new.generate_keypair().hex()
             message2 = f"{pk_classic_hex}:{pk_ml_dsa_new_hex}:{nonce2}".encode("utf-8")
@@ -535,9 +541,7 @@ def test_create_account_already_exists(api_base_url: str):
             assert (
                 "Account with this classic public key already exists" in response2.text
             )
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_create_account_expired_nonce(api_base_url: str):
