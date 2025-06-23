@@ -75,6 +75,9 @@ class DCypherClient:
         if additional_pq_algs is None:
             additional_pq_algs = []
 
+        # Ensure temp directory exists
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
         # Generate classic keys
         sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
         vk_classic = sk_classic.get_verifying_key()
