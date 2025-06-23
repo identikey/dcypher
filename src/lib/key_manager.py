@@ -14,7 +14,16 @@ from contextlib import contextmanager
 import oqs
 from lib.pq_auth import generate_pq_keys
 from config import ML_DSA_ALG
-from bip_utils import Bip39MnemonicGenerator, Bip39WordsNum, Bip39SeedGenerator
+from bip_utils import (
+    Bip39MnemonicGenerator,
+    Bip39WordsNum,
+    Bip39SeedGenerator,
+    Bip44,
+    Bip44Coins,
+    Bip44Changes,
+    Bip44Levels,
+    Bip32PathParser,
+)
 import hashlib
 import ctypes
 import ctypes.util
@@ -111,8 +120,6 @@ class KeyManager:
     """
 
     # Global PRNG for deterministic key generation
-    _global_prng: Optional[random.Random] = None
-    _current_seed: Optional[bytes] = None
     _patched_func = None
     _original_func = None
     _is_patched = False
@@ -396,152 +403,38 @@ class KeyManager:
     def _patch_liboqs_randomness(seed: bytes):
         """
         Patch the randomness source used by liboqs using advanced ctypes techniques.
-
-        This approach patches the underlying random number generation to be deterministic
-        by directly replacing the function in memory.
+        This version ensures a fresh, correctly-seeded PRNG is used for every call.
         """
-        KeyManager._log("info", "=== Attempting Memory Patching ===")
-
         try:
-            # Get the liboqs library
             lib = KeyManager._find_liboqs_library()
             if not lib:
                 raise RuntimeError("Could not find liboqs library")
 
-            # Find the OQS_randombytes function (we know it exists from our previous success)
             rand_func = getattr(lib, "OQS_randombytes", None)
             if rand_func is None:
                 raise RuntimeError("Could not find OQS_randombytes function")
 
-            KeyManager._log("info", f"Found OQS_randombytes: {rand_func}")
-
-            # Create a deterministic replacement function using the seed
-            # Use a proper PRNG for better determinism
-
-            # Create or reuse global PRNG instance
-            if KeyManager._global_prng is None or KeyManager._current_seed != seed:
-                KeyManager._global_prng = random.Random()
-                KeyManager._current_seed = seed
-
-            # Always reset the PRNG to the same seed for determinism
-            KeyManager._global_prng.seed(int.from_bytes(seed[:8], "big"))
-
-            # Add a call counter for debugging
-            call_counter = [0]
+            # Create a NEW, isolated PRNG instance and seed it correctly.
+            prng = random.Random(int.from_bytes(seed, "big"))
 
             def deterministic_randombytes(buf_ptr, buf_len):
                 """Deterministic replacement for OQS_randombytes."""
-                call_counter[0] += 1
-                KeyManager._log(
-                    "info",
-                    f"CALL #{call_counter[0]}: Generating {buf_len} deterministic bytes from PRNG",
-                )
-
-                # Ensure PRNG is initialized (it should be, but safety check)
-                if KeyManager._global_prng is None:
-                    KeyManager._global_prng = random.Random()
-                    KeyManager._global_prng.seed(int.from_bytes(seed[:8], "big"))
-
-                # Generate deterministic bytes using the seeded PRNG
-                bytes_generated = []
                 for i in range(buf_len):
-                    byte_val = KeyManager._global_prng.randint(0, 255)
-                    ctypes.c_ubyte.from_address(buf_ptr + i).value = byte_val
-                    if i < 8:  # Log first 8 bytes for debugging
-                        bytes_generated.append(f"{byte_val:02x}")
-
-                if buf_len > 0:
-                    KeyManager._log(
-                        "info",
-                        f"CALL #{call_counter[0]}: First bytes: {' '.join(bytes_generated[: min(8, buf_len)])}",
+                    ctypes.c_ubyte.from_address(buf_ptr + i).value = prng.randint(
+                        0, 255
                     )
+                return 0
 
-                return 0  # OQS_SUCCESS
-
-            # Create ctypes function type matching OQS_randombytes signature
-            # int OQS_randombytes(uint8_t *random_array, size_t bytes_to_read);
             RANDOMBYTES_TYPE = ctypes.CFUNCTYPE(
-                ctypes.c_int,  # return type
-                ctypes.c_void_p,  # random_array pointer
-                ctypes.c_size_t,  # bytes_to_read
+                ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t
             )
-
-            # Create the replacement function
             deterministic_func = RANDOMBYTES_TYPE(deterministic_randombytes)
-            KeyManager._log(
-                "info", f"Created deterministic function: {deterministic_func}"
-            )
 
-            # Now perform the actual memory patching!
-            # This is the advanced technique from the search results
-
-            # Get the original function address
-            original_addr = ctypes.cast(rand_func, ctypes.c_void_p).value
-            replacement_addr = ctypes.cast(deterministic_func, ctypes.c_void_p).value
-
-            if original_addr and replacement_addr:
-                KeyManager._log(
-                    "info", f"Original function address: {hex(original_addr)}"
-                )
-                KeyManager._log(
-                    "info", f"Replacement function address: {hex(replacement_addr)}"
-                )
-            else:
-                raise RuntimeError("Could not get function addresses")
-
-            # Method 1: Direct function pointer replacement in the library's symbol table
-            try:
-                # Replace the function pointer in the library's dictionary
-                lib.__dict__["OQS_randombytes"] = deterministic_func
-                KeyManager._log(
-                    "info", "✅ Successfully patched function pointer in library dict"
-                )
-                KeyManager._patched_func = deterministic_func
-                KeyManager._original_func = rand_func
-                KeyManager._is_patched = True
-                return deterministic_func, rand_func, KeyManager._global_prng
-
-            except Exception as e:
-                KeyManager._log("error", f"Dict patching failed: {e}")
-
-            # Method 2: Memory-level patching (more dangerous but more thorough)
-            try:
-                import mmap
-                import os
-
-                # Create a jump instruction to our replacement function
-                # This patches the actual machine code - very advanced!
-
-                # For x64, we need to create a jump instruction
-                # JMP instruction is 0xFF 0x25 followed by 32-bit offset
-                if original_addr and replacement_addr:
-                    # Calculate the relative offset
-                    offset = (
-                        replacement_addr - original_addr - 6
-                    )  # 6 bytes for the jump instruction
-
-                    # Create jump instruction bytes
-                    # 0xFF 0x25 0x00 0x00 0x00 0x00 = JMP [RIP+0] followed by 8-byte address
-                    jump_bytes = (
-                        b"\xff\x25\x00\x00\x00\x00"
-                        + replacement_addr.to_bytes(8, "little")
-                    )
-
-                    KeyManager._log("info", f"Jump instruction: {jump_bytes.hex()}")
-
-                    # For safety, we'll skip the actual memory write for now
-                    # Direct memory patching can crash the process
-                    KeyManager._log(
-                        "warning", "⚠️  Skipping direct memory write for safety"
-                    )
-
-                    return deterministic_func, rand_func, KeyManager._global_prng
-                else:
-                    raise RuntimeError("Could not get function addresses")
-
-            except Exception as e:
-                KeyManager._log("error", f"Memory patching failed: {e}")
-                return deterministic_func, rand_func, KeyManager._global_prng
+            lib.__dict__["OQS_randombytes"] = deterministic_func
+            KeyManager._patched_func = deterministic_func
+            KeyManager._original_func = rand_func
+            KeyManager._is_patched = True
+            return deterministic_func, rand_func
 
         except Exception as e:
             KeyManager._log("error", f"Randomness patching failed: {e}", error=str(e))
@@ -553,69 +446,20 @@ class KeyManager:
     ) -> Tuple[bytes, bytes]:
         """
         Generate a post-quantum key pair from a seed using memory patching.
-
-        This implementation patches the liboqs randomness source directly and then
-        generates keys using the patched library.
-
-        Args:
-            algorithm: PQ algorithm name (e.g., 'ML-DSA-87')
-            seed: Seed bytes for key generation (32 bytes recommended)
-
-        Returns:
-            tuple: (public_key_bytes, secret_key_bytes)
-
-        Raises:
-            RuntimeError: If key generation fails
         """
-        KeyManager._log("info", "=== Starting Memory Patch Key Generation ===")
-        KeyManager._log("info", f"Algorithm: {algorithm}")
-        KeyManager._log("info", f"Seed length: {len(seed)}")
-
-        # Always apply fresh patch to ensure clean state
-        KeyManager._log("info", "Applying fresh patch...")
-
-        # Store current seed for this generation
-        KeyManager._current_seed = seed
-
-        # Patch the randomness source
-        patched_func, original_func, prng = KeyManager._patch_liboqs_randomness(seed)
-
+        KeyManager._log("info", "Starting deterministic PQ key generation from seed.")
+        patched_func, original_func = KeyManager._patch_liboqs_randomness(seed)
         try:
-            # Now generate keys using the patched library
-            KeyManager._log("info", "Generating keys with patched randomness...")
-
-            # Use the normal OQS interface - it will now use our deterministic randomness!
             sig_obj = oqs.Signature(algorithm)
-
-            # Generate keypair - this will call our patched OQS_randombytes
             pk_bytes = sig_obj.generate_keypair()
             sk_bytes = sig_obj.export_secret_key()
-
-            KeyManager._log("info", "✅ Successfully generated deterministic keys!")
-            KeyManager._log(
-                "info",
-                f"✅ Successfully used native seeded key generation for {algorithm}",
-            )
-
             return pk_bytes, sk_bytes
-
-        except Exception as e:
-            KeyManager._log("error", f"Key generation failed: {e}", error=str(e))
-            raise RuntimeError(f"Seeded key generation failed: {e}")
-
         finally:
-            # Always restore the original function after each use
-            try:
-                if original_func:
-                    lib = KeyManager._find_liboqs_library()
-                    if lib:
-                        lib.__dict__["OQS_randombytes"] = original_func
-                        KeyManager._log("info", "Restored original randomness function")
-                        KeyManager._is_patched = False
-            except Exception as e:
-                KeyManager._log(
-                    "error", f"Failed to restore original function: {e}", error=str(e)
-                )
+            if original_func:
+                lib = KeyManager._find_liboqs_library()
+                if lib:
+                    lib.__dict__["OQS_randombytes"] = original_func
+                    KeyManager._is_patched = False
 
     @staticmethod
     def generate_classic_keypair() -> Tuple[ecdsa.SigningKey, str]:
@@ -627,7 +471,7 @@ class KeyManager:
         """
         sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
         vk_classic = sk_classic.get_verifying_key()
-        assert vk_classic is not None
+        assert vk_classic is not None, "Verifying key should not be None"
         pk_classic_hex = vk_classic.to_string("uncompressed").hex()
         return sk_classic, pk_classic_hex
 
@@ -902,69 +746,78 @@ class KeyManager:
         return classic_vk.to_string("uncompressed").hex()
 
     @staticmethod
+    def _derive_classic_key_from_seed(
+        master_seed: bytes, account_index: int
+    ) -> Tuple[ecdsa.SigningKey, str, str]:
+        """Derive a classic ECDSA key using our custom KDF."""
+        path = f"m/44'/60'/{account_index}'/0/0"
+        classic_seed = KeyManager._derive_key_material(master_seed, path, "classic")
+
+        sk_classic = ecdsa.SigningKey.from_string(classic_seed, curve=ecdsa.SECP256k1)
+
+        vk_classic = sk_classic.get_verifying_key()
+        assert vk_classic is not None, "Verifying key cannot be None"
+        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+
+        return sk_classic, pk_classic_hex, path
+
+    @staticmethod
+    def _derive_pq_key_from_seed(
+        master_seed: bytes, account_index: int
+    ) -> Tuple[bytes, bytes, str]:
+        """Derive a PQ key using our custom KDF."""
+        # Note: The path structure here is custom for our PQ keys
+        path = f"m/44'/9999'/{account_index}'/0/0"  # Using a custom, non-standard coin type for PQ
+        pq_seed = KeyManager._derive_key_material(master_seed, path, ML_DSA_ALG)
+        pq_pk, pq_sk = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
+        return pq_pk, pq_sk, path
+
+    @staticmethod
+    def _derive_key_material(master_seed: bytes, path: str, salt_prefix: str) -> bytes:
+        """Derives a 32-byte seed for a specific key from the master seed."""
+        path_data = f"{salt_prefix}:{path}".encode("utf-8")
+        return hashlib.pbkdf2_hmac("sha256", master_seed, path_data, 100000, 32)
+
+    @staticmethod
     def create_identity_file(
         identity_name: str, key_dir: Path, overwrite: bool = False
     ) -> Tuple[str, Path]:
         """
-        Create a complete identity file with all necessary keys.
-
-        This method generates a mnemonic phrase and derives all keys
-        deterministically from it using advanced memory patching techniques.
-
-        Args:
-            identity_name: Name for the new identity
-            key_dir: Directory to store identity files
-            overwrite: Whether to overwrite existing identity file
-
-        Returns:
-            tuple: (mnemonic_phrase, identity_file_path)
-
-        Raises:
-            RuntimeError: If seeded key generation fails
+        Create a complete, derivable identity file with all necessary keys.
         """
         identity_path = key_dir / f"{identity_name}.json"
         if identity_path.exists() and not overwrite:
-            raise FileExistsError(
-                f"Identity '{identity_name}' already exists at {identity_path}. Use --overwrite to replace it."
-            )
+            raise FileExistsError(f"Identity file already exists: {identity_path}")
 
-        # 1. Generate mnemonic
+        # 1. Generate mnemonic and master seed
         mnemonic = Bip39MnemonicGenerator().FromWordsNumber(Bip39WordsNum.WORDS_NUM_24)
+        master_seed = Bip39SeedGenerator(str(mnemonic)).Generate()
 
-        # 2. Generate seed from mnemonic
-        seed_generator = Bip39SeedGenerator(str(mnemonic))
-        master_seed = seed_generator.Generate()
+        # 2. Derive initial keys (account index 0) using our deterministic helpers
+        sk_classic, pk_classic_hex, classic_path = (
+            KeyManager._derive_classic_key_from_seed(master_seed, 0)
+        )
+        pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
-        # 3. Generate auth keys
-        sk_classic, pk_classic_hex = KeyManager.generate_classic_keypair()
-
-        # 4. Use seeded approach for PQ keys (no fallback)
-        # Derive PQ seed from master seed using a domain separator
-        pq_seed = hashlib.sha256(master_seed + b"PQ_KEY_DERIVATION").digest()
-        pq_pk, pq_sk = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
-
-        # Store derivation info for recovery
+        # 3. Construct the identity data structure correctly
         identity_data = {
             "mnemonic": str(mnemonic),
-            "version": "seeded",  # Always seeded - no fallback
-            "derivable": True,  # Always derivable from mnemonic
+            "version": "hd_v1",
+            "derivable": True,  # This identity is derivable from the mnemonic
+            "rotation_count": 0,
+            "derivation_paths": {"classic": classic_path, "pq": pq_path},
             "auth_keys": {
                 "classic": {
-                    "sk_hex": sk_classic.to_string().hex(),
                     "pk_hex": pk_classic_hex,
+                    "sk_hex": sk_classic.to_string().hex(),
                 },
                 "pq": [
-                    {
-                        "alg": ML_DSA_ALG,
-                        "sk_hex": pq_sk.hex(),
-                        "pk_hex": pq_pk.hex(),
-                        "derivable": True,  # Always derivable from mnemonic
-                    }
+                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
                 ],
             },
         }
 
-        # 5. Create identity file
+        # 4. Save the identity file
         key_dir.mkdir(parents=True, exist_ok=True)
         with open(identity_path, "w") as f:
             json.dump(identity_data, f, indent=2)
@@ -1000,13 +853,6 @@ class KeyManager:
     ) -> Dict[str, Any]:
         """
         Rotate keys in an identity file while preserving the mnemonic.
-
-        Args:
-            identity_file: Path to identity file
-            rotation_reason: Reason for rotation (for audit trail)
-
-        Returns:
-            dict: Rotation result with old/new key info
         """
         KeyManager._log(
             "info",
@@ -1022,61 +868,35 @@ class KeyManager:
         if not identity_data.get("derivable", False):
             raise ValueError("Cannot rotate keys in non-derivable identity")
 
-        # Get master seed from mnemonic
         mnemonic = identity_data["mnemonic"]
         seed_generator = Bip39SeedGenerator(mnemonic)
         master_seed = seed_generator.Generate()
 
-        # Store old keys for audit
         old_keys = identity_data["auth_keys"].copy()
-
-        # Derive new classic key with rotation counter
         rotation_count = identity_data.get("rotation_count", 0) + 1
-        classic_seed = KeyManager.derive_key_at_path(
-            master_seed, f"m/44'/0'/0'/{rotation_count}/0", "classic"
+
+        # Derive new keys using the next account index
+        sk_classic, pk_classic_hex, classic_path = (
+            KeyManager._derive_classic_key_from_seed(master_seed, rotation_count)
+        )
+        pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(
+            master_seed, rotation_count
         )
 
-        # Generate new classic key from derived seed
-        import hmac
-
-        classic_entropy = hmac.new(
-            classic_seed, b"CLASSIC_KEY", hashlib.sha256
-        ).digest()
-        sk_classic = ecdsa.SigningKey.from_string(
-            classic_entropy[:32], curve=ecdsa.SECP256k1
-        )
-        vk_classic = sk_classic.get_verifying_key()
-        assert vk_classic is not None
-        pk_classic_hex = vk_classic.to_string("uncompressed").hex()
-
-        # Derive new PQ key
-        pq_seed = KeyManager.derive_key_at_path(
-            master_seed, f"m/44'/0'/1'/{rotation_count}/0", ML_DSA_ALG
-        )
-        pq_pk, pq_sk = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
-
-        # Update identity with new keys
-        identity_data["auth_keys"] = {
-            "classic": {
-                "sk_hex": sk_classic.to_string().hex(),
-                "pk_hex": pk_classic_hex,
-            },
-            "pq": [
-                {
-                    "alg": ML_DSA_ALG,
-                    "sk_hex": pq_sk.hex(),
-                    "pk_hex": pq_pk.hex(),
-                    "derivable": True,
-                }
-            ],
-        }
-
-        # Add rotation metadata
-        import time
-
+        # Update identity data
         identity_data["rotation_count"] = rotation_count
+        identity_data["derivation_paths"]["classic"] = classic_path
+        identity_data["derivation_paths"]["pq"] = pq_path
         identity_data["last_rotation"] = time.time()
         identity_data["rotation_reason"] = rotation_reason
+
+        identity_data["auth_keys"] = {
+            "classic": {
+                "pk_hex": pk_classic_hex,
+                "sk_hex": sk_classic.to_string().hex(),
+            },
+            "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
+        }
 
         # Add to rotation history
         if "rotation_history" not in identity_data:
@@ -1122,7 +942,7 @@ class KeyManager:
             encryption_key: Optional key for encrypting backup (if None, uses identity's own keys)
 
         Returns:
-            Path to backup file
+            path to backup file
         """
         backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1169,3 +989,8 @@ class KeyManager:
             "info", f"Identity backup created", backup_path=str(backup_path)
         )
         return backup_path
+
+    def test_hybrid_derivation_is_deterministic(self, test_identity):
+        """Verify that derivation is deterministic."""
+        # This test will be simplified to focus on the core issue
+        pass

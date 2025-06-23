@@ -6,9 +6,11 @@ from pathlib import Path
 import ecdsa
 import oqs
 import json
-from src.lib.key_manager import KeyManager
+from src.lib.key_manager import KeyManager, SecureBytes, SecureKeyHandle
+from bip_utils import Bip39SeedGenerator, Bip39MnemonicGenerator, Bip39WordsNum
 from src.config import ML_DSA_ALG
 from .util.util import get_enabled_sigs, get_sigs_with_ctx_support
+import secrets
 
 
 def test_generate_classic_keypair():
@@ -202,20 +204,19 @@ def test_identity_file_deterministic():
         words = mnemonic.split()
         assert len(words) == 24, "Should have 24 word mnemonic"
 
-        # Verify version and derivability fields (no fallbacks)
+        # Verify version and derivability fields
         assert "version" in data, "Should have version field"
-        assert data["version"] == "seeded", (
-            "Should always be seeded version (no fallbacks)"
+        assert data["version"] == "hd_v1", (
+            "The identity file should have the correct version"
         )
-        assert "derivable" in data, "Should have derivability info"
-        assert data["derivable"] == True, "Should always be derivable (no fallbacks)"
+        assert "rotation_count" in data and data["rotation_count"] == 0
+        assert "derivation_paths" in data, "Should contain derivation paths"
 
-        # Verify PQ keys are also marked as derivable
-        pq_key = data["auth_keys"]["pq"][0]
-        assert "derivable" in pq_key, "PQ key should have derivability info"
-        assert pq_key["derivable"] == True, (
-            "PQ key should always be derivable (no fallbacks)"
-        )
+        # In our new model, all keys from a mnemonic are derivable
+        # We'll re-add a specific "derivable" flag if we re-introduce non-derivable (imported) keys
+        auth_keys = data["auth_keys"]
+        assert auth_keys["classic"]["pk_hex"] is not None
+        assert auth_keys["pq"][0]["pk_hex"] is not None
 
 
 def test_load_identity_file():
@@ -344,3 +345,180 @@ def test_signing_context_with_identity():
             assert isinstance(pq_sig, bytes)
             assert len(classic_sig) > 0
             assert len(pq_sig) > 0
+
+
+class TestSecureMemory:
+    """Tests for secure memory management classes."""
+
+    def test_secure_bytes_wipe(self):
+        """Test that SecureBytes can be wiped."""
+        initial_data = secrets.token_bytes(32)
+        secure_data = SecureBytes(initial_data)
+
+        assert secure_data.get_bytes() == initial_data
+
+        secure_data.wipe()
+
+        with pytest.raises(RuntimeError, match="SecureBytes has been wiped"):
+            secure_data.get_bytes()
+
+    def test_secure_key_handle(self):
+        """Test the SecureKeyHandle context manager."""
+        key_material = secrets.token_bytes(64)
+        handle = SecureKeyHandle(key_material, "test_key")
+
+        with handle.access() as accessed_key:
+            assert accessed_key == key_material
+
+        handle.invalidate()
+
+        with pytest.raises(RuntimeError, match="Key handle has been invalidated"):
+            with handle.access() as _:
+                pass
+
+
+class TestKeyDerivationAndRotation:
+    """Tests for deterministic derivation and key rotation."""
+
+    @pytest.fixture
+    def test_identity(self):
+        """Create a test identity for rotation tests."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            mnemonic, identity_file = KeyManager.create_identity_file(
+                "rotation_test", temp_path
+            )
+            yield identity_file
+
+    def test_hybrid_derivation_is_deterministic(self, test_identity):
+        """Verify that derivation is deterministic."""
+        with open(test_identity, "r") as f:
+            identity_data = json.load(f)
+
+        mnemonic = identity_data["mnemonic"]
+        seed_generator = Bip39SeedGenerator(mnemonic)
+        master_seed = seed_generator.Generate()
+
+        # Re-derive classic key and check for consistency
+        sk_classic, pk_classic_hex, path = KeyManager._derive_classic_key_from_seed(
+            master_seed, 0
+        )
+        assert pk_classic_hex == identity_data["auth_keys"]["classic"]["pk_hex"]
+
+        # Re-derive PQ key and check
+        pq_pk, pq_sk, path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
+        assert pq_pk.hex() == identity_data["auth_keys"]["pq"][0]["pk_hex"]
+
+    def test_key_rotation(self, test_identity):
+        """Test key rotation functionality."""
+        with open(test_identity, "r") as f:
+            initial_data = json.load(f)
+
+        old_classic_pk = initial_data["auth_keys"]["classic"]["pk_hex"]
+        old_pq_pk = initial_data["auth_keys"]["pq"][0]["pk_hex"]
+
+        # Rotate keys
+        result = KeyManager.rotate_keys_in_identity(test_identity, "scheduled_test")
+
+        with open(test_identity, "r") as f:
+            rotated_data = json.load(f)
+
+        # Verify rotation count and metadata
+        assert rotated_data["rotation_count"] == 1
+        assert rotated_data["rotation_reason"] == "scheduled_test"
+
+        # Verify keys have changed
+        new_classic_pk = rotated_data["auth_keys"]["classic"]["pk_hex"]
+        new_pq_pk = rotated_data["auth_keys"]["pq"][0]["pk_hex"]
+        assert new_classic_pk != old_classic_pk
+        assert new_pq_pk != old_pq_pk
+
+        # Verify rotation history
+        assert len(rotated_data["rotation_history"]) == 1
+        history = rotated_data["rotation_history"][0]
+        assert history["rotation_count"] == 1
+        assert history["old_classic_pk"] == old_classic_pk
+        assert history["new_pq_pk"] == new_pq_pk
+
+
+class TestSecureBackup:
+    """Tests for the secure backup functionality."""
+
+    def test_secure_backup_creation(self):
+        """Test that a secure, encrypted backup is created."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Create an identity
+            mnemonic, identity_file = KeyManager.create_identity_file(
+                "backup_test", temp_path
+            )
+
+            # Create a backup
+            backup_dir = temp_path / "backups"
+            backup_file = KeyManager.backup_identity_securely(identity_file, backup_dir)
+
+            assert backup_file.exists()
+
+            # Verify the backup is not plaintext
+            with open(backup_file, "r") as f:
+                backup_data = json.load(f)
+
+            assert "encrypted_identity" in backup_data
+
+            # The original mnemonic should not be in the encrypted backup file in plain text
+            assert mnemonic not in backup_data["encrypted_identity"]
+
+            # Quick check to ensure it's not just base64 of the original
+            with open(identity_file, "r") as f_orig:
+                original_content = f_orig.read()
+            import base64
+
+            assert (
+                base64.b64encode(original_content.encode())
+                not in backup_data["encrypted_identity"].encode()
+            )
+
+
+def test_create_identity_file_is_deterministic():
+    """
+    Tests that creating an identity file results in a deterministic set of keys
+    that can be reproduced from the mnemonic.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # 1. Create an identity file
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "deterministic_test", temp_path
+        )
+
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        pk_classic_initial = identity_data["auth_keys"]["classic"]["pk_hex"]
+        pk_pq_initial = identity_data["auth_keys"]["pq"][0]["pk_hex"]
+
+        # 2. Re-derive keys from the same mnemonic
+        master_seed = Bip39SeedGenerator(mnemonic).Generate()
+
+        # Re-derive classic key
+        classic_path = identity_data["derivation_paths"]["classic"]
+        classic_seed = KeyManager._derive_key_material(
+            master_seed, classic_path, "classic"
+        )
+        sk_classic_regen = ecdsa.SigningKey.from_string(
+            classic_seed, curve=ecdsa.SECP256k1
+        )
+        vk_classic_regen = sk_classic_regen.get_verifying_key()
+        assert vk_classic_regen is not None
+        pk_classic_regen = vk_classic_regen.to_string("uncompressed").hex()
+
+        # Re-derive PQ key
+        pq_path = identity_data["derivation_paths"]["pq"]
+        pq_seed = KeyManager._derive_key_material(master_seed, pq_path, ML_DSA_ALG)
+        pq_pk_regen, _ = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
+
+        # 3. Assert that the re-derived public keys match the ones stored in the file
+        assert pk_classic_initial == pk_classic_regen
+        assert pk_pq_initial == pq_pk_regen.hex()
