@@ -22,25 +22,25 @@ from lib import pre
 from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
     _create_test_idk_file,
+    create_test_account_with_keymanager,
 )
 
 
-def test_1mb_file_multiple_encryption_compression(api_base_url: str):
+def test_1mb_file_multiple_encryption_compression(api_base_url: str, tmp_path):
     """
     Tests compression on realistic encrypted chunks by encrypting a 1MB file
     multiple times with different keys, creating many encrypted chunks to test
     compression ratios on actual encrypted data.
     """
-    # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # 1. Create an account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 2. Create a 1MB file
         large_file_content = os.urandom(1024 * 1024)  # 1MB random data
@@ -55,14 +55,14 @@ def test_1mb_file_multiple_encryption_compression(api_base_url: str):
 
             # Create fresh crypto context and keys for each encryption
             cc = pre.create_crypto_context()
-            keys = pre.generate_keys(cc)
+            keys_pre = pre.generate_keys(cc)
             sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 
             # Create IDK message parts (encrypted chunks)
             message_parts = create_idk_message_parts(
                 data=large_file_content,
                 cc=cc,
-                pk=keys.publicKey,
+                pk=keys_pre.publicKey,
                 signing_key=sk_idk_signer,
             )
 
@@ -209,24 +209,20 @@ def test_1mb_file_multiple_encryption_compression(api_base_url: str):
         assert overall_compression_ratio < 0.8, (
             f"Compression ratio {overall_compression_ratio:.3f} seems too poor for IDK message format"
         )
-
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_upload_and_download_large_file_chunked(api_base_url: str):
+def test_upload_and_download_large_file_chunked(api_base_url: str, tmp_path):
     """
     Tests uploading and downloading a large (1MB) file using the chunked method.
     """
-    # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # 1. Create an account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 2. Create a large file and its IDK message parts
         large_file_content = os.urandom(1024 * 1024)  # 1MB
@@ -234,13 +230,13 @@ def test_upload_and_download_large_file_chunked(api_base_url: str):
 
         # Use a dummy signing key for the IDK message itself, as it's not verified here
         cc = pre.create_crypto_context()
-        keys = pre.generate_keys(cc)
+        keys_pre = pre.generate_keys(cc)
         sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 
         message_parts = create_idk_message_parts(
             data=large_file_content,
             cc=cc,
-            pk=keys.publicKey,
+            pk=keys_pre.publicKey,
             signing_key=sk_idk_signer,
         )
         part_one_content = message_parts[0]
@@ -384,25 +380,21 @@ def test_upload_and_download_large_file_chunked(api_base_url: str):
         )
 
         print("✓ Concatenated file format and reconstruction test passed!")
-
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_concatenated_file_format_and_reconstruction(api_base_url: str):
+def test_concatenated_file_format_and_reconstruction(api_base_url: str, tmp_path):
     """
     Tests that the concatenated gzip file format correctly preserves newline separators
     between IDK message parts and that reconstruction works properly.
     """
-    # 1. Create an account
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+    # 1. Create an account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 2. Create a small file that will generate exactly 3 IDK message parts
         # This gives us a predictable test case
@@ -411,13 +403,13 @@ def test_concatenated_file_format_and_reconstruction(api_base_url: str):
         )
 
         cc = pre.create_crypto_context()
-        keys = pre.generate_keys(cc)
+        keys_pre = pre.generate_keys(cc)
         sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 
         message_parts = create_idk_message_parts(
             data=small_file_content,
             cc=cc,
-            pk=keys.publicKey,
+            pk=keys_pre.publicKey,
             signing_key=sk_idk_signer,
         )
 
@@ -562,8 +554,3 @@ def test_concatenated_file_format_and_reconstruction(api_base_url: str):
         )
 
         print("✓ Concatenated file format and reconstruction test passed!")
-
-    finally:
-        # Clean up oqs signatures
-        for sig in oqs_sigs_to_free:
-            sig.free()

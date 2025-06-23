@@ -140,17 +140,18 @@ def _upload_file_chunked(
     return last_status_code, file_hash
 
 
-def test_file_upload_timing_attack_resistance(api_base_url: str):
+def test_file_upload_timing_attack_resistance(api_base_url: str, tmp_path):
     """
     Tests that file operations execute in constant time regardless of
     file existence to prevent information leakage through timing attacks.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 1. Upload a file first using the new chunked API
         original_content = b"Test content for timing analysis"
@@ -227,10 +228,7 @@ def test_file_upload_timing_attack_resistance(api_base_url: str):
         assert time_difference < 0.05, (
             f"Timing difference too large: {time_difference}s"
         )
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_concurrent_file_uploads(api_base_url: str):
@@ -360,17 +358,18 @@ def test_concurrent_file_uploads(api_base_url: str):
     assert len(set(file_hashes)) == len(file_hashes), "Duplicate file hashes detected"
 
 
-def test_file_corruption_detection(api_base_url: str):
+def test_file_corruption_detection(api_base_url: str, tmp_path):
     """
     Tests that the system detects and rejects corrupted file uploads
     through hash validation and Merkle tree verification.
     """
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
-        pk_ml_dsa_hex = next(iter(all_pq_sks))
-        sig_ml_dsa = all_pq_sks[pk_ml_dsa_hex][0]
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        pk_ml_dsa_hex = keys["pq_sigs"][0]["pk_hex"]
+        sig_ml_dsa = keys["pq_sigs"][0]["sig"]
+        sk_classic = keys["classic_sk"]
 
         # 1. Create a valid file first to establish baseline
         original_content = b"This content will be corrupted"
@@ -392,11 +391,11 @@ def test_file_corruption_detection(api_base_url: str):
 
         # Create IDK message parts manually to test corruption
         cc = pre.create_crypto_context()
-        keys = pre.generate_keys(cc)
+        keys_pre = pre.generate_keys(cc)
         sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 
         message_parts = create_idk_message_parts(
-            content2, cc, keys.publicKey, sk_idk_signer
+            content2, cc, keys_pre.publicKey, sk_idk_signer
         )
 
         if not message_parts:
@@ -479,10 +478,7 @@ def test_file_corruption_detection(api_base_url: str):
             assert chunk_response.status_code == 400, (
                 f"Expected corruption detection to fail upload, got {chunk_response.status_code}"
             )
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_large_file_memory_management(api_base_url: str):

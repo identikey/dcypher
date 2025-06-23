@@ -335,7 +335,7 @@ def test_add_pq_key_authorization_failures(api_base_url: str, tmp_path):
     # OQS signatures are automatically freed when exiting the context
 
 
-def test_replace_existing_pq_key(api_base_url: str):
+def test_replace_existing_pq_key(api_base_url: str, tmp_path):
     """Tests that adding a key for an existing algorithm replaces the old key.
 
     This test now uses the DCypherClient for account and graveyard operations.
@@ -343,92 +343,99 @@ def test_replace_existing_pq_key(api_base_url: str):
     from src.lib.api_client import DCypherClient, DCypherAPIError
 
     falcon_alg = "Falcon-512"
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url, add_pq_algs=[falcon_alg]
+    # Create account with additional Falcon algorithm using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(
+        api_base_url, tmp_path, additional_pq_algs=[falcon_alg]
     )
-    try:
-        pk_ml_dsa_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == ML_DSA_ALG
-        )
-        pk_falcon_old_hex = next(
-            pk for pk, (_, alg) in all_pq_sks.items() if alg == falcon_alg
-        )
-        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
-        sig_falcon_old, _ = all_pq_sks[pk_falcon_old_hex]
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+
+        # Get the existing keys from the signing keys
+        ml_dsa_key = None
+        falcon_old_key = None
+        for pq_key in keys["pq_sigs"]:
+            if pq_key["alg"] == ML_DSA_ALG:
+                ml_dsa_key = pq_key
+            elif pq_key["alg"] == falcon_alg:
+                falcon_old_key = pq_key
+
+        assert ml_dsa_key is not None, "ML-DSA key should be present"
+        assert falcon_old_key is not None, "Falcon key should be present"
+
+        pk_ml_dsa_hex = ml_dsa_key["pk_hex"]
+        sig_ml_dsa = ml_dsa_key["sig"]
+        pk_falcon_old_hex = falcon_old_key["pk_hex"]
+        sig_falcon_old = falcon_old_key["sig"]
 
         # Create API client for verification operations
-        client = DCypherClient(api_base_url)
+        api_client = DCypherClient(api_base_url)
 
         add_nonce = get_nonce(api_base_url)
         add_msg = f"ADD-PQ:{pk_classic_hex}:{falcon_alg}:{add_nonce}".encode()
 
         # Create a new key pair for the same algorithm
-        sig_falcon_new = oqs.Signature(falcon_alg)
-        oqs_sigs_to_free.append(sig_falcon_new)
-        pk_falcon_new_hex = sig_falcon_new.generate_keypair().hex()
+        with oqs.Signature(falcon_alg) as sig_falcon_new:
+            pk_falcon_new_hex = sig_falcon_new.generate_keypair().hex()
 
-        payload = {
-            "new_pq_signatures": [
-                {
-                    "public_key": pk_falcon_new_hex,
-                    "signature": sig_falcon_new.sign(add_msg).hex(),
-                    "alg": falcon_alg,
-                }
-            ],
-            "classic_signature": sk_classic.sign(
-                add_msg, hashfunc=hashlib.sha256
-            ).hex(),
-            "existing_pq_signatures": [
-                {
-                    "public_key": pk_ml_dsa_hex,
-                    "signature": sig_ml_dsa.sign(add_msg).hex(),
-                    "alg": ML_DSA_ALG,
-                },
-                {
-                    "public_key": pk_falcon_old_hex,
-                    "signature": sig_falcon_old.sign(add_msg).hex(),
-                    "alg": falcon_alg,
-                },
-            ],
-            "nonce": add_nonce,
-        }
-        response = requests.post(
-            f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
-        )
-        assert response.status_code == 200, response.text
-        assert "Successfully added 1 PQ key(s)" in response.json()["message"]
+            payload = {
+                "new_pq_signatures": [
+                    {
+                        "public_key": pk_falcon_new_hex,
+                        "signature": sig_falcon_new.sign(add_msg).hex(),
+                        "alg": falcon_alg,
+                    }
+                ],
+                "classic_signature": sk_classic.sign(
+                    add_msg, hashfunc=hashlib.sha256
+                ).hex(),
+                "existing_pq_signatures": [
+                    {
+                        "public_key": pk_ml_dsa_hex,
+                        "signature": sig_ml_dsa.sign(add_msg).hex(),
+                        "alg": ML_DSA_ALG,
+                    },
+                    {
+                        "public_key": pk_falcon_old_hex,
+                        "signature": sig_falcon_old.sign(add_msg).hex(),
+                        "alg": falcon_alg,
+                    },
+                ],
+                "nonce": add_nonce,
+            }
+            response = requests.post(
+                f"{api_base_url}/accounts/{pk_classic_hex}/add-pq-keys", json=payload
+            )
+            assert response.status_code == 200, response.text
+            assert "Successfully added 1 PQ key(s)" in response.json()["message"]
 
-        # Add the new signer to the dict for cleanup. The signer for the old key
-        # remains in all_pq_sks and will be cleaned up in the 'finally' block.
-        all_pq_sks[pk_falcon_new_hex] = (sig_falcon_new, falcon_alg)
+            # Verify state after adding: key count should be the same using API client
+            account_info = api_client.get_account(pk_classic_hex)
+            keys_after_add = account_info["pq_keys"]
+            assert len(keys_after_add) == 2
 
-        # Verify state after adding: key count should be the same using API client
-        account_info = client.get_account(pk_classic_hex)
-        keys_after_add = account_info["pq_keys"]
-        assert len(keys_after_add) == 2
+            # Verify the old key is in the graveyard using API client
+            graveyard_keys = api_client.get_account_graveyard(pk_classic_hex)
+            assert len(graveyard_keys) == 1
+            assert graveyard_keys[0]["public_key"] == pk_falcon_old_hex
+            assert graveyard_keys[0]["alg"] == falcon_alg
 
-        # Verify the old key is in the graveyard using API client
-        graveyard_keys = client.get_account_graveyard(pk_classic_hex)
-        assert len(graveyard_keys) == 1
-        assert graveyard_keys[0]["public_key"] == pk_falcon_old_hex
-        assert graveyard_keys[0]["alg"] == falcon_alg
-
-        # Verify the new key is active
-        active_pks = {k["public_key"] for k in keys_after_add}
-        assert pk_falcon_new_hex in active_pks, "New key should be active"
-        assert pk_falcon_old_hex not in active_pks, "Old key should not be active"
-
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+            # Verify the new key is active
+            active_pks = {k["public_key"] for k in keys_after_add}
+            assert pk_falcon_new_hex in active_pks, "New key should be active"
+            assert pk_falcon_old_hex not in active_pks, "Old key should not be active"
+        # OQS signature for new falcon key is automatically freed when exiting context
+    # OQS signatures are automatically freed when exiting the context
 
 
-def test_add_unsupported_pq_key_fails(api_base_url: str):
+def test_add_unsupported_pq_key_fails(api_base_url: str, tmp_path):
     """Tests adding a key with an unsupported algorithm fails."""
-    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account(
-        api_base_url
-    )
-    try:
+    # Create account using KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
+
+    with client.signing_keys() as keys:
+        sk_classic = keys["classic_sk"]
+
         unsupported_alg = "Unsupported-Alg"
         unsupported_nonce = get_nonce(api_base_url)
         unsupported_msg = (
@@ -450,9 +457,7 @@ def test_add_unsupported_pq_key_fails(api_base_url: str):
         )
         assert response.status_code == 400
         assert f"Unsupported PQ algorithm: {unsupported_alg}" in response.text
-    finally:
-        for sig in oqs_sigs_to_free:
-            sig.free()
+    # OQS signatures are automatically freed when exiting the context
 
 
 def test_rotate_mandatory_pq_key_succeeds(api_base_url: str):
