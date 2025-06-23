@@ -21,110 +21,62 @@ from lib import pre
 from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
-    setup_test_account_with_client,
-    create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
-def test_upload_chunk_compression_ratio(api_base_url: str, monkeypatch):
+def test_upload_chunk_compression_ratio(api_base_url: str, monkeypatch, tmp_path):
     """
     Tests that chunk compression provides significant space savings.
     This test demonstrates realistic file upload workflow using the API client.
     """
     monkeypatch.setattr("src.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
 
-    from src.lib.api_client import DCypherClient
-    import tempfile
-    import json
-    from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
-    # Generate keys for test account
-    sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_classic = sk_classic.get_verifying_key()
-    assert vk_classic is not None
-    pk_classic_hex = vk_classic.to_string("uncompressed").hex()
+    original_content = (
+        b"A" * 30000
+    )  # Highly compressible, large enough for multiple parts
+    idk_parts, file_hash = _create_test_idk_file_parts(original_content)
+    assert len(idk_parts) > 1
+    part_one = idk_parts[0]
 
-    # Generate PQ keys
-    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
+    # Register file using API client
+    client.register_file(
+        public_key=pk_classic_hex,
+        file_hash=file_hash,
+        idk_part_one=part_one,
+        filename="test_file.txt",
+        content_type="text/plain",
+        total_size=len(original_content),
+    )
 
-    # Create temporary auth keys file
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
+    # Prepare chunk data and test compression
+    chunk_data = idk_parts[1].encode("utf-8")
+    compressed_chunk_data = gzip.compress(chunk_data, compresslevel=9)
+    compression_ratio = len(compressed_chunk_data) / len(chunk_data)
+    chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
 
-        # Save classic secret key
-        classic_sk_path = temp_path / "classic.sk"
-        with open(classic_sk_path, "w") as f:
-            f.write(sk_classic.to_string().hex())
+    # Upload chunk using API client with compression
+    result = client.upload_chunk(
+        public_key=pk_classic_hex,
+        file_hash=file_hash,
+        chunk_data=compressed_chunk_data,
+        chunk_hash=chunk_hash,
+        chunk_index=1,
+        total_chunks=len(idk_parts),
+        compressed=True,
+    )
 
-        # Save PQ secret key
-        pq_sk_path = temp_path / "pq.sk"
-        with open(pq_sk_path, "wb") as f:
-            f.write(pq_sk)
-
-        # Create auth keys file
-        auth_keys_data = {
-            "classic_sk_path": str(classic_sk_path),
-            "pq_keys": [
-                {
-                    "sk_path": str(pq_sk_path),
-                    "pk_hex": pq_pk.hex(),
-                    "alg": ML_DSA_ALG,
-                }
-            ],
-        }
-        auth_keys_file = temp_path / "auth_keys.json"
-        with open(auth_keys_file, "w") as f:
-            json.dump(auth_keys_data, f)
-
-        # Create API client and account
-        client = DCypherClient(api_base_url, str(auth_keys_file))
-        pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
-        client.create_account(pk_classic_hex, pq_keys)
-
-        original_content = (
-            b"A" * 30000
-        )  # Highly compressible, large enough for multiple parts
-        idk_parts, file_hash = _create_test_idk_file_parts(original_content)
-        assert len(idk_parts) > 1
-        part_one = idk_parts[0]
-
-        # Register file using API client
-        client.register_file(
-            public_key=pk_classic_hex,
-            file_hash=file_hash,
-            idk_part_one=part_one,
-            filename="test_file.txt",
-            content_type="text/plain",
-            total_size=len(original_content),
-        )
-
-        # Prepare chunk data and test compression
-        chunk_data = idk_parts[1].encode("utf-8")
-        compressed_chunk_data = gzip.compress(chunk_data, compresslevel=9)
-        compression_ratio = len(compressed_chunk_data) / len(chunk_data)
-        chunk_hash = hashlib.blake2b(chunk_data).hexdigest()
-
-        # Upload chunk using API client with compression
-        result = client.upload_chunk(
-            public_key=pk_classic_hex,
-            file_hash=file_hash,
-            chunk_data=compressed_chunk_data,
-            chunk_hash=chunk_hash,
-            chunk_index=1,
-            total_chunks=len(idk_parts),
-            compressed=True,
-        )
-
-        # Verify compression was effective
-        assert compression_ratio < 0.8, (
-            f"Compression ratio {compression_ratio} should be < 0.8"
-        )
-        # Note: The API client handles the response format, so we check the operation succeeded
-        # by verifying no exception was raised and the compression ratio is good
+    # Verify compression was effective
+    assert compression_ratio < 0.8, (
+        f"Compression ratio {compression_ratio} should be < 0.8"
+    )
+    # Note: The API client handles the response format, so we check the operation succeeded
+    # by verifying no exception was raised and the compression ratio is good
 
 
 def test_upload_chunk_unauthorized(api_base_url: str, tmp_path, monkeypatch):
@@ -134,8 +86,8 @@ def test_upload_chunk_unauthorized(api_base_url: str, tmp_path, monkeypatch):
     """
     monkeypatch.setattr("src.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
 
-    # Create account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     with client.signing_keys() as keys:
         sk_classic = keys["classic_sk"]
@@ -216,8 +168,8 @@ def test_upload_chunk_for_unregistered_file(api_base_url: str, tmp_path):
     Tests that uploading a chunk for a file that has not been registered fails.
     This test demonstrates the new API client pattern for validation tests.
     """
-    # Create account using the new API client pattern
-    client, pk_classic_hex, _ = setup_test_account_with_client(tmp_path, api_base_url)
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     chunk_data = b"some data"
     response = requests.post(

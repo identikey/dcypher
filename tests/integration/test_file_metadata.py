@@ -10,8 +10,7 @@ import requests
 from main import app
 
 from tests.integration.test_api import (
-    _create_test_account,
-    setup_test_account_with_client,
+    create_test_account_with_keymanager,
 )
 
 
@@ -29,10 +28,8 @@ def test_get_file_metadata_nonexistent_file(api_base_url: str, tmp_path):
     Tests that getting metadata for a non-existent file hash returns 404.
     This test demonstrates the new API client pattern.
     """
-    # 1. Create a real account using the new helper
-    client, pk_classic_hex, auth_keys_file = setup_test_account_with_client(
-        tmp_path, api_base_url
-    )
+    # 1. Create a real account using the KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     # 2. Attempt to get metadata for a hash that does not exist
     response = requests.get(

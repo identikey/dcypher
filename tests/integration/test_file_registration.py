@@ -15,11 +15,9 @@ from main import app
 from config import ML_DSA_ALG
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
-    setup_test_account_with_client,
-    create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
@@ -29,11 +27,8 @@ def test_successful_upload_workflow(api_base_url: str, tmp_path):
     This includes registration, uploading all chunks, and verifying metadata.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Import the new helper function
-    from tests.integration.test_api import create_test_account_with_context
-
-    # 1. Create an account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # 1. Create an account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     with client.signing_keys() as keys:
         sk_classic = keys["classic_sk"]
@@ -139,8 +134,8 @@ def test_register_file_invalid_merkle_root(api_base_url: str, tmp_path):
     checks if a malformed IDK part is rejected.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Create account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     with client.signing_keys() as keys:
         sk_classic = keys["classic_sk"]
@@ -195,8 +190,8 @@ def test_upload_unauthorized_registration(api_base_url: str, tmp_path):
     Tests that file registration fails if signatures are invalid.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Create account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     with client.signing_keys() as keys:
         sk_classic = keys["classic_sk"]
@@ -245,8 +240,8 @@ def test_register_file_malformed_pq_signatures(api_base_url: str, tmp_path):
     Tests that file registration fails if pq_signatures is not valid JSON.
     This test demonstrates the new API client pattern for simple validation tests.
     """
-    # Create account using the new API client pattern
-    client, pk_classic_hex, _ = setup_test_account_with_client(tmp_path, api_base_url)
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     response = requests.post(
         f"{api_base_url}/storage/{pk_classic_hex}/register",

@@ -17,9 +17,8 @@ from config import ML_DSA_ALG
 from security import SERVER_SECRET
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
-    create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
@@ -30,8 +29,8 @@ def test_account_creation_timing_attack_resistance(api_base_url: str, tmp_path):
     timing-based user enumeration attacks.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Create an existing account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # 1. Create an existing account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     with client.signing_keys() as keys:
         sk_classic = keys["classic_sk"]

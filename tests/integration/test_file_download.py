@@ -23,11 +23,10 @@ from lib import pre
 from lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
-    _create_test_account,
     get_nonce,
     _create_test_idk_file_parts,
     setup_uploaded_file,
-    create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
@@ -106,8 +105,8 @@ def test_download_file_nonexistent(api_base_url: str, tmp_path):
     Tests that downloading a non-existent file returns a 404 error.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Create account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # Create account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     with client.signing_keys() as keys:
         sk_classic = keys["classic_sk"]

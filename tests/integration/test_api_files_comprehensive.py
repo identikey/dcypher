@@ -35,7 +35,7 @@ from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
     _create_test_idk_file,
-    create_test_account_with_context,
+    create_test_account_with_keymanager,
 )
 
 
@@ -630,10 +630,10 @@ def test_file_access_authorization_edge_cases(api_base_url: str, tmp_path):
     This test demonstrates the new API client pattern with automatic resource management.
     """
     # Create two separate accounts using the new context manager pattern
-    client1, pk1_hex = create_test_account_with_context(
+    client1, pk1_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path / "account1"
     )
-    client2, pk2_hex = create_test_account_with_context(
+    client2, pk2_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path / "account2"
     )
 
@@ -964,10 +964,10 @@ def test_cross_account_access_prevention(api_base_url: str, tmp_path):
     This test demonstrates the new API client pattern with automatic resource management.
     """
     # Create two separate accounts using the new context manager pattern
-    client1, pk1_hex = create_test_account_with_context(
+    client1, pk1_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path / "account1"
     )
-    client2, pk2_hex = create_test_account_with_context(
+    client2, pk2_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path / "account2"
     )
 

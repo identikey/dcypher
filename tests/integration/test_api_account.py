@@ -19,8 +19,7 @@ from security import SERVER_SECRET
 from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
-    create_test_account_with_signing_keys,
-    create_test_account_with_context,
+    _create_test_idk_file_parts,
     create_test_account_with_keymanager,
 )
 
@@ -99,15 +98,15 @@ def test_create_account_used_nonce(api_base_url: str, tmp_path):
     nonce is provided. This prevents replay attacks.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # Create a valid account first using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # Create a valid account first using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     # Now try to re-use the nonce from the `state` object by accessing it
     # via the live server instance.
     nonce = get_nonce(api_base_url)
 
     # To simulate a used nonce, we have to create an account first.
-    # The create_test_account_with_context helper already does that. Let's make a new one.
+    # The create_test_account_with_keymanager helper already does that. Let's make a new one.
     sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     vk_classic = sk_classic.get_verifying_key()
     assert vk_classic is not None
@@ -395,8 +394,8 @@ def test_create_account_already_exists(api_base_url: str, tmp_path):
     all accounts.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Create an initial account using the new context manager pattern
-    client, pk_classic_hex = create_test_account_with_context(api_base_url, tmp_path)
+    # 1. Create an initial account using the new KeyManager-based helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
     # 2. Attempt to create a second account with the same classic public key
     with client.signing_keys() as keys:
@@ -516,11 +515,11 @@ def test_get_accounts_and_account_by_id(api_base_url: str, tmp_path):
     """
     from src.lib.api_client import DCypherClient, ResourceNotFoundError
 
-    # 1. Create two distinct accounts using the new context manager pattern
-    client1, pk_classic_1_hex = create_test_account_with_context(
+    # 1. Create two distinct accounts using the new KeyManager-based helper
+    client1, pk_classic_1_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path / "account1"
     )
-    client2, pk_classic_2_hex = create_test_account_with_context(
+    client2, pk_classic_2_hex = create_test_account_with_keymanager(
         api_base_url, tmp_path / "account2"
     )
 

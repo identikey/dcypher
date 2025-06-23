@@ -17,7 +17,6 @@ from config import ML_DSA_ALG
 from tests.integration.test_api import (
     _create_test_account,
     get_nonce,
-    create_test_account_with_context,
     create_test_account_with_keymanager,
 )
 
@@ -183,76 +182,29 @@ def test_add_and_remove_pq_keys(api_base_url: str):
         assert any(k["public_key"] == falcon_pk_2.hex() for k in keys_after_remove)
 
 
-def test_remove_mandatory_pq_key_fails(api_base_url: str):
+def test_remove_mandatory_pq_key_fails(api_base_url: str, tmp_path):
     """
     Tests that an attempt to remove the mandatory ML-DSA key from an account
     is rejected with a 400 error.
 
-    This test now uses the DCypherClient to demonstrate realistic error handling.
+    This test now uses the enhanced DCypherClient with KeyManager for simplified testing.
     """
-    from src.lib.api_client import DCypherClient, ValidationError
-    import tempfile
-    import json
-    from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    # Create minimal account with only mandatory ML-DSA key using streamlined helper
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
+    # Verify initial account state
+    account_info = client.get_account(pk_classic_hex)
+    assert len(account_info["pq_keys"]) == 1
+    assert account_info["pq_keys"][0]["alg"] == ML_DSA_ALG
 
-        # Generate classic key
-        sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-        vk_classic = sk_classic.get_verifying_key()
-        assert vk_classic is not None
-        pk_classic_hex = vk_classic.to_string().hex()
+    # Attempt to remove the mandatory key - should raise ValidationError
+    from src.lib.api_client import ValidationError
 
-        # Save classic key
-        classic_sk_path = temp_path / "classic.sk"
-        with open(classic_sk_path, "w") as f:
-            f.write(sk_classic.to_string().hex())
+    with pytest.raises(ValidationError) as exc_info:
+        client.remove_pq_keys(pk_classic_hex, [ML_DSA_ALG])
 
-        # Generate mandatory ML-DSA key
-        ml_dsa_pk, ml_dsa_sk = generate_pq_keys(ML_DSA_ALG)
-
-        # Save ML-DSA key
-        ml_dsa_sk_path = temp_path / "ml_dsa.sk"
-        with open(ml_dsa_sk_path, "wb") as f:
-            f.write(ml_dsa_sk)
-
-        # Create auth keys file
-        auth_keys_data = {
-            "classic_sk_path": str(classic_sk_path),
-            "pq_keys": [
-                {
-                    "sk_path": str(ml_dsa_sk_path),
-                    "pk_hex": ml_dsa_pk.hex(),
-                    "alg": ML_DSA_ALG,
-                }
-            ],
-        }
-        auth_keys_file = temp_path / "auth_keys.json"
-        with open(auth_keys_file, "w") as f:
-            json.dump(auth_keys_data, f)
-
-        # Create API client and account
-        client = DCypherClient(api_base_url, str(auth_keys_file))
-
-        # Create minimal account with only mandatory ML-DSA key
-        initial_pq_keys = [{"pk_hex": ml_dsa_pk.hex(), "alg": ML_DSA_ALG}]
-        client.create_account(pk_classic_hex, initial_pq_keys)
-
-        # Verify initial account state
-        account_info = client.get_account(pk_classic_hex)
-        assert len(account_info["pq_keys"]) == 1
-        assert account_info["pq_keys"][0]["alg"] == ML_DSA_ALG
-
-        # Attempt to remove the mandatory key - should raise ValidationError
-        with pytest.raises(ValidationError) as exc_info:
-            client.remove_pq_keys(pk_classic_hex, [ML_DSA_ALG])
-
-        # Verify the error message contains the expected text
-        assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in str(
-            exc_info.value
-        )
+    # Verify the error message contains the expected text
+    assert f"Cannot remove the mandatory PQ key ({ML_DSA_ALG})" in str(exc_info.value)
 
 
 def test_add_pq_key_authorization_failures(api_base_url: str, tmp_path):
@@ -652,13 +604,12 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
     - Invalid signature from an existing PQ key.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    # 1. Setup: Create an account with one mandatory and two optional keys using streamlined helper
+    # 1. Setup: Create an account with ML-DSA key and one additional key using streamlined helper
     add_pq_alg_1 = "Falcon-512"
-    add_pq_alg_2 = "Falcon-1024"
 
-    # Create account with additional PQ algorithms using the streamlined helper
+    # Create account with additional PQ algorithm using the streamlined helper
     client, pk_classic_hex = create_test_account_with_keymanager(
-        api_base_url, tmp_path, additional_pq_algs=[add_pq_alg_1, add_pq_alg_2]
+        api_base_url, tmp_path, additional_pq_algs=[add_pq_alg_1]
     )
 
     with client.signing_keys() as keys:
@@ -666,26 +617,20 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
 
         # Get the existing PQ keys from the signing keys
         ml_dsa_key = None
-        falcon_1_key = None
-        falcon_2_key = None
+        falcon_key = None
         for pq_key in keys["pq_sigs"]:
             if pq_key["alg"] == ML_DSA_ALG:
                 ml_dsa_key = pq_key
             elif pq_key["alg"] == add_pq_alg_1:
-                falcon_1_key = pq_key
-            elif pq_key["alg"] == add_pq_alg_2:
-                falcon_2_key = pq_key
+                falcon_key = pq_key
 
         assert ml_dsa_key is not None, "ML-DSA key should be present"
-        assert falcon_1_key is not None, "Falcon-512 key should be present"
-        assert falcon_2_key is not None, "Falcon-1024 key should be present"
+        assert falcon_key is not None, "Falcon-512 key should be present"
 
         pk_ml_dsa_hex = ml_dsa_key["pk_hex"]
         sig_ml_dsa = ml_dsa_key["sig"]
-        pk_add_pq_1_hex = falcon_1_key["pk_hex"]
-        sig_add_pq_1 = falcon_1_key["sig"]
-        pk_add_pq_2_hex = falcon_2_key["pk_hex"]
-        sig_add_pq_2 = falcon_2_key["sig"]
+        pk_add_pq_1_hex = falcon_key["pk_hex"]
+        sig_add_pq_1 = falcon_key["sig"]
 
         # 2. Prepare for a valid "remove" operation
         pk_to_remove = pk_add_pq_1_hex
@@ -710,11 +655,6 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
                 "signature": sig_add_pq_1.sign(correct_remove_msg).hex(),
                 "alg": add_pq_alg_1,
             },
-            {
-                "public_key": pk_add_pq_2_hex,
-                "signature": sig_add_pq_2.sign(correct_remove_msg).hex(),
-                "alg": add_pq_alg_2,
-            },
         ]
 
         # --- Test Cases ---
@@ -736,7 +676,7 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
 
         # Case 2: Missing signature from an existing PQ key
         payload["classic_signature"] = valid_classic_sig
-        payload["pq_signatures"] = [valid_pq_sigs[0], valid_pq_sigs[2]]  # Missing one
+        payload["pq_signatures"] = [valid_pq_sigs[0]]  # Missing one
         response = requests.post(
             f"{api_base_url}/accounts/{pk_classic_hex}/remove-pq-keys", json=payload
         )
@@ -746,11 +686,10 @@ def test_remove_pq_key_authorization_failures(api_base_url: str, tmp_path):
         # Case 3: Invalid signature from an existing PQ key
         invalid_pq_sigs = [
             valid_pq_sigs[0],
-            valid_pq_sigs[1],
             {
-                "public_key": pk_add_pq_2_hex,
-                "signature": sig_add_pq_2.sign(incorrect_msg).hex(),
-                "alg": add_pq_alg_2,
+                "public_key": pk_add_pq_1_hex,
+                "signature": sig_add_pq_1.sign(incorrect_msg).hex(),
+                "alg": add_pq_alg_1,
             },
         ]
         payload["pq_signatures"] = invalid_pq_sigs

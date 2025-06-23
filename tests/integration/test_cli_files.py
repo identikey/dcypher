@@ -26,43 +26,7 @@ import gzip
 import base64
 from lib import idk_message
 from src.lib.api_client import DCypherClient
-
-
-def _setup_api_client_with_auth(test_dir, api_base_url):
-    """Helper function to create authentication keys and API client."""
-    # Generate authentication keys for API
-    classic_sk_api = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    classic_vk_api = classic_sk_api.get_verifying_key()
-    assert classic_vk_api is not None
-    pk_classic_hex = classic_vk_api.to_string("uncompressed").hex()
-    classic_sk_api_path = test_dir / "user_auth_api.sk"
-    with open(classic_sk_api_path, "w") as f:
-        f.write(classic_sk_api.to_string().hex())
-
-    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
-    pq_sk_path = test_dir / "user_auth_pq.sk"
-    with open(pq_sk_path, "wb") as f:
-        f.write(pq_sk)
-
-    # Create auth keys file for API client
-    auth_keys_data = {
-        "classic_sk_path": str(classic_sk_api_path),
-        "pq_keys": [
-            {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}
-        ],
-    }
-    auth_keys_file = test_dir / "auth_keys.json"
-    with open(auth_keys_file, "w") as f:
-        json.dump(auth_keys_data, f)
-
-    # Create API client
-    client = DCypherClient(api_base_url, str(auth_keys_file))
-
-    # Create account
-    pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
-    client.create_account(pk_classic_hex, pq_keys)
-
-    return client, pk_classic_hex, auth_keys_file
+from src.lib.key_manager import KeyManager
 
 
 def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
@@ -78,10 +42,14 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     run_command(["gen-cc", "--output", str(cc_path)])
     run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])
 
-    # b. Setup API client and create account
-    client, pk_classic_hex, auth_keys_file = _setup_api_client_with_auth(
-        test_dir, api_base_url
-    )
+    # b. Setup API client and create account using streamlined helper
+    from tests.integration.test_api import create_test_account_with_keymanager
+
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, test_dir)
+
+    # Get auth keys file path for CLI usage
+    assert client.auth_keys_path is not None, "Auth keys path should not be None"
+    auth_keys_file = Path(client.auth_keys_path)
 
     # c. Signing keys for IDK Message Format
     sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
@@ -168,10 +136,14 @@ def test_cli_download_compressed_verification(cli_test_env, api_base_url):
     run_command(["gen-cc", "--output", str(cc_path)])
     run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])
 
-    # Setup API client and create account
-    client, pk_classic_hex, auth_keys_file = _setup_api_client_with_auth(
-        test_dir, api_base_url
-    )
+    # Setup API client and create account using streamlined helper
+    from tests.integration.test_api import create_test_account_with_keymanager
+
+    client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, test_dir)
+
+    # Get auth keys file path for CLI usage
+    assert client.auth_keys_path is not None, "Auth keys path should not be None"
+    auth_keys_file = Path(client.auth_keys_path)
 
     sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     (test_dir / "idk_signer.sk").write_text(sk_idk_signer.to_string().hex())
