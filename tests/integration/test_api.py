@@ -127,6 +127,11 @@ def _create_test_account(
                 }
             )
 
+    # Create account using API client
+    from src.lib.api_client import DCypherClient
+
+    client = DCypherClient(api_base_url)
+
     # Create account payload
     payload = {
         "public_key": pk_classic_hex,
@@ -141,8 +146,9 @@ def _create_test_account(
     if additional_pq_payload:
         payload["additional_pq_signatures"] = additional_pq_payload
 
+    # Use the API client's _handle_response method for consistent error handling
     response = requests.post(f"{api_base_url}/accounts", json=payload)
-    assert response.status_code == 200, response.text
+    result = client._handle_response(response)
 
     return sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs
 
@@ -150,22 +156,26 @@ def _create_test_account(
 def get_nonce(api_base_url: str):
     """
     Helper function to request a nonce from the /nonce endpoint.
-    Asserts that the request is successful and returns the nonce.
+    Uses the API client for consistent behavior.
     """
-    response = requests.get(f"{api_base_url}/nonce")
-    assert response.status_code == 200
-    return response.json()["nonce"]
+    from src.lib.api_client import DCypherClient
+
+    client = DCypherClient(api_base_url)
+    return client.get_nonce()
 
 
 def test_get_nonce_endpoint(api_base_url: str):
     """
     Tests the /nonce endpoint to ensure it returns a valid, well-formed nonce.
     """
-    response = requests.get(f"{api_base_url}/nonce")
-    assert response.status_code == 200
-    data = response.json()
-    assert "nonce" in data
-    nonce = data["nonce"]
+    from src.lib.api_client import DCypherClient
+
+    # Create API client (no auth needed for getting nonce)
+    client = DCypherClient(api_base_url)
+
+    # Get nonce using API client
+    nonce = client.get_nonce()
+
     # The nonce should be in the format "timestamp:mac"
     parts = nonce.split(":")
     assert len(parts) == 2

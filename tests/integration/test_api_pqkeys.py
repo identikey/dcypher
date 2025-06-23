@@ -736,7 +736,7 @@ def test_remove_pq_key_authorization_failures(api_base_url: str):
         assert "Invalid signature for existing PQ key" in response.text
     finally:
         # Clean up oqs signatures
-        for sig, _ in all_pq_sks.values():
+        for sig in oqs_sigs_to_free:
             sig.free()
 
 
