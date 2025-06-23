@@ -7,7 +7,6 @@ import socket
 import threading
 import uvicorn
 from fastapi.testclient import TestClient
-import requests
 import shutil
 
 from main import (

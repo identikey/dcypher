@@ -103,38 +103,66 @@ def test_concurrent_account_creation(api_base_url: str):
     Tests that multiple concurrent account creation requests are handled
     correctly without race conditions or data corruption.
     """
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+    import tempfile
+    import json
+    from pathlib import Path
+    from lib.pq_auth import generate_pq_keys
 
     def create_single_account(thread_id):
-        """Create a single account in a thread"""
+        """Create a single account in a thread using the API client"""
         try:
+            # Generate keys for this account
             sk_classic = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
             vk_classic = sk_classic.get_verifying_key()
             assert vk_classic is not None
             pk_classic_hex = vk_classic.to_string("uncompressed").hex()
 
-            nonce = get_nonce(api_base_url)
-            with oqs.Signature(ML_DSA_ALG) as sig_ml_dsa:
-                pk_ml_dsa_hex = sig_ml_dsa.generate_keypair().hex()
-                message = f"{pk_classic_hex}:{pk_ml_dsa_hex}:{nonce}".encode("utf-8")
-                sig_classic_hex = sk_classic.sign(
-                    message, hashfunc=hashlib.sha256
-                ).hex()
-                sig_ml_dsa_hex = sig_ml_dsa.sign(message).hex()
+            # Generate PQ keys
+            pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
 
-                response = requests.post(
-                    f"{api_base_url}/accounts",
-                    json={
-                        "public_key": pk_classic_hex,
-                        "signature": sig_classic_hex,
-                        "ml_dsa_signature": {
-                            "public_key": pk_ml_dsa_hex,
-                            "signature": sig_ml_dsa_hex,
+            # Create temporary auth keys file for this thread
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+
+                # Save classic secret key
+                classic_sk_path = temp_path / f"classic_{thread_id}.sk"
+                with open(classic_sk_path, "w") as f:
+                    f.write(sk_classic.to_string().hex())
+
+                # Save PQ secret key
+                pq_sk_path = temp_path / f"pq_{thread_id}.sk"
+                with open(pq_sk_path, "wb") as f:
+                    f.write(pq_sk)
+
+                # Create auth keys file
+                auth_keys_data = {
+                    "classic_sk_path": str(classic_sk_path),
+                    "pq_keys": [
+                        {
+                            "sk_path": str(pq_sk_path),
+                            "pk_hex": pq_pk.hex(),
                             "alg": ML_DSA_ALG,
-                        },
-                        "nonce": nonce,
-                    },
-                )
-                return thread_id, response.status_code, pk_classic_hex
+                        }
+                    ],
+                }
+                auth_keys_file = temp_path / f"auth_keys_{thread_id}.json"
+                with open(auth_keys_file, "w") as f:
+                    json.dump(auth_keys_data, f)
+
+                # Create API client and account
+                client = DCypherClient(api_base_url, str(auth_keys_file))
+                pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
+
+                result = client.create_account(pk_classic_hex, pq_keys)
+                return thread_id, 200, pk_classic_hex
+
+        except DCypherAPIError as e:
+            # Check if it's a 409 (conflict) which might happen in concurrent scenarios
+            if "409" in str(e):
+                return thread_id, 409, str(e)
+            else:
+                return thread_id, 500, str(e)
         except Exception as e:
             return thread_id, 500, str(e)
 
@@ -148,7 +176,7 @@ def test_concurrent_account_creation(api_base_url: str):
     # Verify all accounts were created successfully
     success_count = sum(1 for _, status_code, _ in results if status_code == 200)
     assert success_count == 10, (
-        f"Only {success_count}/10 concurrent accounts created successfully"
+        f"Only {success_count}/10 concurrent accounts created successfully. Results: {results}"
     )
 
     # Verify all accounts are unique
