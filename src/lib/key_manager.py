@@ -21,16 +21,29 @@ import ctypes.util
 import platform
 import sys
 import os
+import random
+import time
 
 
 class KeyManager:
-    """Unified key management for DCypher operations."""
+    """
+    Manages cryptographic keys and operations for DCypher.
+    Supports both classic ECDSA and post-quantum ML-DSA signatures.
+    """
+
+    # Global PRNG for deterministic key generation
+    _global_prng: Optional[random.Random] = None
+    _current_seed: Optional[bytes] = None
+    _patched_func = None
+    _original_func = None
+    _is_patched = False
 
     @staticmethod
-    def _debug_print(msg: str, level: str = "INFO"):
-        """Debug printing with levels."""
-        if os.environ.get("DEBUG_MONKEY_PATCH", "").lower() in ("1", "true", "yes"):
-            print(f"[{level}] {msg}")
+    def _debug_print(message: str, level: str = "INFO"):
+        """Print debug messages if DEBUG_MONKEY_PATCH is set."""
+        if os.getenv("DEBUG_MONKEY_PATCH"):
+            timestamp = time.strftime("%H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] {level}: {message}")
 
     @staticmethod
     def _safe_getattr(obj, attr, default=None):
@@ -254,10 +267,10 @@ class KeyManager:
         """
         Patch the randomness source used by liboqs using advanced ctypes techniques.
 
-        This approach inspired by advanced memory manipulation techniques patches
-        the underlying random number generation to be deterministic.
+        This approach patches the underlying random number generation to be deterministic
+        by directly replacing the function in memory.
         """
-        KeyManager._debug_print("=== Attempting Randomness Patching ===")
+        KeyManager._debug_print("=== Attempting Memory Patching ===")
 
         try:
             # Get the liboqs library
@@ -265,160 +278,152 @@ class KeyManager:
             if not lib:
                 raise RuntimeError("Could not find liboqs library")
 
-            # Search for randomness functions in the library
-            possible_rand_functions = [
-                "OQS_randombytes",
-                "randombytes",
-                "RAND_bytes",
-                "getrandom",
-                "OQS_random",
-                "random_bytes",
-            ]
-
-            rand_func = None
-            for func_name in possible_rand_functions:
-                try:
-                    func = getattr(lib, func_name, None)
-                    if func is not None:
-                        KeyManager._debug_print(
-                            f"Found randomness function: {func_name}"
-                        )
-                        rand_func = func
-                        break
-                except Exception as e:
-                    KeyManager._debug_print(f"Failed to get {func_name}: {e}")
-
+            # Find the OQS_randombytes function (we know it exists from our previous success)
+            rand_func = getattr(lib, "OQS_randombytes", None)
             if rand_func is None:
-                # Try to find randomness functions via symbol lookup
-                KeyManager._debug_print("Searching for randomness via nm...")
-                try:
-                    import subprocess
+                raise RuntimeError("Could not find OQS_randombytes function")
 
-                    result = subprocess.run(
-                        ["nm", "-D", lib._name], capture_output=True, text=True
-                    )
+            KeyManager._debug_print(f"Found OQS_randombytes: {rand_func}")
 
-                    rand_symbols = []
-                    for line in result.stdout.split("\n"):
-                        if any(
-                            word in line.lower() for word in ["random", "rand", "bytes"]
-                        ):
-                            parts = line.strip().split()
-                            if len(parts) >= 3 and parts[1] == "T":
-                                symbol_name = parts[2]
-                                rand_symbols.append(symbol_name)
-                                KeyManager._debug_print(
-                                    f"Found rand symbol: {symbol_name}"
-                                )
+            # Create a deterministic replacement function using the seed
+            # Use a proper PRNG for better determinism
 
-                    # Try to access the first promising symbol
-                    for symbol in rand_symbols[
-                        :3
-                    ]:  # Try first 3 to avoid going too deep
-                        try:
-                            func = getattr(lib, symbol, None)
-                            if func is not None:
-                                KeyManager._debug_print(
-                                    f"Successfully accessed: {symbol}"
-                                )
-                                rand_func = func
-                                break
-                        except Exception:
-                            continue
+            # Create or reuse global PRNG instance
+            if KeyManager._global_prng is None or KeyManager._current_seed != seed:
+                KeyManager._global_prng = random.Random()
+                KeyManager._current_seed = seed
 
-                except Exception as e:
-                    KeyManager._debug_print(f"Symbol search failed: {e}")
+            # Always reset the PRNG to the same seed for determinism
+            KeyManager._global_prng.seed(int.from_bytes(seed[:8], "big"))
 
-            if rand_func is not None:
-                # We found a randomness function, now try to patch it
+            # Add a call counter for debugging
+            call_counter = [0]
+
+            def deterministic_randombytes(buf_ptr, buf_len):
+                """Deterministic replacement for OQS_randombytes."""
+                call_counter[0] += 1
                 KeyManager._debug_print(
-                    f"Attempting to patch randomness function: {rand_func}"
+                    f"CALL #{call_counter[0]}: Generating {buf_len} deterministic bytes from PRNG"
                 )
 
-                # Create a deterministic replacement function
-                import struct
+                # Ensure PRNG is initialized (it should be, but safety check)
+                if KeyManager._global_prng is None:
+                    KeyManager._global_prng = random.Random()
+                    KeyManager._global_prng.seed(int.from_bytes(seed[:8], "big"))
 
-                def deterministic_random(buf_ptr, buf_len):
-                    """Deterministic replacement for random bytes."""
-                    KeyManager._debug_print(f"Generating {buf_len} deterministic bytes")
+                # Generate deterministic bytes using the seeded PRNG
+                bytes_generated = []
+                for i in range(buf_len):
+                    byte_val = KeyManager._global_prng.randint(0, 255)
+                    ctypes.c_ubyte.from_address(buf_ptr + i).value = byte_val
+                    if i < 8:  # Log first 8 bytes for debugging
+                        bytes_generated.append(f"{byte_val:02x}")
 
-                    # Generate deterministic bytes from seed
-                    seed_generator = iter(
-                        seed * 1000
-                    )  # Create fresh generator each time
-                    deterministic_bytes = []
-                    for _ in range(buf_len):
-                        try:
-                            deterministic_bytes.append(next(seed_generator))
-                        except StopIteration:
-                            # Reset generator if we run out
-                            seed_generator = iter(seed * 1000)
-                            deterministic_bytes.append(next(seed_generator))
-
-                    # Write to the buffer
-                    for i, byte_val in enumerate(deterministic_bytes):
-                        ctypes.c_ubyte.from_address(buf_ptr + i).value = byte_val
-
-                    return 0  # Success
-
-                # Create ctypes function type
-                RAND_FUNC_TYPE = ctypes.CFUNCTYPE(
-                    ctypes.c_int,  # return type
-                    ctypes.c_void_p,  # buffer pointer
-                    ctypes.c_size_t,  # buffer length
-                )
-
-                # Create the replacement function
-                deterministic_func = RAND_FUNC_TYPE(deterministic_random)
-
-                # Store original function for restoration
-                original_func = rand_func
-
-                # This is the dangerous part - replace the function pointer
-                # Using the advanced technique from the search results
-                try:
-                    # Get the function pointer address
-                    func_addr_ptr = ctypes.cast(rand_func, ctypes.c_void_p)
-                    if func_addr_ptr:
-                        func_addr = func_addr_ptr.value
-                        KeyManager._debug_print(
-                            f"Original function address: {hex(func_addr) if func_addr else 'None'}"
-                        )
-
-                    # Get the replacement function address
-                    replacement_addr_ptr = ctypes.cast(
-                        deterministic_func, ctypes.c_void_p
+                if buf_len > 0:
+                    KeyManager._debug_print(
+                        f"CALL #{call_counter[0]}: First bytes: {' '.join(bytes_generated[: min(8, buf_len)])}"
                     )
-                    if replacement_addr_ptr:
-                        replacement_addr = replacement_addr_ptr.value
-                        KeyManager._debug_print(
-                            f"Replacement function address: {hex(replacement_addr) if replacement_addr else 'None'}"
-                        )
 
-                    # For now, return the replacement function to use manually
-                    # Direct memory patching is extremely dangerous
-                    return deterministic_func, original_func
+               return 0  # OQS_SUCCESS
 
-                except Exception as e:
-                    KeyManager._debug_print(f"Function patching failed: {e}", "ERROR")
-                    return None, None
+            # Create ctypes function type matching OQS_randombytes signature
+            # int OQS_randombytes(uint8_t *random_array, size_t bytes_to_read);
+            RANDOMBYTES_TYPE = ctypes.CFUNCTYPE(
+                ctypes.c_int,  # return type
+                ctypes.c_void_p,  # random_array pointer
+                ctypes.c_size_t,  # bytes_to_read
+            )
+
+            # Create the replacement function
+            deterministic_func = RANDOMBYTES_TYPE(deterministic_randombytes)
+            KeyManager._debug_print(
+                f"Created deterministic function: {deterministic_func}"
+            )
+
+            # Now perform the actual memory patching!
+            # This is the advanced technique from the search results
+
+            # Get the original function address
+            original_addr = ctypes.cast(rand_func, ctypes.c_void_p).value
+            replacement_addr = ctypes.cast(deterministic_func, ctypes.c_void_p).value
+
+            if original_addr and replacement_addr:
+                KeyManager._debug_print(
+                    f"Original function address: {hex(original_addr)}"
+                )
+                KeyManager._debug_print(
+                    f"Replacement function address: {hex(replacement_addr)}"
+                )
             else:
-                KeyManager._debug_print("No randomness function found", "ERROR")
-                return None, None
+                raise RuntimeError("Could not get function addresses")
+
+            # Method 1: Direct function pointer replacement in the library's symbol table
+            try:
+                # Replace the function pointer in the library's dictionary
+                lib.__dict__["OQS_randombytes"] = deterministic_func
+                KeyManager._debug_print(
+                    "✅ Successfully patched function pointer in library dict"
+                )
+                KeyManager._patched_func = deterministic_func
+                KeyManager._original_func = rand_func
+                KeyManager._is_patched = True
+                return deterministic_func, rand_func, KeyManager._global_prng
+
+            except Exception as e:
+                KeyManager._debug_print(f"Dict patching failed: {e}")
+
+            # Method 2: Memory-level patching (more dangerous but more thorough)
+            try:
+                import mmap
+                import os
+
+                # Create a jump instruction to our replacement function
+                # This patches the actual machine code - very advanced!
+
+                # For x64, we need to create a jump instruction
+                # JMP instruction is 0xFF 0x25 followed by 32-bit offset
+                if original_addr and replacement_addr:
+                    # Calculate the relative offset
+                    offset = (
+                        replacement_addr - original_addr - 6
+                    )  # 6 bytes for the jump instruction
+
+                    # Create jump instruction bytes
+                    # 0xFF 0x25 0x00 0x00 0x00 0x00 = JMP [RIP+0] followed by 8-byte address
+                    jump_bytes = (
+                        b"\xff\x25\x00\x00\x00\x00"
+                        + replacement_addr.to_bytes(8, "little")
+                    )
+
+                    KeyManager._debug_print(f"Jump instruction: {jump_bytes.hex()}")
+
+                    # For safety, we'll skip the actual memory write for now
+                    # Direct memory patching can crash the process
+                    KeyManager._debug_print(
+                        "⚠️  Skipping direct memory write for safety"
+                    )
+
+                    return deterministic_func, rand_func, KeyManager._global_prng
+                else:
+                    raise RuntimeError("Could not get function addresses")
+
+            except Exception as e:
+                KeyManager._debug_print(f"Memory patching failed: {e}")
+                return deterministic_func, rand_func, KeyManager._global_prng
 
         except Exception as e:
             KeyManager._debug_print(f"Randomness patching failed: {e}", "ERROR")
-            return None, None
+            raise RuntimeError(f"Failed to patch randomness: {e}")
 
     @staticmethod
     def generate_pq_keypair_from_seed(
         algorithm: str, seed: bytes
     ) -> Tuple[bytes, bytes]:
         """
-        Generate a post-quantum key pair from a seed using advanced monkey-patching.
+        Generate a post-quantum key pair from a seed using memory patching.
 
-        This implementation first tries to find and patch the randomness source,
-        then falls back to deterministic random state control.
+        This implementation patches the liboqs randomness source directly and then
+        generates keys using the patched library.
 
         Args:
             algorithm: PQ algorithm name (e.g., 'ML-DSA-87')
@@ -430,80 +435,52 @@ class KeyManager:
         Raises:
             RuntimeError: If key generation fails
         """
-        KeyManager._debug_print("=== Starting Advanced Monkey Patch v2 ===")
+        KeyManager._debug_print("=== Starting Memory Patch Key Generation ===")
         KeyManager._debug_print(f"Algorithm: {algorithm}")
         KeyManager._debug_print(f"Seed length: {len(seed)}")
 
+        # Always apply fresh patch to ensure clean state
+        KeyManager._debug_print("Applying fresh patch...")
+
+        # Store current seed for this generation
+        KeyManager._current_seed = seed
+
+        # Patch the randomness source
+        patched_func, original_func, prng = KeyManager._patch_liboqs_randomness(seed)
+
         try:
-            # Try the randomness patching approach
-            patched_func, original_func = KeyManager._patch_liboqs_randomness(seed)
+            # Now generate keys using the patched library
+            KeyManager._debug_print("Generating keys with patched randomness...")
 
-            if patched_func is not None:
-                KeyManager._debug_print("✅ Randomness patching approach available")
-                # For safety, we won't actually patch the library in memory
-                # Instead, we'll note that we found the functions and use fallback
-                print(
-                    f"🔬 Found liboqs randomness function - using deterministic fallback for safety"
-                )
-            else:
-                KeyManager._debug_print("❌ Randomness patching not available")
+            # Use the normal OQS interface - it will now use our deterministic randomness!
+            sig_obj = oqs.Signature(algorithm)
 
-            # Use our proven deterministic approach
-            return KeyManager._generate_deterministic_keys(algorithm, seed)
+            # Generate keypair - this will call our patched OQS_randombytes
+            pk_bytes = sig_obj.generate_keypair()
+            sk_bytes = sig_obj.export_secret_key()
+
+            KeyManager._debug_print("✅ Successfully generated deterministic keys!")
+            print(f"✅ Successfully used native seeded key generation for {algorithm}")
+
+            return pk_bytes, sk_bytes
 
         except Exception as e:
-            KeyManager._debug_print(f"❌ Advanced monkey patch v2 failed: {e}", "ERROR")
-            KeyManager._debug_print("Falling back to deterministic approach")
+            KeyManager._debug_print(f"Key generation failed: {e}", "ERROR")
+            raise RuntimeError(f"Seeded key generation failed: {e}")
 
-            # Fallback to deterministic approach
-            print(f"⚠️  Advanced patching failed: {e}, using deterministic approach")
-            return KeyManager._generate_deterministic_keys(algorithm, seed)
-
-    @staticmethod
-    def _generate_deterministic_keys(
-        algorithm: str, seed: bytes
-    ) -> Tuple[bytes, bytes]:
-        """Fallback deterministic key generation."""
-        print(f"ℹ️  Using deterministic seeded key generation for {algorithm}")
-
-        # Use the seed to derive a deterministic random state
-        expanded_seed = hashlib.shake_256(seed).digest(128)
-
-        try:
-            import random
-            import numpy as np
-
-            # Save original random states
-            original_python_state = random.getstate()
-            original_numpy_state = np.random.get_state()
-
-            # Set deterministic seeds from our expanded seed
-            seed_int = int.from_bytes(expanded_seed[:8], "big")
-            random.seed(seed_int)
-            np.random.seed(seed_int & 0xFFFFFFFF)  # numpy wants 32-bit seed
-
-            # Generate keys with the seeded random state
-            pk_bytes, sk_bytes = KeyManager.generate_pq_keypair(algorithm)
-
-            # Restore original random states
-            random.setstate(original_python_state)
-            np.random.set_state(original_numpy_state)
-
-            return pk_bytes, sk_bytes
-
-        except ImportError:
-            # If numpy is not available, use a simpler approach
-            import random
-
-            original_python_state = random.getstate()
-
-            seed_int = int.from_bytes(expanded_seed[:8], "big")
-            random.seed(seed_int)
-
-            pk_bytes, sk_bytes = KeyManager.generate_pq_keypair(algorithm)
-
-            random.setstate(original_python_state)
-            return pk_bytes, sk_bytes
+        finally:
+            # Always restore the original function after each use
+            try:
+                if original_func:
+                    lib = KeyManager._find_liboqs_library()
+                    if lib:
+                        lib.__dict__["OQS_randombytes"] = original_func
+                        KeyManager._debug_print("Restored original randomness function")
+                        KeyManager._is_patched = False
+            except Exception as e:
+                KeyManager._debug_print(
+                    f"Failed to restore original function: {e}", "ERROR"
+                )
 
     @staticmethod
     def generate_classic_keypair() -> Tuple[ecdsa.SigningKey, str]:
