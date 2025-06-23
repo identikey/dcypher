@@ -676,5 +676,28 @@ def download_chunks(pk_path, auth_keys_path, file_hash, output_path, api_url):
         raise click.ClickException(f"API request failed: {error_text}")
 
 
+@cli.command("supported-algorithms")
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def supported_algorithms(api_url):
+    """Lists supported post-quantum signature algorithms."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url)
+        algorithms = client.get_supported_algorithms()
+
+        click.echo("Supported post-quantum signature algorithms:", err=True)
+        for alg in algorithms:
+            click.echo(f"  - {alg}")
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to get supported algorithms: {e}")
+
+
 if __name__ == "__main__":
     cli()

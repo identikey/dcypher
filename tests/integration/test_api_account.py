@@ -587,15 +587,22 @@ def test_get_accounts_and_account_by_id(api_base_url: str):
     Tests listing all accounts and retrieving individual accounts by public key.
     This test creates multiple accounts to ensure the endpoints handle more than
     one account correctly.
+
+    This test demonstrates using the new DCypherClient for account retrieval.
     """
+    from src.lib.api_client import DCypherClient, ResourceNotFoundError
+
     # 1. Create two distinct accounts
     # Account 1
     _, pk_classic_1_hex, _, oqs_sigs_to_free_1 = _create_test_account(api_base_url)
     # Account 2
     _, pk_classic_2_hex, _, oqs_sigs_to_free_2 = _create_test_account(api_base_url)
 
+    # Initialize API client
+    client = DCypherClient(api_base_url)
+
     try:
-        # 2. Test get all accounts
+        # 2. Test get all accounts (still using direct requests for now)
         response = requests.get(f"{api_base_url}/accounts")
         assert response.status_code == 200
         # Use sets for order-independent comparison
@@ -604,25 +611,24 @@ def test_get_accounts_and_account_by_id(api_base_url: str):
             pk_classic_2_hex,
         }
 
-        # 3. Test get single account (Account 1)
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_1_hex}")
-        assert response.status_code == 200
-        account_details = response.json()
+        # 3. Test get single account (Account 1) - using client
+        account_details = client.get_account(pk_classic_1_hex)
         assert account_details["public_key"] == pk_classic_1_hex
         assert len(account_details["pq_keys"]) == 1
         assert account_details["pq_keys"][0]["alg"] == ML_DSA_ALG
 
-        # 4. Test get single account (Account 2)
-        response = requests.get(f"{api_base_url}/accounts/{pk_classic_2_hex}")
-        assert response.status_code == 200
-        account_details_2 = response.json()
+        # 4. Test get single account (Account 2) - using client
+        account_details_2 = client.get_account(pk_classic_2_hex)
         assert account_details_2["public_key"] == pk_classic_2_hex
         assert len(account_details_2["pq_keys"]) == 1
         assert account_details_2["pq_keys"][0]["alg"] == ML_DSA_ALG
 
-        # 5. Test get non-existent account
-        response = requests.get(f"{api_base_url}/accounts/nonexistentkey")
-        assert response.status_code == 404
+        # 5. Test get non-existent account - using client with exception handling
+        try:
+            client.get_account("nonexistentkey")
+            assert False, "Expected ResourceNotFoundError"
+        except ResourceNotFoundError:
+            pass  # Expected behavior
     finally:
         for sig in oqs_sigs_to_free_1:
             sig.free()

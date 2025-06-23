@@ -134,5 +134,21 @@ def test_encrypt_mutually_exclusive_options(cli_test_env):
     assert "Error: Provide either --data or --input-file, not both." in result.stderr
 
 
+def test_supported_algorithms_command(cli_test_env, api_base_url):
+    """
+    Tests the new supported-algorithms command that uses the DCypherClient.
+    This demonstrates the API client working in the CLI.
+    """
+    run_command, test_dir = cli_test_env
+
+    # Test the new command
+    result = run_command(["supported-algorithms", "--api-url", api_base_url])
+
+    assert result.returncode == 0
+    assert "Supported post-quantum signature algorithms:" in result.stderr
+    # Should list at least ML-DSA-87 which is always supported (printed to stdout)
+    assert "ML-DSA-87" in result.stdout
+
+
 if __name__ == "__main__":
     pytest.main(["-s", __file__])

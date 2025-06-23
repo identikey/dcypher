@@ -5,8 +5,8 @@ default:
     @just --list
 
 # Build the Docker image
-docker-build:
-    docker buildx build --platform linux/amd64 -t dcypher --load .
+docker-built:
+    docker build build --platform linux/amd64 -t dcypher --load .
 
 # Run the Docker container
 docker-run:
