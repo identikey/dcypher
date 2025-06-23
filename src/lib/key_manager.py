@@ -125,10 +125,9 @@ class KeyManager:
     Supports both classic ECDSA and post-quantum ML-DSA signatures.
     """
 
-    # Global PRNG for deterministic key generation
-    _patched_func = None
-    _original_func = None
-    _is_patched = False
+    # Class-level attributes for managing the patch
+    _original_randombytes: Optional[Any] = None
+    _patch_lock = threading.Lock()
 
     # Logger for key management operations
     _logger = logging.getLogger("dcypher.key_manager")
@@ -408,42 +407,44 @@ class KeyManager:
     @staticmethod
     def _patch_oqs_randombytes(seed: bytes):
         """
-        Patch the OQS_randombytes function with a deterministic, thread-safe implementation.
+        Patch oqs_rand.randombytes to use a deterministic generator
+        based on the provided seed, stored in thread-local storage.
         """
-        # Always set the thread-local seed first
-        _thread_local.prng = random.Random(int.from_bytes(seed, "big"))
+        with KeyManager._patch_lock:
+            if KeyManager._original_randombytes is None:
+                KeyManager._original_randombytes = oqs_rand.randombytes
 
-        if KeyManager._is_patched:
-            # Already patched globally, just needed to set the thread-local seed
-            return
+            # Create a new seeded generator for the current thread.
+            _thread_local.prng = random.Random(seed)
 
-        # Store the original function
-        KeyManager._original_func = oqs.native().OQS_randombytes
+            def deterministic_randombytes(n: int) -> bytes:
+                """Generates n pseudo-random bytes from the thread-local generator."""
+                if not hasattr(_thread_local, "prng"):
+                    KeyManager._log(
+                        "warning", "Thread-local PRNG not found, falling back."
+                    )
+                    # Fallback to the original (presumably secure) generator
+                    if KeyManager._original_randombytes:
+                        return KeyManager._original_randombytes(n)
+                    # Ultimate fallback to system random if something went wrong
+                    return secrets.token_bytes(n)
 
-        # Create our deterministic replacement
-        def deterministic_randombytes(buf_ptr, buf_len):
-            """Thread-safe deterministic replacement for OQS_randombytes."""
-            if not hasattr(_thread_local, "prng"):
-                # Fall back to original if no PRNG is set for this thread
-                return KeyManager._original_func(buf_ptr, buf_len)
+                prng = _thread_local.prng
+                return bytes([prng.randint(0, 255) for _ in range(n)])
 
-            # Use the thread-local deterministic PRNG
-            for i in range(buf_len):
-                ctypes.c_ubyte.from_address(
-                    buf_ptr + i
-                ).value = _thread_local.prng.randint(0, 255)
-
-        # Create the ctypes function type
-        RANDOMBYTES_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_size_t)
-        KeyManager._patched_func = RANDOMBYTES_TYPE(deterministic_randombytes)
-
-        # Apply the patch
-        oqs.native().OQS_randombytes = KeyManager._patched_func
-        KeyManager._is_patched = True
+            oqs_rand.randombytes = deterministic_randombytes
+            KeyManager._log("info", "oqs_rand.randombytes has been patched.")
 
     @staticmethod
     def _unpatch_oqs_randombytes():
-        """Remove the thread-local PRNG but leave the global patch in place."""
+        """Restore the original oqs_rand.randombytes function."""
+        with KeyManager._patch_lock:
+            if KeyManager._original_randombytes is not None:
+                oqs_rand.randombytes = KeyManager._original_randombytes
+                # Set to None so it can be re-patched in subsequent tests if needed
+                KeyManager._original_randombytes = None
+                KeyManager._log("info", "oqs_rand.randombytes has been restored.")
+
         if hasattr(_thread_local, "prng"):
             delattr(_thread_local, "prng")
 
@@ -456,10 +457,8 @@ class KeyManager:
         """
         KeyManager._log("info", "Generating deterministic PQ keypair from seed.")
 
+        KeyManager._patch_oqs_randombytes(seed)
         try:
-            # Patch the randomness function with our deterministic version
-            KeyManager._patch_oqs_randombytes(seed)
-
             # Generate the keypair - this will now use our deterministic randomness
             sig = oqs.Signature(algorithm)
             public_key = sig.generate_keypair()
@@ -468,7 +467,7 @@ class KeyManager:
             return public_key, secret_key
 
         finally:
-            # Clean up the thread-local PRNG
+            # IMPORTANT: Always restore the original randomness function
             KeyManager._unpatch_oqs_randombytes()
 
     @staticmethod
