@@ -206,3 +206,26 @@ def _create_test_idk_file(content: bytes) -> tuple[bytes, str]:
     merkle_root = parsed_part["headers"]["MerkleRoot"]
 
     return idk_file_bytes, merkle_root
+
+
+def _create_test_idk_file_parts(content: bytes) -> tuple[list[str], str]:
+    """
+    Creates a valid, spec-compliant IDK message, split into multiple parts.
+
+    Similar to _create_test_idk_file but returns all string parts.
+    """
+    cc = pre.create_crypto_context()
+    keys = pre.generate_keys(cc)
+    sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+    message_parts = idk_message.create_idk_message_parts(
+        data=content,
+        cc=cc,
+        pk=keys.publicKey,
+        signing_key=sk_idk_signer,
+    )
+
+    parsed_part = idk_message.parse_idk_message_part(message_parts[0])
+    merkle_root = parsed_part["headers"]["MerkleRoot"]
+
+    return message_parts, merkle_root

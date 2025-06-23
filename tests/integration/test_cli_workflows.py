@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 import click
 import hashlib
 import socket
+import gzip
 
 
 def test_full_workflow(cli_test_env):
@@ -659,22 +660,32 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             "--api-url",
             api_base_url,
             "--pk-path",
-            pk_classic_hex,
+            "user_pre.pub",
             "--auth-keys-path",
             str(auth_keys_file),
             "--file-path",
-            str(encrypted_file),
+            str(original_file),
+            "--cc-path",
+            str(cc_path),
+            "--signing-key-path",
+            str(sk_idk_path),
         ]
     )
     assert result.returncode == 0, f"Upload failed: {result.stderr}"
-    upload_response = json.loads(result.stdout)
-    file_hash = upload_response["file_hash"]
 
-    # --- 6. Download the file using the CLI ---
-    downloaded_file = test_dir / "downloaded_large.idk"
+    # Extract file hash from the registration message
+    file_hash = ""
+    for line in result.stderr.splitlines():
+        if "Registering file with hash:" in line:
+            file_hash = line.split()[-1]
+            break
+    assert file_hash, "Could not find file hash in upload output."
+
+    # --- 6. Download the chunks using the chunks download command ---
+    downloaded_chunks_file = test_dir / "downloaded_large.chunks.gz"
     result = run_command(
         [
-            "download",
+            "download-chunks",
             "--api-url",
             api_base_url,
             "--pk-path",
@@ -684,13 +695,22 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             "--file-hash",
             file_hash,
             "--output-path",
-            str(downloaded_file),
+            str(downloaded_chunks_file),
         ]
     )
     assert result.returncode == 0, f"Download failed: {result.stderr}"
-    assert downloaded_file.exists()
+    assert downloaded_chunks_file.exists()
 
-    # --- 7. Decrypt the downloaded file and verify ---
+    # --- 7. Reassemble and decrypt the downloaded file and verify ---
+    # a. Decompress the downloaded Gzip file to get concatenated idk parts
+    reassembled_idk_file = test_dir / "reassembled.idk"
+    with (
+        gzip.open(downloaded_chunks_file, "rb") as f_in,
+        open(reassembled_idk_file, "wb") as f_out,
+    ):
+        f_out.write(f_in.read())
+
+    # c. Decrypt the reassembled IDK file
     decrypted_file = test_dir / "decrypted_large.dat"
     result = run_command(
         [
@@ -702,7 +722,7 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             "--verifying-key-path",
             str(vk_idk_path),
             "--ciphertext-path",
-            str(downloaded_file),
+            str(reassembled_idk_file),
             "--output-file",
             str(decrypted_file),
         ]
@@ -714,3 +734,84 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     click.echo(
         "CLI upload/download/decrypt workflow successful with large file!", err=True
     )
+
+    # Test a file small enough to not require chunking beyond the header
+    original_data_small = b"This is a test with just one data chunk."
+    original_file_small = test_dir / "original_single_chunk.dat"
+    original_file_small.write_bytes(original_data_small)
+
+    # Upload the small file
+    result = run_command(
+        [
+            "upload",
+            "--api-url",
+            api_base_url,
+            "--pk-path",
+            "user_pre.pub",
+            "--auth-keys-path",
+            str(auth_keys_file),
+            "--file-path",
+            str(original_file_small),
+            "--cc-path",
+            str(cc_path),
+            "--signing-key-path",
+            str(sk_idk_path),
+        ]
+    )
+    assert result.returncode == 0, f"Upload failed: {result.stderr}"
+    assert "Uploading 0 data chunks..." in result.stderr
+
+    file_hash_small = [
+        line.split()[-1]
+        for line in result.stderr.splitlines()
+        if "Registering file with hash:" in line
+    ][0]
+
+    # Download the chunks (even if there's only one part in the gzip)
+    downloaded_file_small = test_dir / "downloaded_single_chunk.chunks.gz"
+    result = run_command(
+        [
+            "download-chunks",
+            "--api-url",
+            api_base_url,
+            "--pk-path",
+            pk_classic_hex,
+            "--auth-keys-path",
+            str(auth_keys_file),
+            "--file-hash",
+            file_hash_small,
+            "--output-path",
+            str(downloaded_file_small),
+        ]
+    )
+    assert result.returncode == 0, (
+        f"Download failed for small file with hash {file_hash_small}:\n{result.stderr}"
+    )
+    assert downloaded_file_small.exists()
+
+    # Decompress, reassemble, and verify
+    reassembled_small_idk = test_dir / "reassembled_small.idk"
+    with (
+        gzip.open(downloaded_file_small, "rb") as f_in,
+        open(reassembled_small_idk, "wb") as f_out,
+    ):
+        f_out.write(f_in.read())
+
+    decrypted_file_small = test_dir / "decrypted_single_chunk.dat"
+    result = run_command(
+        [
+            "decrypt",
+            "--cc-path",
+            str(cc_path),
+            "--sk-path",
+            "user_pre.sec",
+            "--verifying-key-path",
+            str(vk_idk_path),
+            "--ciphertext-path",
+            str(reassembled_small_idk),
+            "--output-file",
+            str(decrypted_file_small),
+        ]
+    )
+    assert result.returncode == 0, f"Decrypt failed: {result.stderr}"
+    assert decrypted_file_small.read_bytes() == original_data_small

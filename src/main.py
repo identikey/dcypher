@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 # To run this with uvicorn:
@@ -9,8 +11,29 @@ from routers import storage as storage_router
 from routers import system as system_router
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager. This is the recommended way to handle
+    startup and shutdown events in modern FastAPI.
+    """
+    print("Starting background task for expired upload cleanup...")
+    # Create a background task that runs for the entire application lifespan
+    cleanup_task = asyncio.create_task(storage_router.cleanup_expired_pending_uploads())
+
+    yield
+
+    # On shutdown, cancel the background task
+    print("Shutting down background task...")
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        print("Cleanup task successfully cancelled.")
+
+
 def create_app() -> FastAPI:
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
 
     app.include_router(accounts_router.router, tags=["accounts"])
     app.include_router(storage_router.router, tags=["storage"])

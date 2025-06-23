@@ -165,3 +165,13 @@ class Block(BaseModel):
     block_id: str
     chunk_ids: List[str]
     total_chunks: int
+
+
+class RegisterFileRequest(BaseModel):
+    nonce: str
+    file_hash: str
+    filename: str
+    size: int
+    content_type: str
+    classic_signature: str
+    pq_signatures: List[PqSignature]

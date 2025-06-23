@@ -13,6 +13,7 @@ import os
 import json
 import gzip
 import base64
+import io
 from fastapi.testclient import TestClient
 from main import app
 from app_state import state
@@ -78,31 +79,47 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
             f"Generated {len(all_encrypted_chunks)} encrypted chunks across {encryption_runs} encryption runs"
         )
 
-        # 4. Register a dummy file for chunk uploads
-        dummy_content = b"1MB compression test"
-        idk_file_bytes, file_hash = _create_test_idk_file(dummy_content)
+        # 4. Register a file to associate chunks with.
+        # We use the header from the first encryption run to get a valid file_hash.
+        part_one_content = all_encrypted_chunks[0][1]
+        parsed_part = parse_idk_message_part(part_one_content.decode("utf-8"))
+        file_hash = parsed_part["headers"]["MerkleRoot"]
+        total_size = len(large_file_content)
+
         register_nonce = get_nonce()
-        register_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
-        client.post(
-            f"/storage/{pk_classic_hex}",
-            files={"file": ("compression_test.txt", idk_file_bytes, "text/plain")},
+        register_msg = (
+            f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        )
+        classic_sig_register = sk_classic.sign(
+            register_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_register = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(register_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        register_response = client.post(
+            f"/storage/{pk_classic_hex}/register",
+            files={
+                "idk_part_one": (
+                    "part1.idk",
+                    part_one_content,
+                    "application/octet-stream",
+                )
+            },
             data={
                 "nonce": register_nonce,
-                "file_hash": file_hash,
-                "classic_signature": sk_classic.sign(
-                    register_msg, hashfunc=hashlib.sha256
-                ).hex(),
-                "pq_signatures": json.dumps(
-                    [
-                        {
-                            "public_key": pk_ml_dsa_hex,
-                            "signature": sig_ml_dsa.sign(register_msg).hex(),
-                            "alg": ML_DSA_ALG,
-                        }
-                    ]
-                ),
+                "filename": "1mb_compression_test.bin",
+                "content_type": "application/octet-stream",
+                "total_size": str(total_size),
+                "classic_signature": classic_sig_register,
+                "pq_signatures": json.dumps([pq_sig_register]),
             },
         )
+        assert register_response.status_code == 201, register_response.text
+        # The first chunk (header) is now uploaded, so we can remove it from our list.
+        # Note: The test will re-upload it, which is fine. The goal is to test
+        # compression on many chunks, and the server handles duplicate chunks.
 
         # 5. Upload all encrypted chunks with compression
         total_original_size = 0
@@ -198,6 +215,8 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
 
         # 9. Verify chunk store metadata
         assert file_hash in state.chunk_store
+        # The first chunk is uploaded during registration, then all chunks are uploaded again.
+        # The number of unique chunks should be equal to the total chunks generated.
         assert len(state.chunk_store[file_hash]) == total_chunks
 
         # 10. Spot check chunk metadata
@@ -220,9 +239,9 @@ def test_1mb_file_multiple_encryption_compression(storage_paths):
             sig.free()
 
 
-def test_upload_and_download_large_file(storage_paths):
+def test_upload_and_download_large_file_chunked(storage_paths):
     """
-    Tests uploading and downloading a large (1MB) file.
+    Tests uploading and downloading a large (1MB) file using the chunked method.
     """
     # 1. Create an account
     sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
@@ -230,41 +249,149 @@ def test_upload_and_download_large_file(storage_paths):
         pk_ml_dsa_hex = next(iter(all_pq_sks))
         sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
 
-        # 2. Create a large file
+        # 2. Create a large file and its IDK message parts
         large_file_content = os.urandom(1024 * 1024)  # 1MB
-        idk_file_bytes, file_hash = _create_test_idk_file(large_file_content)
+        file_size = len(large_file_content)
 
-        # 3. Upload the file
-        upload_nonce = get_nonce()
-        upload_msg = f"UPLOAD:{pk_classic_hex}:{file_hash}:{upload_nonce}".encode()
-        classic_sig_upload = sk_classic.sign(upload_msg, hashfunc=hashlib.sha256).hex()
-        pq_sig_upload = {
+        # Use a dummy signing key for the IDK message itself, as it's not verified here
+        cc = pre.create_crypto_context()
+        keys = pre.generate_keys(cc)
+        sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+        message_parts = create_idk_message_parts(
+            data=large_file_content,
+            cc=cc,
+            pk=keys.publicKey,
+            signing_key=sk_idk_signer,
+        )
+        part_one_content = message_parts[0]
+        data_chunks = message_parts[1:]
+        total_chunks = len(message_parts)
+
+        parsed_part = parse_idk_message_part(part_one_content)
+        file_hash = parsed_part["headers"]["MerkleRoot"]
+
+        # 3. Register the file
+        register_nonce = get_nonce()
+        register_msg = (
+            f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        )
+        classic_sig_register = sk_classic.sign(
+            register_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_register = {
             "public_key": pk_ml_dsa_hex,
-            "signature": sig_ml_dsa.sign(upload_msg).hex(),
+            "signature": sig_ml_dsa.sign(register_msg).hex(),
             "alg": ML_DSA_ALG,
         }
-        upload_response = client.post(
-            f"/storage/{pk_classic_hex}",
+        register_response = client.post(
+            f"/storage/{pk_classic_hex}/register",
             files={
-                "file": (
-                    "large_file.bin",
-                    idk_file_bytes,
+                "idk_part_one": (
+                    "part1.idk",
+                    part_one_content,
                     "application/octet-stream",
                 )
             },
             data={
-                "nonce": upload_nonce,
-                "file_hash": file_hash,
-                "classic_signature": classic_sig_upload,
-                "pq_signatures": json.dumps([pq_sig_upload]),
+                "nonce": register_nonce,
+                "filename": "large_file.bin",
+                "content_type": "application/octet-stream",
+                "total_size": str(file_size),
+                "classic_signature": classic_sig_register,
+                "pq_signatures": json.dumps([pq_sig_register]),
             },
         )
-        assert upload_response.status_code == 201, upload_response.text
+        assert register_response.status_code == 201, register_response.text
 
-        # 4. Download the file
+        # 4. Upload the remaining chunks
+        for i, chunk_content_str in enumerate(data_chunks):
+            chunk_index = i + 1
+            chunk_content_bytes = chunk_content_str.encode("utf-8")
+            chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
+
+            upload_nonce = get_nonce()
+            upload_msg = (
+                f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+                f"{chunk_index}:{total_chunks}:{chunk_hash}:{upload_nonce}"
+            ).encode()
+            classic_sig_upload = sk_classic.sign(
+                upload_msg, hashfunc=hashlib.sha256
+            ).hex()
+            pq_sig_upload = {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(upload_msg).hex(),
+                "alg": ML_DSA_ALG,
+            }
+
+            print(
+                f"Uploading chunk {chunk_index}/{total_chunks}, hash: {chunk_hash[:12]}..."
+            )
+            upload_response = client.post(
+                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+                files={"file": (chunk_hash, chunk_content_bytes)},
+                data={
+                    "nonce": upload_nonce,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": str(chunk_index),
+                    "total_chunks": str(total_chunks),
+                    "compressed": "false",
+                    "classic_signature": classic_sig_upload,
+                    "pq_signatures": json.dumps([pq_sig_upload]),
+                },
+            )
+            assert upload_response.status_code == 200, upload_response.text
+            print(f"✓ Chunk {chunk_index} uploaded successfully")
+
+        # Debug: Check the concatenated file on disk
+        import config
+
+        concatenated_file_path = os.path.join(
+            config.BLOCK_STORE_ROOT, f"{file_hash}.chunks.gz"
+        )
+        if os.path.exists(concatenated_file_path):
+            file_size = os.path.getsize(concatenated_file_path)
+            print(f"Concatenated file exists on disk: {file_size} bytes")
+
+            # Examine the raw bytes to understand the structure
+            with open(concatenated_file_path, "rb") as f:
+                raw_data = f.read()
+
+            print(f"Raw file size: {len(raw_data)} bytes")
+            print(f"First 50 bytes: {raw_data[:50].hex()}")
+            print(f"Gzip magic numbers found at positions:", end=" ")
+
+            # Look for gzip magic numbers (1f 8b)
+            magic_positions = []
+            for i in range(len(raw_data) - 1):
+                if raw_data[i : i + 2] == b"\x1f\x8b":
+                    magic_positions.append(i)
+
+            print(magic_positions)
+            print(f"Found {len(magic_positions)} gzip magic numbers")
+
+            # Try to read it directly and count gzip members
+            disk_stream = io.BytesIO(raw_data)
+            disk_member_count = 0
+            while disk_stream.tell() < len(raw_data):
+                try:
+                    with gzip.GzipFile(fileobj=disk_stream) as gz:
+                        content = gz.read().decode("utf-8")
+                        print(
+                            f"Disk member {disk_member_count}: {len(content)} chars, starts with: {repr(content[:50])}"
+                        )
+                        disk_member_count += 1
+                except Exception as e:
+                    print(f"Error reading disk member {disk_member_count}: {e}")
+                    break
+            print(f"Found {disk_member_count} gzip members on disk")
+        else:
+            print("Concatenated file does not exist on disk!")
+
+        # 5. Download the reconstructed file (via concatenated chunks endpoint)
         download_nonce = get_nonce()
         download_msg = (
-            f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+            f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
         )
         classic_sig_download = sk_classic.sign(
             download_msg, hashfunc=hashlib.sha256
@@ -280,13 +407,226 @@ def test_upload_and_download_large_file(storage_paths):
             "pq_signatures": [pq_sig_download],
         }
         download_response = client.post(
-            f"/storage/{pk_classic_hex}/{file_hash}/download",
+            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
             json=download_payload,
         )
 
-        # 5. Assert success and verify content
+        # 6. Assert success and verify content
         assert download_response.status_code == 200, download_response.text
-        assert download_response.content == idk_file_bytes
+
+        # Reconstruct the original full IDK message from the server's gzipped chunks
+        reconstructed_parts = []
+        data_stream = io.BytesIO(download_response.content)
+        gzip_member_count = 0
+
+        # Properly parse concatenated gzip stream
+        while data_stream.tell() < len(download_response.content):
+            try:
+                # Read one complete gzip member
+                with gzip.GzipFile(fileobj=data_stream) as gz:
+                    decompressed_content = gz.read().decode("utf-8")
+                    reconstructed_parts.append(decompressed_content)
+                    gzip_member_count += 1
+            except Exception as e:
+                print(f"Error reading gzip member {gzip_member_count}: {e}")
+                break
+
+        print(f"Successfully decompressed {gzip_member_count} gzip members")
+        print(f"Expected: {total_chunks} IDK message parts (concatenated)")
+
+        # The new streaming implementation concatenates all IDK parts into a single gzip member,
+        # filtering out the newline separators, so we expect exactly 1 gzip member
+        assert gzip_member_count == 1, (
+            f"Expected 1 concatenated gzip member, got {gzip_member_count}"
+        )
+
+        # Concatenate all reconstructed parts to form the complete IDK message
+        reconstructed_idk_message = "".join(reconstructed_parts)
+        original_idk_message = "\n".join(message_parts)
+
+        # Verify the reconstructed message matches the original
+        assert reconstructed_idk_message == original_idk_message, (
+            "Reconstructed IDK message doesn't match original"
+        )
+
+        print("✓ Concatenated file format and reconstruction test passed!")
+
+    finally:
+        # Clean up oqs signatures
+        for sig in oqs_sigs_to_free:
+            sig.free()
+
+
+def test_concatenated_file_format_and_reconstruction(storage_paths):
+    """
+    Tests that the concatenated gzip file format correctly preserves newline separators
+    between IDK message parts and that reconstruction works properly.
+    """
+    # 1. Create an account
+    sk_classic, pk_classic_hex, all_pq_sks, oqs_sigs_to_free = _create_test_account()
+    try:
+        pk_ml_dsa_hex = next(iter(all_pq_sks))
+        sig_ml_dsa, _ = all_pq_sks[pk_ml_dsa_hex]
+
+        # 2. Create a small file that will generate exactly 3 IDK message parts
+        # This gives us a predictable test case
+        small_file_content = os.urandom(
+            pre.get_slot_count(pre.create_crypto_context()) * 4 + 100
+        )
+
+        cc = pre.create_crypto_context()
+        keys = pre.generate_keys(cc)
+        sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+        message_parts = create_idk_message_parts(
+            data=small_file_content,
+            cc=cc,
+            pk=keys.publicKey,
+            signing_key=sk_idk_signer,
+        )
+
+        # Ensure we have multiple parts for this test
+        assert len(message_parts) >= 3, (
+            f"Expected at least 3 parts, got {len(message_parts)}"
+        )
+
+        part_one_content = message_parts[0]
+        data_chunks = message_parts[1:]
+        total_chunks = len(message_parts)
+
+        parsed_part = parse_idk_message_part(part_one_content)
+        file_hash = parsed_part["headers"]["MerkleRoot"]
+
+        # 3. Register the file
+        register_nonce = get_nonce()
+        register_msg = (
+            f"REGISTER:{pk_classic_hex}:{file_hash}:{register_nonce}".encode()
+        )
+        classic_sig_register = sk_classic.sign(
+            register_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_register = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(register_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+
+        register_response = client.post(
+            f"/storage/{pk_classic_hex}/register",
+            files={
+                "idk_part_one": (
+                    "part1.idk",
+                    part_one_content,
+                    "application/octet-stream",
+                )
+            },
+            data={
+                "nonce": register_nonce,
+                "filename": "test_format.bin",
+                "content_type": "application/octet-stream",
+                "total_size": str(len(small_file_content)),
+                "classic_signature": classic_sig_register,
+                "pq_signatures": json.dumps([pq_sig_register]),
+            },
+        )
+        assert register_response.status_code == 201, register_response.text
+
+        # 4. Upload the remaining chunks
+        for i, chunk_content_str in enumerate(data_chunks):
+            chunk_index = i + 1
+            chunk_content_bytes = chunk_content_str.encode("utf-8")
+            chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
+
+            upload_nonce = get_nonce()
+            upload_msg = (
+                f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+                f"{chunk_index}:{total_chunks}:{chunk_hash}:{upload_nonce}"
+            ).encode()
+            classic_sig_upload = sk_classic.sign(
+                upload_msg, hashfunc=hashlib.sha256
+            ).hex()
+            pq_sig_upload = {
+                "public_key": pk_ml_dsa_hex,
+                "signature": sig_ml_dsa.sign(upload_msg).hex(),
+                "alg": ML_DSA_ALG,
+            }
+
+            upload_response = client.post(
+                f"/storage/{pk_classic_hex}/{file_hash}/chunks",
+                files={"file": (chunk_hash, chunk_content_bytes)},
+                data={
+                    "nonce": upload_nonce,
+                    "chunk_hash": chunk_hash,
+                    "chunk_index": str(chunk_index),
+                    "total_chunks": str(total_chunks),
+                    "compressed": "false",
+                    "classic_signature": classic_sig_upload,
+                    "pq_signatures": json.dumps([pq_sig_upload]),
+                },
+            )
+            assert upload_response.status_code == 200, upload_response.text
+
+        # 5. Download the concatenated chunks
+        download_nonce = get_nonce()
+        download_msg = (
+            f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{download_nonce}".encode()
+        )
+        classic_sig_download = sk_classic.sign(
+            download_msg, hashfunc=hashlib.sha256
+        ).hex()
+        pq_sig_download = {
+            "public_key": pk_ml_dsa_hex,
+            "signature": sig_ml_dsa.sign(download_msg).hex(),
+            "alg": ML_DSA_ALG,
+        }
+        download_payload = {
+            "nonce": download_nonce,
+            "classic_signature": classic_sig_download,
+            "pq_signatures": [pq_sig_download],
+        }
+        download_response = client.post(
+            f"/storage/{pk_classic_hex}/{file_hash}/chunks/download",
+            json=download_payload,
+        )
+        assert download_response.status_code == 200, download_response.text
+
+        # 6. Test the specific reconstruction logic
+        reconstructed_parts = []
+        data_stream = io.BytesIO(download_response.content)
+        gzip_member_count = 0
+
+        # Properly parse concatenated gzip stream
+        while data_stream.tell() < len(download_response.content):
+            try:
+                # Read one complete gzip member
+                with gzip.GzipFile(fileobj=data_stream) as gz:
+                    decompressed_content = gz.read().decode("utf-8")
+                    reconstructed_parts.append(decompressed_content)
+                    gzip_member_count += 1
+            except Exception as e:
+                print(f"Error reading gzip member {gzip_member_count}: {e}")
+                break
+
+        print(f"Successfully decompressed {gzip_member_count} gzip members")
+        print(f"Expected: {total_chunks} IDK message parts (concatenated)")
+
+        # The new streaming implementation concatenates all IDK parts into a single gzip member,
+        # filtering out the newline separators, so we expect exactly 1 gzip member
+        assert gzip_member_count == 1, (
+            f"Expected 1 concatenated gzip member, got {gzip_member_count}"
+        )
+
+        # Concatenate all reconstructed parts to form the complete IDK message
+        reconstructed_idk_message = "".join(reconstructed_parts)
+        original_idk_message = "\n".join(message_parts)
+
+        # Verify the reconstructed message matches the original
+        assert reconstructed_idk_message == original_idk_message, (
+            "Reconstructed IDK message doesn't match original"
+        )
+
+        print("✓ Concatenated file format and reconstruction test passed!")
+
     finally:
         # Clean up oqs signatures
         for sig in oqs_sigs_to_free:

@@ -297,38 +297,58 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
 @click.option("--pk-path", type=str, required=True)
 @click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
 @click.option("--file-path", type=click.Path(exists=True), required=True)
+@click.option("--cc-path", default="cc.json", help="Path to the crypto context file.")
+@click.option(
+    "--signing-key-path",
+    help="Path to the ECDSA private key for signing message headers.",
+    required=True,
+)
 @click.option(
     "--api-url",
     envvar="DCY_API_URL",
-    default="https://api.dcypher.io",
+    default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def upload(pk_path, auth_keys_path, file_path, api_url):
-    """Uploads a file to the remote storage API."""
+def upload(pk_path, auth_keys_path, file_path, cc_path, signing_key_path, api_url):
+    """
+    Encrypts and uploads a file to the remote storage API using a chunked method.
+    """
     from lib import idk_message
     from lib.auth import sign_message_with_keys
 
-    with open(file_path, "rb") as f:
-        file_content = f.read()
-
+    # --- 1. Prepare for encryption and upload ---
+    click.echo("Preparing keys and crypto context...", err=True)
     try:
-        parsed_part = idk_message.parse_idk_message_part(file_content.decode("utf-8"))
-        file_hash = parsed_part["headers"]["MerkleRoot"]
-    except Exception as e:
-        raise click.ClickException(f"Error parsing IDK message to get MerkleRoot: {e}")
+        # Load crypto context
+        with open(cc_path, "r") as f:
+            cc_data = json.load(f)
+        cc = pre.deserialize_cc(cc_data["cc"])
 
-    click.echo(f"Starting upload for file hash: {file_hash}...", err=True)
-    nonce = get_nonce(api_url)
+        # Load public key for encryption
+        with open(pk_path, "r") as f:
+            pk_data = json.load(f)
+        pk_enc = pre.deserialize_public_key(base64.b64decode(pk_data["key"]))
 
-    try:
+        # Load signing key for IDK message headers
+        with open(signing_key_path, "r") as f:
+            sk_hex = f.read()
+            sk_sign_idk = ecdsa.SigningKey.from_string(
+                bytes.fromhex(sk_hex), curve=ecdsa.SECP256k1
+            )
+
+        # Load authentication keys
         auth_keys_data = json.loads(Path(auth_keys_path).read_text())
-        classic_sk = ecdsa.SigningKey.from_string(
+        classic_sk_auth = ecdsa.SigningKey.from_string(
             bytes.fromhex(Path(auth_keys_data["classic_sk_path"]).read_text()),
             curve=ecdsa.SECP256k1,
         )
-        pq_keys = []
+        classic_vk_auth = classic_sk_auth.get_verifying_key()
+        assert classic_vk_auth is not None
+        pk_classic_hex = classic_vk_auth.to_string("uncompressed").hex()
+
+        pq_keys_auth = []
         for pq_key_info in auth_keys_data["pq_keys"]:
-            pq_keys.append(
+            pq_keys_auth.append(
                 {
                     "sk": Path(pq_key_info["sk_path"]).read_bytes(),
                     "pk_hex": pq_key_info["pk_hex"],
@@ -336,29 +356,113 @@ def upload(pk_path, auth_keys_path, file_path, api_url):
                 }
             )
     except Exception as e:
-        raise click.ClickException(f"Error loading auth keys: {e}")
+        raise click.ClickException(f"Error loading keys or crypto context: {e}")
 
-    message = f"UPLOAD:{pk_path}:{file_hash}:{nonce}".encode("utf-8")
+    # --- 2. Create IDK message parts in memory ---
+    click.echo("Encrypting file and creating IDK message parts...", err=True)
+    with open(file_path, "rb") as f:
+        file_content_bytes = f.read()
+
+    message_parts = idk_message.create_idk_message_parts(
+        data=file_content_bytes,
+        cc=cc,
+        pk=pk_enc,
+        signing_key=sk_sign_idk,
+    )
+    part_one_content = message_parts[0]
+    data_chunks = message_parts[1:]
+    total_chunks = len(message_parts)  # Part one + data chunks
+
+    # Extract MerkleRoot which is the file_hash
+    try:
+        parsed_part = idk_message.parse_idk_message_part(part_one_content)
+        file_hash = parsed_part["headers"]["MerkleRoot"]
+    except Exception as e:
+        raise click.ClickException(f"Error parsing IDK message header: {e}")
+
+    # --- 3. Register the file with the first part ---
+    click.echo(f"Registering file with hash: {file_hash}", err=True)
+    nonce = get_nonce(api_url)
+    message_to_sign = f"REGISTER:{pk_classic_hex}:{file_hash}:{nonce}".encode("utf-8")
     signatures = sign_message_with_keys(
-        message, {"classic_sk": classic_sk, "pq_keys": pq_keys}
+        message_to_sign,
+        {"classic_sk": classic_sk_auth, "pq_keys": pq_keys_auth},
     )
 
-    url = f"{api_url}/storage/{pk_path}"
+    url = f"{api_url}/storage/{pk_classic_hex}/register"
     try:
-        files = {"file": (file_hash, file_content, "application/octet-stream")}
+        files = {
+            "idk_part_one": (
+                f"{file_hash}.part1.idk",
+                part_one_content,
+                "application/octet-stream",
+            )
+        }
+        file_stat = os.stat(file_path)
         data = {
             "nonce": nonce,
-            "file_hash": file_hash,
+            "filename": Path(file_path).name,
+            "content_type": "application/octet-stream",  # Or be more specific
+            "total_size": file_stat.st_size,
             "classic_signature": signatures["classic_signature"],
             "pq_signatures": json.dumps(signatures["pq_signatures"]),
         }
         response = requests.post(url, files=files, data=data)
         response.raise_for_status()
-        click.echo("Upload successful.", err=True)
-        click.echo(json.dumps(response.json(), indent=2))
+        click.echo("File registered, first chunk uploaded.", err=True)
     except requests.exceptions.RequestException as e:
         error_text = e.response.text if e.response else str(e)
-        raise click.ClickException(f"API request failed: {error_text}")
+        raise click.ClickException(
+            f"API request failed during registration: {error_text}"
+        )
+
+    # --- 4. Upload remaining data chunks ---
+    click.echo(f"Uploading {len(data_chunks)} data chunks...", err=True)
+    for i, chunk_content in enumerate(data_chunks):
+        chunk_index = i + 1  # Index 0 was the header
+        chunk_content_bytes = chunk_content.encode("utf-8")
+
+        # Compress the chunk before uploading
+        compressed_chunk = gzip.compress(chunk_content_bytes, compresslevel=9)
+        chunk_hash = hashlib.blake2b(chunk_content_bytes).hexdigest()
+
+        click.echo(
+            f"Uploading chunk {chunk_index}/{total_chunks - 1} (hash: {chunk_hash[:12]}...)",
+            err=True,
+        )
+
+        nonce = get_nonce(api_url)
+        message_to_sign = (
+            f"UPLOAD-CHUNK:{pk_classic_hex}:{file_hash}:"
+            f"{chunk_index}:{total_chunks}:{chunk_hash}:{nonce}"
+        ).encode("utf-8")
+        signatures = sign_message_with_keys(
+            message_to_sign,
+            {"classic_sk": classic_sk_auth, "pq_keys": pq_keys_auth},
+        )
+
+        url = f"{api_url}/storage/{pk_classic_hex}/{file_hash}/chunks"
+        files = {"file": (chunk_hash, compressed_chunk, "application/gzip")}
+        data = {
+            "nonce": nonce,
+            "chunk_hash": chunk_hash,
+            "chunk_index": chunk_index,
+            "total_chunks": total_chunks,
+            "compressed": True,
+            "classic_signature": signatures["classic_signature"],
+            "pq_signatures": json.dumps(signatures["pq_signatures"]),
+        }
+
+        try:
+            response = requests.post(url, files=files, data=data)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            error_text = e.response.text if e.response else str(e)
+            raise click.ClickException(
+                f"API request failed for chunk {chunk_index}: {error_text}"
+            )
+
+    click.echo("All chunks uploaded successfully.", err=True)
 
 
 @cli.command("download")
@@ -396,6 +500,9 @@ def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_ur
             bytes.fromhex(Path(auth_keys_data["classic_sk_path"]).read_text()),
             curve=ecdsa.SECP256k1,
         )
+        classic_vk = classic_sk.get_verifying_key()
+        assert classic_vk is not None
+        pk_classic_hex = classic_vk.to_string("uncompressed").hex()
         pq_keys = []
         for pq_key_info in auth_keys_data["pq_keys"]:
             pq_keys.append(
@@ -408,12 +515,12 @@ def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_ur
     except Exception as e:
         raise click.ClickException(f"Error loading auth keys: {e}")
 
-    message = f"DOWNLOAD:{pk_path}:{file_hash}:{nonce}".encode("utf-8")
+    message = f"DOWNLOAD:{pk_classic_hex}:{file_hash}:{nonce}".encode("utf-8")
     signatures = sign_message_with_keys(
         message, {"classic_sk": classic_sk, "pq_keys": pq_keys}
     )
 
-    url = f"{api_url}/storage/{pk_path}/{file_hash}/download"
+    url = f"{api_url}/storage/{pk_classic_hex}/{file_hash}/download"
     payload = {
         "nonce": nonce,
         "classic_signature": signatures["classic_signature"],
@@ -486,6 +593,83 @@ def download(pk_path, auth_keys_path, file_hash, output_path, compressed, api_ur
                 f"File '{file_hash}' downloaded and verified successfully to '{output_path}'.",
                 err=True,
             )
+
+    except requests.exceptions.RequestException as e:
+        error_text = e.response.text if e.response else str(e)
+        raise click.ClickException(f"API request failed: {error_text}")
+
+
+@cli.command("download-chunks")
+@click.option("--pk-path", type=str, required=True)
+@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option("--file-hash", type=str, required=True)
+@click.option(
+    "--output-path",
+    type=click.Path(dir_okay=False, writable=True),
+    required=True,
+    help="Path to save the downloaded concatenated chunks file.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def download_chunks(pk_path, auth_keys_path, file_hash, output_path, api_url):
+    """Downloads all chunks for a file as a single concatenated gzip file."""
+    from lib.auth import sign_message_with_keys
+
+    click.echo(
+        f"Starting download for concatenated chunks of file hash: {file_hash}...",
+        err=True,
+    )
+    nonce = get_nonce(api_url)
+
+    try:
+        auth_keys_data = json.loads(Path(auth_keys_path).read_text())
+        classic_sk = ecdsa.SigningKey.from_string(
+            bytes.fromhex(Path(auth_keys_data["classic_sk_path"]).read_text()),
+            curve=ecdsa.SECP256k1,
+        )
+        classic_vk = classic_sk.get_verifying_key()
+        assert classic_vk is not None
+        pk_classic_hex = classic_vk.to_string("uncompressed").hex()
+        pq_keys = []
+        for pq_key_info in auth_keys_data["pq_keys"]:
+            pq_keys.append(
+                {
+                    "sk": Path(pq_key_info["sk_path"]).read_bytes(),
+                    "pk_hex": pq_key_info["pk_hex"],
+                    "alg": pq_key_info["alg"],
+                }
+            )
+    except Exception as e:
+        raise click.ClickException(f"Error loading auth keys: {e}")
+
+    message = f"DOWNLOAD-CHUNKS:{pk_classic_hex}:{file_hash}:{nonce}".encode("utf-8")
+    signatures = sign_message_with_keys(
+        message, {"classic_sk": classic_sk, "pq_keys": pq_keys}
+    )
+
+    url = f"{api_url}/storage/{pk_classic_hex}/{file_hash}/chunks/download"
+    payload = {
+        "nonce": nonce,
+        "classic_signature": signatures["classic_signature"],
+        "pq_signatures": signatures["pq_signatures"],
+    }
+
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+
+        # Save the downloaded content
+        with open(output_path, "wb") as f:
+            f.write(response.content)
+
+        click.echo(
+            f"Concatenated chunks for '{file_hash}' downloaded successfully to '{output_path}'.",
+            err=True,
+        )
 
     except requests.exceptions.RequestException as e:
         error_text = e.response.text if e.response else str(e)
