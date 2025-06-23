@@ -324,7 +324,7 @@ class KeyManager:
                         f"CALL #{call_counter[0]}: First bytes: {' '.join(bytes_generated[: min(8, buf_len)])}"
                     )
 
-               return 0  # OQS_SUCCESS
+                return 0  # OQS_SUCCESS
 
             # Create ctypes function type matching OQS_randombytes signature
             # int OQS_randombytes(uint8_t *random_array, size_t bytes_to_read);
@@ -683,8 +683,8 @@ class KeyManager:
         """
         Create a complete identity file with all necessary keys.
 
-        This method generates a mnemonic phrase and attempts to derive all keys
-        deterministically from it, falling back to storing keys directly if needed.
+        This method generates a mnemonic phrase and derives all keys
+        deterministically from it using advanced memory patching techniques.
 
         Args:
             identity_name: Name for the new identity
@@ -693,6 +693,9 @@ class KeyManager:
 
         Returns:
             tuple: (mnemonic_phrase, identity_file_path)
+
+        Raises:
+            RuntimeError: If seeded key generation fails
         """
         identity_path = key_dir / f"{identity_name}.json"
         if identity_path.exists() and not overwrite:
@@ -710,57 +713,33 @@ class KeyManager:
         # 3. Generate auth keys
         sk_classic, pk_classic_hex = KeyManager.generate_classic_keypair()
 
-        try:
-            # Try the seeded approach first
-            # Derive PQ seed from master seed using a domain separator
-            pq_seed = hashlib.sha256(master_seed + b"PQ_KEY_DERIVATION").digest()
-            pq_pk, pq_sk = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
+        # 4. Use seeded approach for PQ keys (no fallback)
+        # Derive PQ seed from master seed using a domain separator
+        pq_seed = hashlib.sha256(master_seed + b"PQ_KEY_DERIVATION").digest()
+        pq_pk, pq_sk = KeyManager.generate_pq_keypair_from_seed(ML_DSA_ALG, pq_seed)
 
-            # Store derivation info for recovery
-            identity_data = {
-                "mnemonic": str(mnemonic),
-                "version": "seeded",  # Indicates this uses deterministic derivation
-                "derivable": True,  # Indicates keys can be re-derived from mnemonic
-                "auth_keys": {
-                    "classic": {
-                        "sk_hex": sk_classic.to_string().hex(),
-                        "pk_hex": pk_classic_hex,
-                    },
-                    "pq": [
-                        {
-                            "alg": ML_DSA_ALG,
-                            "sk_hex": pq_sk.hex(),
-                            "pk_hex": pq_pk.hex(),
-                            "derivable": True,  # Indicates this key can be re-derived from mnemonic
-                        }
-                    ],
+        # Store derivation info for recovery
+        identity_data = {
+            "mnemonic": str(mnemonic),
+            "version": "seeded",  # Always seeded - no fallback
+            "derivable": True,  # Always derivable from mnemonic
+            "auth_keys": {
+                "classic": {
+                    "sk_hex": sk_classic.to_string().hex(),
+                    "pk_hex": pk_classic_hex,
                 },
-            }
-        except RuntimeError:
-            # Fall back to store-and-derive approach
-            pq_pk, pq_sk = KeyManager.generate_pq_keypair(ML_DSA_ALG)
+                "pq": [
+                    {
+                        "alg": ML_DSA_ALG,
+                        "sk_hex": pq_sk.hex(),
+                        "pk_hex": pq_pk.hex(),
+                        "derivable": True,  # Always derivable from mnemonic
+                    }
+                ],
+            },
+        }
 
-            identity_data = {
-                "mnemonic": str(mnemonic),
-                "version": "stored",  # Indicates this stores keys directly
-                "derivable": False,  # Indicates keys cannot be re-derived fully
-                "auth_keys": {
-                    "classic": {
-                        "sk_hex": sk_classic.to_string().hex(),
-                        "pk_hex": pk_classic_hex,
-                    },
-                    "pq": [
-                        {
-                            "alg": ML_DSA_ALG,
-                            "sk_hex": pq_sk.hex(),
-                            "pk_hex": pq_pk.hex(),
-                            "derivable": False,  # Indicates this key cannot be re-derived
-                        }
-                    ],
-                },
-            }
-
-        # 4. Create identity file
+        # 5. Create identity file
         key_dir.mkdir(parents=True, exist_ok=True)
         with open(identity_path, "w") as f:
             json.dump(identity_data, f, indent=2)

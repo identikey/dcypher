@@ -231,7 +231,7 @@ def test_deterministic_key_generation():
 
 
 def test_identity_file_deterministic():
-    """Test that identity file creation works consistently."""
+    """Test that identity file creation always uses seeded key generation."""
     import tempfile
     from pathlib import Path
     import json
@@ -262,6 +262,17 @@ def test_identity_file_deterministic():
         words = mnemonic.split()
         assert len(words) == 24, "Should have 24 word mnemonic"
 
-        # Verify version and derivability fields exist
+        # Verify version and derivability fields (no fallbacks)
         assert "version" in data, "Should have version field"
+        assert data["version"] == "seeded", (
+            "Should always be seeded version (no fallbacks)"
+        )
         assert "derivable" in data, "Should have derivability info"
+        assert data["derivable"] == True, "Should always be derivable (no fallbacks)"
+
+        # Verify PQ keys are also marked as derivable
+        pq_key = data["auth_keys"]["pq"][0]
+        assert "derivable" in pq_key, "PQ key should have derivability info"
+        assert pq_key["derivable"] == True, (
+            "PQ key should always be derivable (no fallbacks)"
+        )
