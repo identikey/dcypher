@@ -90,12 +90,40 @@ build-openfhe-python: build-openfhe
     # Install in development mode to replace the file:// dependency
     uv add --editable ./openfhe-python
 
+# Clone and build liboqs C library locally (not system-wide)
+build-liboqs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building liboqs C library locally..."
+    cd liboqs
+    mkdir -p build
+    cd build
+    cmake .. \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../liboqs-local" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DOQS_BUILD_ONLY_LIB=ON \
+        -DOQS_MINIMAL_BUILD=OFF
+    make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+    make install
+    echo "liboqs installed to: $(pwd)/../../liboqs-local"
+
 # Build both OpenFHE C++ and Python bindings
 build-all: build-openfhe-python
+
+# Build all dependencies
+build-deps: build-openfhe-python build-liboqs
 
 # Clean OpenFHE builds
 clean-openfhe:
     rm -rf openfhe-development/build openfhe-local openfhe-python/build
+
+# Clean liboqs builds
+clean-liboqs:
+    rm -rf liboqs/build liboqs-local
+
+# Clean all builds
+clean-all: clean-openfhe clean-liboqs
 
 test:
     uv run pytest -n auto --dist worksteal tests/

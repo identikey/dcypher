@@ -7,3 +7,4 @@ __pycache__
 /chunk_store
 .pytest_cache
 openfhe-local
+liboqs-local

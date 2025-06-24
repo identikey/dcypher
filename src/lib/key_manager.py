@@ -191,8 +191,46 @@ class KeyManager:
 
     @staticmethod
     def _find_liboqs_library():
-        """Find the liboqs shared library with extensive debugging."""
+        """Find the liboqs shared library, prioritizing locally built version."""
         KeyManager._log("info", "Starting library search...")
+
+        # Method 0: Check for locally built liboqs first (highest priority)
+        try:
+            import os
+            import platform
+            
+            # Determine local library paths based on platform
+            system = platform.system().lower()
+            if system == "linux":
+                local_lib_path = "/app/liboqs-local/lib/liboqs.so"  # Docker path
+                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.so")
+            elif system == "darwin":
+                local_lib_path = "/app/liboqs-local/lib/liboqs.dylib"  # Docker path
+                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.dylib")
+            elif system == "windows":
+                local_lib_path = "/app/liboqs-local/bin/oqs.dll"  # Docker path
+                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/bin/oqs.dll")
+            else:
+                local_lib_path = None
+                host_lib_path = None
+
+            # Try local paths in order of preference
+            local_paths = [p for p in [local_lib_path, host_lib_path] if p is not None]
+            
+            for path in local_paths:
+                KeyManager._log("info", f"Trying local liboqs path: {path}")
+                try:
+                    if os.path.exists(path):
+                        lib = ctypes.CDLL(path)
+                        KeyManager._log("info", f"Successfully loaded local liboqs: {path}")
+                        return lib
+                    else:
+                        KeyManager._log("info", f"Local path does not exist: {path}")
+                except OSError as e:
+                    KeyManager._log("warning", f"Failed to load local liboqs {path}: {e}")
+
+        except Exception as e:
+            KeyManager._log("error", f"Local liboqs search failed: {e}", error=str(e))
 
         # Method 1: Check if oqs module has internal library reference
         try:
@@ -228,7 +266,7 @@ class KeyManager:
         except Exception as e:
             KeyManager._log("error", f"Method 2 failed: {e}", error=str(e))
 
-        # Method 3: Platform-specific common paths
+        # Method 3: Platform-specific common paths (fallback)
         try:
             system = platform.system().lower()
             KeyManager._log("info", f"Platform: {system}")
@@ -257,7 +295,7 @@ class KeyManager:
                 common_paths = []
 
             for path in common_paths:
-                KeyManager._log("info", f"Trying path: {path}")
+                KeyManager._log("info", f"Trying fallback path: {path}")
                 try:
                     lib = ctypes.CDLL(path)
                     KeyManager._log("info", f"Successfully loaded: {path}")
@@ -428,9 +466,6 @@ class KeyManager:
     #                     return KeyManager._original_randombytes(n)
     #                 # Ultimate fallback to system random if something went wrong
     #                 return secrets.token_bytes(n)
-
-    #             prng = _thread_local.prng
-    #             return bytes([prng.randint(0, 255) for _ in range(n)])
 
     #         oqs_rand.randombytes = deterministic_randombytes
     #         KeyManager._log("info", "oqs_rand.randombytes has been patched.")
@@ -821,9 +856,7 @@ class KeyManager:
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [
-                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
-                ],
+                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
             },
         }
 

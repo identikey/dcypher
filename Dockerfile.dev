@@ -2,7 +2,7 @@
 # Use Ubuntu 24.04 for newer glibc (2.38+) required by OpenFHE
 FROM ubuntu:24.04
 
-# Install system dependencies required for OpenFHE and development tools
+# Install system dependencies required for OpenFHE, liboqs, and development tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     ca-certificates \
@@ -23,6 +23,22 @@ WORKDIR /app
 # Copy the openfhe-python directory during build (will be replaced by volume mount at runtime)
 COPY openfhe-python ./openfhe-python
 
+# Copy liboqs submodule and build during Docker build
+COPY liboqs ./liboqs
+RUN echo "Building liboqs locally..." && \
+    cd liboqs && \
+    mkdir -p build && \
+    cd build && \
+    cmake .. \
+        -DCMAKE_INSTALL_PREFIX="/app/liboqs-local" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=ON \
+        -DOQS_BUILD_ONLY_LIB=ON \
+        -DOQS_MINIMAL_BUILD=OFF && \
+    make -j$(nproc) && \
+    make install && \
+    echo "liboqs installed to /app/liboqs-local"
+
 # Copy project files for dependency resolution
 COPY pyproject.toml ./
 COPY uv.lock ./
@@ -34,9 +50,10 @@ RUN sed -i 's|file:///Users/dukejones/work/Identikey/openfhe-python|file:///app/
 # Install dependencies using the modified pyproject.toml
 RUN uv sync --no-install-project
 
-# Set environment variables
+# Set environment variables including liboqs library path
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
+ENV LD_LIBRARY_PATH="/app/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
 
 # Create a non-root user for development
 # RUN useradd -m -u 1000 dev && chown -R dev:dev /app
