@@ -5,3 +5,4 @@ __pycache__
 /include
 /block_store
 /chunk_store
+.pytest_cache

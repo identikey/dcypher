@@ -58,5 +58,44 @@ docker-cli *args:
 docker-exec command:
     docker run --rm -it dcypher {{command}}
 
+# Build OpenFHE C++ library locally (not system-wide)
+build-openfhe:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building OpenFHE C++ library locally..."
+    cd openfhe-development
+    mkdir -p build
+    cd build
+    cmake .. \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../openfhe-local" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_UNITTESTS=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_BENCHMARKS=OFF
+    make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+    make install
+    echo "OpenFHE installed to: $(pwd)/../../openfhe-local"
+
+# Build OpenFHE Python bindings using local C++ library
+build-openfhe-python: build-openfhe
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building OpenFHE Python bindings..."
+    export CMAKE_PREFIX_PATH="$(pwd)/openfhe-local:${CMAKE_PREFIX_PATH:-}"
+    export LD_LIBRARY_PATH="$(pwd)/openfhe-local/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="$(pwd)/openfhe-local/lib:${DYLD_LIBRARY_PATH:-}"
+    cd openfhe-python
+    uv run python setup.py build_ext --inplace
+    cd ..
+    # Install in development mode to replace the file:// dependency
+    uv add --editable ./openfhe-python
+
+# Build both OpenFHE C++ and Python bindings
+build-all: build-openfhe-python
+
+# Clean OpenFHE builds
+clean-openfhe:
+    rm -rf openfhe-development/build openfhe-local openfhe-python/build
+
 test:
     uv run pytest -n auto --dist worksteal tests/
