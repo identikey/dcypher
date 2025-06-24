@@ -24,18 +24,15 @@ WORKDIR /app
 COPY openfhe-python ./openfhe-python
 
 # Copy project files for dependency resolution
-COPY dcypher/pyproject.toml ./
-COPY dcypher/uv.lock ./
-COPY dcypher/src ./src
+COPY pyproject.toml ./
+COPY uv.lock ./
+COPY src ./src
 
 # Replace absolute path with Docker absolute path for build
 RUN sed -i 's|file:///Users/dukejones/work/Identikey/openfhe-python|file:///app/openfhe-python|g' pyproject.toml
 
 # Install dependencies using the modified pyproject.toml
 RUN uv sync --no-install-project
-
-# Remove the copied openfhe-python directory (will be mounted as volume at runtime)
-RUN rm -rf ./openfhe-python
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
