@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from routers import accounts as accounts_router
 from routers import storage as storage_router
 from routers import system as system_router
+from routers import reencryption as reencryption_router
 
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(accounts_router.router, tags=["accounts"])
     app.include_router(storage_router.router, tags=["storage"])
     app.include_router(system_router.router, tags=["system"])
+    app.include_router(reencryption_router.router, tags=["reencryption"])
 
     return app
 

@@ -36,6 +36,7 @@ import time
 import logging
 import secrets
 import threading
+from lib import pre
 
 
 # Thread-local storage for deterministic PRNG
@@ -197,37 +198,46 @@ class KeyManager:
         # Method 0: Check for locally built liboqs first (highest priority)
         try:
             import os
-            import platform
-            
+
             # Determine local library paths based on platform
             system = platform.system().lower()
             if system == "linux":
                 local_lib_path = "/app/liboqs-local/lib/liboqs.so"  # Docker path
-                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.so")
+                host_lib_path = os.path.join(
+                    os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.so"
+                )
             elif system == "darwin":
                 local_lib_path = "/app/liboqs-local/lib/liboqs.dylib"  # Docker path
-                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.dylib")
+                host_lib_path = os.path.join(
+                    os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.dylib"
+                )
             elif system == "windows":
                 local_lib_path = "/app/liboqs-local/bin/oqs.dll"  # Docker path
-                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/bin/oqs.dll")
+                host_lib_path = os.path.join(
+                    os.path.dirname(__file__), "../../liboqs-local/bin/oqs.dll"
+                )
             else:
                 local_lib_path = None
                 host_lib_path = None
 
             # Try local paths in order of preference
             local_paths = [p for p in [local_lib_path, host_lib_path] if p is not None]
-            
+
             for path in local_paths:
                 KeyManager._log("info", f"Trying local liboqs path: {path}")
                 try:
                     if os.path.exists(path):
                         lib = ctypes.CDLL(path)
-                        KeyManager._log("info", f"Successfully loaded local liboqs: {path}")
+                        KeyManager._log(
+                            "info", f"Successfully loaded local liboqs: {path}"
+                        )
                         return lib
                     else:
                         KeyManager._log("info", f"Local path does not exist: {path}")
                 except OSError as e:
-                    KeyManager._log("warning", f"Failed to load local liboqs {path}: {e}")
+                    KeyManager._log(
+                        "warning", f"Failed to load local liboqs {path}: {e}"
+                    )
 
         except Exception as e:
             KeyManager._log("error", f"Local liboqs search failed: {e}", error=str(e))
@@ -856,7 +866,10 @@ class KeyManager:
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
+                "pq": [
+                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                ],
+                "pre": {},  # Placeholder for PRE keys
             },
         }
 
@@ -866,6 +879,37 @@ class KeyManager:
             json.dump(identity_data, f, indent=2)
 
         return str(mnemonic), identity_path
+
+    @staticmethod
+    def add_pre_keys_to_identity(identity_file: Path, cc_bytes: bytes) -> None:
+        """
+        Generates and adds PRE keys to an existing identity file.
+
+        Args:
+            identity_file: Path to the identity JSON file.
+            cc_bytes: Serialized crypto context from the server.
+        """
+        # Deserialize the crypto context
+        cc = pre.deserialize_cc(cc_bytes)
+
+        # Generate PRE keys
+        keys = pre.generate_keys(cc)
+        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+
+        # Load the identity file
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        # Add PRE keys to the 'pre' section
+        identity_data["auth_keys"]["pre"] = {
+            "pk_hex": pk_bytes.hex(),
+            "sk_hex": sk_bytes.hex(),
+        }
+
+        # Save the updated identity file
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
 
     @staticmethod
     def derive_key_at_path(

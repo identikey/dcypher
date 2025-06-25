@@ -94,6 +94,10 @@ def create_account(request: CreateAccountRequest):
     state.accounts[request.public_key] = active_pq_keys
     state.used_nonces.add(request.nonce)
 
+    # If a PRE public key is provided, store it
+    if request.pre_public_key_hex:
+        state.add_pre_key(request.public_key, bytes.fromhex(request.pre_public_key_hex))
+
     return {"message": "Account created successfully", "public_key": request.public_key}
 
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 
 class PqSignature(BaseModel):
@@ -24,6 +24,9 @@ class CreateAccountRequest(BaseModel):
         [], description="Optional list of additional PQ signatures."
     )
     nonce: str = Field(..., description="Time-based nonce provided by the server.")
+    pre_public_key_hex: Optional[str] = Field(
+        None, description="Optional hex-encoded public key for Proxy Re-Encryption."
+    )
 
 
 class AddPqKeysRequest(BaseModel):

@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
 from .auth import sign_message_with_keys
 from .key_manager import KeyManager
+from lib import pre
 import ecdsa
 import oqs
 
@@ -322,6 +323,29 @@ class DCypherClient:
         except (requests.exceptions.RequestException, KeyError) as e:
             raise DCypherAPIError(f"Failed to get supported algorithms: {e}")
 
+    def get_pre_crypto_context(self) -> bytes:
+        """Get the serialized crypto context for PRE from the API server."""
+        try:
+            response = requests.get(f"{self.api_url}/pre-crypto-context")
+            response.raise_for_status()
+            return response.content
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to get PRE crypto context: {e}")
+
+    def initialize_pre_for_identity(self) -> None:
+        """
+        Initializes PRE capabilities for the current identity.
+        Fetches the crypto context and adds PRE keys to the identity file.
+        """
+        if not self.keys_path or not Path(self.keys_path).exists():
+            raise AuthenticationError("Identity file not configured or does not exist.")
+
+        # 1. Get crypto context from server
+        cc_bytes = self.get_pre_crypto_context()
+
+        # 2. Add PRE keys to identity file
+        KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_bytes)
+
     def get_classic_public_key(self) -> str:
         """
         Get the classic public key hex from the loaded auth keys.
@@ -361,6 +385,21 @@ class DCypherClient:
             "signature": signatures["classic_signature"],
             "nonce": nonce,
         }
+
+        # Check if identity file has PRE keys and include them
+        if self.keys_path and Path(self.keys_path).exists():
+            try:
+                with open(self.keys_path, "r") as f:
+                    identity_data = json.load(f)
+
+                # Check if this is an identity file with PRE keys
+                if "auth_keys" in identity_data and "pre" in identity_data["auth_keys"]:
+                    pre_keys = identity_data["auth_keys"]["pre"]
+                    if "pk_hex" in pre_keys and pre_keys["pk_hex"]:
+                        payload["pre_public_key_hex"] = pre_keys["pk_hex"]
+            except (json.JSONDecodeError, KeyError):
+                # If we can't read PRE keys, just continue without them
+                pass
 
         # Add PQ signatures - first one is mandatory ML-DSA
         if pq_keys:
@@ -808,3 +847,183 @@ class DCypherClient:
             return self._handle_response(response)
         except requests.exceptions.RequestException as e:
             raise DCypherAPIError(f"Failed to download chunk: {e}")
+
+    def create_share(
+        self, bob_public_key: str, file_hash: str, re_encryption_key_hex: str
+    ) -> Dict[str, Any]:
+        """
+        Create a sharing policy to allow Bob to access Alice's file.
+
+        Args:
+            bob_public_key: Bob's classic public key
+            file_hash: Hash of the file to share
+            re_encryption_key_hex: Hex-encoded re-encryption key (Alice -> Bob)
+
+        Returns:
+            API response with share_id
+        """
+        alice_public_key = self.get_classic_public_key()
+
+        # Get nonce
+        nonce = self.get_nonce()
+
+        # Build message: SHARE:alice_pk:bob_pk:file_hash:nonce
+        message = f"SHARE:{alice_public_key}:{bob_public_key}:{file_hash}:{nonce}"
+
+        # Sign the message
+        signatures = self._sign_message(message)
+
+        # Prepare form data
+        data = {
+            "alice_public_key": alice_public_key,
+            "bob_public_key": bob_public_key,
+            "file_hash": file_hash,
+            "re_encryption_key_hex": re_encryption_key_hex,
+            "nonce": nonce,
+            "classic_signature": signatures["classic_signature"],
+            "pq_signatures": json.dumps(signatures["pq_signatures"]),
+        }
+
+        try:
+            response = requests.post(f"{self.api_url}/reencryption/share", data=data)
+            return self._handle_response(response)
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to create share: {e}")
+
+    def list_shares(self, public_key: str) -> Dict[str, Any]:
+        """
+        List all shares involving the given public key.
+
+        Args:
+            public_key: The public key to list shares for
+
+        Returns:
+            Dict with shares_sent and shares_received lists
+        """
+        try:
+            response = requests.get(f"{self.api_url}/reencryption/shares/{public_key}")
+            return self._handle_response(response)
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to list shares: {e}")
+
+    def download_shared_file(self, share_id: str) -> bytes:
+        """
+        Download a file that has been shared with the current user.
+
+        Args:
+            share_id: ID of the share to download
+
+        Returns:
+            Re-encrypted file content as bytes
+        """
+        bob_public_key = self.get_classic_public_key()
+
+        # Get nonce
+        nonce = self.get_nonce()
+
+        # Build message: DOWNLOAD-SHARED:bob_pk:share_id:nonce
+        message = f"DOWNLOAD-SHARED:{bob_public_key}:{share_id}:{nonce}"
+
+        # Sign the message
+        signatures = self._sign_message(message)
+
+        # Prepare form data
+        data = {
+            "bob_public_key": bob_public_key,
+            "nonce": nonce,
+            "classic_signature": signatures["classic_signature"],
+            "pq_signatures": json.dumps(signatures["pq_signatures"]),
+        }
+
+        try:
+            response = requests.post(
+                f"{self.api_url}/reencryption/download/{share_id}", data=data
+            )
+            return self._handle_response(response)
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to download shared file: {e}")
+
+    def revoke_share(self, share_id: str) -> Dict[str, Any]:
+        """
+        Revoke a sharing policy.
+
+        Args:
+            share_id: ID of the share to revoke
+
+        Returns:
+            API response confirming revocation
+        """
+        alice_public_key = self.get_classic_public_key()
+
+        # Get nonce
+        nonce = self.get_nonce()
+
+        # Build message: REVOKE:alice_pk:share_id:nonce
+        message = f"REVOKE:{alice_public_key}:{share_id}:{nonce}"
+
+        # Sign the message
+        signatures = self._sign_message(message)
+
+        # Prepare form data
+        data = {
+            "alice_public_key": alice_public_key,
+            "nonce": nonce,
+            "classic_signature": signatures["classic_signature"],
+            "pq_signatures": json.dumps(signatures["pq_signatures"]),
+        }
+
+        try:
+            response = requests.delete(
+                f"{self.api_url}/reencryption/share/{share_id}", data=data
+            )
+            return self._handle_response(response)
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to revoke share: {e}")
+
+    def generate_re_encryption_key(self, bob_public_key_hex: str) -> str:
+        """
+        Generate a re-encryption key from Alice's PRE secret key to Bob's PRE public key.
+
+        Args:
+            bob_public_key_hex: Bob's PRE public key in hex format
+
+        Returns:
+            Hex-encoded re-encryption key
+        """
+        if not self.keys_path:
+            raise AuthenticationError("No identity file configured")
+
+        # Load identity file to get Alice's PRE secret key
+        try:
+            with open(self.keys_path, "r") as f:
+                identity_data = json.load(f)
+
+            if (
+                "auth_keys" not in identity_data
+                or "pre" not in identity_data["auth_keys"]
+            ):
+                raise AuthenticationError("PRE keys not found in identity file")
+
+            pre_keys = identity_data["auth_keys"]["pre"]
+            if "sk_hex" not in pre_keys:
+                raise AuthenticationError("PRE secret key not found in identity file")
+
+            alice_sk_hex = pre_keys["sk_hex"]
+
+        except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
+            raise AuthenticationError(f"Failed to load PRE keys: {e}")
+
+        # Get crypto context from server
+        cc_bytes = self.get_pre_crypto_context()
+        cc = pre.deserialize_cc(cc_bytes)
+
+        # Deserialize keys
+        alice_sk = pre.deserialize_secret_key(bytes.fromhex(alice_sk_hex))
+        bob_pk = pre.deserialize_public_key(bytes.fromhex(bob_public_key_hex))
+
+        # Generate re-encryption key
+        re_key = pre.generate_re_encryption_key(cc, alice_sk, bob_pk)
+
+        # Serialize and return as hex
+        re_key_bytes = pre.serialize_to_bytes(re_key)
+        return re_key_bytes.hex()
