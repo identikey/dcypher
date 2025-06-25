@@ -11,84 +11,61 @@ import ecdsa
 
 
 @click.command("upload")
-@click.option("--pk-path", type=str, required=True)
-@click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
 @click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file containing PRE and signing keys.",
 )
 @click.option("--file-path", type=click.Path(exists=True), required=True)
-@click.option("--cc-path", default="cc.json", help="Path to the crypto context file.")
-@click.option(
-    "--signing-key-path",
-    help="Path to the ECDSA private key for signing message headers.",
-    required=True,
-)
 @click.option(
     "--api-url",
     envvar="DCY_API_URL",
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def upload(
-    pk_path,
-    auth_keys_path,
-    identity_path,
-    file_path,
-    cc_path,
-    signing_key_path,
-    api_url,
-):
-    """Uploads a file to the remote storage API."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
-    # --- 1. Load Keys and Crypto Context ---
-    click.echo("Loading keys and crypto context...", err=True)
+def upload(identity_path, file_path, api_url):
+    """Uploads a file to the remote storage API using identity file."""
+    click.echo("Initializing upload with identity file...", err=True)
 
     try:
-        # Load crypto context
-        with open(cc_path, "r") as f:
-            cc_data = json.load(f)
-        cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
+        # Initialize API client
+        client = DCypherClient(api_url, identity_path=identity_path)
 
-        # Load public key for encryption
-        with open(pk_path, "r") as f:
-            pk_data = json.load(f)
-        pk_enc = pre.deserialize_public_key(base64.b64decode(pk_data["key"]))
+        # Get server's crypto context
+        click.echo("Getting server crypto context...", err=True)
+        cc_bytes = client.get_pre_crypto_context()
+        cc = pre.deserialize_cc(cc_bytes)
 
-        # Load signing key for IDK message headers
-        with open(signing_key_path, "r") as f:
-            sk_hex = f.read()
-            sk_sign_idk = ecdsa.SigningKey.from_string(
-                bytes.fromhex(sk_hex), curve=ecdsa.SECP256k1
+        # Load identity data to get keys
+        click.echo("Loading keys from identity file...", err=True)
+        with open(identity_path, "r") as f:
+            identity_data = json.load(f)
+
+        # Get PRE public key from identity
+        if (
+            "pre" not in identity_data["auth_keys"]
+            or not identity_data["auth_keys"]["pre"]
+        ):
+            raise click.ClickException(
+                "Identity file does not contain PRE keys. Run 'init-pre' first."
             )
 
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        pre_pk_hex = identity_data["auth_keys"]["pre"]["pk_hex"]
+        pre_pk_bytes = bytes.fromhex(pre_pk_hex)
+        pk_enc = pre.deserialize_public_key(pre_pk_bytes)
+
+        # Get signing key from identity (classic ECDSA key used for IDK message signing)
+        classic_sk_hex = identity_data["auth_keys"]["classic"]["sk_hex"]
+        sk_sign_idk = ecdsa.SigningKey.from_string(
+            bytes.fromhex(classic_sk_hex), curve=ecdsa.SECP256k1
+        )
 
         # Get classic public key for API operations
         pk_classic_hex = client.get_classic_public_key()
 
     except Exception as e:
-        raise click.ClickException(f"Error loading keys or crypto context: {e}")
+        raise click.ClickException(f"Error loading identity or crypto context: {e}")
 
     # --- 2. Create IDK message parts in memory ---
     click.echo("Encrypting file and creating IDK message parts...", err=True)

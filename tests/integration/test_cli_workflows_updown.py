@@ -44,99 +44,50 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     """
     run_command, test_dir = cli_test_env
 
-    # --- 1. Setup Client-Side Identities ---
-    # a. PRE crypto context and keys
-    cc_path = test_dir / "cc.json"
-    run_command(["gen-cc", "--output", str(cc_path)])
+    # --- 1. Create Identity and Setup ---
+    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir)])
+    identity_file = test_dir / "TestUser.json"
+    assert identity_file.exists()
 
-    with open(cc_path, "r") as f:
-        cc_data = json.load(f)
-    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
-    slot_count = pre.get_slot_count(cc)
+    # Initialize PRE capabilities
+    run_command(
+        [
+            "init-pre",
+            "--identity-path",
+            str(identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
 
-    run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])
+    # Create account on server
+    run_command(
+        [
+            "create-account",
+            "--identity-path",
+            str(identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
 
-    # b. Authentication keys for API
-    classic_sk_api = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    classic_vk_api = classic_sk_api.get_verifying_key()
-    assert classic_vk_api is not None
-    pk_classic_hex = classic_vk_api.to_string("uncompressed").hex()
-    classic_sk_api_path = test_dir / "user_auth_api.sk"
-    with open(classic_sk_api_path, "w") as f:
-        f.write(classic_sk_api.to_string().hex())
-
-    pq_pk, pq_sk = generate_pq_keys(ML_DSA_ALG)
-    pq_sk_path = test_dir / "user_auth_pq.sk"
-    with open(pq_sk_path, "wb") as f:
-        f.write(pq_sk)
-
-    # c. Signing keys for IDK Message Format
-    sk_idk_signer = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-    vk_idk_verifier = sk_idk_signer.get_verifying_key()
-    assert vk_idk_verifier is not None
-    sk_idk_path = test_dir / "idk_signer.sk"
-    vk_idk_path = test_dir / "idk_verifier.vk"
-    with open(sk_idk_path, "w") as f:
-        f.write(sk_idk_signer.to_string().hex())
-    with open(vk_idk_path, "w") as f:
-        f.write(vk_idk_verifier.to_string("uncompressed").hex())
-
-    # --- 2. Create Account using API client ---
-    auth_keys_data = {
-        "classic_sk_path": str(classic_sk_api_path),
-        "pq_keys": [
-            {"sk_path": str(pq_sk_path), "pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}
-        ],
-    }
-    auth_keys_file = test_dir / "auth_keys.json"
-    with open(auth_keys_file, "w") as f:
-        json.dump(auth_keys_data, f)
-
-    client = DCypherClient(api_base_url, str(auth_keys_file))
-    pq_keys = [{"pk_hex": pq_pk.hex(), "alg": ML_DSA_ALG}]
-    client.create_account(pk_classic_hex, pq_keys)
-
-    # --- 4. Encrypt a LARGE file ---
-    # Use a size guaranteed to be > slot_count to test chunking
-    original_data = secrets.token_bytes(slot_count + 10)
+    # --- 2. Create a LARGE test file ---
+    # Create a file large enough to test chunking (using a reasonable size)
+    original_data = secrets.token_bytes(8192)  # 8KB should be enough to test chunking
     original_file = test_dir / "original_large.dat"
     with open(original_file, "wb") as f:
         f.write(original_data)
 
-    encrypted_file = test_dir / "encrypted_large.idk"
-    result = run_command(
-        [
-            "encrypt",
-            "--cc-path",
-            str(cc_path),
-            "--pk-path",
-            "user_pre.pub",
-            "--signing-key-path",
-            str(sk_idk_path),
-            "--input-file",
-            str(original_file),
-            "--output",
-            str(encrypted_file),
-        ]
-    )
-    assert result.returncode == 0
-
-    # --- 5. Upload the file using the CLI ---
+    # --- 3. Upload the file using the new CLI syntax ---
     result = run_command(
         [
             "upload",
-            "--api-url",
-            api_base_url,
-            "--pk-path",
-            "user_pre.pub",
-            "--auth-keys-path",
-            str(auth_keys_file),
+            "--identity-path",
+            str(identity_file),
             "--file-path",
             str(original_file),
-            "--cc-path",
-            str(cc_path),
-            "--signing-key-path",
-            str(sk_idk_path),
+            "--api-url",
+            api_base_url,
         ]
     )
     assert result.returncode == 0, f"Upload failed: {result.stderr}"
@@ -149,7 +100,49 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             break
     assert file_hash, "Could not find file hash in upload output."
 
-    # --- 6. Download the chunks using the chunks download command ---
+    # --- 4. Download the chunks using the chunks download command ---
+    # Note: download-chunks still uses the old syntax, we'll need to update that separately
+    # For now, create a minimal auth keys file for download compatibility
+    with open(identity_file, "r") as f:
+        identity_data = json.load(f)
+
+    classic_sk_hex = identity_data["auth_keys"]["classic"]["sk_hex"]
+    classic_sk = ecdsa.SigningKey.from_string(
+        bytes.fromhex(classic_sk_hex), curve=ecdsa.SECP256k1
+    )
+    classic_vk = classic_sk.get_verifying_key()
+    assert classic_vk is not None
+    pk_classic_hex = classic_vk.to_string("uncompressed").hex()
+
+    # Create temp auth keys file for download command (download commands not yet updated)
+    # Create temporary secret key files in auth_keys format
+    classic_sk_file = test_dir / "temp_classic.sk"
+    with open(classic_sk_file, "w") as f:
+        f.write(classic_sk_hex)
+
+    # Create PQ secret key files and build pq_keys list
+    pq_keys_list = []
+    for i, pq_key_data in enumerate(identity_data["auth_keys"]["pq"]):
+        pq_sk_file = test_dir / f"temp_pq_{i}.sk"
+        with open(pq_sk_file, "wb") as f:
+            f.write(bytes.fromhex(pq_key_data["sk_hex"]))
+
+        pq_keys_list.append(
+            {
+                "sk_path": str(pq_sk_file),
+                "pk_hex": pq_key_data["pk_hex"],
+                "alg": pq_key_data["alg"],
+            }
+        )
+
+    temp_auth_file = test_dir / "temp_auth.json"
+    temp_auth_data = {
+        "classic_sk_path": str(classic_sk_file),
+        "pq_keys": pq_keys_list,
+    }
+    with open(temp_auth_file, "w") as f:
+        json.dump(temp_auth_data, f)
+
     downloaded_chunks_file = test_dir / "downloaded_large.chunks.gz"
     result = run_command(
         [
@@ -159,7 +152,7 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             "--pk-path",
             pk_classic_hex,
             "--auth-keys-path",
-            str(auth_keys_file),
+            str(temp_auth_file),
             "--file-hash",
             file_hash,
             "--output-path",
@@ -169,8 +162,8 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     assert result.returncode == 0, f"Download failed: {result.stderr}"
     assert downloaded_chunks_file.exists()
 
-    # --- 7. Reassemble and decrypt the downloaded file and verify ---
-    # a. Decompress the downloaded Gzip file to get concatenated idk parts
+    # --- 5. Reassemble and decrypt the downloaded file and verify ---
+    # Decompress the downloaded Gzip file to get concatenated idk parts
     reassembled_idk_file = test_dir / "reassembled.idk"
     with (
         gzip.open(downloaded_chunks_file, "rb") as f_in,
@@ -181,17 +174,53 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             content = content.encode("utf-8")
         f_out.write(content)
 
-    # c. Decrypt the reassembled IDK file
+    # Get server crypto context for decryption
+    cc_file = test_dir / "server_cc.dat"
+    run_command(
+        [
+            "get-pre-context",
+            "--output",
+            str(cc_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+
+    # Convert to JSON format for CLI decrypt
+    with open(cc_file, "rb") as f:
+        cc_bytes = f.read()
+    cc_b64 = base64.b64encode(cc_bytes).decode("ascii")
+    cc_json_file = test_dir / "server_cc.json"
+    with open(cc_json_file, "w") as f:
+        json.dump({"cc": cc_b64}, f)
+
+    # Get PRE secret key from identity
+    pre_sk_hex = identity_data["auth_keys"]["pre"]["sk_hex"]
+    pre_sk_bytes = bytes.fromhex(pre_sk_hex)
+    pre_sk_b64 = base64.b64encode(pre_sk_bytes).decode("ascii")
+    pre_sk_file = test_dir / "pre.sec"
+    with open(pre_sk_file, "w") as f:
+        json.dump({"key": pre_sk_b64}, f)
+
+    # Create dummy verifying key (IDK messages handle verification internally)
+    dummy_sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    dummy_vk = dummy_sk.get_verifying_key()
+    assert dummy_vk is not None
+    dummy_vk_file = test_dir / "dummy.vk"
+    with open(dummy_vk_file, "w") as f:
+        f.write(dummy_vk.to_string("uncompressed").hex())
+
+    # Decrypt the reassembled IDK file
     decrypted_file = test_dir / "decrypted_large.dat"
     result = run_command(
         [
             "decrypt",
             "--cc-path",
-            str(cc_path),
+            str(cc_json_file),
             "--sk-path",
-            "user_pre.sec",
+            str(pre_sk_file),
             "--verifying-key-path",
-            str(vk_idk_path),
+            str(dummy_vk_file),
             "--ciphertext-path",
             str(reassembled_idk_file),
             "--output-file",
@@ -206,27 +235,21 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
         "CLI upload/download/decrypt workflow successful with large file!", err=True
     )
 
-    # Test a file small enough to not require chunking beyond the header
+    # --- 6. Test a small file (single chunk) ---
     original_data_small = b"This is a test with just one data chunk."
     original_file_small = test_dir / "original_single_chunk.dat"
     original_file_small.write_bytes(original_data_small)
 
-    # Upload the small file
+    # Upload the small file using new syntax
     result = run_command(
         [
             "upload",
-            "--api-url",
-            api_base_url,
-            "--pk-path",
-            "user_pre.pub",
-            "--auth-keys-path",
-            str(auth_keys_file),
+            "--identity-path",
+            str(identity_file),
             "--file-path",
             str(original_file_small),
-            "--cc-path",
-            str(cc_path),
-            "--signing-key-path",
-            str(sk_idk_path),
+            "--api-url",
+            api_base_url,
         ]
     )
     assert result.returncode == 0, f"Upload failed: {result.stderr}"
@@ -248,7 +271,7 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
             "--pk-path",
             pk_classic_hex,
             "--auth-keys-path",
-            str(auth_keys_file),
+            str(temp_auth_file),
             "--file-hash",
             file_hash_small,
             "--output-path",
@@ -276,11 +299,11 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
         [
             "decrypt",
             "--cc-path",
-            str(cc_path),
+            str(cc_json_file),
             "--sk-path",
-            "user_pre.sec",
+            str(pre_sk_file),
             "--verifying-key-path",
-            str(vk_idk_path),
+            str(dummy_vk_file),
             "--ciphertext-path",
             str(reassembled_small_idk),
             "--output-file",

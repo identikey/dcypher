@@ -11,7 +11,7 @@ from lib.pq_auth import verify_pq_signature
 from lib import pre
 from security import verify_nonce
 from app_state import state, find_account
-from src.crypto.context_manager import CryptoContextManager
+from crypto.context_manager import CryptoContextManager
 import ecdsa
 
 # Generate a signing key for the server (for re-signed IDK messages)

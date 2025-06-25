@@ -114,10 +114,19 @@ def get_account(public_key: str):
     pq_keys_list = [
         {"public_key": pk, "alg": alg} for alg, pk in account_pq_keys.items()
     ]
-    return {
+
+    # Build the response with PQ keys
+    response = {
         "public_key": public_key,
         "pq_keys": pq_keys_list,
     }
+
+    # Include PRE public key if it exists
+    pre_public_key_bytes = state.get_pre_key(public_key)
+    if pre_public_key_bytes:
+        response["pre_public_key_hex"] = pre_public_key_bytes.hex()
+
+    return response
 
 
 @router.post("/accounts/{public_key}/add-pq-keys")

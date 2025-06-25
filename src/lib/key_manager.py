@@ -39,7 +39,7 @@ import threading
 from lib import pre
 
 try:
-    from src.crypto.context_manager import CryptoContextManager
+    from crypto.context_manager import CryptoContextManager
 except ImportError:
     # Fallback for when running from CLI or different contexts
     import sys
@@ -906,17 +906,20 @@ class KeyManager:
         # This prevents OpenFHE "Key was not generated with the same crypto context" errors
         context_manager = CryptoContextManager()
 
-        # Check if singleton already has a context
-        cc = context_manager.get_context()
+        # CRITICAL: Always reset the context to ensure clean state
+        # OpenFHE requires that the context be properly set up in its global registry
+        # before any key operations. We must deserialize the context fresh to ensure
+        # it's properly registered in OpenFHE's internal systems.
+        context_manager.reset()  # Clear any existing context
 
-        if cc is None:
-            # If no singleton context exists, initialize it from the provided bytes
-            import base64
+        # Deserialize the context and set it up in the singleton
+        import base64
 
-            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-            cc = context_manager.deserialize_context(serialized_context)
+        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+        cc = context_manager.deserialize_context(serialized_context)
 
-        # Generate PRE keys using the singleton context
+        # NOW generate PRE keys using the properly initialized context
+        # This ensures the keys are associated with the correct context instance
         keys = pre.generate_keys(cc)
         pk_bytes = pre.serialize_to_bytes(keys.publicKey)
         sk_bytes = pre.serialize_to_bytes(keys.secretKey)

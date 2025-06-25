@@ -95,9 +95,23 @@ def create_share(identity_path, bob_public_key, file_hash, api_url):
         click.echo(f"Creating share for file {file_hash}...", err=True)
         click.echo(f"Sharing with: {bob_public_key[:16]}...", err=True)
 
-        # Generate re-encryption key
+        # Get Bob's account info to retrieve his PRE public key
+        click.echo("Looking up recipient's PRE public key...", err=True)
+        try:
+            bob_account = client.get_account(bob_public_key)
+            bob_pre_pk_hex = bob_account.get("pre_public_key_hex")
+
+            if not bob_pre_pk_hex:
+                raise click.ClickException(
+                    f"Recipient {bob_public_key[:16]}... does not have PRE capabilities enabled. "
+                    "They need to run 'dcypher init-pre' first."
+                )
+        except Exception as e:
+            raise click.ClickException(f"Failed to get recipient's account info: {e}")
+
+        # Generate re-encryption key using Bob's PRE public key
         click.echo("Generating re-encryption key...", err=True)
-        re_key_hex = client.generate_re_encryption_key(bob_public_key)
+        re_key_hex = client.generate_re_encryption_key(bob_pre_pk_hex)
 
         # Create the share
         result = client.create_share(bob_public_key, file_hash, re_key_hex)

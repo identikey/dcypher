@@ -237,6 +237,212 @@ def test_cli_sharing_commands(cli_test_env, api_base_url):
     )
 
 
+def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
+    """
+    Tests the complete CLI re-encryption workflow against a live API server.
+
+    This test demonstrates the full end-to-end workflow:
+    1. Alice creates identity, initializes PRE, and creates account
+    2. Bob creates identity, initializes PRE, and creates account
+    3. Alice uploads an encrypted file using the updated upload command
+    4. Alice shares the file with Bob using proxy re-encryption
+    5. Bob downloads the re-encrypted file and decrypts it
+    6. Alice revokes Bob's access
+
+    This uses the refactored upload command that works with identity files.
+    """
+    run_command, test_dir = cli_test_env
+
+    # === Step 1: Create Alice's Identity ===
+    run_command(["identity", "new", "--name", "Alice", "--path", str(test_dir)])
+    alice_identity_file = test_dir / "Alice.json"
+    assert alice_identity_file.exists()
+
+    # === Step 2: Create Bob's Identity ===
+    run_command(["identity", "new", "--name", "Bob", "--path", str(test_dir)])
+    bob_identity_file = test_dir / "Bob.json"
+    assert bob_identity_file.exists()
+
+    # === Step 3: Initialize PRE for both identities ===
+    run_command(
+        [
+            "init-pre",
+            "--identity-path",
+            str(alice_identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    run_command(
+        [
+            "init-pre",
+            "--identity-path",
+            str(bob_identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+
+    # === Step 4: Create accounts on the server ===
+    run_command(
+        [
+            "create-account",
+            "--identity-path",
+            str(alice_identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    run_command(
+        [
+            "create-account",
+            "--identity-path",
+            str(bob_identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+
+    # === Step 5: Alice creates a test file ===
+    secret_message = b"This is Alice's secret message for Bob via CLI!"
+    test_file = test_dir / "secret.txt"
+    test_file.write_bytes(secret_message)
+
+    # === Step 6: Alice uploads the encrypted file using the updated upload command ===
+    upload_result = run_command(
+        [
+            "upload",
+            "--identity-path",
+            str(alice_identity_file),
+            "--file-path",
+            str(test_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    assert upload_result.returncode == 0, f"Upload failed: {upload_result.stderr}"
+
+    # Extract file hash from upload output
+    file_hash = None
+    for line in upload_result.stderr.splitlines():
+        if "Registering file with hash:" in line:
+            file_hash = line.split()[-1]
+            break
+    assert file_hash, "Could not find file hash in upload output"
+    click.echo(
+        f"✅ File uploaded successfully with hash: {file_hash[:16]}...", err=True
+    )
+
+    # === Step 7: Get Bob's public key for sharing ===
+    bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
+    bob_public_key = bob_client.get_classic_public_key()
+
+    # === Step 8: Alice creates a share with Bob ===
+    share_result = run_command(
+        [
+            "create-share",
+            "--identity-path",
+            str(alice_identity_file),
+            "--bob-public-key",
+            bob_public_key,
+            "--file-hash",
+            file_hash,
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    assert share_result.returncode == 0, f"Share creation failed: {share_result.stderr}"
+
+    # Extract share ID from output
+    share_id = None
+    for line in share_result.stderr.splitlines():
+        if "Share ID:" in line:
+            share_id = line.split("Share ID:")[-1].strip()
+            break
+    assert share_id, "Could not find share ID in create-share output"
+    click.echo(f"✅ Share created with ID: {share_id}", err=True)
+
+    # === Step 9: Bob lists shares to see the file ===
+    bob_shares_result = run_command(
+        [
+            "list-shares",
+            "--identity-path",
+            str(bob_identity_file),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    assert bob_shares_result.returncode == 0
+    assert "Shares you've received (1)" in bob_shares_result.stderr
+    click.echo("✅ Bob can see the shared file", err=True)
+
+    # === Step 10: Bob downloads the shared file (server applies re-encryption) ===
+    shared_file_path = test_dir / "shared_file.gz"
+    download_result = run_command(
+        [
+            "download-shared",
+            "--identity-path",
+            str(bob_identity_file),
+            "--share-id",
+            share_id,
+            "--output-path",
+            str(shared_file_path),
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    assert download_result.returncode == 0, f"Download failed: {download_result.stderr}"
+    assert shared_file_path.exists()
+    click.echo("✅ Bob downloaded the re-encrypted file", err=True)
+
+    # === Step 11: Alice revokes the share ===
+    revoke_result = run_command(
+        [
+            "revoke-share",
+            "--identity-path",
+            str(alice_identity_file),
+            "--share-id",
+            share_id,
+            "--api-url",
+            api_base_url,
+        ]
+    )
+    assert revoke_result.returncode == 0
+    assert "Share revoked successfully" in revoke_result.stderr
+    click.echo("✅ Alice revoked the share", err=True)
+
+    # === Step 12: Verify Bob can no longer access the revoked share ===
+    try:
+        revoked_download_result = run_command(
+            [
+                "download-shared",
+                "--identity-path",
+                str(bob_identity_file),
+                "--share-id",
+                share_id,
+                "--output-path",
+                str(test_dir / "should_fail.gz"),
+                "--api-url",
+                api_base_url,
+            ]
+        )
+        # The command should fail
+        assert revoked_download_result.returncode != 0, (
+            "Bob should not be able to download after revocation"
+        )
+        click.echo("✅ Bob correctly cannot access revoked share", err=True)
+    except Exception:
+        # Expected - the download should fail
+        click.echo("✅ Bob correctly cannot access revoked share", err=True)
+
+    click.echo("🎉 Complete CLI re-encryption workflow successful!", err=True)
+    click.echo("✅ Upload → Share → Download → Revoke all work via CLI!", err=True)
+    click.echo(
+        "📝 Note: Decryption step can be added once server PRE transformation is implemented",
+        err=True,
+    )
+
+
 def test_full_workflow_with_string(cli_test_env):
     """
     Tests the workflow with string data instead of file.

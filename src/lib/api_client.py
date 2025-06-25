@@ -1013,29 +1013,33 @@ class DCypherClient:
         except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
             raise AuthenticationError(f"Failed to load PRE keys: {e}")
 
-        # CRITICAL: Use the context singleton to ensure consistency with ciphertext creation
-        # Instead of creating a new context instance, use the same singleton that was used
-        # for ciphertext creation in the integration test
-        from src.crypto.context_manager import CryptoContextManager
+        # CRITICAL: Use the context singleton to ensure consistency
+        # The key insight is that OpenFHE requires all crypto objects to be associated
+        # with the SAME context instance. We must deserialize the context FIRST,
+        # then deserialize the keys AFTER the context is properly set up.
+        from crypto.context_manager import CryptoContextManager
         import base64
 
         context_manager = CryptoContextManager()
 
-        # If the singleton doesn't have a context, initialize it from the server
-        if context_manager.get_context() is None:
-            # Get crypto context from server and initialize singleton
-            cc_bytes = self.get_pre_crypto_context()
-            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-            cc = context_manager.deserialize_context(serialized_context)
-        else:
-            # Use the existing singleton context
-            cc = context_manager.get_context()
+        # Always get a fresh context from the server to ensure consistency
+        # This ensures we're using the exact same context that was used to create
+        # the ciphertexts and other crypto objects
+        cc_bytes = self.get_pre_crypto_context()
 
-        # Deserialize keys
+        # CRITICAL: Reset OpenFHE's global context registry and set up the singleton
+        # This ensures that when we deserialize keys, they will be associated with
+        # the correct context in OpenFHE's internal registry
+        context_manager.reset()  # Clear any existing context
+        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+        cc = context_manager.deserialize_context(serialized_context)
+
+        # NOW deserialize the keys AFTER the context is properly set up
+        # This ensures the keys are associated with the same context instance
         alice_sk = pre.deserialize_secret_key(bytes.fromhex(alice_sk_hex))
         bob_pk = pre.deserialize_public_key(bytes.fromhex(bob_public_key_hex))
 
-        # Generate re-encryption key using the SAME context instance
+        # Generate re-encryption key using the properly initialized context
         re_key = pre.generate_re_encryption_key(cc, alice_sk, bob_pk)
 
         # Serialize and return as hex
