@@ -490,7 +490,7 @@ def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     # Decrypt and write to output
     try:
         decrypted_data = idk_message.decrypt_idk_message(
-            cc=cc, sk=sk, vk=vk_verify, message_str=message_content
+            cc=cc, sk=sk, message_str=message_content
         )
         Path(output_file).write_bytes(decrypted_data)
         click.echo(f"Success! Decrypted data written to {output_file}", err=True)

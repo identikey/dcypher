@@ -38,6 +38,19 @@ import secrets
 import threading
 from lib import pre
 
+try:
+    from src.crypto.context_manager import CryptoContextManager
+except ImportError:
+    # Fallback for when running from CLI or different contexts
+    import sys
+    import os
+
+    # Add the parent directory to the path to find crypto module
+    parent_dir = os.path.dirname(os.path.dirname(__file__))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from crypto.context_manager import CryptoContextManager
+
 
 # Thread-local storage for deterministic PRNG
 _thread_local = threading.local()
@@ -889,10 +902,21 @@ class KeyManager:
             identity_file: Path to the identity JSON file.
             cc_bytes: Serialized crypto context from the server.
         """
-        # Deserialize the crypto context
-        cc = pre.deserialize_cc(cc_bytes)
+        # CRITICAL: Use the context singleton to ensure consistency with other operations
+        # This prevents OpenFHE "Key was not generated with the same crypto context" errors
+        context_manager = CryptoContextManager()
 
-        # Generate PRE keys
+        # Check if singleton already has a context
+        cc = context_manager.get_context()
+
+        if cc is None:
+            # If no singleton context exists, initialize it from the provided bytes
+            import base64
+
+            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
+
+        # Generate PRE keys using the singleton context
         keys = pre.generate_keys(cc)
         pk_bytes = pre.serialize_to_bytes(keys.publicKey)
         sk_bytes = pre.serialize_to_bytes(keys.secretKey)

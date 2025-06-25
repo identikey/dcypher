@@ -601,67 +601,82 @@ def test_pre_key_management_with_live_server(api_base_url, temp_dir):
     """
     print("🔧 Testing PRE key management with live server...")
 
-    # Create identity without PRE keys initially
-    mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+    # CRITICAL: Reset the context singleton to ensure clean state
+    CryptoContextManager._instance = None
+    context_manager = CryptoContextManager()
 
-    # Verify initial state
-    with open(identity_file, "r") as f:
-        identity_data = json.load(f)
-    assert identity_data["auth_keys"]["pre"] == {}
-    print("✅ Identity created with empty PRE section")
+    try:
+        # Create identity without PRE keys initially
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
 
-    # Create client and test PRE initialization
-    client = DCypherClient(api_base_url, identity_path=str(identity_file))
+        # Verify initial state
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+        assert identity_data["auth_keys"]["pre"] == {}
+        print("✅ Identity created with empty PRE section")
 
-    # Initialize PRE capabilities
-    client.initialize_pre_for_identity()
+        # Create client and test PRE initialization
+        client = DCypherClient(api_base_url, identity_path=str(identity_file))
 
-    # Verify PRE keys were added
-    with open(identity_file, "r") as f:
-        updated_identity = json.load(f)
+        # Get the server's crypto context and initialize the singleton
+        server_cc_bytes = client.get_pre_crypto_context()
+        serialized_context = base64.b64encode(server_cc_bytes).decode("ascii")
+        server_cc = context_manager.deserialize_context(serialized_context)
 
-    pre_keys = updated_identity["auth_keys"]["pre"]
-    assert "pk_hex" in pre_keys
-    assert "sk_hex" in pre_keys
-    assert len(pre_keys["pk_hex"]) > 0
-    assert len(pre_keys["sk_hex"]) > 0
+        # Initialize PRE capabilities using the server's context
+        client.initialize_pre_for_identity()
 
-    print(f"✅ PRE keys added - Public key: {pre_keys['pk_hex'][:32]}...")
+        # Verify PRE keys were added
+        with open(identity_file, "r") as f:
+            updated_identity = json.load(f)
 
-    # Create account with PRE keys
-    keys_data = KeyManager.load_identity_file(identity_file)
-    pk = KeyManager.get_classic_public_key(keys_data["classic_sk"])
-    pq_keys = [
-        {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
-    ]
+        pre_keys = updated_identity["auth_keys"]["pre"]
+        assert "pk_hex" in pre_keys
+        assert "sk_hex" in pre_keys
+        assert len(pre_keys["pk_hex"]) > 0
+        assert len(pre_keys["sk_hex"]) > 0
 
-    client.create_account(pk, pq_keys)
+        print(f"✅ PRE keys added - Public key: {pre_keys['pk_hex'][:32]}...")
 
-    # Verify account was created with PRE key
-    account_info = client.get_account(pk)
-    assert account_info["public_key"] == pk
-    print("✅ Account created successfully with PRE capabilities")
+        # Create account with PRE keys
+        keys_data = KeyManager.load_identity_file(identity_file)
+        pk = KeyManager.get_classic_public_key(keys_data["classic_sk"])
+        pq_keys = [
+            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
+        ]
 
-    # Test re-encryption key generation
-    # Create another user for testing
-    other_mnemonic, other_identity = KeyManager.create_identity_file(
-        "other_user", temp_dir
-    )
+        client.create_account(pk, pq_keys)
 
-    # Create a separate client for the other user and initialize their PRE keys
-    other_client = DCypherClient(api_base_url, identity_path=str(other_identity))
-    other_client.initialize_pre_for_identity()  # Initialize PRE keys for the other user
+        # Verify account was created with PRE key
+        account_info = client.get_account(pk)
+        assert account_info["public_key"] == pk
+        print("✅ Account created successfully with PRE capabilities")
 
-    with open(other_identity, "r") as f:
-        other_data = json.load(f)
-    other_pre_pk = other_data["auth_keys"]["pre"]["pk_hex"]
+        # Test re-encryption key generation
+        # Create another user for testing
+        other_mnemonic, other_identity = KeyManager.create_identity_file(
+            "other_user", temp_dir
+        )
 
-    re_key_hex = client.generate_re_encryption_key(other_pre_pk)
-    assert isinstance(re_key_hex, str)
-    assert len(re_key_hex) > 0
+        # Create a separate client for the other user and initialize their PRE keys
+        other_client = DCypherClient(api_base_url, identity_path=str(other_identity))
+        other_client.initialize_pre_for_identity()  # Initialize PRE keys for the other user
 
-    print(f"✅ Re-encryption key generated: {re_key_hex[:32]}...")
-    print("🎉 PRE key management test completed successfully!")
+        with open(other_identity, "r") as f:
+            other_data = json.load(f)
+        other_pre_pk = other_data["auth_keys"]["pre"]["pk_hex"]
+
+        # Generate re-encryption key using the singleton context (this should work now)
+        re_key_hex = client.generate_re_encryption_key(other_pre_pk)
+        assert isinstance(re_key_hex, str)
+        assert len(re_key_hex) > 0
+
+        print(f"✅ Re-encryption key generated: {re_key_hex[:32]}...")
+        print("🎉 PRE key management test completed successfully!")
+
+    finally:
+        # Clean up context singleton
+        context_manager.reset()
 
 
 def test_error_handling_with_live_server(alice_identity, bob_identity, api_base_url):
