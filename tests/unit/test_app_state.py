@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from app_state import ServerState, find_account, get_app_state
+from app_state import ServerState, get_app_state
 
 
 def test_get_app_state():
@@ -31,14 +31,14 @@ def clean_state():
 def test_find_account_success(clean_state):
     """Tests that find_account returns the correct account."""
     clean_state.accounts["test_pk"] = {"alg": "test_alg"}
-    account = find_account("test_pk")
+    account = get_app_state().find_account("test_pk")
     assert account == {"alg": "test_alg"}
 
 
 def test_find_account_not_found(clean_state):
     """Tests that find_account raises HTTPException for a non-existent account."""
     with pytest.raises(HTTPException) as excinfo:
-        find_account("non_existent_pk")
+        get_app_state().find_account("non_existent_pk")
     assert excinfo.value.status_code == 404
 
 
@@ -105,13 +105,13 @@ def test_add_used_nonce(clean_state):
     nonce2 = "nonce_456"
     assert nonce1 not in clean_state.used_nonces
 
-    clean_state.used_nonces.add(nonce1)
-    assert nonce1 in clean_state.used_nonces
-    assert nonce2 not in clean_state.used_nonces
+    get_app_state().used_nonces.add(nonce1)
+    assert nonce1 in get_app_state().used_nonces
+    assert nonce2 not in get_app_state().used_nonces
 
-    clean_state.used_nonces.add(nonce2)
-    assert nonce2 in clean_state.used_nonces
-    assert len(clean_state.used_nonces) == 2
+    get_app_state().used_nonces.add(nonce2)
+    assert nonce2 in get_app_state().used_nonces
+    assert len(get_app_state().used_nonces) == 2
 
 
 def test_check_and_add_nonce(clean_state):
@@ -120,15 +120,15 @@ def test_check_and_add_nonce(clean_state):
 
     # First time should be successful
     try:
-        clean_state.check_and_add_nonce(nonce)
+        get_app_state().check_and_add_nonce(nonce)
     except HTTPException:
         pytest.fail("check_and_add_nonce() raised HTTPException unexpectedly!")
 
-    assert nonce in clean_state.used_nonces
+    assert nonce in get_app_state().used_nonces
 
     # Second time should raise an exception
     with pytest.raises(HTTPException) as excinfo:
-        clean_state.check_and_add_nonce(nonce)
+        get_app_state().check_and_add_nonce(nonce)
     assert excinfo.value.status_code == 400
     assert "Replay attack detected" in excinfo.value.detail
 
@@ -189,10 +189,10 @@ class TestAddAccountMethod:
         public_key = "test_account_pk"
         account_data = {"ML-DSA-65": "ml_dsa_key", "Falcon-512": "falcon_key"}
 
-        clean_state.add_account(public_key, account_data)
+        get_app_state().add_account(public_key, account_data)
 
-        assert public_key in clean_state.accounts
-        assert clean_state.accounts[public_key] == account_data
+        assert public_key in get_app_state().accounts
+        assert get_app_state().accounts[public_key] == account_data
 
     def test_add_account_overwrite_existing(self, clean_state):
         """Test that add_account overwrites existing accounts."""
@@ -201,25 +201,25 @@ class TestAddAccountMethod:
         updated_data = {"ML-DSA-65": "updated_key", "Falcon-512": "new_key"}
 
         # Add original account
-        clean_state.add_account(public_key, original_data)
-        assert clean_state.accounts[public_key] == original_data
+        get_app_state().add_account(public_key, original_data)
+        assert get_app_state().accounts[public_key] == original_data
 
         # Update account
-        clean_state.add_account(public_key, updated_data)
-        assert clean_state.accounts[public_key] == updated_data
+        get_app_state().add_account(public_key, updated_data)
+        assert get_app_state().accounts[public_key] == updated_data
 
         # Verify only one account exists
-        assert len(clean_state.accounts) == 1
+        assert len(get_app_state().accounts) == 1
 
     def test_add_account_empty_data(self, clean_state):
         """Test add_account with empty account data."""
         public_key = "empty_account"
         empty_data = {}
 
-        clean_state.add_account(public_key, empty_data)
+        get_app_state().add_account(public_key, empty_data)
 
-        assert public_key in clean_state.accounts
-        assert clean_state.accounts[public_key] == empty_data
+        assert public_key in get_app_state().accounts
+        assert get_app_state().accounts[public_key] == empty_data
 
     def test_add_account_unicode_data(self, clean_state):
         """Test add_account with unicode characters."""
@@ -229,10 +229,10 @@ class TestAddAccountMethod:
             "clé_française": "données_spéciales_🗝️",
         }
 
-        clean_state.add_account(public_key, unicode_data)
+        get_app_state().add_account(public_key, unicode_data)
 
-        assert public_key in clean_state.accounts
-        assert clean_state.accounts[public_key] == unicode_data
+        assert public_key in get_app_state().accounts
+        assert get_app_state().accounts[public_key] == unicode_data
 
     def test_add_account_thread_safety(self, clean_state):
         """Test add_account thread safety."""
@@ -247,7 +247,7 @@ class TestAddAccountMethod:
                     "thread_id": thread_id,
                     "account_id": i,
                 }
-                clean_state.add_account(pk, account_data)
+                get_app_state().add_account(pk, account_data)
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = [executor.submit(add_accounts, i) for i in range(num_threads)]
@@ -255,7 +255,7 @@ class TestAddAccountMethod:
                 future.result()
 
         # Verify all accounts were created
-        assert len(clean_state.accounts) == num_threads * accounts_per_thread
+        assert len(get_app_state().accounts) == num_threads * accounts_per_thread
 
 
 class TestRemoveAccountMethod:
@@ -267,18 +267,18 @@ class TestRemoveAccountMethod:
         account_data = {"ML-DSA-65": "test_key"}
 
         # Add account first
-        clean_state.add_account(public_key, account_data)
-        assert public_key in clean_state.accounts
+        get_app_state().add_account(public_key, account_data)
+        assert public_key in get_app_state().accounts
 
         # Remove account
-        clean_state.remove_account(public_key)
-        assert public_key not in clean_state.accounts
+        get_app_state().remove_account(public_key)
+        assert public_key not in get_app_state().accounts
 
     def test_remove_nonexistent_account(self, clean_state):
         """Test removing a non-existent account doesn't raise an error."""
         # Should not raise any exception
-        clean_state.remove_account("nonexistent_account")
-        assert len(clean_state.accounts) == 0
+        get_app_state().remove_account("nonexistent_account")
+        assert len(get_app_state().accounts) == 0
 
     def test_remove_account_multiple_times(self, clean_state):
         """Test removing the same account multiple times."""
@@ -286,16 +286,16 @@ class TestRemoveAccountMethod:
         account_data = {"ML-DSA-65": "test_key"}
 
         # Add account
-        clean_state.add_account(public_key, account_data)
-        assert public_key in clean_state.accounts
+        get_app_state().add_account(public_key, account_data)
+        assert public_key in get_app_state().accounts
 
         # Remove first time
-        clean_state.remove_account(public_key)
-        assert public_key not in clean_state.accounts
+        get_app_state().remove_account(public_key)
+        assert public_key not in get_app_state().accounts
 
         # Remove second time (should not raise error)
-        clean_state.remove_account(public_key)
-        assert public_key not in clean_state.accounts
+        get_app_state().remove_account(public_key)
+        assert public_key not in get_app_state().accounts
 
 
 class TestAddFileToBlockStoreMethod:
@@ -312,11 +312,11 @@ class TestAddFileToBlockStoreMethod:
             "created_at": time.time(),
         }
 
-        clean_state.add_file_to_block_store(user_pk, file_hash, file_metadata)
+        get_app_state().add_file_to_block_store(user_pk, file_hash, file_metadata)
 
-        assert user_pk in clean_state.block_store
-        assert file_hash in clean_state.block_store[user_pk]
-        assert clean_state.block_store[user_pk][file_hash] == file_metadata
+        assert user_pk in get_app_state().block_store
+        assert file_hash in get_app_state().block_store[user_pk]
+        assert get_app_state().block_store[user_pk][file_hash] == file_metadata
 
     def test_add_file_to_block_store_new_user(self, clean_state):
         """Test adding file for a new user creates user entry."""
@@ -325,14 +325,14 @@ class TestAddFileToBlockStoreMethod:
         file_metadata = {"filename": "test.txt"}
 
         # Initially no users
-        assert len(clean_state.block_store) == 0
+        assert len(get_app_state().block_store) == 0
 
-        clean_state.add_file_to_block_store(user_pk, file_hash, file_metadata)
+        get_app_state().add_file_to_block_store(user_pk, file_hash, file_metadata)
 
         # User should be created
-        assert user_pk in clean_state.block_store
-        assert len(clean_state.block_store) == 1
-        assert len(clean_state.block_store[user_pk]) == 1
+        assert user_pk in get_app_state().block_store
+        assert len(get_app_state().block_store) == 1
+        assert len(get_app_state().block_store[user_pk]) == 1
 
     def test_add_file_to_block_store_overwrite_file(self, clean_state):
         """Test overwriting existing file metadata."""
@@ -342,15 +342,15 @@ class TestAddFileToBlockStoreMethod:
         updated_metadata = {"filename": "updated.txt", "size": 200, "updated": True}
 
         # Add original file
-        clean_state.add_file_to_block_store(user_pk, file_hash, original_metadata)
-        assert clean_state.block_store[user_pk][file_hash] == original_metadata
+        get_app_state().add_file_to_block_store(user_pk, file_hash, original_metadata)
+        assert get_app_state().block_store[user_pk][file_hash] == original_metadata
 
         # Update file metadata
-        clean_state.add_file_to_block_store(user_pk, file_hash, updated_metadata)
-        assert clean_state.block_store[user_pk][file_hash] == updated_metadata
+        get_app_state().add_file_to_block_store(user_pk, file_hash, updated_metadata)
+        assert get_app_state().block_store[user_pk][file_hash] == updated_metadata
 
         # Should still be only one file
-        assert len(clean_state.block_store[user_pk]) == 1
+        assert len(get_app_state().block_store[user_pk]) == 1
 
     def test_add_file_to_block_store_thread_safety(self, clean_state):
         """Test thread safety of add_file_to_block_store."""
@@ -366,7 +366,9 @@ class TestAddFileToBlockStoreMethod:
                     "thread_id": thread_id,
                     "file_id": i,
                 }
-                clean_state.add_file_to_block_store(user_pk, file_hash, file_metadata)
+                get_app_state().add_file_to_block_store(
+                    user_pk, file_hash, file_metadata
+                )
 
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = [executor.submit(add_files, i) for i in range(num_threads)]
@@ -374,7 +376,7 @@ class TestAddFileToBlockStoreMethod:
                 future.result()
 
         # Verify all files were added
-        assert len(clean_state.block_store) == num_threads
+        assert len(get_app_state().block_store) == num_threads
 
 
 class TestAddChunkToChunkStoreMethod:
@@ -386,11 +388,11 @@ class TestAddChunkToChunkStoreMethod:
         chunk_hash = "chunk_123"
         chunk_metadata = {"index": 0, "size": 1024, "stored_at": time.time()}
 
-        clean_state.add_chunk_to_chunk_store(file_hash, chunk_hash, chunk_metadata)
+        get_app_state().add_chunk_to_chunk_store(file_hash, chunk_hash, chunk_metadata)
 
-        assert file_hash in clean_state.chunk_store
-        assert chunk_hash in clean_state.chunk_store[file_hash]
-        assert clean_state.chunk_store[file_hash][chunk_hash] == chunk_metadata
+        assert file_hash in get_app_state().chunk_store
+        assert chunk_hash in get_app_state().chunk_store[file_hash]
+        assert get_app_state().chunk_store[file_hash][chunk_hash] == chunk_metadata
 
     def test_add_chunk_to_chunk_store_new_file(self, clean_state):
         """Test adding chunk for a new file creates file entry."""
@@ -399,14 +401,14 @@ class TestAddChunkToChunkStoreMethod:
         chunk_metadata = {"index": 0, "size": 512}
 
         # Initially no files
-        assert len(clean_state.chunk_store) == 0
+        assert len(get_app_state().chunk_store) == 0
 
-        clean_state.add_chunk_to_chunk_store(file_hash, chunk_hash, chunk_metadata)
+        get_app_state().add_chunk_to_chunk_store(file_hash, chunk_hash, chunk_metadata)
 
         # File should be created
-        assert file_hash in clean_state.chunk_store
-        assert len(clean_state.chunk_store) == 1
-        assert len(clean_state.chunk_store[file_hash]) == 1
+        assert file_hash in get_app_state().chunk_store
+        assert len(get_app_state().chunk_store) == 1
+        assert len(get_app_state().chunk_store[file_hash]) == 1
 
     def test_add_chunk_to_chunk_store_overwrite_chunk(self, clean_state):
         """Test overwriting existing chunk metadata."""
@@ -416,15 +418,19 @@ class TestAddChunkToChunkStoreMethod:
         updated_metadata = {"index": 0, "size": 2048, "updated": True}
 
         # Add original chunk
-        clean_state.add_chunk_to_chunk_store(file_hash, chunk_hash, original_metadata)
-        assert clean_state.chunk_store[file_hash][chunk_hash] == original_metadata
+        get_app_state().add_chunk_to_chunk_store(
+            file_hash, chunk_hash, original_metadata
+        )
+        assert get_app_state().chunk_store[file_hash][chunk_hash] == original_metadata
 
         # Update chunk metadata
-        clean_state.add_chunk_to_chunk_store(file_hash, chunk_hash, updated_metadata)
-        assert clean_state.chunk_store[file_hash][chunk_hash] == updated_metadata
+        get_app_state().add_chunk_to_chunk_store(
+            file_hash, chunk_hash, updated_metadata
+        )
+        assert get_app_state().chunk_store[file_hash][chunk_hash] == updated_metadata
 
         # Should still be only one chunk
-        assert len(clean_state.chunk_store[file_hash]) == 1
+        assert len(get_app_state().chunk_store[file_hash]) == 1
 
 
 class TestAddToGraveyardMethod:
@@ -439,11 +445,11 @@ class TestAddToGraveyardMethod:
             "retired_at": time.time(),
         }
 
-        clean_state.add_to_graveyard(user_pk, retired_key_data)
+        get_app_state().add_to_graveyard(user_pk, retired_key_data)
 
-        assert user_pk in clean_state.graveyard
-        assert len(clean_state.graveyard[user_pk]) == 1
-        assert clean_state.graveyard[user_pk][0] == retired_key_data
+        assert user_pk in get_app_state().graveyard
+        assert len(get_app_state().graveyard[user_pk]) == 1
+        assert get_app_state().graveyard[user_pk][0] == retired_key_data
 
     def test_add_to_graveyard_new_user(self, clean_state):
         """Test adding retired key for a new user creates user entry."""
@@ -455,14 +461,14 @@ class TestAddToGraveyardMethod:
         }
 
         # Initially no users in graveyard
-        assert len(clean_state.graveyard) == 0
+        assert len(get_app_state().graveyard) == 0
 
-        clean_state.add_to_graveyard(user_pk, retired_key_data)
+        get_app_state().add_to_graveyard(user_pk, retired_key_data)
 
         # User should be created in graveyard
-        assert user_pk in clean_state.graveyard
-        assert len(clean_state.graveyard) == 1
-        assert len(clean_state.graveyard[user_pk]) == 1
+        assert user_pk in get_app_state().graveyard
+        assert len(get_app_state().graveyard) == 1
+        assert len(get_app_state().graveyard[user_pk]) == 1
 
     def test_add_to_graveyard_multiple_keys(self, clean_state):
         """Test adding multiple retired keys for the same user."""
@@ -481,11 +487,11 @@ class TestAddToGraveyardMethod:
         ]
 
         for retired_key_data in retired_keys:
-            clean_state.add_to_graveyard(user_pk, retired_key_data)
+            get_app_state().add_to_graveyard(user_pk, retired_key_data)
 
-        assert len(clean_state.graveyard[user_pk]) == 2
+        assert len(get_app_state().graveyard[user_pk]) == 2
         for i, retired_key_data in enumerate(retired_keys):
-            assert clean_state.graveyard[user_pk][i] == retired_key_data
+            assert get_app_state().graveyard[user_pk][i] == retired_key_data
 
     def test_add_to_graveyard_preserves_order(self, clean_state):
         """Test that retired keys are added in order."""
@@ -499,13 +505,13 @@ class TestAddToGraveyardMethod:
                 "retired_at": time.time() + i,
                 "order": i,
             }
-            clean_state.add_to_graveyard(user_pk, retired_key_data)
+            get_app_state().add_to_graveyard(user_pk, retired_key_data)
 
         # Verify order is preserved
-        assert len(clean_state.graveyard[user_pk]) == 5
+        assert len(get_app_state().graveyard[user_pk]) == 5
         for i in range(5):
-            assert clean_state.graveyard[user_pk][i]["order"] == i
-            assert clean_state.graveyard[user_pk][i]["public_key"] == f"key_{i}"
+            assert get_app_state().graveyard[user_pk][i]["order"] == i
+            assert get_app_state().graveyard[user_pk][i]["public_key"] == f"key_{i}"
 
 
 class TestEdgeCasesAndErrorConditions:
@@ -516,23 +522,23 @@ class TestEdgeCasesAndErrorConditions:
         nonce = "test_nonce_123"
 
         # First use should succeed
-        clean_state.check_and_add_nonce(nonce)
-        assert nonce in clean_state.used_nonces
+        get_app_state().check_and_add_nonce(nonce)
+        assert nonce in get_app_state().used_nonces
 
         # Second use should fail
         with pytest.raises(HTTPException) as exc_info:
-            clean_state.check_and_add_nonce(nonce)
+            get_app_state().check_and_add_nonce(nonce)
         assert exc_info.value.status_code == 400
         assert "Replay attack detected" in exc_info.value.detail
 
         # Test with empty nonce
-        clean_state.check_and_add_nonce("")
-        assert "" in clean_state.used_nonces
+        get_app_state().check_and_add_nonce("")
+        assert "" in get_app_state().used_nonces
 
         # Test with very long nonce
         long_nonce = "a" * 1000
-        clean_state.check_and_add_nonce(long_nonce)
-        assert long_nonce in clean_state.used_nonces
+        get_app_state().check_and_add_nonce(long_nonce)
+        assert long_nonce in get_app_state().used_nonces
 
     def test_large_data_handling(self, clean_state):
         """Tests handling of large data structures."""
@@ -540,9 +546,9 @@ class TestEdgeCasesAndErrorConditions:
         large_account_data = {
             f"alg_{i}": f"very_long_public_key_{'x' * 100}_{i}" for i in range(20)
         }
-        clean_state.add_account("large_account", large_account_data)
+        get_app_state().add_account("large_account", large_account_data)
 
-        retrieved = find_account("large_account")
+        retrieved = get_app_state().find_account("large_account")
         assert retrieved == large_account_data
 
         # Test large file metadata
@@ -551,12 +557,13 @@ class TestEdgeCasesAndErrorConditions:
             "description": "x" * 1000,
             "tags": [f"tag_{i}" for i in range(100)],
         }
-        clean_state.add_file_to_block_store(
+        get_app_state().add_file_to_block_store(
             "user1", "large_file_hash", large_file_metadata
         )
 
         assert (
-            clean_state.block_store["user1"]["large_file_hash"] == large_file_metadata
+            get_app_state().block_store["user1"]["large_file_hash"]
+            == large_file_metadata
         )
 
     def test_unicode_and_special_characters(self, clean_state):
@@ -567,15 +574,15 @@ class TestEdgeCasesAndErrorConditions:
             "алгоритм": "公钥_🔐_データ",
             "clé_publique": "données_spéciales_🗝️",
         }
-        clean_state.add_account(unicode_pk, unicode_data)
+        get_app_state().add_account(unicode_pk, unicode_data)
 
-        retrieved = find_account(unicode_pk)
+        retrieved = get_app_state().find_account(unicode_pk)
         assert retrieved == unicode_data
 
         # Test special characters in nonces
         special_nonce = "nonce_with_special_chars_!@#$%^&*()_+-="
-        clean_state.check_and_add_nonce(special_nonce)
-        assert special_nonce in clean_state.used_nonces
+        get_app_state().check_and_add_nonce(special_nonce)
+        assert special_nonce in get_app_state().used_nonces
 
 
 class TestIntegrationScenarios:
@@ -587,10 +594,10 @@ class TestIntegrationScenarios:
 
         # 1. Create account
         initial_data = {"ML-DSA-65": "ml_dsa_key", "Falcon-512": "falcon_key"}
-        clean_state.add_account(pk, initial_data)
+        get_app_state().add_account(pk, initial_data)
 
         # 2. Verify account exists
-        account = find_account(pk)
+        account = get_app_state().find_account(pk)
         assert account == initial_data
 
         # 3. Add files to account
@@ -601,7 +608,7 @@ class TestIntegrationScenarios:
                 "size": 1024 * (i + 1),
                 "created_at": time.time(),
             }
-            clean_state.add_file_to_block_store(pk, file_hash, file_metadata)
+            get_app_state().add_file_to_block_store(pk, file_hash, file_metadata)
 
         # 4. Add chunks for files
         for i in range(3):
@@ -609,13 +616,13 @@ class TestIntegrationScenarios:
             for j in range(2):  # 2 chunks per file
                 chunk_hash = f"chunk_{i}_{j}_hash"
                 chunk_metadata = {"index": j, "size": 512, "stored_at": time.time()}
-                clean_state.add_chunk_to_chunk_store(
+                get_app_state().add_chunk_to_chunk_store(
                     file_hash, chunk_hash, chunk_metadata
                 )
 
         # 5. Update account (retire old key)
         old_falcon_key = initial_data["Falcon-512"]
-        clean_state.add_to_graveyard(
+        get_app_state().add_to_graveyard(
             pk,
             {
                 "public_key": old_falcon_key,
@@ -625,12 +632,12 @@ class TestIntegrationScenarios:
         )
 
         updated_data = {"ML-DSA-65": "ml_dsa_key", "Falcon-512": "new_falcon_key"}
-        clean_state.add_account(pk, updated_data)
+        get_app_state().add_account(pk, updated_data)
 
         # 6. Verify final state
-        final_account = find_account(pk)
+        final_account = get_app_state().find_account(pk)
         assert final_account == updated_data
-        assert len(clean_state.block_store[pk]) == 3
-        assert len(clean_state.chunk_store) == 3
-        assert len(clean_state.graveyard[pk]) == 1
-        assert clean_state.graveyard[pk][0]["public_key"] == old_falcon_key
+        assert len(get_app_state().block_store[pk]) == 3
+        assert len(get_app_state().chunk_store) == 3
+        assert len(get_app_state().graveyard[pk]) == 1
+        assert get_app_state().graveyard[pk][0]["public_key"] == old_falcon_key

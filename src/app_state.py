@@ -113,6 +113,14 @@ class ServerState:
                 self.chunk_store[file_hash] = {}
             self.chunk_store[file_hash][chunk_hash] = chunk_metadata
 
+    def find_account(self, public_key: str):
+        """Finds an account by its classic public key or raises HTTPException."""
+        with self._accounts_lock:
+            account = self.accounts.get(public_key)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found.")
+        return account
+
 
 # Global state instance. In a real app, this might be managed differently.
 state = ServerState()
@@ -124,12 +132,8 @@ def get_app_state():
 
 
 def find_account(public_key: str):
-    """Finds an account by its classic public key or raises HTTPException."""
-    # Read operations on dicts are generally atomic in Python (GIL),
-    # but locking ensures consistency during complex multi-step updates,
-    # which might be introduced later.
-    with get_app_state()._accounts_lock:
-        account = get_app_state().accounts.get(public_key)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found.")
-    return account
+    """
+    DEPRECATED: Use state.find_account() instead.
+    Finds an account by its classic public key or raises HTTPException.
+    """
+    return state.find_account(public_key)

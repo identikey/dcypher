@@ -19,7 +19,7 @@ from models import (
     DownloadConcatenatedRequest,
     RegisterFileRequest,
 )
-from app_state import state, find_account
+from app_state import state
 import config
 
 router = APIRouter()
@@ -106,7 +106,7 @@ async def register_file(
     and stores the first part as the first chunk.
     The message to sign is f"REGISTER:{public_key}:{file_hash}:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
 
     if not verify_nonce(nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -215,7 +215,7 @@ async def register_file(
 @router.get("/storage/{public_key}")
 def list_files(public_key: str):
     """Lists all files in the user's block store."""
-    find_account(public_key)  # Ensure account exists
+    state.find_account(public_key)  # Ensure account exists
     user_files = state.block_store.get(public_key, {})
     return {"files": list(user_files.keys())}
 
@@ -223,7 +223,7 @@ def list_files(public_key: str):
 @router.get("/storage/{public_key}/{file_hash}")
 def get_file_metadata(public_key: str, file_hash: str):
     """Gets metadata for a specific file in the user's block store."""
-    find_account(public_key)
+    state.find_account(public_key)
     user_files = state.block_store.get(public_key, {})
     file_metadata = user_files.get(file_hash)
     if not file_metadata:
@@ -238,7 +238,7 @@ async def download_file(public_key: str, file_hash: str, request: DownloadFileRe
     Must be authorized by all keys on the account.
     Message to sign: f"DOWNLOAD:{public_key}:{file_hash}:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
     user_files = state.block_store.get(public_key, {})
     file_metadata = user_files.get(file_hash)
     if not file_metadata:
@@ -328,7 +328,7 @@ async def upload_chunk(
     Must be authorized by all keys.
     Message to sign: f"UPLOAD-CHUNK:{pk}:{file_hash}:{chunk_index}:{total_chunks}:{chunk_hash}:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
 
     # Check if the file has been registered and if the upload window is still open.
     file_metadata = state.block_store.get(public_key, {}).get(file_hash)
@@ -473,7 +473,7 @@ async def download_chunk(
     Must be authorized by all keys on the account.
     Message to sign: f"DOWNLOAD-CHUNK:{public_key}:{file_hash}:{chunk_hash}:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
 
     # Verify the parent file exists
     user_files = state.block_store.get(public_key, {})
@@ -654,7 +654,7 @@ async def download_concatenated_chunks(
     Must be authorized by all keys on the account.
     Message to sign: f"DOWNLOAD-CHUNKS:{public_key}:{file_hash}:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
 
     # Verify the parent file exists
     user_files = state.block_store.get(public_key, {})

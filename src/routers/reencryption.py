@@ -10,7 +10,7 @@ from lib.auth import verify_signature
 from lib.pq_auth import verify_pq_signature
 from lib import pre
 from security import verify_nonce
-from app_state import state, find_account
+from app_state import state
 from crypto.context_manager import CryptoContextManager
 import ecdsa
 
@@ -39,10 +39,10 @@ async def create_share(
     Message to sign: f"SHARE:{alice_pk}:{bob_pk}:{file_hash}:{nonce}"
     """
     # Verify Alice's account exists
-    alice_pq_keys = find_account(alice_public_key)
+    alice_pq_keys = state.find_account(alice_public_key)
 
     # Verify Bob's account exists and has PRE key
-    find_account(bob_public_key)
+    state.find_account(bob_public_key)
     bob_pre_key = state.get_pre_key(bob_public_key)
     if not bob_pre_key:
         raise HTTPException(
@@ -123,7 +123,7 @@ async def list_shares(public_key: str):
     """
     List all shares involving the given public key (both as sender and receiver).
     """
-    find_account(public_key)  # Ensure account exists
+    state.find_account(public_key)  # Ensure account exists
 
     shares_as_sender = []
     shares_as_receiver = []
@@ -170,7 +170,7 @@ async def download_shared_file(
     Message to sign: f"DOWNLOAD-SHARED:{bob_pk}:{share_id}:{nonce}"
     """
     # Verify Bob's account exists
-    bob_pq_keys = find_account(bob_public_key)
+    bob_pq_keys = state.find_account(bob_public_key)
 
     # Get share policy
     share_policy = state.get_share(share_id)
@@ -415,7 +415,7 @@ async def revoke_share(
     Message to sign: f"REVOKE:{alice_pk}:{share_id}:{nonce}"
     """
     # Verify Alice's account exists
-    alice_pq_keys = find_account(alice_public_key)
+    alice_pq_keys = state.find_account(alice_public_key)
 
     # Get share policy
     share_policy = state.get_share(share_id)

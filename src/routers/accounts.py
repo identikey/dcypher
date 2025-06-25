@@ -1,6 +1,6 @@
 import time
 from fastapi import APIRouter, HTTPException
-from app_state import state, find_account
+from app_state import state
 from models import CreateAccountRequest, AddPqKeysRequest, RemovePqKeysRequest
 from lib.auth import verify_signature
 from lib.pq_auth import verify_pq_signature, SUPPORTED_SIG_ALGS
@@ -110,7 +110,7 @@ def get_accounts():
 @router.get("/accounts/{public_key}")
 def get_account(public_key: str):
     """Retrieves a single account by public key."""
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
     pq_keys_list = [
         {"public_key": pk, "alg": alg} for alg, pk in account_pq_keys.items()
     ]
@@ -140,7 +140,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
     The message to sign is:
     f"ADD-PQ:{classic_pk}:{new_alg_1}:{new_alg_2}:...:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
 
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -239,7 +239,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
     The message to sign is:
     f"REMOVE-PQ:{classic_pk}:{removed_alg_1}:{removed_alg_2}:...:{nonce}"
     """
-    account_pq_keys = find_account(public_key)
+    account_pq_keys = state.find_account(public_key)
 
     if not verify_nonce(request.nonce):
         raise HTTPException(status_code=400, detail="Invalid or expired nonce.")
@@ -309,5 +309,5 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
 @router.get("/accounts/{public_key}/graveyard")
 def get_graveyard(public_key: str):
     """Retrieves the graveyard of retired PQ keys for a given account."""
-    find_account(public_key)  # Ensure account exists
+    state.find_account(public_key)  # Ensure account exists
     return {"public_key": public_key, "graveyard": state.graveyard.get(public_key, [])}
