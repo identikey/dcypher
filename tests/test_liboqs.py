@@ -22,21 +22,19 @@ def test_liboqs_integration():
     for path in liboqs_paths:
         print(f"\nChecking path: {path}")
         if os.path.exists(path):
-            print(f"✓ Library file exists: {path}")
+            print(f" Library file exists: {path}")
             try:
                 lib = ctypes.CDLL(path)
-                print(f"✓ Successfully loaded liboqs library from {path}")
+                print(f" Successfully loaded liboqs library from {path}")
                 print(f"  Library object: {lib}")
                 liboqs_found = True
                 break
             except Exception as e:
-                print(f"✗ Failed to load liboqs from {path}: {e}")
+                print(f" Failed to load liboqs from {path}: {e}")
         else:
-            print(f"✗ Library file not found: {path}")
+            print(f" Library file not found: {path}")
     
-    if not liboqs_found:
-        print("\n❌ No liboqs library found in any expected location")
-        return False
+    assert liboqs_found, "No liboqs library found in any expected location"
     
     # Test the KeyManager library finding function
     print("\n=== Testing KeyManager._find_liboqs_library ===")
@@ -45,33 +43,27 @@ def test_liboqs_integration():
         from lib.key_manager import KeyManager
         
         lib = KeyManager._find_liboqs_library()
-        if lib:
-            print("✓ KeyManager successfully found liboqs library!")
-            print(f"  Library: {lib}")
+        assert lib is not None, "KeyManager could not find liboqs library"
+        print(" KeyManager successfully found liboqs library!")
+        print(f"  Library: {lib}")
+        
+        # Test basic oqs import
+        try:
+            import oqs
+            print(" oqs module imported successfully")
             
-            # Test basic oqs import
-            try:
-                import oqs
-                print("✓ oqs module imported successfully")
-                
-                # Test basic key generation
-                sig = oqs.Signature("Dilithium2")
-                public_key = sig.generate_keypair()
-                print(f"✓ Generated Dilithium2 keypair, public key length: {len(public_key)}")
-                
-                return True
-            except Exception as e:
-                print(f"✗ Error testing oqs module: {e}")
-                return False
-        else:
-            print("✗ KeyManager could not find liboqs library")
-            return False
+            # Test basic key generation
+            sig = oqs.Signature("Dilithium2")
+            public_key = sig.generate_keypair()
+            print(f" Generated Dilithium2 keypair, public key length: {len(public_key)}")
+            
+        except Exception as e:
+            assert False, f"Error testing oqs module: {e}"
     except Exception as e:
-        print(f"✗ Error testing KeyManager: {e}")
+        print(f" Error testing KeyManager: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        assert False, f"Error testing KeyManager: {e}"
 
 if __name__ == "__main__":
-    success = test_liboqs_integration()
-    sys.exit(0 if success else 1)
+    test_liboqs_integration()
