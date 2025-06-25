@@ -175,49 +175,64 @@ class TestPREInitialization:
 
     def test_create_account_with_pre_key(self, temp_dir):
         """Test that account creation includes PRE public key if available."""
-        # Create identity with PRE keys
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+        # CRITICAL: Reset the context singleton to ensure clean state
+        CryptoContextManager._instance = None
+        context_manager = CryptoContextManager()
 
-        # Initialize PRE for the identity
-        with patch("src.lib.api_client.requests.get") as mock_get:
-            cc = pre.create_crypto_context()
-            pre.generate_keys(cc)  # Initialize context
-            mock_get.return_value.content = pre.serialize_to_bytes(cc)
-
-            KeyManager.add_pre_keys_to_identity(
-                identity_file, pre.serialize_to_bytes(cc)
+        try:
+            # Create identity with PRE keys
+            mnemonic, identity_file = KeyManager.create_identity_file(
+                "test_user", temp_dir
             )
 
-        # Create client
-        client = DCypherClient(
-            "http://localhost:8000", identity_path=str(identity_file)
-        )
+            # Initialize PRE for the identity
+            with patch("src.lib.api_client.requests.get") as mock_get:
+                cc = pre.create_crypto_context()
+                pre.generate_keys(cc)  # Initialize context
+                mock_get.return_value.content = pre.serialize_to_bytes(cc)
 
-        # Mock the account creation request
-        with (
-            patch("src.lib.api_client.requests.post") as mock_post,
-            patch.object(client, "get_nonce", return_value="test_nonce"),
-        ):
-            mock_post.return_value.status_code = 201
-            mock_post.return_value.headers = {"content-type": "application/json"}
-            mock_post.return_value.json.return_value = {"message": "Account created"}
+                KeyManager.add_pre_keys_to_identity(
+                    identity_file, pre.serialize_to_bytes(cc)
+                )
 
-            # Get keys for account creation
-            keys_data = KeyManager.load_identity_file(identity_file)
-            pk_classic_hex = KeyManager.get_classic_public_key(keys_data["classic_sk"])
-            pq_keys = [
-                {"pk_hex": key["pk_hex"], "alg": key["alg"]}
-                for key in keys_data["pq_keys"]
-            ]
+            # Create client
+            client = DCypherClient(
+                "http://localhost:8000", identity_path=str(identity_file)
+            )
 
-            # Create account
-            client.create_account(pk_classic_hex, pq_keys)
+            # Mock the account creation request
+            with (
+                patch("src.lib.api_client.requests.post") as mock_post,
+                patch.object(client, "get_nonce", return_value="test_nonce"),
+            ):
+                mock_post.return_value.status_code = 201
+                mock_post.return_value.headers = {"content-type": "application/json"}
+                mock_post.return_value.json.return_value = {
+                    "message": "Account created"
+                }
 
-            # Verify the request included PRE public key
-            call_args = mock_post.call_args
-            payload = call_args[1]["json"]
-            assert "pre_public_key_hex" in payload
-            assert len(payload["pre_public_key_hex"]) > 0
+                # Get keys for account creation
+                keys_data = KeyManager.load_identity_file(identity_file)
+                pk_classic_hex = KeyManager.get_classic_public_key(
+                    keys_data["classic_sk"]
+                )
+                pq_keys = [
+                    {"pk_hex": key["pk_hex"], "alg": key["alg"]}
+                    for key in keys_data["pq_keys"]
+                ]
+
+                # Create account
+                client.create_account(pk_classic_hex, pq_keys)
+
+                # Verify the request included PRE public key
+                call_args = mock_post.call_args
+                payload = call_args[1]["json"]
+                assert "pre_public_key_hex" in payload
+                assert len(payload["pre_public_key_hex"]) > 0
+
+        finally:
+            # Clean up context singleton
+            context_manager.reset()
 
 
 class TestPRECryptographicOperations:
