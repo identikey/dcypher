@@ -302,7 +302,6 @@ def test_complete_reencryption_workflow_live_server(
         decrypted_content = idk_message.decrypt_idk_message(
             cc=server_cc,  # Same server crypto context Alice used
             sk=bob_pre_sk,  # Bob's own PRE secret key
-            vk=alice_classic_vk,
             message_str=shared_file_str,
         )
 
@@ -550,7 +549,6 @@ def test_multiple_users_sharing_workflow(api_base_url, temp_dir):
             decrypted_content = idk_message.decrypt_idk_message(
                 cc=server_cc,  # Use the same server crypto context for all operations
                 sk=recipient_pre_sk,
-                vk=alice_classic_vk,
                 message_str=shared_file_str,
             )
 

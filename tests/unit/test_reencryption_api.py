@@ -583,12 +583,12 @@ class TestPRECryptographicOperations:
         # Clean up
         context_manager.reset()
 
-    def test_file_sharing_workflow_simulation(
+    def test_file_sharing_workflow_with_context_singleton(
         self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
     ):
-        """Test the complete file sharing workflow API integration.
+        """Test the complete file sharing workflow API integration with context singleton.
 
-        This test validates the API workflow steps:
+        This test validates the API workflow steps using the context singleton pattern:
         1. Alice creates and registers encrypted files
         2. Alice generates re-encryption keys for sharing
         3. Alice creates shares with proper parameters
@@ -596,103 +596,118 @@ class TestPRECryptographicOperations:
 
         Note: End-to-end crypto validation is covered in integration tests.
         """
-        # Test file content
-        file_content = b"This is Alice's confidential document for Bob"
-        filename = "confidential.txt"
+        # CRITICAL: Reset the context singleton to ensure clean state for this test
+        from src.crypto.context_manager import CryptoContextManager
 
-        # Get the shared deserialized context
-        shared_cc, cc_bytes = deserialized_crypto_context
+        CryptoContextManager._instance = None
+        context_manager = CryptoContextManager()
 
-        # Get PRE keys for API operations
-        alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
+        try:
+            # Test file content
+            file_content = b"This is Alice's confidential document for Bob"
+            filename = "confidential.txt"
 
-        # Get Alice's classic keys for signing
-        alice_keys_data = KeyManager.load_identity_file(alice_client_with_pre.keys_path)
-        alice_classic_sk = alice_keys_data["classic_sk"]
+            # Get the shared deserialized context
+            shared_cc, cc_bytes = deserialized_crypto_context
 
-        print("📝 Step 1: Alice creates encrypted file...")
+            # Get PRE keys for API operations
+            alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
 
-        # Alice creates an IDK message (encrypted file format)
-        optional_headers = {"Filename": filename, "ContentType": "text/plain"}
-        idk_parts = idk_message.create_idk_message_parts(
-            file_content,
-            shared_cc,
-            alice_pre_keys.publicKey,
-            alice_classic_sk,
-            optional_headers,
-        )
-
-        # Parse the first part to get file hash
-        parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
-        file_hash = parsed_first_part["headers"]["MerkleRoot"]
-
-        print("📤 Step 2: Alice registers file (API simulation)...")
-
-        # Mock file registration (this is API-level, not crypto)
-        with patch.object(alice_client_with_pre, "register_file") as mock_register:
-            mock_register.return_value = {"message": "File registered successfully"}
-
-            result = alice_client_with_pre.register_file(
-                public_key=alice_client_with_pre.get_classic_public_key(),
-                file_hash=file_hash,
-                idk_part_one=idk_parts[0],
-                filename=filename,
-                content_type="text/plain",
-                total_size=len(file_content),
+            # Get Alice's classic keys for signing
+            alice_keys_data = KeyManager.load_identity_file(
+                alice_client_with_pre.keys_path
             )
-            assert result["message"] == "File registered successfully"
+            alice_classic_sk = alice_keys_data["classic_sk"]
 
-        print("🔑 Step 3: Alice generates re-encryption key...")
+            print("📝 Step 1: Alice creates encrypted file...")
 
-        # Get Bob's PRE public key
-        with open(bob_client_with_pre.keys_path, "r") as f:
-            bob_identity = json.load(f)
-        bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
-
-        with patch.object(
-            alice_client_with_pre, "get_pre_crypto_context"
-        ) as mock_get_cc:
-            mock_get_cc.return_value = cc_bytes
-            re_key_hex = alice_client_with_pre.generate_re_encryption_key(
-                bob_pre_pk_hex
+            # Alice creates an IDK message (encrypted file format)
+            optional_headers = {"Filename": filename, "ContentType": "text/plain"}
+            idk_parts = idk_message.create_idk_message_parts(
+                file_content,
+                shared_cc,
+                alice_pre_keys.publicKey,
+                alice_classic_sk,
+                optional_headers,
             )
 
-        # Verify we got a valid re-encryption key
-        assert isinstance(re_key_hex, str)
-        assert len(re_key_hex) > 0
-        assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+            # Parse the first part to get file hash
+            parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
+            file_hash = parsed_first_part["headers"]["MerkleRoot"]
 
-        print("🔗 Step 4: Alice creates share...")
+            print("📤 Step 2: Alice registers file (API simulation)...")
 
-        # Alice creates a share (API operation)
-        with patch.object(alice_client_with_pre, "create_share") as mock_create_share:
-            share_id = f"share_{secrets.token_hex(16)}"
-            mock_create_share.return_value = {"share_id": share_id}
+            # Mock file registration (this is API-level, not crypto)
+            with patch.object(alice_client_with_pre, "register_file") as mock_register:
+                mock_register.return_value = {"message": "File registered successfully"}
 
-            share_result = alice_client_with_pre.create_share(
+                result = alice_client_with_pre.register_file(
+                    public_key=alice_client_with_pre.get_classic_public_key(),
+                    file_hash=file_hash,
+                    idk_part_one=idk_parts[0],
+                    filename=filename,
+                    content_type="text/plain",
+                    total_size=len(file_content),
+                )
+                assert result["message"] == "File registered successfully"
+
+            print("🔑 Step 3: Alice generates re-encryption key...")
+
+            # Get Bob's PRE public key
+            with open(bob_client_with_pre.keys_path, "r") as f:
+                bob_identity = json.load(f)
+            bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
+
+            with patch.object(
+                alice_client_with_pre, "get_pre_crypto_context"
+            ) as mock_get_cc:
+                mock_get_cc.return_value = cc_bytes
+                re_key_hex = alice_client_with_pre.generate_re_encryption_key(
+                    bob_pre_pk_hex
+                )
+
+            # Verify we got a valid re-encryption key
+            assert isinstance(re_key_hex, str)
+            assert len(re_key_hex) > 0
+            assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+
+            print("🔗 Step 4: Alice creates share...")
+
+            # Alice creates a share (API operation)
+            with patch.object(
+                alice_client_with_pre, "create_share"
+            ) as mock_create_share:
+                share_id = f"share_{secrets.token_hex(16)}"
+                mock_create_share.return_value = {"share_id": share_id}
+
+                share_result = alice_client_with_pre.create_share(
+                    bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
+                )
+                assert share_result["share_id"] == share_id
+
+            print("✅ Step 5: Validate complete API workflow...")
+
+            # Verify all API calls were made with correct parameters
+            mock_register.assert_called_once()
+            mock_create_share.assert_called_once_with(
                 bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
             )
-            assert share_result["share_id"] == share_id
 
-        print("✅ Step 5: Validate complete API workflow...")
+            # Verify data flow integrity
+            assert len(file_hash) > 0, "File hash generation failed"
+            assert len(re_key_hex) > 0, "Re-encryption key generation failed"
+            assert share_id.startswith("share_"), "Share ID format incorrect"
 
-        # Verify all API calls were made with correct parameters
-        mock_register.assert_called_once()
-        mock_create_share.assert_called_once_with(
-            bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
-        )
+            print("🎉 SUCCESS: Complete file sharing API workflow validated!")
+            print(f"  📁 File registered: {filename} ({len(file_content)} bytes)")
+            print(f"  🔐 IDK message: {len(idk_parts)} parts, hash {file_hash[:16]}...")
+            print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
+            print(f"  🔗 Share created: {share_id}")
+            print(f"  ✅ All API calls completed successfully")
 
-        # Verify data flow integrity
-        assert len(file_hash) > 0, "File hash generation failed"
-        assert len(re_key_hex) > 0, "Re-encryption key generation failed"
-        assert share_id.startswith("share_"), "Share ID format incorrect"
-
-        print("🎉 SUCCESS: Complete file sharing API workflow validated!")
-        print(f"  📁 File registered: {filename} ({len(file_content)} bytes)")
-        print(f"  🔐 IDK message: {len(idk_parts)} parts, hash {file_hash[:16]}...")
-        print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
-        print(f"  🔗 Share created: {share_id}")
-        print(f"  ✅ All API calls completed successfully")
+        finally:
+            # Clean up context singleton to prevent interference with other tests
+            context_manager.reset()
 
 
 class TestAPIIntegration:
@@ -711,103 +726,118 @@ class TestAPIIntegration:
 
         Note: End-to-end crypto validation is covered in integration tests.
         """
-        # Test file content
-        file_content = b"This is Alice's confidential document for Bob"
-        filename = "confidential.txt"
+        # CRITICAL: Reset the context singleton to ensure clean state for this test
+        from src.crypto.context_manager import CryptoContextManager
 
-        # Get the shared deserialized context
-        shared_cc, cc_bytes = deserialized_crypto_context
+        CryptoContextManager._instance = None
+        context_manager = CryptoContextManager()
 
-        # Get PRE keys for API operations
-        alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
+        try:
+            # Test file content
+            file_content = b"This is Alice's confidential document for Bob"
+            filename = "confidential.txt"
 
-        # Get Alice's classic keys for signing
-        alice_keys_data = KeyManager.load_identity_file(alice_client_with_pre.keys_path)
-        alice_classic_sk = alice_keys_data["classic_sk"]
+            # Get the shared deserialized context
+            shared_cc, cc_bytes = deserialized_crypto_context
 
-        print("📝 Step 1: Alice creates encrypted file...")
+            # Get PRE keys for API operations
+            alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
 
-        # Alice creates an IDK message (encrypted file format)
-        optional_headers = {"Filename": filename, "ContentType": "text/plain"}
-        idk_parts = idk_message.create_idk_message_parts(
-            file_content,
-            shared_cc,
-            alice_pre_keys.publicKey,
-            alice_classic_sk,
-            optional_headers,
-        )
-
-        # Parse the first part to get file hash
-        parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
-        file_hash = parsed_first_part["headers"]["MerkleRoot"]
-
-        print("📤 Step 2: Alice registers file (API simulation)...")
-
-        # Mock file registration (this is API-level, not crypto)
-        with patch.object(alice_client_with_pre, "register_file") as mock_register:
-            mock_register.return_value = {"message": "File registered successfully"}
-
-            result = alice_client_with_pre.register_file(
-                public_key=alice_client_with_pre.get_classic_public_key(),
-                file_hash=file_hash,
-                idk_part_one=idk_parts[0],
-                filename=filename,
-                content_type="text/plain",
-                total_size=len(file_content),
+            # Get Alice's classic keys for signing
+            alice_keys_data = KeyManager.load_identity_file(
+                alice_client_with_pre.keys_path
             )
-            assert result["message"] == "File registered successfully"
+            alice_classic_sk = alice_keys_data["classic_sk"]
 
-        print("🔑 Step 3: Alice generates re-encryption key...")
+            print("📝 Step 1: Alice creates encrypted file...")
 
-        # Get Bob's PRE public key
-        with open(bob_client_with_pre.keys_path, "r") as f:
-            bob_identity = json.load(f)
-        bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
-
-        with patch.object(
-            alice_client_with_pre, "get_pre_crypto_context"
-        ) as mock_get_cc:
-            mock_get_cc.return_value = cc_bytes
-            re_key_hex = alice_client_with_pre.generate_re_encryption_key(
-                bob_pre_pk_hex
+            # Alice creates an IDK message (encrypted file format)
+            optional_headers = {"Filename": filename, "ContentType": "text/plain"}
+            idk_parts = idk_message.create_idk_message_parts(
+                file_content,
+                shared_cc,
+                alice_pre_keys.publicKey,
+                alice_classic_sk,
+                optional_headers,
             )
 
-        # Verify we got a valid re-encryption key
-        assert isinstance(re_key_hex, str)
-        assert len(re_key_hex) > 0
-        assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+            # Parse the first part to get file hash
+            parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
+            file_hash = parsed_first_part["headers"]["MerkleRoot"]
 
-        print("🔗 Step 4: Alice creates share...")
+            print("📤 Step 2: Alice registers file (API simulation)...")
 
-        # Alice creates a share (API operation)
-        with patch.object(alice_client_with_pre, "create_share") as mock_create_share:
-            share_id = f"share_{secrets.token_hex(16)}"
-            mock_create_share.return_value = {"share_id": share_id}
+            # Mock file registration (this is API-level, not crypto)
+            with patch.object(alice_client_with_pre, "register_file") as mock_register:
+                mock_register.return_value = {"message": "File registered successfully"}
 
-            share_result = alice_client_with_pre.create_share(
+                result = alice_client_with_pre.register_file(
+                    public_key=alice_client_with_pre.get_classic_public_key(),
+                    file_hash=file_hash,
+                    idk_part_one=idk_parts[0],
+                    filename=filename,
+                    content_type="text/plain",
+                    total_size=len(file_content),
+                )
+                assert result["message"] == "File registered successfully"
+
+            print("🔑 Step 3: Alice generates re-encryption key...")
+
+            # Get Bob's PRE public key
+            with open(bob_client_with_pre.keys_path, "r") as f:
+                bob_identity = json.load(f)
+            bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
+
+            with patch.object(
+                alice_client_with_pre, "get_pre_crypto_context"
+            ) as mock_get_cc:
+                mock_get_cc.return_value = cc_bytes
+                re_key_hex = alice_client_with_pre.generate_re_encryption_key(
+                    bob_pre_pk_hex
+                )
+
+            # Verify we got a valid re-encryption key
+            assert isinstance(re_key_hex, str)
+            assert len(re_key_hex) > 0
+            assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+
+            print("🔗 Step 4: Alice creates share...")
+
+            # Alice creates a share (API operation)
+            with patch.object(
+                alice_client_with_pre, "create_share"
+            ) as mock_create_share:
+                share_id = f"share_{secrets.token_hex(16)}"
+                mock_create_share.return_value = {"share_id": share_id}
+
+                share_result = alice_client_with_pre.create_share(
+                    bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
+                )
+                assert share_result["share_id"] == share_id
+
+            print("✅ Step 5: Validate complete API workflow...")
+
+            # Verify all API calls were made with correct parameters
+            mock_register.assert_called_once()
+            mock_create_share.assert_called_once_with(
                 bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
             )
-            assert share_result["share_id"] == share_id
 
-        print("✅ Step 5: Validate complete API workflow...")
+            # Verify data flow integrity
+            assert len(file_hash) > 0, "File hash generation failed"
+            assert len(re_key_hex) > 0, "Re-encryption key generation failed"
+            assert share_id.startswith("share_"), "Share ID format incorrect"
 
-        # Verify all API calls were made with correct parameters
-        mock_register.assert_called_once()
-        mock_create_share.assert_called_once_with(
-            bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
-        )
+            print("🎉 SUCCESS: Complete file sharing API workflow validated!")
+            print(f"  📁 File registered: {filename} ({len(file_content)} bytes)")
+            print(f"  🔐 IDK message: {len(idk_parts)} parts, hash {file_hash[:16]}...")
+            print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
+            print(f"  🔗 Share created: {share_id}")
+            print(f"  ✅ All API calls completed successfully")
 
-        # Verify data flow integrity
-        assert len(file_hash) > 0, "File hash generation failed"
-        assert len(re_key_hex) > 0, "Re-encryption key generation failed"
-        assert share_id.startswith("share_"), "Share ID format incorrect"
-
-        print("🎉 SUCCESS: Complete file sharing API workflow validated!")
-        print(f"  📁 File registered: {filename} ({len(file_content)} bytes)")
-        print(f"  🔐 IDK message: {len(idk_parts)} parts, hash {file_hash[:16]}...")
-        print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
-        print(f"  🔗 Share created: {share_id}")
-        print(f"  ✅ All API calls completed successfully")
+        finally:
+            # Clean up context singleton to prevent interference with other tests
+            context_manager.reset()
 
     def test_list_shares_functionality(
         self, alice_client_with_pre, bob_client_with_pre

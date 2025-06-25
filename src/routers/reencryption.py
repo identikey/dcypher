@@ -314,33 +314,41 @@ async def download_shared_file(
             # Create new headers following the re-encryption specification
             new_headers = parsed_part["headers"].copy()
 
-            # Update required headers
+            # Update required headers for re-encrypted messages
             new_headers["ChunkHash"] = hashlib.blake2b(bob_payload_bytes).hexdigest()
             new_headers["ReEncrypted"] = "true"
             new_headers["OriginalSender"] = alice_public_key
             new_headers["ReEncryptedBy"] = SERVER_PUBLIC_KEY
             new_headers["ReEncryptedFor"] = bob_public_key
             new_headers["ReEncryptionTimestamp"] = datetime.utcnow().isoformat() + "Z"
+            new_headers["ProxyPublicKey"] = SERVER_PUBLIC_KEY  # Required by new spec
 
             # Remove headers that are invalidated by re-encryption
             new_headers.pop("Signature", None)  # Original signature no longer valid
+            new_headers.pop(
+                "SignerPublicKey", None
+            )  # Original signer no longer relevant
             new_headers.pop("AuthPath", None)  # Merkle verification impossible
             new_headers.pop("MerkleRoot", None)  # Original Merkle tree invalidated
 
-            # Create canonical header string for proxy signature
-            canonical_headers = []
+            # Create canonical header string for proxy signature (matching idk_message.py format)
+            canonical_header_str = ""
             for key in sorted(new_headers.keys()):
                 if (
                     key != "ProxySignature"
                 ):  # Don't include the signature we're about to create
                     value = new_headers[key]
-                    canonical_headers.append(f"{key}: {value}")
+                    if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal"]:
+                        canonical_header_str += f"{key}: {value}\n"
+                    else:
+                        canonical_header_str += f'{key}: "{value}"\n'
 
-            canonical_string = "\n".join(canonical_headers)
-            canonical_hash = hashlib.sha256(canonical_string.encode("utf-8")).digest()
+            canonical_hash = hashlib.sha256(
+                canonical_header_str.encode("utf-8")
+            ).digest()
 
             # Sign with server's private key
-            proxy_signature = SERVER_SK.sign(canonical_hash)
+            proxy_signature = SERVER_SK.sign_digest(canonical_hash)
             new_headers["ProxySignature"] = proxy_signature.hex()
 
             # Reconstruct the IDK part with re-encrypted payload and new headers
