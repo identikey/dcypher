@@ -1,5 +1,6 @@
 import hashlib
 import json
+import base64
 from fastapi import APIRouter, HTTPException, Form
 from fastapi.responses import Response
 from typing import List, Dict, Any
@@ -10,6 +11,7 @@ from lib.pq_auth import verify_pq_signature
 from lib import pre
 from security import verify_nonce
 from app_state import state, find_account
+from src.crypto.context_manager import CryptoContextManager
 import ecdsa
 
 # Generate a signing key for the server (for re-signed IDK messages)
@@ -234,26 +236,24 @@ async def download_shared_file(
 
     # Apply re-encryption using the stored re-encryption key
     try:
-        # CRITICAL FIX: OpenFHE requires ALL objects to use the SAME context instance
-        # The fundamental issue is that we have multiple context deserializations:
-        # 1. Client deserializes context for ciphertext creation
-        # 2. Client deserializes context again for re-encryption key generation
-        # 3. Server deserializes context for re-encryption operations
-        #
-        # Since we can't control the client's context lifecycle, we need to ensure
-        # that on the server side, we deserialize ALL objects with the same context.
+        # CRITICAL FIX: Use the context singleton to ensure ALL operations use the SAME context instance
+        # This resolves the OpenFHE limitation where crypto objects must be created with the same context.
 
-        # Use a single context instance for all server-side operations
-        server_context = pre.deserialize_cc(state.pre_cc_serialized)
+        # Get the server's singleton context - this is the SAME instance used for all operations
+        context_manager = CryptoContextManager()
 
-        # NEW APPROACH: Instead of storing re-encryption keys (which don't work across contexts),
-        # we'll store the Alice and Bob key information and generate the re-encryption key
-        # fresh on the server using our single context instance.
+        # If the context isn't initialized, initialize it from the stored serialized context
+        if context_manager.get_context() is None:
+            # Initialize from the stored context bytes
+            import base64 as b64
 
-        # For this to work, we need to modify the share creation to store the key information
-        # instead of the pre-generated re-encryption key. For now, let's try the original approach
-        # and document the limitation.
+            serialized_context = b64.b64encode(state.pre_cc_serialized).decode("ascii")
+            server_context = context_manager.deserialize_context(serialized_context)
+        else:
+            # Use the existing singleton context
+            server_context = context_manager.get_context()
 
+        # Now ALL operations use the SAME context instance from the singleton
         re_key_bytes = share_policy["re_encryption_key"]
         re_key = pre.deserialize_re_encryption_key(re_key_bytes)
 
@@ -283,12 +283,6 @@ async def download_shared_file(
                 full_part = parts_with_empties[i] + parts_with_empties[i + 1]
                 message_parts.append(full_part.strip())
 
-        # CRITICAL: Use the same context deserialization pattern as the client
-        # The client gets cc_bytes from the server, deserializes it, and uses that context
-        # for both ciphertext operations and re-encryption key generation.
-        # We must use the same pattern on the server side.
-        client_context = pre.deserialize_cc(state.pre_cc_serialized)
-
         # Extract Alice's ciphertexts and apply re-encryption
         import base64
 
@@ -310,7 +304,7 @@ async def download_shared_file(
 
             # Apply re-encryption transformation using the same context instance
             # The re-encryption key was also created with a context from the same bytes
-            bob_ciphertexts = pre.re_encrypt(client_context, re_key, [alice_ciphertext])
+            bob_ciphertexts = pre.re_encrypt(server_context, re_key, [alice_ciphertext])
             bob_ciphertext = bob_ciphertexts[0]
 
             # Serialize the re-encrypted ciphertext

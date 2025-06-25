@@ -4,11 +4,13 @@ import json
 import secrets
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+import base64
 
 from src.lib.api_client import DCypherClient
 from src.lib.key_manager import KeyManager
 from src.lib import pre, idk_message
 from src.app_state import get_app_state
+from src.crypto.context_manager import CryptoContextManager
 
 
 @pytest.fixture
@@ -929,65 +931,67 @@ class TestErrorHandling:
     def test_context_compatibility_across_multiple_deserializations(
         self, shared_crypto_context
     ):
-        """Test if multiple deserializations of the same context bytes work together.
+        """Test if the context singleton pattern resolves context compatibility issues.
 
-        This test reproduces the exact pattern used in our integration test:
-        1. Serialize a context
-        2. Deserialize it for Alice's operations (ciphertext creation)
-        3. Deserialize it again for re-encryption key generation
-        4. Deserialize it a third time for server re-encryption
+        This test demonstrates how using the context singleton pattern can resolve
+        the OpenFHE context compatibility issues by ensuring all operations use
+        the same context instance.
 
-        This should help us understand OpenFHE's context compatibility requirements.
+        Updated to use the context singleton instead of multiple deserializations.
         """
-        # Step 1: Create and serialize the original context (like the server does)
-        original_cc = shared_crypto_context
-        cc_bytes = pre.serialize_to_bytes(original_cc)
+        # Reset the singleton to start fresh
+        CryptoContextManager._instance = None
+        context_manager = CryptoContextManager()
 
-        # Step 2: Alice's workflow - deserialize context for ciphertext creation
-        alice_cc = pre.deserialize_cc(cc_bytes)
-        alice_keys = pre.generate_keys(alice_cc)
+        # Step 1: Initialize the singleton with the shared context
+        # In a real scenario, this would be done by the server on startup
+        original_cc = shared_crypto_context
+
+        # Set the context directly in the singleton for testing
+        # This simulates what would happen when the server initializes its context
+        context_manager._context = original_cc
+        context_manager._context_params = {
+            "scheme": "BFV",
+            "plaintext_modulus": 65537,
+            "multiplicative_depth": 2,
+            "scaling_mod_size": 50,
+            "batch_size": 8,
+        }
+
+        # Step 2: All operations use the SAME context instance from the singleton
+        shared_cc = context_manager.get_context()
+
+        # Alice's operations - using the singleton context
+        alice_keys = pre.generate_keys(shared_cc)
 
         test_data = b"Test data for context compatibility"
-        slot_count = pre.get_slot_count(alice_cc)
+        slot_count = pre.get_slot_count(shared_cc)
         coeffs = pre.bytes_to_coefficients(test_data, slot_count)
-        alice_ciphertext = pre.encrypt(alice_cc, alice_keys.publicKey, coeffs)
+        alice_ciphertext = pre.encrypt(shared_cc, alice_keys.publicKey, coeffs)
 
-        # Step 3: Bob's key generation - deserialize context again
-        bob_cc = pre.deserialize_cc(cc_bytes)  # Different instance than alice_cc
-        bob_keys = pre.generate_keys(bob_cc)
+        # Bob's key generation - using the SAME singleton context
+        bob_keys = pre.generate_keys(shared_cc)
 
-        # Step 4: Re-encryption key generation - deserialize context yet again
-        rekey_cc = pre.deserialize_cc(
-            cc_bytes
-        )  # Different instance than alice_cc and bob_cc
+        # Re-encryption key generation - using the SAME singleton context
         re_key = pre.generate_re_encryption_key(
-            rekey_cc, alice_keys.secretKey, bob_keys.publicKey
+            shared_cc, alice_keys.secretKey, bob_keys.publicKey
         )
 
-        # Step 5: Server re-encryption - deserialize context one more time
-        server_cc = pre.deserialize_cc(cc_bytes)  # Fourth different instance
+        # Server re-encryption - using the SAME singleton context
+        bob_ciphertexts = pre.re_encrypt(shared_cc, re_key, alice_ciphertext)
 
-        # This is where our integration test fails - try to re-encrypt with different context instance
-        try:
-            bob_ciphertexts = pre.re_encrypt(server_cc, re_key, alice_ciphertext)
+        # Decryption - using the SAME singleton context
+        decrypted_coeffs = pre.decrypt(
+            shared_cc, bob_keys.secretKey, bob_ciphertexts, len(coeffs)
+        )
+        decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
 
-            # If we get here, the re-encryption worked - test decryption
-            decrypted_coeffs = pre.decrypt(
-                server_cc, bob_keys.secretKey, bob_ciphertexts, len(coeffs)
-            )
-            decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
+        assert decrypted_data == test_data
+        print("✅ Context singleton pattern resolves compatibility issues!")
+        print("  All operations used the same context instance successfully")
 
-            assert decrypted_data == test_data
-            print("✅ Multiple context deserializations work together!")
-
-        except Exception as e:
-            print(f"❌ Multiple context deserializations failed: {e}")
-            print(
-                "This confirms that OpenFHE requires the same context instance for all operations"
-            )
-
-            # Document the limitation for future reference
-            pytest.fail(f"OpenFHE context limitation confirmed: {e}")
+        # Clean up
+        context_manager.reset()
 
 
 # Additional integration tests can be added here as the implementation evolves

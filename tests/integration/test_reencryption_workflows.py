@@ -50,6 +50,7 @@ from src.lib import pre
 from src.app_state import get_app_state
 from src.lib import idk_message
 import ecdsa
+from src.crypto.context_manager import CryptoContextManager
 
 
 @pytest.fixture
@@ -111,7 +112,17 @@ def test_complete_reencryption_workflow_live_server(
 
     # Get the server's crypto context
     server_cc_bytes = alice_client.get_pre_crypto_context()
-    server_cc = pre.deserialize_cc(server_cc_bytes)
+
+    # CRITICAL: Use the context singleton pattern to ensure ALL operations use the SAME context instance
+    # This resolves the OpenFHE limitation where crypto objects must be created with the same context.
+
+    # Reset singleton to start fresh
+    CryptoContextManager._instance = None
+    context_manager = CryptoContextManager()
+
+    # Initialize the singleton with the server's context
+    serialized_context = base64.b64encode(server_cc_bytes).decode("ascii")
+    server_cc = context_manager.deserialize_context(serialized_context)
 
     # CRITICAL: Generate different PRE keys for Alice and Bob from the SAME context instance
     # This ensures proper proxy re-encryption while maintaining crypto context consistency
@@ -355,7 +366,15 @@ def test_multiple_users_sharing_workflow(api_base_url, temp_dir):
 
     # Get the server's crypto context that all users must share
     server_cc_bytes = temp_client.get_pre_crypto_context()
-    server_cc = pre.deserialize_cc(server_cc_bytes)
+
+    # CRITICAL: Use the context singleton pattern to ensure ALL operations use the SAME context instance
+    # Reset singleton to start fresh for this test
+    CryptoContextManager._instance = None
+    context_manager = CryptoContextManager()
+
+    # Initialize the singleton with the server's context
+    serialized_context = base64.b64encode(server_cc_bytes).decode("ascii")
+    server_cc = context_manager.deserialize_context(serialized_context)
 
     # Generate different PRE keys for each user from the same crypto context instance
     user_pre_keys = {}
