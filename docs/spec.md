@@ -37,6 +37,7 @@ The headers are in `Key: Value` format.
 * `BytesTotal`: The total size in bytes of the original, unencoded message data. This is critical for correctly truncating the data after decryption.
 * `MerkleRoot`: The BLAKE2b hash of the root of the Merle tree. This also serves as the unique identifier for the message.
 * `Signature`: An ECDSA signature of the canonicalized headers, to authenticate the metadata.
+* `SignerPublicKey`: The hex-encoded public key of the message signer, enabling self-contained verification.
 
 #### Part-specific Headers
 
@@ -78,7 +79,7 @@ The `Signature` is calculated and included for each part of the message to provi
 
 A recipient performs the following steps for each part received:
 
-1. Verify the signature. To do this, recreate the signed message by building the canonical header string (as described in Signature Generation). The SHA-256 hash of this string is then verified against the `Signature` header using the sender's public key. If the signature is invalid, the part must be discarded.
+1. **Verify the signature**: To do this, recreate the signed message by building the canonical header string (as described in Signature Generation). The SHA-256 hash of this string is then verified against the `Signature` header using the `SignerPublicKey` from the message headers. If the signature is invalid, the part must be discarded.
 2. With the signature verified, the recipient knows the payload and headers are authentic. It can then proceed with verifying the ciphertext pieces against the `MerkleRoot` using the `AuthPath`.
 3. Once all parts are received and verified, extract and assemble the list of all ciphertext pieces.
 4. Deserialize and decrypt the ciphertext pieces using the appropriate key and the `PartSlotsUsed` from the header.
@@ -205,6 +206,7 @@ Comment: "IYKYK"
 MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
 Part: "1/8"
 Signature: "<ecdsa_signature_of_the_canonicalized_headers>"
+SignerPublicKey: "<hex_encoded_public_key_of_alice>"
 PartSlotsTotal: "1024"
 PartSlotsUsed: "1024"
 Version: "0.1"
@@ -221,6 +223,7 @@ Comment: "IYKYK"
 MerkleRoot: "<blake2b_root_hash_for_all_8_pieces>"
 Part: "8/8"
 Signature: "<ecdsa_signature_of_the_canonicalized_headers>"
+SignerPublicKey: "<hex_encoded_public_key_of_alice>"
 PartSlotsTotal: "1024"
 PartSlotsUsed: "512"
 Version: "0.1"
@@ -256,11 +259,13 @@ A re-encrypted IDK message maintains the same basic structure but includes addit
 * `ReEncryptedFor`: The public key or identifier of the intended recipient (Bob).
 * `ReEncryptionTimestamp`: ISO 8601 timestamp when re-encryption was performed.
 * `ProxySignature`: ECDSA signature of the re-encrypted headers by the proxy service.
+* `ProxyPublicKey`: The hex-encoded public key of the proxy service, enabling self-contained verification of the proxy signature.
 
 #### Modified Headers in Re-encrypted Messages
 
 * `ChunkHash`: Updated to reflect the hash of the re-encrypted payload.
 * `Signature`: **Removed** - The original sender's signature is no longer valid for the modified payload.
+* `SignerPublicKey`: **Removed** - The original signer's public key is no longer relevant for payload verification.
 * `AuthPath`: **Removed** - Merkle verification cannot work across re-encryption.
 * `MerkleRoot`: **Removed** - The original Merkle tree is invalidated by payload changes.
 
@@ -281,20 +286,22 @@ A re-encrypted IDK message maintains the same basic structure but includes addit
 Recipients of re-encrypted messages follow a modified verification process:
 
 1. **Check Re-encryption Status**: Verify the `ReEncrypted` header is set to `"true"`.
-2. **Verify Proxy Signature**: Validate the `ProxySignature` using the known proxy service public key.
+2. **Verify Proxy Signature**: Validate the `ProxySignature` using the `ProxyPublicKey` from the message headers.
 3. **Verify Payload Integrity**: Check that the `ChunkHash` matches the hash of the base64-decoded payload.
 4. **Skip Merkle Verification**: Re-encrypted messages cannot maintain Merkle tree integrity.
 5. **Audit Trail Verification**: Verify the re-encryption metadata (`OriginalSender`, `ReEncryptedFor`, etc.) matches expected values.
 6. **Decrypt Content**: Use the recipient's private key to decrypt the re-encrypted ciphertexts.
 
-### Trust Model for Re-encrypted Messages
+### Trust Model
 
-Re-encrypted messages operate under a different trust model:
+Re-encrypted messages operate under a modified trust model:
 
-* **Original Authenticity**: Verified through the re-encryption audit trail and proxy service trust.
-* **Proxy Trust**: Recipients must trust the proxy service to perform re-encryption correctly.
-* **Content Integrity**: Guaranteed by the cryptographic properties of proxy re-encryption.
-* **Payload Integrity**: Verified through `ChunkHash` validation.
+1. **Self-Contained Verification**: Messages include all necessary verification keys (`SignerPublicKey`, `ProxyPublicKey`) for independent validation.
+2. **Proxy Trust**: Recipients must trust the proxy service to perform re-encryption correctly and honestly.
+3. **Metadata Integrity**: The proxy service guarantees the accuracy of re-encryption metadata.
+4. **Payload Authenticity**: The `ProxySignature` ensures the re-encrypted payload hasn't been tampered with after re-encryption.
+5. **Origin Traceability**: The `OriginalSender` field provides cryptographic proof of the message's origin.
+6. **No Merkle Verification**: Recipients cannot verify the original Merkle tree structure due to the nature of re-encryption.
 
 ### Example Re-encrypted Message
 
@@ -306,6 +313,7 @@ OriginalSender: "048850ecd869d9bf..."
 Part: "1/1"
 PartSlotsTotal: "8192"
 PartSlotsUsed: "33"
+ProxyPublicKey: "04server5678abcd..."
 ProxySignature: "3041021f2a8b9c7d..."
 ReEncrypted: "true"
 ReEncryptedBy: "04server5678abcd..."

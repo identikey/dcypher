@@ -285,6 +285,7 @@ def test_idk_message_format_conformance(crypto_setup):
         "BytesTotal",
         "MerkleRoot",
         "Signature",
+        "SignerPublicKey",
         "Part",
         "ChunkHash",
         "AuthPath",
@@ -323,10 +324,10 @@ def test_full_message_reconstruction_and_decryption(crypto_setup):
 
     full_message_str = "\n".join(message_parts)
 
-    # 3. Decrypt and verify the full message
+    # 3. Decrypt and verify the full message using self-contained verification
     try:
         decrypted_data = idk_message.decrypt_idk_message(
-            cc=cc, sk=keys.secretKey, vk=vk, message_str=full_message_str
+            cc=cc, sk=keys.secretKey, message_str=full_message_str
         )
     except ValueError as e:
         pytest.fail(f"Decryption failed with multi-piece parts: {e}")
@@ -361,10 +362,10 @@ def test_end_to_end_with_optional_headers(crypto_setup):
     )
     full_message_str = "\n".join(message_parts)
 
-    # 3. Decrypt and verify the full message
+    # 3. Decrypt and verify the full message using self-contained verification
     try:
         decrypted_data = idk_message.decrypt_idk_message(
-            cc=cc, sk=keys.secretKey, vk=vk, message_str=full_message_str
+            cc=cc, sk=keys.secretKey, message_str=full_message_str
         )
     except ValueError as e:
         pytest.fail(f"Decryption failed with optional headers: {e}")
@@ -435,7 +436,7 @@ def test_tampering_by_removing_optional_header(crypto_setup):
     # 4. Assert that verification fails
     with pytest.raises(ValueError, match="Verification failed"):
         idk_message.decrypt_idk_message(
-            cc=cc, sk=keys.secretKey, vk=vk, message_str=tampered_part_str
+            cc=cc, sk=keys.secretKey, message_str=tampered_part_str
         )
 
 
@@ -569,7 +570,7 @@ def test_verification_failures(crypto_setup, tamper_func, error_msg):
     # 4. Assert that the high-level decryption/verification function raises an error
     with pytest.raises(ValueError, match="Verification failed"):
         idk_message.decrypt_idk_message(
-            cc=cc, sk=keys.secretKey, vk=vk, message_str=tampered_part_str
+            cc=cc, sk=keys.secretKey, message_str=tampered_part_str
         )
 
 
@@ -658,5 +659,119 @@ def test_decrypt_with_inconsistent_merkle_roots(crypto_setup):
 
     with pytest.raises(ValueError, match="Inconsistent Merkle roots"):
         idk_message.decrypt_idk_message(
-            cc=cc, sk=keys.secretKey, vk=vk, message_str=mixed_message_str
+            cc=cc, sk=keys.secretKey, message_str=mixed_message_str
         )
+
+
+def test_create_and_verify_re_encrypted_message(crypto_setup):
+    """
+    Tests the creation and verification of re-encrypted IDK messages with self-contained verification.
+    """
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    sk = crypto_setup["sk"]  # Alice's signing key
+
+    # Create a separate proxy signing key
+    proxy_sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    proxy_vk = proxy_sk.get_verifying_key()
+
+    # Create test data and encrypt it
+    original_data = b"Hello, this is a test message for re-encryption!"
+    slot_count = pre.get_slot_count(cc)
+    pt_coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    alice_ciphertexts = pre.encrypt(cc, keys.publicKey, pt_coeffs)
+
+    # Create re-encrypted message parts using proxy's signing key
+    alice_public_key_hex = sk.get_verifying_key().to_string().hex()
+    proxy_public_key_hex = proxy_vk.to_string().hex()
+    bob_public_key_hex = "04" + "b" * 126  # Mock Bob's public key
+
+    re_encrypted_parts = idk_message.create_re_encrypted_idk_message_parts(
+        re_encrypted_ciphertexts=alice_ciphertexts,
+        original_sender_public_key=alice_public_key_hex,
+        proxy_public_key=proxy_public_key_hex,
+        recipient_public_key=bob_public_key_hex,
+        proxy_signing_key=proxy_sk,  # Use proxy's signing key
+        original_bytes_total=len(original_data),
+        cc=cc,
+    )
+
+    # Verify the message structure
+    assert len(re_encrypted_parts) > 0
+
+    # Parse the first part to check headers
+    first_part = re_encrypted_parts[0]
+    parsed = idk_message.parse_idk_message_part(first_part)
+    headers = parsed["headers"]
+
+    # Check re-encryption specific headers
+    assert headers["ReEncrypted"] == "true"
+    assert headers["OriginalSender"] == alice_public_key_hex
+    assert headers["ProxyPublicKey"] == proxy_public_key_hex
+    assert headers["ReEncryptedFor"] == bob_public_key_hex
+    assert "ProxySignature" in headers
+
+    # Should NOT have regular message headers
+    assert "SignerPublicKey" not in headers
+    assert "Signature" not in headers
+    assert "AuthPath" not in headers
+    assert "MerkleRoot" not in headers
+
+
+def test_re_encrypted_message_format_conformance(crypto_setup):
+    """
+    Tests that re-encrypted messages conform to the specification format.
+    """
+    # 1. Setup
+    cc = crypto_setup["cc"]
+    keys = crypto_setup["keys"]
+    proxy_sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+
+    original_data = b"Test data"
+    slot_count = pre.get_slot_count(cc)
+    pt_coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    ciphertexts = pre.encrypt(cc, keys.publicKey, pt_coeffs)
+
+    # 2. Create re-encrypted message
+    re_encrypted_parts = idk_message.create_re_encrypted_idk_message_parts(
+        re_encrypted_ciphertexts=ciphertexts,
+        original_sender_public_key="04" + "a" * 126,
+        proxy_public_key=proxy_sk.get_verifying_key().to_string().hex(),
+        recipient_public_key="04" + "b" * 126,
+        proxy_signing_key=proxy_sk,
+        original_bytes_total=len(original_data),
+        cc=cc,
+    )
+
+    # 3. Check format conformance
+    part_str = re_encrypted_parts[0]
+    lines = part_str.split("\n")
+
+    # Check BEGIN/END markers
+    assert lines[0].startswith("----- BEGIN IDK MESSAGE PART")
+    assert lines[-1].startswith("----- END IDK MESSAGE PART")
+
+    # Check headers are present and properly formatted
+    header_lines = []
+    for line in lines[1:-1]:
+        if ": " in line:
+            header_lines.append(line)
+        else:
+            break  # Reached payload
+
+    header_keys = [line.split(": ")[0] for line in header_lines]
+
+    # Check required re-encryption headers
+    required_headers = {
+        "ReEncrypted",
+        "OriginalSender",
+        "ReEncryptedBy",
+        "ReEncryptedFor",
+        "ReEncryptionTimestamp",
+        "ProxySignature",
+        "ProxyPublicKey",
+    }
+    assert required_headers.issubset(set(header_keys))
+
+    # Check headers are in alphabetical order
+    assert header_keys == sorted(header_keys)

@@ -140,6 +140,9 @@ def create_idk_message_parts(
     total_parts = len(serialized_pieces_bytes)
     message_parts = []
 
+    # Get the signer's public key for self-contained verification
+    signer_public_key_hex = signing_key.get_verifying_key().to_string().hex()
+
     # 4. Create each message part
     for i, piece_bytes in enumerate(serialized_pieces_bytes):
         part_num = i + 1
@@ -167,6 +170,7 @@ def create_idk_message_parts(
             "MerkleRoot": merkle_root,
             "Part": f"{part_num}/{total_parts}",
             "ChunkHash": hashlib.blake2b(payload_bytes).hexdigest(),
+            "SignerPublicKey": signer_public_key_hex,
         }
 
         # Add optional headers first, so they are part of the signed content
@@ -320,7 +324,7 @@ def verify_merkle_path(
 
 
 def decrypt_idk_message(
-    cc, sk: ecdsa.SigningKey, vk: ecdsa.VerifyingKey, message_str: str
+    cc, sk: ecdsa.SigningKey, message_str: str, verify_sender: Optional[str] = None
 ) -> bytes:
     """
     Parses, verifies, and decrypts a full IDK message string.
@@ -331,8 +335,9 @@ def decrypt_idk_message(
     Args:
         cc: The crypto context.
         sk: The recipient's secret key for decryption.
-        vk: The sender's verifying key for signature verification.
         message_str: The complete, raw IDK message string (can contain multiple parts).
+        verify_sender: Optional hex-encoded public key to verify against SignerPublicKey header.
+                      If provided, will verify the message came from this specific sender.
 
     Returns:
         The decrypted original data as a byte string.
@@ -372,56 +377,22 @@ def decrypt_idk_message(
     merkle_root = ""
     current_piece_index = 0
     slot_count = pre.get_slot_count(cc)
+    message_signer_vk = None
 
     for parsed in sorted_parts:
         try:
             headers = parsed["headers"]
             payload_b64 = parsed["payload_b64"]
 
-            # Verify signature
-            signature_hex = headers.pop("Signature")
-            # Reconstruct the "Part" header for canonical string verification
-            headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
-
-            canonical_header_str = ""
-            for key in sorted(headers.keys()):
-                if key in ["PartNum", "TotalParts"]:
-                    continue
-                value = headers[key]
-                # Re-create the canonical string by quoting string values
-                if key in [
-                    "PartSlotsTotal",
-                    "PartSlotsUsed",
-                    "BytesTotal",
-                    "AuthPath",
-                ]:
-                    canonical_header_str += f"{key}: {value}\n"
-                else:
-                    canonical_header_str += f'{key}: "{value}"\n'
-
-            header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
-            # The signature from the header is already unquoted by parse_idk_message_part
-            vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
-
-            # Validate part-specific headers
-            part_slots_used = int(headers["PartSlotsUsed"])
-            part_slots_total = int(headers["PartSlotsTotal"])
-            if part_slots_used > part_slots_total:
-                raise ValueError(
-                    f"PartSlotsUsed ({part_slots_used}) "
-                    f"cannot exceed PartSlotsTotal ({part_slots_total})"
-                )
-
-            # Validate the payload format and content.
+            # Decode payload first as it's needed by both message types
             payload_bytes = base64.b64decode(payload_b64, validate=True)
-            if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
-                raise ValueError("ChunkHash verification failed")
 
-            # Check if this is a re-encrypted message
+            # Check if this is a re-encrypted message first
             is_re_encrypted = headers.get("ReEncrypted", "false").lower() == "true"
 
             if is_re_encrypted:
                 # Handle re-encrypted messages according to new specification
+                # Re-encrypted messages don't have SignerPublicKey, they have ProxyPublicKey
 
                 # Verify required re-encryption headers are present
                 required_re_headers = [
@@ -430,6 +401,7 @@ def decrypt_idk_message(
                     "ReEncryptedFor",
                     "ReEncryptionTimestamp",
                     "ProxySignature",
+                    "ProxyPublicKey",
                 ]
                 for req_header in required_re_headers:
                     if req_header not in headers:
@@ -437,21 +409,32 @@ def decrypt_idk_message(
                             f"Re-encrypted message missing required header: {req_header}"
                         )
 
-                # Verify proxy signature
-                # Create canonical header string (same as server does)
-                canonical_headers = []
+                # Verify proxy signature using the ProxyPublicKey from the message
+                proxy_public_key_hex = headers["ProxyPublicKey"]
+                proxy_public_key_bytes = bytes.fromhex(proxy_public_key_hex)
+                proxy_vk = ecdsa.VerifyingKey.from_string(
+                    proxy_public_key_bytes, curve=ecdsa.SECP256k1
+                )
+
+                # Create canonical header string for proxy signature verification
+                canonical_header_str = ""
                 for key in sorted(headers.keys()):
                     if key != "ProxySignature":
                         value = headers[key]
-                        canonical_headers.append(f"{key}: {value}")
+                        if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal"]:
+                            canonical_header_str += f"{key}: {value}\n"
+                        else:
+                            canonical_header_str += f'{key}: "{value}"\n'
 
-                canonical_string = "\n".join(canonical_headers)
                 canonical_hash = hashlib.sha256(
-                    canonical_string.encode("utf-8")
+                    canonical_header_str.encode("utf-8")
                 ).digest()
 
-                # TODO: Add proxy signature verification here when server public key is available
-                # For now, we trust that the message came from the server
+                # Verify the proxy signature
+                proxy_signature_hex = headers["ProxySignature"]
+                proxy_vk.verify_digest(
+                    bytes.fromhex(proxy_signature_hex), canonical_hash
+                )
 
                 # Skip Merkle verification for re-encrypted messages
                 print(
@@ -464,6 +447,60 @@ def decrypt_idk_message(
 
             else:
                 # Handle original (non-re-encrypted) messages with full verification
+                # Original messages must have SignerPublicKey
+
+                # Get the signer's public key from the message headers for self-contained verification
+                if "SignerPublicKey" in headers:
+                    signer_public_key_hex = headers["SignerPublicKey"]
+                    # Create verifying key from the hex-encoded public key
+                    signer_public_key_bytes = bytes.fromhex(signer_public_key_hex)
+                    vk = ecdsa.VerifyingKey.from_string(
+                        signer_public_key_bytes, curve=ecdsa.SECP256k1
+                    )
+
+                    # Store the first signer key and verify consistency across parts
+                    if message_signer_vk is None:
+                        message_signer_vk = vk
+                        # If verify_sender is specified, check that it matches
+                        if verify_sender and signer_public_key_hex != verify_sender:
+                            raise ValueError(
+                                f"Message signer {signer_public_key_hex[:16]}... does not match expected sender {verify_sender[:16]}..."
+                            )
+                    elif message_signer_vk.to_string().hex() != signer_public_key_hex:
+                        raise ValueError(
+                            "Inconsistent signer public keys across message parts"
+                        )
+                else:
+                    raise ValueError(
+                        "Original message part missing required SignerPublicKey header"
+                    )
+
+                # Verify signature for original messages
+                signature_hex = headers.pop("Signature")
+                # Reconstruct the "Part" header for canonical string verification
+                headers["Part"] = f"{headers['PartNum']}/{headers['TotalParts']}"
+
+                canonical_header_str = ""
+                for key in sorted(headers.keys()):
+                    if key in ["PartNum", "TotalParts"]:
+                        continue
+                    value = headers[key]
+                    # Re-create the canonical string by quoting string values
+                    if key in [
+                        "PartSlotsTotal",
+                        "PartSlotsUsed",
+                        "BytesTotal",
+                        "AuthPath",
+                    ]:
+                        canonical_header_str += f"{key}: {value}\n"
+                    else:
+                        canonical_header_str += f'{key}: "{value}"\n'
+
+                header_hash = hashlib.sha256(
+                    canonical_header_str.encode("utf-8")
+                ).digest()
+                # The signature from the header is already unquoted by parse_idk_message_part
+                vk.verify_digest(bytes.fromhex(signature_hex), header_hash)
 
                 # The payload *is* the single serialized ciphertext piece.
                 # Hash it for Merkle path verification.
@@ -477,11 +514,31 @@ def decrypt_idk_message(
                 ):
                     raise ValueError("Merkle path verification failed")
 
-            if not merkle_root:
-                merkle_root = headers["MerkleRoot"]
-                total_bytes = int(headers["BytesTotal"])
-            elif headers["MerkleRoot"] != merkle_root:
-                raise ValueError("Inconsistent Merkle roots across message parts")
+            # Common validation for both message types
+            # Validate part-specific headers
+            part_slots_used = int(headers["PartSlotsUsed"])
+            part_slots_total = int(headers["PartSlotsTotal"])
+            if part_slots_used > part_slots_total:
+                raise ValueError(
+                    f"PartSlotsUsed ({part_slots_used}) "
+                    f"cannot exceed PartSlotsTotal ({part_slots_total})"
+                )
+
+            # Validate the payload format and content.
+            if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
+                raise ValueError("ChunkHash verification failed")
+
+            # Handle MerkleRoot for original messages only
+            if not is_re_encrypted:
+                if not merkle_root:
+                    merkle_root = headers["MerkleRoot"]
+                    total_bytes = int(headers["BytesTotal"])
+                elif headers["MerkleRoot"] != merkle_root:
+                    raise ValueError("Inconsistent Merkle roots across message parts")
+            else:
+                # For re-encrypted messages, use BytesTotal directly
+                if not total_bytes:
+                    total_bytes = int(headers["BytesTotal"])
 
             # Correctly deserialize the single piece from the payload.
             piece_obj = pre.deserialize_ciphertext(payload_bytes)
@@ -500,3 +557,113 @@ def decrypt_idk_message(
     decrypted_coeffs = pre.decrypt(cc, sk, sorted_pieces, total_slots_for_message)
     final_data = pre.coefficients_to_bytes(decrypted_coeffs, total_bytes)
     return final_data
+
+
+def create_re_encrypted_idk_message_parts(
+    re_encrypted_ciphertexts: List[Any],
+    original_sender_public_key: str,
+    proxy_public_key: str,
+    recipient_public_key: str,
+    proxy_signing_key: ecdsa.SigningKey,
+    original_bytes_total: int,
+    cc,
+    optional_headers: Optional[Dict[str, str]] = None,
+) -> List[str]:
+    """
+    Creates re-encrypted IDK message parts according to the new specification.
+
+    Args:
+        re_encrypted_ciphertexts: List of re-encrypted ciphertext objects.
+        original_sender_public_key: Hex-encoded public key of the original sender (Alice).
+        proxy_public_key: Hex-encoded public key of the proxy service.
+        recipient_public_key: Hex-encoded public key of the intended recipient (Bob).
+        proxy_signing_key: The proxy service's ECDSA signing key.
+        original_bytes_total: The total size in bytes of the original data.
+        cc: The crypto context.
+        optional_headers: Optional additional headers.
+
+    Returns:
+        A list of strings, where each string is a fully formatted re-encrypted IDK message part.
+    """
+    from datetime import datetime, timezone
+
+    # Serialize each re-encrypted ciphertext piece
+    serialized_pieces_bytes = [
+        pre.serialize_to_bytes(ct) for ct in re_encrypted_ciphertexts
+    ]
+
+    total_parts = len(serialized_pieces_bytes)
+    message_parts = []
+    slot_count = pre.get_slot_count(cc)
+
+    # Generate re-encryption timestamp
+    re_encryption_timestamp = (
+        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+
+    for i, piece_bytes in enumerate(serialized_pieces_bytes):
+        part_num = i + 1
+
+        # Calculate slots used for this part
+        # For re-encrypted messages, we use the full slot count per part
+        part_slots_total = slot_count
+        part_slots_used = min(slot_count, (original_bytes_total + 1) // 2)
+
+        # Base64-encode the payload
+        payload_b64 = base64.b64encode(piece_bytes).decode("ascii")
+
+        # Prepare re-encrypted message headers
+        headers = {
+            "Version": IDK_VERSION,
+            "PartSlotsTotal": str(part_slots_total),
+            "PartSlotsUsed": str(part_slots_used),
+            "BytesTotal": str(original_bytes_total),
+            "Part": f"{part_num}/{total_parts}",
+            "ChunkHash": hashlib.blake2b(piece_bytes).hexdigest(),
+            # Re-encryption specific headers
+            "ReEncrypted": "true",
+            "OriginalSender": original_sender_public_key,
+            "ReEncryptedBy": proxy_public_key,
+            "ReEncryptedFor": recipient_public_key,
+            "ReEncryptionTimestamp": re_encryption_timestamp,
+            "ProxyPublicKey": proxy_public_key,
+        }
+
+        # Add optional headers
+        if optional_headers:
+            for key, value in optional_headers.items():
+                if key not in headers:
+                    headers[key] = value
+
+        # Create canonical header string for proxy signature
+        canonical_header_str = ""
+        for key in sorted(headers.keys()):
+            value = headers[key]
+            if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal"]:
+                canonical_header_str += f"{key}: {value}\n"
+            else:
+                canonical_header_str += f'{key}: "{value}"\n'
+
+        # Sign with proxy key
+        header_hash = hashlib.sha256(canonical_header_str.encode("utf-8")).digest()
+        proxy_signature = proxy_signing_key.sign_digest(header_hash).hex()
+        headers["ProxySignature"] = proxy_signature
+
+        # Assemble the final message part
+        header_block = ""
+        for key in sorted(headers.keys()):
+            value = headers[key]
+            if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal"]:
+                header_block += f"{key}: {value}\n"
+            else:
+                header_block += f'{key}: "{value}"\n'
+
+        message_part = (
+            f"{BEGIN_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}\n"
+            f"{header_block}"
+            f"{payload_b64}\n"
+            f"{END_IDK_MESSAGE.format(part_num=part_num, total_parts=total_parts)}"
+        )
+        message_parts.append(message_part)
+
+    return message_parts

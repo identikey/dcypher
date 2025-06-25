@@ -487,14 +487,15 @@ class TestPRECryptographicOperations:
     def test_end_to_end_idk_workflow_with_shared_context(
         self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
     ):
-        """Test complete IDK message workflow API integration.
+        """Test complete end-to-end IDK message workflow with PRE using shared context.
 
-        This test validates the API integration aspects:
-        1. IDK message creation works with PRE keys
-        2. Re-encryption key generation works
-        3. API calls integrate properly
+        This test validates the complete workflow:
+        1. Alice creates an IDK message using PRE encryption
+        2. Alice generates a re-encryption key for Bob
+        3. All operations use the shared deserialized context for consistency
 
-        Note: Detailed crypto validation is covered in other tests.
+        This is an API-level integration test that verifies the workflow works
+        correctly when all components use the same crypto context.
         """
         # Test data
         original_data = (
@@ -503,6 +504,20 @@ class TestPRECryptographicOperations:
 
         # Get the shared deserialized context and its bytes
         shared_cc, cc_bytes = deserialized_crypto_context
+
+        # CRITICAL: Reset the context singleton to ensure clean state
+        CryptoContextManager._instance = None
+        context_manager = CryptoContextManager()
+
+        # Initialize the singleton with our shared context
+        context_manager._context = shared_cc
+        context_manager._context_params = {
+            "scheme": "BFV",
+            "plaintext_modulus": 65537,
+            "multiplicative_depth": 2,
+            "scaling_mod_size": 50,
+            "batch_size": 16,  # Power of 2
+        }
 
         # Get keys (all using the shared deserialized context)
         alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
@@ -538,13 +553,8 @@ class TestPRECryptographicOperations:
         bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
 
         # Alice generates re-encryption key for Bob
-        with patch.object(
-            alice_client_with_pre, "get_pre_crypto_context"
-        ) as mock_get_cc:
-            mock_get_cc.return_value = cc_bytes
-            re_key_hex = alice_client_with_pre.generate_re_encryption_key(
-                bob_pre_pk_hex
-            )
+        # The generate_re_encryption_key method will use the singleton context we just set
+        re_key_hex = alice_client_with_pre.generate_re_encryption_key(bob_pre_pk_hex)
 
         print(f"  ✅ Generated re-encryption key: {re_key_hex[:32]}...")
 
@@ -569,6 +579,9 @@ class TestPRECryptographicOperations:
         print(f"  📊 IDK message: {len(idk_parts)} parts created")
         print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
         print(f"  ✅ All API components integrate correctly")
+
+        # Clean up
+        context_manager.reset()
 
     def test_file_sharing_workflow_simulation(
         self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
