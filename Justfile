@@ -109,10 +109,7 @@ build-liboqs:
     echo "liboqs installed to: $(pwd)/../../liboqs-local"
 
 # Build both OpenFHE C++ and Python bindings
-build-all: build-openfhe-python
-
-# Build all dependencies
-build-deps: build-openfhe-python build-liboqs
+build-all: build-openfhe-python build-liboqs
 
 # Clean OpenFHE builds
 clean-openfhe:
