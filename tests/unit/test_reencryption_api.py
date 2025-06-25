@@ -233,74 +233,83 @@ class TestPRECryptographicOperations:
         bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
 
         # Get the crypto context bytes (this simulates what the server would return)
-        _, cc_bytes = deserialized_crypto_context
+        shared_cc, cc_bytes = deserialized_crypto_context
 
-        # Mock the crypto context response to return the shared context bytes
-        with patch.object(
-            alice_client_with_pre, "get_pre_crypto_context"
-        ) as mock_get_cc:
-            mock_get_cc.return_value = cc_bytes
+        # CRITICAL: Reset the context singleton to ensure clean state
+        CryptoContextManager._instance = None
+        context_manager = CryptoContextManager()
 
-            # Generate re-encryption key (this follows the exact API workflow)
-            re_key_hex = alice_client_with_pre.generate_re_encryption_key(
-                bob_pre_pk_hex
+        try:
+            # Initialize the singleton with the shared context (same as fixtures use)
+            context_manager._context = shared_cc
+            context_manager._context_params = {
+                "scheme": "BFV",
+                "plaintext_modulus": 65537,
+                "multiplicative_depth": 2,
+                "scaling_mod_size": 50,
+                "batch_size": 16,  # Power of 2
+            }
+
+            # Mock the crypto context response to return the shared context bytes
+            with patch.object(
+                alice_client_with_pre, "get_pre_crypto_context"
+            ) as mock_get_cc:
+                mock_get_cc.return_value = cc_bytes
+
+                # Generate re-encryption key (this follows the exact API workflow)
+                re_key_hex = alice_client_with_pre.generate_re_encryption_key(
+                    bob_pre_pk_hex
+                )
+
+            # Verify we got a valid hex string
+            assert isinstance(re_key_hex, str)
+            assert len(re_key_hex) > 0
+            assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+
+            # CRITICAL: Test that the re-encryption key actually works!
+            print("🧪 Testing that the generated re-encryption key actually works...")
+
+            # Use the SAME shared context that was used to create the keys
+            test_cc = shared_cc  # Use the shared context instead of creating a new one
+
+            # Get Alice and Bob's keys from the test fixtures (they use the shared context)
+            alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
+            bob_pre_keys = bob_client_with_pre.__dict__["_test_pre_keys"]
+
+            # Test data for validation
+            test_data = b"Testing that Alice->Bob re-encryption key works properly!"
+            slot_count = pre.get_slot_count(test_cc)
+            coeffs = pre.bytes_to_coefficients(test_data, slot_count)
+
+            # Alice encrypts data using the shared context
+            alice_ciphertext = pre.encrypt(test_cc, alice_pre_keys.publicKey, coeffs)
+
+            # Deserialize the generated re-encryption key
+            re_key = pre.deserialize_re_encryption_key(bytes.fromhex(re_key_hex))
+
+            # Apply re-encryption transformation using the shared context
+            bob_ciphertext = pre.re_encrypt(test_cc, re_key, alice_ciphertext)
+
+            # Bob decrypts the re-encrypted data using the same shared context
+            decrypted_coeffs = pre.decrypt(
+                test_cc, bob_pre_keys.secretKey, bob_ciphertext, len(coeffs)
+            )
+            decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
+
+            # Verify Bob received exactly what Alice encrypted
+            assert decrypted_data == test_data, (
+                f"Generated re-encryption key doesn't work! "
+                f"Alice sent: {test_data!r}, Bob got: {decrypted_data!r}"
             )
 
-        # Verify we got a valid hex string
-        assert isinstance(re_key_hex, str)
-        assert len(re_key_hex) > 0
-        assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+            print(
+                f"✅ Re-encryption key works: {len(test_data)} bytes preserved through transformation"
+            )
+            print("🎉 Generated re-encryption key validated successfully!")
 
-        # CRITICAL: Test that the re-encryption key actually works!
-        print("🧪 Testing that the generated re-encryption key actually works...")
-
-        # To test the re-encryption key, we need to follow the EXACT same workflow
-        # that the API client uses - deserialize the context bytes fresh
-        test_cc = pre.deserialize_cc(cc_bytes)  # Fresh context like API client uses
-
-        # Get Alice and Bob's keys, but deserialize them fresh from the identity files
-        # to match what the API client would do
-        with open(alice_client_with_pre.keys_path, "r") as f:
-            alice_identity = json.load(f)
-        alice_pre_sk_hex = alice_identity["auth_keys"]["pre"]["sk_hex"]
-        alice_pre_sk = pre.deserialize_secret_key(bytes.fromhex(alice_pre_sk_hex))
-
-        # Get Alice's public key by generating keys from the same secret key
-        alice_pre_pk = pre.deserialize_public_key(
-            bytes.fromhex(alice_identity["auth_keys"]["pre"]["pk_hex"])
-        )
-
-        # Test data for validation
-        test_data = b"Testing that Alice->Bob re-encryption key works properly!"
-        slot_count = pre.get_slot_count(test_cc)
-        coeffs = pre.bytes_to_coefficients(test_data, slot_count)
-
-        # Alice encrypts data using the fresh context
-        alice_ciphertext = pre.encrypt(test_cc, alice_pre_pk, coeffs)
-
-        # Deserialize the generated re-encryption key
-        re_key = pre.deserialize_re_encryption_key(bytes.fromhex(re_key_hex))
-
-        # Apply re-encryption transformation using the fresh context
-        bob_ciphertext = pre.re_encrypt(test_cc, re_key, alice_ciphertext)
-
-        # Bob decrypts the re-encrypted data using the same fresh context
-        bob_pre_sk_hex = bob_identity["auth_keys"]["pre"]["sk_hex"]
-        bob_pre_sk = pre.deserialize_secret_key(bytes.fromhex(bob_pre_sk_hex))
-
-        decrypted_coeffs = pre.decrypt(test_cc, bob_pre_sk, bob_ciphertext, len(coeffs))
-        decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
-
-        # Verify Bob received exactly what Alice encrypted
-        assert decrypted_data == test_data, (
-            f"Generated re-encryption key doesn't work! "
-            f"Alice sent: {test_data!r}, Bob got: {decrypted_data!r}"
-        )
-
-        print(
-            f"✅ Re-encryption key works: {len(test_data)} bytes preserved through transformation"
-        )
-        print("🎉 Generated re-encryption key validated successfully!")
+        finally:
+            # Clean up context singleton
+            context_manager.reset()
 
     def test_complete_pre_workflow_with_shared_context(self, shared_crypto_context):
         """Test the complete PRE workflow with proper shared crypto context.
