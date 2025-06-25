@@ -283,38 +283,32 @@ def test_complete_reencryption_workflow_live_server(
     else:
         shared_file_str = shared_file_data
 
-    # Bob decrypts the downloaded IDK message using the server's crypto context
-    decrypted_content = idk_message.decrypt_idk_message(
-        cc=server_cc,  # Same server crypto context Alice used
-        sk=bob_pre_sk,  # Bob's own PRE secret key
-        vk=alice_classic_vk,
-        message_str=shared_file_str,
-    )
-
-    print(f"✅ Bob decrypted {len(decrypted_content)} bytes of content")
-
     # CRITICAL VERIFICATION: Ensure Bob received exactly what Alice uploaded
-    # NOTE: This will currently fail because the server doesn't implement actual
-    # proxy re-encryption transformation yet - it returns Alice's original ciphertext
-    # which Bob can't decrypt with his different secret key. This is expected behavior
-    # and confirms that proper PRE with different keys is working.
+    # With proper server PRE implementation, Bob should be able to decrypt
+    # the re-encrypted content using his own secret key
 
     try:
+        decrypted_content = idk_message.decrypt_idk_message(
+            cc=server_cc,  # Same server crypto context Alice used
+            sk=bob_pre_sk,  # Bob's own PRE secret key
+            vk=alice_classic_vk,
+            message_str=shared_file_str,
+        )
+
+        print(f"✅ Bob decrypted {len(decrypted_content)} bytes of content")
+
+        # Verify Bob received exactly what Alice uploaded
         assert decrypted_content == secret_message, (
             f"Content mismatch! Alice uploaded: {secret_message!r}, "
             f"Bob received: {decrypted_content!r}"
         )
         print("🎉 SUCCESS: Bob received exactly the same content Alice uploaded!")
-    except AssertionError:
-        print(
-            "⚠️  Expected: Bob received garbled content because server PRE transformation not implemented"
-        )
-        print(
-            "✅ SUCCESS: Confirmed proper PRE setup - Alice and Bob have different keys!"
-        )
-        print("✅ SUCCESS: Crypto context consistency achieved!")
-        # For now, we consider this a success since it proves the crypto setup is correct
-        return
+        print("✅ Proxy re-encryption is working correctly!")
+
+    except Exception as e:
+        print(f"❌ FAILED: Bob could not decrypt the shared content: {e}")
+        print("❌ This indicates an issue with the proxy re-encryption implementation")
+        raise AssertionError(f"Proxy re-encryption verification failed: {e}")
 
     print("🚫 Testing share revocation...")
 
@@ -533,25 +527,25 @@ def test_multiple_users_sharing_workflow(api_base_url, temp_dir):
         recipient_pre_sk = recipient["pre_keys"]["secretKey"]
 
         # Decrypt the content using the server crypto context
-        decrypted_content = idk_message.decrypt_idk_message(
-            cc=server_cc,  # Use the same server crypto context for all operations
-            sk=recipient_pre_sk,
-            vk=alice_classic_vk,
-            message_str=shared_file_str,
-        )
-
-        # Verify content (will show expected mismatch due to server PRE not implemented)
         try:
+            decrypted_content = idk_message.decrypt_idk_message(
+                cc=server_cc,  # Use the same server crypto context for all operations
+                sk=recipient_pre_sk,
+                vk=alice_classic_vk,
+                message_str=shared_file_str,
+            )
+
+            # Verify content - should match Alice's original
             assert decrypted_content == test_content, (
                 f"{recipient_name} received different content! "
                 f"Expected: {test_content!r}, Got: {decrypted_content!r}"
             )
             print(f"  ✅ {recipient_name} received correct content")
-        except AssertionError:
-            print(
-                f"  ⚠️  Expected: {recipient_name} received garbled content (server PRE not implemented)"
-            )
-            print(f"  ✅ {recipient_name} crypto setup verified!")
+            print(f"  ✅ Proxy re-encryption working for {recipient_name}")
+
+        except Exception as e:
+            print(f"  ❌ {recipient_name} failed to decrypt: {e}")
+            raise AssertionError(f"PRE failed for {recipient_name}: {e}")
 
     print("✅ Multiple users crypto context consistency confirmed!")
 

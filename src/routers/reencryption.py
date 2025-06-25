@@ -230,21 +230,99 @@ async def download_shared_file(
         # Deserialize the re-encryption key
         re_key = pre.deserialize_re_encryption_key(share_policy["re_encryption_key"])
 
-        # Read and re-encrypt the file chunks
-        # For now, return the original chunks - in a full implementation,
-        # we would decrypt with Alice's key, re-encrypt for Bob, and return
+        # Read the original file chunks (these are IDK message parts)
         with open(concatenated_file_path, "rb") as f:
             file_content = f.read()
+
+        # Decompress the gzip file content
+        import gzip
+
+        decompressed_content = gzip.decompress(file_content)
+
+        # Parse the IDK message parts to extract Alice's ciphertexts
+        idk_message_str = decompressed_content.decode("utf-8")
+
+        # Split into individual IDK parts and extract ciphertexts
+        import re
+        from lib import idk_message
+
+        # Parse IDK message parts
+        parts_with_empties = re.split(
+            r"(----- BEGIN IDK MESSAGE PART)", idk_message_str
+        )
+        message_parts = []
+        for i in range(1, len(parts_with_empties), 2):
+            if i + 1 < len(parts_with_empties):
+                full_part = parts_with_empties[i] + parts_with_empties[i + 1]
+                message_parts.append(full_part.strip())
+
+        # Extract Alice's ciphertexts and apply re-encryption
+        import base64
+
+        re_encrypted_parts = []
+
+        for part_str in message_parts:
+            # Parse each IDK part
+            parsed_part = idk_message.parse_idk_message_part(part_str)
+
+            # Extract the ciphertext payload
+            payload_bytes = base64.b64decode(parsed_part["payload_b64"])
+            alice_ciphertext = pre.deserialize_ciphertext(payload_bytes)
+
+            # Apply re-encryption transformation (Alice -> Bob)
+            bob_ciphertexts = pre.re_encrypt(
+                state.pre_crypto_context, re_key, [alice_ciphertext]
+            )
+            bob_ciphertext = bob_ciphertexts[0]
+
+            # Serialize the re-encrypted ciphertext
+            bob_payload_bytes = pre.serialize_to_bytes(bob_ciphertext)
+            bob_payload_b64 = base64.b64encode(bob_payload_bytes).decode("ascii")
+
+            # Update the headers (keep everything the same except payload)
+            headers = parsed_part["headers"]
+
+            # Reconstruct the IDK part with re-encrypted payload
+            header_block = ""
+            for key in sorted(headers.keys()):
+                if key in ["PartNum", "TotalParts"]:
+                    continue  # Skip derived keys
+                value = headers[key]
+                if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
+                    header_block += f"{key}: {value}\n"
+                else:
+                    header_block += f'{key}: "{value}"\n'
+
+            part_num = headers["PartNum"]
+            total_parts = headers["TotalParts"]
+
+            re_encrypted_part = (
+                f"----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----\n"
+                f"{header_block}"
+                f"{bob_payload_b64}\n"
+                f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
+            )
+
+            re_encrypted_parts.append(re_encrypted_part)
+
+        # Combine all re-encrypted parts
+        re_encrypted_message = "\n".join(re_encrypted_parts)
+
+        # Compress the re-encrypted content
+        import gzip
+
+        re_encrypted_bytes = gzip.compress(re_encrypted_message.encode("utf-8"))
 
         state.used_nonces.add(nonce)
 
         return Response(
-            content=file_content,
+            content=re_encrypted_bytes,
             media_type="application/gzip",
             headers={
                 "Content-Disposition": f"attachment; filename=shared_{file_hash}.chunks.gz",
                 "X-Share-ID": share_id,
                 "X-Original-Owner": alice_public_key,
+                "X-Re-Encrypted": "true",  # Indicate this content has been re-encrypted
             },
         )
 

@@ -31,13 +31,29 @@ def shared_crypto_context():
 
 
 @pytest.fixture
-def alice_client_with_pre(temp_dir, shared_crypto_context):
+def deserialized_crypto_context(shared_crypto_context):
+    """Create a deserialized crypto context that matches what the API would use.
+
+    This simulates getting the context from the server, serializing it, and
+    deserializing it - which is what happens in the real API workflow.
+    """
+    # Serialize and deserialize to match what the API would do
+    cc_bytes = pre.serialize_to_bytes(shared_crypto_context)
+    deserialized_cc = pre.deserialize_cc(cc_bytes)
+    return deserialized_cc, cc_bytes
+
+
+@pytest.fixture
+def alice_client_with_pre(temp_dir, deserialized_crypto_context):
     """Create Alice's client with PRE capabilities using shared crypto context."""
     # Create identity file
     mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir)
 
-    # Generate Alice's PRE keys from the shared context
-    alice_pre_keys = pre.generate_keys(shared_crypto_context)
+    # Get the single deserialized context and its bytes
+    deserialized_cc, cc_bytes = deserialized_crypto_context
+
+    # Generate Alice's PRE keys from the shared deserialized context
+    alice_pre_keys = pre.generate_keys(deserialized_cc)
     alice_pk_bytes = pre.serialize_to_bytes(alice_pre_keys.publicKey)
     alice_sk_bytes = pre.serialize_to_bytes(alice_pre_keys.secretKey)
 
@@ -56,19 +72,23 @@ def alice_client_with_pre(temp_dir, shared_crypto_context):
 
     # Store additional data for testing in a way that doesn't trigger linter errors
     client.__dict__["_test_pre_keys"] = alice_pre_keys
-    client.__dict__["_test_crypto_context"] = shared_crypto_context
+    client.__dict__["_test_crypto_context"] = deserialized_cc
+    client.__dict__["_test_crypto_context_bytes"] = cc_bytes
 
     return client
 
 
 @pytest.fixture
-def bob_client_with_pre(temp_dir, shared_crypto_context):
+def bob_client_with_pre(temp_dir, deserialized_crypto_context):
     """Create Bob's client with PRE capabilities using shared crypto context."""
     # Create identity file
     mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir)
 
-    # Generate Bob's PRE keys from the shared context
-    bob_pre_keys = pre.generate_keys(shared_crypto_context)
+    # Get the SAME deserialized context instance that Alice is using
+    deserialized_cc, cc_bytes = deserialized_crypto_context
+
+    # Generate Bob's PRE keys from the same deserialized context instance
+    bob_pre_keys = pre.generate_keys(deserialized_cc)
     bob_pk_bytes = pre.serialize_to_bytes(bob_pre_keys.publicKey)
     bob_sk_bytes = pre.serialize_to_bytes(bob_pre_keys.secretKey)
 
@@ -87,7 +107,8 @@ def bob_client_with_pre(temp_dir, shared_crypto_context):
 
     # Store additional data for testing in a way that doesn't trigger linter errors
     client.__dict__["_test_pre_keys"] = bob_pre_keys
-    client.__dict__["_test_crypto_context"] = shared_crypto_context
+    client.__dict__["_test_crypto_context"] = deserialized_cc
+    client.__dict__["_test_crypto_context_bytes"] = cc_bytes
 
     return client
 
@@ -201,22 +222,24 @@ class TestPRECryptographicOperations:
     """Test the core PRE cryptographic operations."""
 
     def test_generate_re_encryption_key(
-        self, alice_client_with_pre, bob_client_with_pre
+        self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
     ):
-        """Test generating a re-encryption key from Alice to Bob."""
+        """Test generating a re-encryption key from Alice to Bob and validate it works."""
         # Get Bob's PRE public key
         with open(bob_client_with_pre.keys_path, "r") as f:
             bob_identity = json.load(f)
         bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
 
-        # Mock the crypto context response to return the shared context
-        shared_cc = alice_client_with_pre.__dict__["_test_crypto_context"]
+        # Get the crypto context bytes (this simulates what the server would return)
+        _, cc_bytes = deserialized_crypto_context
+
+        # Mock the crypto context response to return the shared context bytes
         with patch.object(
             alice_client_with_pre, "get_pre_crypto_context"
         ) as mock_get_cc:
-            mock_get_cc.return_value = pre.serialize_to_bytes(shared_cc)
+            mock_get_cc.return_value = cc_bytes
 
-            # Generate re-encryption key
+            # Generate re-encryption key (this follows the exact API workflow)
             re_key_hex = alice_client_with_pre.generate_re_encryption_key(
                 bob_pre_pk_hex
             )
@@ -225,6 +248,57 @@ class TestPRECryptographicOperations:
         assert isinstance(re_key_hex, str)
         assert len(re_key_hex) > 0
         assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+
+        # CRITICAL: Test that the re-encryption key actually works!
+        print("🧪 Testing that the generated re-encryption key actually works...")
+
+        # To test the re-encryption key, we need to follow the EXACT same workflow
+        # that the API client uses - deserialize the context bytes fresh
+        test_cc = pre.deserialize_cc(cc_bytes)  # Fresh context like API client uses
+
+        # Get Alice and Bob's keys, but deserialize them fresh from the identity files
+        # to match what the API client would do
+        with open(alice_client_with_pre.keys_path, "r") as f:
+            alice_identity = json.load(f)
+        alice_pre_sk_hex = alice_identity["auth_keys"]["pre"]["sk_hex"]
+        alice_pre_sk = pre.deserialize_secret_key(bytes.fromhex(alice_pre_sk_hex))
+
+        # Get Alice's public key by generating keys from the same secret key
+        alice_pre_pk = pre.deserialize_public_key(
+            bytes.fromhex(alice_identity["auth_keys"]["pre"]["pk_hex"])
+        )
+
+        # Test data for validation
+        test_data = b"Testing that Alice->Bob re-encryption key works properly!"
+        slot_count = pre.get_slot_count(test_cc)
+        coeffs = pre.bytes_to_coefficients(test_data, slot_count)
+
+        # Alice encrypts data using the fresh context
+        alice_ciphertext = pre.encrypt(test_cc, alice_pre_pk, coeffs)
+
+        # Deserialize the generated re-encryption key
+        re_key = pre.deserialize_re_encryption_key(bytes.fromhex(re_key_hex))
+
+        # Apply re-encryption transformation using the fresh context
+        bob_ciphertext = pre.re_encrypt(test_cc, re_key, alice_ciphertext)
+
+        # Bob decrypts the re-encrypted data using the same fresh context
+        bob_pre_sk_hex = bob_identity["auth_keys"]["pre"]["sk_hex"]
+        bob_pre_sk = pre.deserialize_secret_key(bytes.fromhex(bob_pre_sk_hex))
+
+        decrypted_coeffs = pre.decrypt(test_cc, bob_pre_sk, bob_ciphertext, len(coeffs))
+        decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
+
+        # Verify Bob received exactly what Alice encrypted
+        assert decrypted_data == test_data, (
+            f"Generated re-encryption key doesn't work! "
+            f"Alice sent: {test_data!r}, Bob got: {decrypted_data!r}"
+        )
+
+        print(
+            f"✅ Re-encryption key works: {len(test_data)} bytes preserved through transformation"
+        )
+        print("🎉 Generated re-encryption key validated successfully!")
 
     def test_complete_pre_workflow_with_shared_context(self, shared_crypto_context):
         """Test the complete PRE workflow with proper shared crypto context.
@@ -342,32 +416,188 @@ class TestPRECryptographicOperations:
         # (though they have the same parameters)
         # This verifies that we're working with distinct context objects
 
+    def test_pre_workflow_with_different_data_types(self, shared_crypto_context):
+        """Test PRE workflow with various data types and sizes.
 
-class TestAPIIntegration:
-    """Test API integration for proxy re-encryption workflows."""
+        This ensures the PRE system works correctly with:
+        - Text data
+        - Binary data
+        - Empty data
+        - Large data
+        """
+        # Generate keys from shared context
+        alice_keys = pre.generate_keys(shared_crypto_context)
+        bob_keys = pre.generate_keys(shared_crypto_context)
+
+        # Test different data types
+        test_cases = [
+            ("text", b"Hello, this is a simple text message!"),
+            ("binary", secrets.token_bytes(64)),  # Random binary data
+            ("empty", b""),  # Edge case: empty data
+            ("large", b"X" * 5000),  # Large data that requires multiple chunks
+            ("unicode", "🎉 Unicode test with emojis! 🔐🔑".encode("utf-8")),
+        ]
+
+        for data_type, test_data in test_cases:
+            print(f"🧪 Testing PRE with {data_type} data ({len(test_data)} bytes)...")
+
+            if len(test_data) == 0:
+                # Special handling for empty data
+                slot_count = pre.get_slot_count(shared_crypto_context)
+                coeffs = pre.bytes_to_coefficients(test_data, slot_count)
+            else:
+                slot_count = pre.get_slot_count(shared_crypto_context)
+                coeffs = pre.bytes_to_coefficients(test_data, slot_count)
+
+            # Alice encrypts the data
+            alice_ciphertext = pre.encrypt(
+                shared_crypto_context, alice_keys.publicKey, coeffs
+            )
+
+            # Alice creates re-encryption key for Bob
+            re_key = pre.generate_re_encryption_key(
+                shared_crypto_context, alice_keys.secretKey, bob_keys.publicKey
+            )
+
+            # Proxy applies re-encryption
+            bob_ciphertext = pre.re_encrypt(
+                shared_crypto_context, re_key, alice_ciphertext
+            )
+
+            # Bob decrypts the re-encrypted data
+            decrypted_coeffs = pre.decrypt(
+                shared_crypto_context, bob_keys.secretKey, bob_ciphertext, len(coeffs)
+            )
+            decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
+
+            # Verify data integrity
+            assert decrypted_data == test_data, (
+                f"PRE failed for {data_type} data! "
+                f"Original: {test_data!r}, Decrypted: {decrypted_data!r}"
+            )
+
+            print(
+                f"  ✅ {data_type} data: {len(test_data)} bytes → {len(decrypted_data)} bytes"
+            )
+
+        print("🎉 All data types successfully processed through PRE workflow!")
+
+    def test_end_to_end_idk_workflow_with_shared_context(
+        self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
+    ):
+        """Test complete IDK message workflow API integration.
+
+        This test validates the API integration aspects:
+        1. IDK message creation works with PRE keys
+        2. Re-encryption key generation works
+        3. API calls integrate properly
+
+        Note: Detailed crypto validation is covered in other tests.
+        """
+        # Test data
+        original_data = (
+            b"This is a complete end-to-end test of the IDK message workflow with PRE!"
+        )
+
+        # Get the shared deserialized context and its bytes
+        shared_cc, cc_bytes = deserialized_crypto_context
+
+        # Get keys (all using the shared deserialized context)
+        alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
+
+        # Get Alice's signing key
+        alice_keys_data = KeyManager.load_identity_file(alice_client_with_pre.keys_path)
+        alice_classic_sk = alice_keys_data["classic_sk"]
+
+        print("📝 Step 1: Alice creates IDK message...")
+
+        # Alice creates IDK message
+        optional_headers = {
+            "Filename": "test_document.txt",
+            "ContentType": "text/plain",
+            "Description": "End-to-end PRE test",
+        }
+
+        idk_parts = idk_message.create_idk_message_parts(
+            original_data,
+            shared_cc,  # Use the shared deserialized context
+            alice_pre_keys.publicKey,
+            alice_classic_sk,
+            optional_headers,
+        )
+
+        print(f"  ✅ Created {len(idk_parts)} IDK parts")
+
+        print("🔑 Step 2: Alice generates re-encryption key...")
+
+        # Get Bob's PRE public key
+        with open(bob_client_with_pre.keys_path, "r") as f:
+            bob_identity = json.load(f)
+        bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
+
+        # Alice generates re-encryption key for Bob
+        with patch.object(
+            alice_client_with_pre, "get_pre_crypto_context"
+        ) as mock_get_cc:
+            mock_get_cc.return_value = cc_bytes
+            re_key_hex = alice_client_with_pre.generate_re_encryption_key(
+                bob_pre_pk_hex
+            )
+
+        print(f"  ✅ Generated re-encryption key: {re_key_hex[:32]}...")
+
+        print("✅ Step 3: Validate API integration...")
+
+        # Verify all components work together at the API level
+        assert len(idk_parts) > 0, "IDK message creation failed"
+        assert isinstance(re_key_hex, str), "Re-encryption key generation failed"
+        assert len(re_key_hex) > 0, "Re-encryption key is empty"
+        assert all(c in "0123456789abcdef" for c in re_key_hex.lower()), (
+            "Invalid re-encryption key format"
+        )
+
+        # Verify IDK message structure
+        for i, part in enumerate(idk_parts):
+            parsed_part = idk_message.parse_idk_message_part(part)
+            assert "headers" in parsed_part, f"IDK part {i} missing headers"
+            assert "payload_b64" in parsed_part, f"IDK part {i} missing payload"
+            assert parsed_part["headers"]["Filename"] == "test_document.txt"
+
+        print("🎉 SUCCESS: Complete IDK + PRE API integration validated!")
+        print(f"  📊 IDK message: {len(idk_parts)} parts created")
+        print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
+        print(f"  ✅ All API components integrate correctly")
 
     def test_file_sharing_workflow_simulation(
-        self, alice_client_with_pre, bob_client_with_pre
+        self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
     ):
-        """Test the complete file sharing workflow using PRE.
+        """Test the complete file sharing workflow API integration.
 
-        This simulates the API workflow focusing on the client method calls
-        rather than the detailed cryptographic operations (which are tested
-        separately and in integration tests).
+        This test validates the API workflow steps:
+        1. Alice creates and registers encrypted files
+        2. Alice generates re-encryption keys for sharing
+        3. Alice creates shares with proper parameters
+        4. All API calls work correctly together
+
+        Note: End-to-end crypto validation is covered in integration tests.
         """
         # Test file content
         file_content = b"This is Alice's confidential document for Bob"
         filename = "confidential.txt"
 
-        # Get crypto context and keys for IDK message creation
-        shared_cc = alice_client_with_pre.__dict__["_test_crypto_context"]
+        # Get the shared deserialized context
+        shared_cc, cc_bytes = deserialized_crypto_context
+
+        # Get PRE keys for API operations
         alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
 
         # Get Alice's classic keys for signing
         alice_keys_data = KeyManager.load_identity_file(alice_client_with_pre.keys_path)
         alice_classic_sk = alice_keys_data["classic_sk"]
 
-        # Step 1: Alice creates an IDK message (encrypted file format)
+        print("📝 Step 1: Alice creates encrypted file...")
+
+        # Alice creates an IDK message (encrypted file format)
         optional_headers = {"Filename": filename, "ContentType": "text/plain"}
         idk_parts = idk_message.create_idk_message_parts(
             file_content,
@@ -381,7 +611,9 @@ class TestAPIIntegration:
         parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
         file_hash = parsed_first_part["headers"]["MerkleRoot"]
 
-        # Step 2: Mock file registration and upload
+        print("📤 Step 2: Alice registers file (API simulation)...")
+
+        # Mock file registration (this is API-level, not crypto)
         with patch.object(alice_client_with_pre, "register_file") as mock_register:
             mock_register.return_value = {"message": "File registered successfully"}
 
@@ -395,7 +627,9 @@ class TestAPIIntegration:
             )
             assert result["message"] == "File registered successfully"
 
-        # Step 3: Alice generates re-encryption key for Bob
+        print("🔑 Step 3: Alice generates re-encryption key...")
+
+        # Get Bob's PRE public key
         with open(bob_client_with_pre.keys_path, "r") as f:
             bob_identity = json.load(f)
         bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
@@ -403,7 +637,7 @@ class TestAPIIntegration:
         with patch.object(
             alice_client_with_pre, "get_pre_crypto_context"
         ) as mock_get_cc:
-            mock_get_cc.return_value = pre.serialize_to_bytes(shared_cc)
+            mock_get_cc.return_value = cc_bytes
             re_key_hex = alice_client_with_pre.generate_re_encryption_key(
                 bob_pre_pk_hex
             )
@@ -413,7 +647,9 @@ class TestAPIIntegration:
         assert len(re_key_hex) > 0
         assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
 
-        # Step 4: Alice creates a share
+        print("🔗 Step 4: Alice creates share...")
+
+        # Alice creates a share (API operation)
         with patch.object(alice_client_with_pre, "create_share") as mock_create_share:
             share_id = f"share_{secrets.token_hex(16)}"
             mock_create_share.return_value = {"share_id": share_id}
@@ -423,20 +659,140 @@ class TestAPIIntegration:
             )
             assert share_result["share_id"] == share_id
 
-        # Step 5: Mock Bob downloading the shared file
-        mock_shared_file_data = b"mock_re_encrypted_content_for_bob"
-        with patch.object(bob_client_with_pre, "download_shared_file") as mock_download:
-            mock_download.return_value = mock_shared_file_data
+        print("✅ Step 5: Validate complete API workflow...")
 
-            downloaded_data = bob_client_with_pre.download_shared_file(share_id)
-            assert downloaded_data == mock_shared_file_data
-
-        # Verify all the API calls were made with correct parameters
+        # Verify all API calls were made with correct parameters
         mock_register.assert_called_once()
         mock_create_share.assert_called_once_with(
             bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
         )
-        mock_download.assert_called_once_with(share_id)
+
+        # Verify data flow integrity
+        assert len(file_hash) > 0, "File hash generation failed"
+        assert len(re_key_hex) > 0, "Re-encryption key generation failed"
+        assert share_id.startswith("share_"), "Share ID format incorrect"
+
+        print("🎉 SUCCESS: Complete file sharing API workflow validated!")
+        print(f"  📁 File registered: {filename} ({len(file_content)} bytes)")
+        print(f"  🔐 IDK message: {len(idk_parts)} parts, hash {file_hash[:16]}...")
+        print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
+        print(f"  🔗 Share created: {share_id}")
+        print(f"  ✅ All API calls completed successfully")
+
+
+class TestAPIIntegration:
+    """Test API integration for proxy re-encryption workflows."""
+
+    def test_file_sharing_workflow_simulation(
+        self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
+    ):
+        """Test the complete file sharing workflow API integration.
+
+        This test validates the API workflow steps:
+        1. Alice creates and registers encrypted files
+        2. Alice generates re-encryption keys for sharing
+        3. Alice creates shares with proper parameters
+        4. All API calls work correctly together
+
+        Note: End-to-end crypto validation is covered in integration tests.
+        """
+        # Test file content
+        file_content = b"This is Alice's confidential document for Bob"
+        filename = "confidential.txt"
+
+        # Get the shared deserialized context
+        shared_cc, cc_bytes = deserialized_crypto_context
+
+        # Get PRE keys for API operations
+        alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
+
+        # Get Alice's classic keys for signing
+        alice_keys_data = KeyManager.load_identity_file(alice_client_with_pre.keys_path)
+        alice_classic_sk = alice_keys_data["classic_sk"]
+
+        print("📝 Step 1: Alice creates encrypted file...")
+
+        # Alice creates an IDK message (encrypted file format)
+        optional_headers = {"Filename": filename, "ContentType": "text/plain"}
+        idk_parts = idk_message.create_idk_message_parts(
+            file_content,
+            shared_cc,
+            alice_pre_keys.publicKey,
+            alice_classic_sk,
+            optional_headers,
+        )
+
+        # Parse the first part to get file hash
+        parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
+        file_hash = parsed_first_part["headers"]["MerkleRoot"]
+
+        print("📤 Step 2: Alice registers file (API simulation)...")
+
+        # Mock file registration (this is API-level, not crypto)
+        with patch.object(alice_client_with_pre, "register_file") as mock_register:
+            mock_register.return_value = {"message": "File registered successfully"}
+
+            result = alice_client_with_pre.register_file(
+                public_key=alice_client_with_pre.get_classic_public_key(),
+                file_hash=file_hash,
+                idk_part_one=idk_parts[0],
+                filename=filename,
+                content_type="text/plain",
+                total_size=len(file_content),
+            )
+            assert result["message"] == "File registered successfully"
+
+        print("🔑 Step 3: Alice generates re-encryption key...")
+
+        # Get Bob's PRE public key
+        with open(bob_client_with_pre.keys_path, "r") as f:
+            bob_identity = json.load(f)
+        bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
+
+        with patch.object(
+            alice_client_with_pre, "get_pre_crypto_context"
+        ) as mock_get_cc:
+            mock_get_cc.return_value = cc_bytes
+            re_key_hex = alice_client_with_pre.generate_re_encryption_key(
+                bob_pre_pk_hex
+            )
+
+        # Verify we got a valid re-encryption key
+        assert isinstance(re_key_hex, str)
+        assert len(re_key_hex) > 0
+        assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
+
+        print("🔗 Step 4: Alice creates share...")
+
+        # Alice creates a share (API operation)
+        with patch.object(alice_client_with_pre, "create_share") as mock_create_share:
+            share_id = f"share_{secrets.token_hex(16)}"
+            mock_create_share.return_value = {"share_id": share_id}
+
+            share_result = alice_client_with_pre.create_share(
+                bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
+            )
+            assert share_result["share_id"] == share_id
+
+        print("✅ Step 5: Validate complete API workflow...")
+
+        # Verify all API calls were made with correct parameters
+        mock_register.assert_called_once()
+        mock_create_share.assert_called_once_with(
+            bob_client_with_pre.get_classic_public_key(), file_hash, re_key_hex
+        )
+
+        # Verify data flow integrity
+        assert len(file_hash) > 0, "File hash generation failed"
+        assert len(re_key_hex) > 0, "Re-encryption key generation failed"
+        assert share_id.startswith("share_"), "Share ID format incorrect"
+
+        print("🎉 SUCCESS: Complete file sharing API workflow validated!")
+        print(f"  📁 File registered: {filename} ({len(file_content)} bytes)")
+        print(f"  🔐 IDK message: {len(idk_parts)} parts, hash {file_hash[:16]}...")
+        print(f"  🔑 Re-encryption key: {len(re_key_hex)} hex characters")
+        print(f"  🔗 Share created: {share_id}")
+        print(f"  ✅ All API calls completed successfully")
 
     def test_list_shares_functionality(
         self, alice_client_with_pre, bob_client_with_pre
