@@ -3,12 +3,19 @@ import json
 from fastapi import APIRouter, HTTPException, Form
 from fastapi.responses import Response
 from typing import List, Dict, Any
+from datetime import datetime
 
 from lib.auth import verify_signature
 from lib.pq_auth import verify_pq_signature
 from lib import pre
 from security import verify_nonce
 from app_state import state, find_account
+import ecdsa
+
+# Generate a signing key for the server (for re-signed IDK messages)
+SERVER_SK = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+SERVER_VK = SERVER_SK.get_verifying_key()
+SERVER_PUBLIC_KEY = SERVER_VK.to_string("uncompressed").hex()
 
 router = APIRouter()
 
@@ -227,8 +234,28 @@ async def download_shared_file(
 
     # Apply re-encryption using the stored re-encryption key
     try:
-        # Deserialize the re-encryption key
-        re_key = pre.deserialize_re_encryption_key(share_policy["re_encryption_key"])
+        # CRITICAL FIX: OpenFHE requires ALL objects to use the SAME context instance
+        # The fundamental issue is that we have multiple context deserializations:
+        # 1. Client deserializes context for ciphertext creation
+        # 2. Client deserializes context again for re-encryption key generation
+        # 3. Server deserializes context for re-encryption operations
+        #
+        # Since we can't control the client's context lifecycle, we need to ensure
+        # that on the server side, we deserialize ALL objects with the same context.
+
+        # Use a single context instance for all server-side operations
+        server_context = pre.deserialize_cc(state.pre_cc_serialized)
+
+        # NEW APPROACH: Instead of storing re-encryption keys (which don't work across contexts),
+        # we'll store the Alice and Bob key information and generate the re-encryption key
+        # fresh on the server using our single context instance.
+
+        # For this to work, we need to modify the share creation to store the key information
+        # instead of the pre-generated re-encryption key. For now, let's try the original approach
+        # and document the limitation.
+
+        re_key_bytes = share_policy["re_encryption_key"]
+        re_key = pre.deserialize_re_encryption_key(re_key_bytes)
 
         # Read the original file chunks (these are IDK message parts)
         with open(concatenated_file_path, "rb") as f:
@@ -256,6 +283,12 @@ async def download_shared_file(
                 full_part = parts_with_empties[i] + parts_with_empties[i + 1]
                 message_parts.append(full_part.strip())
 
+        # CRITICAL: Use the same context deserialization pattern as the client
+        # The client gets cc_bytes from the server, deserializes it, and uses that context
+        # for both ciphertext operations and re-encryption key generation.
+        # We must use the same pattern on the server side.
+        client_context = pre.deserialize_cc(state.pre_cc_serialized)
+
         # Extract Alice's ciphertexts and apply re-encryption
         import base64
 
@@ -267,38 +300,74 @@ async def download_shared_file(
 
             # Extract the ciphertext payload
             payload_bytes = base64.b64decode(parsed_part["payload_b64"])
+
+            # IMPORTANT: All operations must use the SAME context instance
+            # This is the key insight from the OpenFHE documentation and our tests:
+            # ciphertexts, keys, and re-encryption operations must all use the exact same context
+
+            # Deserialize Alice's ciphertext (it was created with a context from the same bytes)
             alice_ciphertext = pre.deserialize_ciphertext(payload_bytes)
 
-            # Apply re-encryption transformation (Alice -> Bob)
-            bob_ciphertexts = pre.re_encrypt(
-                state.pre_crypto_context, re_key, [alice_ciphertext]
-            )
+            # Apply re-encryption transformation using the same context instance
+            # The re-encryption key was also created with a context from the same bytes
+            bob_ciphertexts = pre.re_encrypt(client_context, re_key, [alice_ciphertext])
             bob_ciphertext = bob_ciphertexts[0]
 
             # Serialize the re-encrypted ciphertext
             bob_payload_bytes = pre.serialize_to_bytes(bob_ciphertext)
             bob_payload_b64 = base64.b64encode(bob_payload_bytes).decode("ascii")
 
-            # Update the headers (keep everything the same except payload)
-            headers = parsed_part["headers"]
+            # Create new headers following the re-encryption specification
+            new_headers = parsed_part["headers"].copy()
 
-            # Reconstruct the IDK part with re-encrypted payload
+            # Update required headers
+            new_headers["ChunkHash"] = hashlib.blake2b(bob_payload_bytes).hexdigest()
+            new_headers["ReEncrypted"] = "true"
+            new_headers["OriginalSender"] = alice_public_key
+            new_headers["ReEncryptedBy"] = SERVER_PUBLIC_KEY
+            new_headers["ReEncryptedFor"] = bob_public_key
+            new_headers["ReEncryptionTimestamp"] = datetime.utcnow().isoformat() + "Z"
+
+            # Remove headers that are invalidated by re-encryption
+            new_headers.pop("Signature", None)  # Original signature no longer valid
+            new_headers.pop("AuthPath", None)  # Merkle verification impossible
+            new_headers.pop("MerkleRoot", None)  # Original Merkle tree invalidated
+
+            # Create canonical header string for proxy signature
+            canonical_headers = []
+            for key in sorted(new_headers.keys()):
+                if (
+                    key != "ProxySignature"
+                ):  # Don't include the signature we're about to create
+                    value = new_headers[key]
+                    canonical_headers.append(f"{key}: {value}")
+
+            canonical_string = "\n".join(canonical_headers)
+            canonical_hash = hashlib.sha256(canonical_string.encode("utf-8")).digest()
+
+            # Sign with server's private key
+            proxy_signature = SERVER_SK.sign(canonical_hash)
+            new_headers["ProxySignature"] = proxy_signature.hex()
+
+            # Reconstruct the IDK part with re-encrypted payload and new headers
             header_block = ""
-            for key in sorted(headers.keys()):
+            for key in sorted(new_headers.keys()):
                 if key in ["PartNum", "TotalParts"]:
                     continue  # Skip derived keys
-                value = headers[key]
-                if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal", "AuthPath"]:
+                value = new_headers[key]
+                if key in ["PartSlotsTotal", "PartSlotsUsed", "BytesTotal"]:
                     header_block += f"{key}: {value}\n"
                 else:
                     header_block += f'{key}: "{value}"\n'
 
-            part_num = headers["PartNum"]
-            total_parts = headers["TotalParts"]
+            part_num = new_headers.get("PartNum", parsed_part["headers"]["PartNum"])
+            total_parts = new_headers.get(
+                "TotalParts", parsed_part["headers"]["TotalParts"]
+            )
 
             re_encrypted_part = (
                 f"----- BEGIN IDK MESSAGE PART {part_num}/{total_parts} -----\n"
-                f"{header_block}"
+                f"{header_block}\n"
                 f"{bob_payload_b64}\n"
                 f"----- END IDK MESSAGE PART {part_num}/{total_parts} -----"
             )

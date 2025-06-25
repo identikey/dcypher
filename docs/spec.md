@@ -229,34 +229,97 @@ Version: "0.1"
 ----- END IDK MESSAGE PART 8/8 -----
 ```
 
+## Proxy Re-encryption Extensions
+
+When an IDK message undergoes proxy re-encryption, the ciphertext payloads are transformed for a new recipient, but the original message structure and metadata must be preserved for auditability and verification.
+
+### Re-encrypted Message Format
+
+A re-encrypted IDK message maintains the same basic structure but includes additional headers to indicate the transformation:
+
 ```text
------ BEGIN IDK MESSAGE PART 1/64 -----
-AuthPath: ["33c908344d2f7f13325f0e26faf7fc68548324ab822167893b74aceed70457b39f152092194280c5870c6982c7d3f079b25c1d281f36c0091fea2cfeebf5f558", "52ff84a09d98261917a2dab2e51acc0b9f4115baa9e96ec7fb91287869a86a894af07843c22ecf522c96d390181cc21f914171a21eac69d0d6f97f1ea0ead5f4", "b0cfc444436783b60ebe6a46bab226fdcdcea0d56187b30ddfb0235e9721afd600eee8f2b1feea9b2c131c83cb519a9cd7bd335573941fc90b37a63707975233", "1deda5608c7e5212c707e6be75cdf47b6ec42f5e4412129e535be7f5a2e94a3cf36b8431252bc7fe456fd7293e728c73c16f9afdfbad6f40c3013bb4b40673a6", "990f19b51c22a3477bfbb19054b734a46ff99808ce53f456e9e73058229695a4de9723552855da4c7e5e79f0127f0d26b87dbe2c7ee689d1544daf5e0c0bd5a2", "59ab828336c84b6d3158a4d515af0f06e0c2c5a9d9ab029f017d532ae88396b74df35c29d9d4c7fe8dbc44fa3b972e225003f313e7b171ae2317a3a7e2b3adb2"]
-BytesTotal: 1048576
-ChunkHash: "757f6c518d23ce69cce3d9dd182614f5956fc707a466f4e91d5c3faf975531e59c2b3b8ec129749aabeef362befb47aa32c77f884fb705823792417441916e89"
-MerkleRoot: "783ede6d23ab237608e410f9443ef2daa4f8b1d6790510a028735ae9c2d59a9ff69fc935a6ad9fbeca54e33e61181830708f95e86dce04b415ad6dd73b79d3f9"
-Part: "1/64"
-PartSlotsTotal: 8192
-PartSlotsUsed: 8192
-PieceLength: 263211
-Signature: "a4e18290d664d2574ee915ecbf3b72b5e88cfbb3cee2ad423dd52213e3252a5b154e8598e9ff236e34032df8bb08a3750413f64d2b2f2eeb9d13f0ffd851971a"
-Version: "0.1"
+----- BEGIN IDK MESSAGE PART <part_num>/<total_parts> -----
+<original_headers>
+<re-encryption_headers>
 
-AQAAAEABAACAAQAAA...
------ END IDK MESSAGE PART 1/64 -----
-
------ BEGIN IDK MESSAGE PART 2/64 -----
-AuthPath: ["757f6c518d23ce69cce3d9dd182614f5956fc707a466f4e91d5c3faf975531e59c2b3b8ec129749aabeef362befb47aa32c77f884fb705823792417441916e89", "52ff84a09d98261917a2dab2e51acc0b9f4115baa9e96ec7fb91287869a86a894af07843c22ecf522c96d390181cc21f914171a21eac69d0d6f97f1ea0ead5f4", "b0cfc444436783b60ebe6a46bab226fdcdcea0d56187b30ddfb0235e9721afd600eee8f2b1feea9b2c131c83cb519a9cd7bd335573941fc90b37a63707975233", "1deda5608c7e5212c707e6be75cdf47b6ec42f5e4412129e535be7f5a2e94a3cf36b8431252bc7fe456fd7293e728c73c16f9afdfbad6f40c3013bb4b40673a6", "990f19b51c22a3477bfbb19054b734a46ff99808ce53f456e9e73058229695a4de9723552855da4c7e5e79f0127f0d26b87dbe2c7ee689d1544daf5e0c0bd5a2", "59ab828336c84b6d3158a4d515af0f06e0c2c5a9d9ab029f017d532ae88396b74df35c29d9d4c7fe8dbc44fa3b972e225003f313e7b171ae2317a3a7e2b3adb2"]
-BytesTotal: 1048576
-ChunkHash: "33c908344d2f7f13325f0e26faf7fc68548324ab822167893b74aceed70457b39f152092194280c5870c6982c7d3f079b25c1d281f36c0091fea2cfeebf5f558"
-MerkleRoot: "783ede6d23ab237608e410f9443ef2daa4f8b1d6790510a028735ae9c2d59a9ff69fc935a6ad9fbeca54e33e61181830708f95e86dce04b415ad6dd73b79d3f9"
-Part: "2/64"
-PartSlotsTotal: 8192
-PartSlotsUsed: 8192
-PieceLength: 263211
-Signature: "c3cd6f7a74949d598000ac2c08d57660dcdbcefd2ea596058dbe570516ea6924c9a3856319e24d64e2fe993807d90da35fc076f2c982381c1c5131d4abc1e164"
-Version: "0.1"
-
-AQAAAEABAACAAQAAA...
------ END IDK MESSAGE PART 2/64 -----
+<base64_encoded_re_encrypted_payload>
+----- END IDK MESSAGE PART <part_num>/<total_parts> -----
 ```
+
+### Additional Headers for Re-encrypted Messages
+
+#### Mandatory Re-encryption Headers
+
+* `ReEncrypted`: Set to `"true"` to indicate this message has undergone proxy re-encryption.
+* `OriginalSender`: The public key or identifier of the original message creator (Alice).
+* `ReEncryptedBy`: The public key or identifier of the re-encryption service/proxy.
+* `ReEncryptedFor`: The public key or identifier of the intended recipient (Bob).
+* `ReEncryptionTimestamp`: ISO 8601 timestamp when re-encryption was performed.
+* `ProxySignature`: ECDSA signature of the re-encrypted headers by the proxy service.
+
+#### Modified Headers in Re-encrypted Messages
+
+* `ChunkHash`: Updated to reflect the hash of the re-encrypted payload.
+* `Signature`: **Removed** - The original sender's signature is no longer valid for the modified payload.
+* `AuthPath`: **Removed** - Merkle verification cannot work across re-encryption.
+* `MerkleRoot`: **Removed** - The original Merkle tree is invalidated by payload changes.
+
+### Re-encryption Process
+
+1. **Extract Original Ciphertexts**: Parse the original IDK message parts to extract Alice's ciphertexts.
+2. **Apply Re-encryption**: Transform each ciphertext using the re-encryption key (Alice → Bob).
+3. **Update Payload**: Replace the original ciphertext with the re-encrypted version.
+4. **Update Headers**:
+   * Set `ReEncrypted` to `"true"`
+   * Update `ChunkHash` to reflect the new payload
+   * Add re-encryption metadata headers
+   * Remove invalidated verification headers (`Signature`, `AuthPath`, `MerkleRoot`)
+5. **Sign Re-encrypted Message**: The proxy service signs the new headers with `ProxySignature`.
+
+### Verification of Re-encrypted Messages
+
+Recipients of re-encrypted messages follow a modified verification process:
+
+1. **Check Re-encryption Status**: Verify the `ReEncrypted` header is set to `"true"`.
+2. **Verify Proxy Signature**: Validate the `ProxySignature` using the known proxy service public key.
+3. **Verify Payload Integrity**: Check that the `ChunkHash` matches the hash of the base64-decoded payload.
+4. **Skip Merkle Verification**: Re-encrypted messages cannot maintain Merkle tree integrity.
+5. **Audit Trail Verification**: Verify the re-encryption metadata (`OriginalSender`, `ReEncryptedFor`, etc.) matches expected values.
+6. **Decrypt Content**: Use the recipient's private key to decrypt the re-encrypted ciphertexts.
+
+### Trust Model for Re-encrypted Messages
+
+Re-encrypted messages operate under a different trust model:
+
+* **Original Authenticity**: Verified through the re-encryption audit trail and proxy service trust.
+* **Proxy Trust**: Recipients must trust the proxy service to perform re-encryption correctly.
+* **Content Integrity**: Guaranteed by the cryptographic properties of proxy re-encryption.
+* **Payload Integrity**: Verified through `ChunkHash` validation.
+
+### Example Re-encrypted Message
+
+```text
+----- BEGIN IDK MESSAGE PART 1/1 -----
+BytesTotal: "66"
+ChunkHash: "a1b2c3d4e5f6789..."
+OriginalSender: "048850ecd869d9bf..."
+Part: "1/1"
+PartSlotsTotal: "8192"
+PartSlotsUsed: "33"
+ProxySignature: "3041021f2a8b9c7d..."
+ReEncrypted: "true"
+ReEncryptedBy: "04server5678abcd..."
+ReEncryptedFor: "04e2bd394b1f6d3a..."
+ReEncryptionTimestamp: "2024-01-15T10:30:00Z"
+Version: "0.1"
+
+<base64_encoded_re_encrypted_payload>
+----- END IDK MESSAGE PART 1/1 -----
+```
+
+### Security Considerations
+
+1. **Proxy Trust**: The security of re-encrypted messages depends on trusting the proxy service.
+2. **Audit Trail**: All re-encryption operations are logged in the message headers for accountability.
+3. **Temporal Verification**: Timestamps help detect replay attacks and verify recency.
+4. **Selective Verification**: Recipients can choose to accept or reject re-encrypted messages based on policy.

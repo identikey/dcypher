@@ -926,5 +926,68 @@ class TestErrorHandling:
         with pytest.raises(Exception):
             client.generate_re_encryption_key("fake_bob_pk_hex")
 
+    def test_context_compatibility_across_multiple_deserializations(
+        self, shared_crypto_context
+    ):
+        """Test if multiple deserializations of the same context bytes work together.
+
+        This test reproduces the exact pattern used in our integration test:
+        1. Serialize a context
+        2. Deserialize it for Alice's operations (ciphertext creation)
+        3. Deserialize it again for re-encryption key generation
+        4. Deserialize it a third time for server re-encryption
+
+        This should help us understand OpenFHE's context compatibility requirements.
+        """
+        # Step 1: Create and serialize the original context (like the server does)
+        original_cc = shared_crypto_context
+        cc_bytes = pre.serialize_to_bytes(original_cc)
+
+        # Step 2: Alice's workflow - deserialize context for ciphertext creation
+        alice_cc = pre.deserialize_cc(cc_bytes)
+        alice_keys = pre.generate_keys(alice_cc)
+
+        test_data = b"Test data for context compatibility"
+        slot_count = pre.get_slot_count(alice_cc)
+        coeffs = pre.bytes_to_coefficients(test_data, slot_count)
+        alice_ciphertext = pre.encrypt(alice_cc, alice_keys.publicKey, coeffs)
+
+        # Step 3: Bob's key generation - deserialize context again
+        bob_cc = pre.deserialize_cc(cc_bytes)  # Different instance than alice_cc
+        bob_keys = pre.generate_keys(bob_cc)
+
+        # Step 4: Re-encryption key generation - deserialize context yet again
+        rekey_cc = pre.deserialize_cc(
+            cc_bytes
+        )  # Different instance than alice_cc and bob_cc
+        re_key = pre.generate_re_encryption_key(
+            rekey_cc, alice_keys.secretKey, bob_keys.publicKey
+        )
+
+        # Step 5: Server re-encryption - deserialize context one more time
+        server_cc = pre.deserialize_cc(cc_bytes)  # Fourth different instance
+
+        # This is where our integration test fails - try to re-encrypt with different context instance
+        try:
+            bob_ciphertexts = pre.re_encrypt(server_cc, re_key, alice_ciphertext)
+
+            # If we get here, the re-encryption worked - test decryption
+            decrypted_coeffs = pre.decrypt(
+                server_cc, bob_keys.secretKey, bob_ciphertexts, len(coeffs)
+            )
+            decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
+
+            assert decrypted_data == test_data
+            print("✅ Multiple context deserializations work together!")
+
+        except Exception as e:
+            print(f"❌ Multiple context deserializations failed: {e}")
+            print(
+                "This confirms that OpenFHE requires the same context instance for all operations"
+            )
+
+            # Document the limitation for future reference
+            pytest.fail(f"OpenFHE context limitation confirmed: {e}")
+
 
 # Additional integration tests can be added here as the implementation evolves

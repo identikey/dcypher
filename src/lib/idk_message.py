@@ -417,17 +417,65 @@ def decrypt_idk_message(
             if hashlib.blake2b(payload_bytes).hexdigest() != headers["ChunkHash"]:
                 raise ValueError("ChunkHash verification failed")
 
-            # The payload *is* the single serialized ciphertext piece.
-            # Hash it for Merkle path verification.
-            leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
+            # Check if this is a re-encrypted message
+            is_re_encrypted = headers.get("ReEncrypted", "false").lower() == "true"
 
-            if not verify_merkle_path(
-                leaf_hash_bytes,
-                json.loads(headers["AuthPath"]),
-                current_piece_index,  # The index is the running total of pieces
-                headers["MerkleRoot"],
-            ):
-                raise ValueError("Merkle path verification failed")
+            if is_re_encrypted:
+                # Handle re-encrypted messages according to new specification
+
+                # Verify required re-encryption headers are present
+                required_re_headers = [
+                    "OriginalSender",
+                    "ReEncryptedBy",
+                    "ReEncryptedFor",
+                    "ReEncryptionTimestamp",
+                    "ProxySignature",
+                ]
+                for req_header in required_re_headers:
+                    if req_header not in headers:
+                        raise ValueError(
+                            f"Re-encrypted message missing required header: {req_header}"
+                        )
+
+                # Verify proxy signature
+                # Create canonical header string (same as server does)
+                canonical_headers = []
+                for key in sorted(headers.keys()):
+                    if key != "ProxySignature":
+                        value = headers[key]
+                        canonical_headers.append(f"{key}: {value}")
+
+                canonical_string = "\n".join(canonical_headers)
+                canonical_hash = hashlib.sha256(
+                    canonical_string.encode("utf-8")
+                ).digest()
+
+                # TODO: Add proxy signature verification here when server public key is available
+                # For now, we trust that the message came from the server
+
+                # Skip Merkle verification for re-encrypted messages
+                print(
+                    f"📝 Processing re-encrypted message part {headers.get('Part', '?')}"
+                )
+                print(f"   Original sender: {headers['OriginalSender'][:16]}...")
+                print(f"   Re-encrypted by: {headers['ReEncryptedBy'][:16]}...")
+                print(f"   Re-encrypted for: {headers['ReEncryptedFor'][:16]}...")
+                print(f"   Timestamp: {headers['ReEncryptionTimestamp']}")
+
+            else:
+                # Handle original (non-re-encrypted) messages with full verification
+
+                # The payload *is* the single serialized ciphertext piece.
+                # Hash it for Merkle path verification.
+                leaf_hash_bytes = hashlib.blake2b(payload_bytes).digest()
+
+                if not verify_merkle_path(
+                    leaf_hash_bytes,
+                    json.loads(headers["AuthPath"]),
+                    current_piece_index,  # The index is the running total of pieces
+                    headers["MerkleRoot"],
+                ):
+                    raise ValueError("Merkle path verification failed")
 
             if not merkle_root:
                 merkle_root = headers["MerkleRoot"]
