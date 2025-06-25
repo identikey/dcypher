@@ -16,9 +16,6 @@ from bip_utils import Bip39MnemonicGenerator, Bip39WordsNum
 from typing import List, Dict, Any
 
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
-
-
 @click.group()
 def cli():
     """A CLI tool for demonstrating proxy re-encryption."""
@@ -884,7 +881,16 @@ def download(
 
 @cli.command("download-chunks")
 @click.option("--pk-path", type=str, required=True)
-@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
 @click.option("--file-hash", type=str, required=True)
 @click.option(
     "--output-path",
@@ -898,9 +904,23 @@ def download(
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def download_chunks(pk_path, auth_keys_path, file_hash, output_path, api_url):
+def download_chunks(
+    pk_path, auth_keys_path, identity_path, file_hash, output_path, api_url
+):
     """Downloads all chunks for a file as a single concatenated gzip file."""
     from lib.api_client import DCypherClient, DCypherAPIError
+
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
 
     click.echo(
         f"Starting download for concatenated chunks of file hash: {file_hash}...",
@@ -908,10 +928,13 @@ def download_chunks(pk_path, auth_keys_path, file_hash, output_path, api_url):
     )
 
     try:
-        # Initialize API client with auth keys
-        client = DCypherClient(api_url, str(auth_keys_path))
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
 
-        # Get the classic public key from the auth keys
+        # Get the classic public key from the keys
         pk_classic_hex = client.get_classic_public_key()
 
         # Download chunks using the client
@@ -1040,19 +1063,45 @@ def list_files(auth_keys_path, identity_path, api_url):
 
 
 @cli.command("get-graveyard")
-@click.option("--auth-keys-path", type=click.Path(exists=True), required=True)
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
 @click.option(
     "--api-url",
     envvar="DCY_API_URL",
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def get_graveyard(auth_keys_path, api_url):
+def get_graveyard(auth_keys_path, identity_path, api_url):
     """Gets retired keys (graveyard) for the authenticated account."""
     from lib.api_client import DCypherClient, DCypherAPIError
 
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
     try:
-        client = DCypherClient(api_url, str(auth_keys_path))
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+
         pk_classic_hex = client.get_classic_public_key()
         graveyard = client.get_account_graveyard(pk_classic_hex)
 
@@ -1067,6 +1116,548 @@ def get_graveyard(auth_keys_path, api_url):
 
     except DCypherAPIError as e:
         raise click.ClickException(f"Failed to get graveyard: {e}")
+
+
+@cli.command("create-account")
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def create_account(auth_keys_path, identity_path, api_url):
+    """Creates a new account on the server using your identity or auth keys."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
+    try:
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+
+        # Load keys to get PQ key info for account creation
+        from lib.key_manager import KeyManager
+
+        keys_path = identity_path if identity_path else auth_keys_path
+        keys_data = KeyManager.load_keys_unified(Path(keys_path))
+
+        pk_classic_hex = client.get_classic_public_key()
+        pq_keys = [
+            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
+        ]
+
+        click.echo(
+            f"Creating account with classic key: {pk_classic_hex[:16]}...", err=True
+        )
+        click.echo(f"Including {len(pq_keys)} post-quantum keys", err=True)
+
+        result = client.create_account(pk_classic_hex, pq_keys)
+        click.echo(f"✓ Account created successfully!", err=True)
+        click.echo(f"  Account ID: {pk_classic_hex}", err=True)
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to create account: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("get-account")
+@click.option(
+    "--public-key", type=str, required=True, help="Public key of the account to query."
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def get_account(public_key, api_url):
+    """Gets detailed information about an account."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url)
+        account = client.get_account(public_key)
+
+        click.echo(f"Account Information:", err=True)
+        click.echo(f"  Public Key: {account.get('public_key', 'N/A')}", err=True)
+        click.echo(f"  Created: {account.get('created_at', 'N/A')}", err=True)
+
+        if "pq_keys" in account:
+            click.echo(f"  Post-Quantum Keys:", err=True)
+            for i, pq_key in enumerate(account["pq_keys"]):
+                click.echo(
+                    f"    {i + 1}. {pq_key.get('alg', 'N/A')}: {pq_key.get('public_key', 'N/A')[:16]}...",
+                    err=True,
+                )
+
+        if "pre_public_key_hex" in account and account["pre_public_key_hex"]:
+            click.echo(
+                f"  PRE Public Key: {account['pre_public_key_hex'][:16]}...", err=True
+            )
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to get account: {e}")
+
+
+@cli.command("add-pq-keys")
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
+@click.option(
+    "--algorithms",
+    type=str,
+    required=True,
+    help="Comma-separated list of PQ algorithms to add (e.g., 'Falcon-512,SPHINCS+-SHA2-128f')",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def add_pq_keys(auth_keys_path, identity_path, algorithms, api_url):
+    """Adds new post-quantum keys to an existing account."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
+    try:
+        # Parse algorithms
+        alg_list = [alg.strip() for alg in algorithms.split(",")]
+
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+
+        pk_classic_hex = client.get_classic_public_key()
+
+        # Generate new keys for the specified algorithms (temporary, not persisted locally)
+        import oqs
+
+        new_keys = []
+        oqs_objects = []  # Track for cleanup
+
+        try:
+            for alg in alg_list:
+                click.echo(f"Generating new {alg} key pair...", err=True)
+                sig = oqs.Signature(alg)
+                sk = sig.generate_keypair()
+                pk_hex = sig.public_key.hex()
+
+                new_keys.append({"pk_hex": pk_hex, "alg": alg})
+                oqs_objects.append(sig)
+
+            click.echo(f"Adding {len(new_keys)} new PQ keys to account...", err=True)
+            result = client.add_pq_keys(pk_classic_hex, new_keys)
+
+            click.echo(f"✓ Successfully added PQ keys to account!", err=True)
+            for key in new_keys:
+                click.echo(f"  - {key['alg']}: {key['pk_hex'][:16]}...", err=True)
+
+            click.echo("", err=True)
+            click.echo(
+                "⚠️  Important: The new keys were added to the server but NOT saved to your local identity file.",
+                err=True,
+            )
+            click.echo(
+                "You will need to manually add these keys to your local files if you want to use them for signing.",
+                err=True,
+            )
+            click.echo(
+                "Consider rotating your identity to generate new keys that are properly integrated.",
+                err=True,
+            )
+
+        finally:
+            # Clean up OQS objects
+            for sig in oqs_objects:
+                sig.free()
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to add PQ keys: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("remove-pq-keys")
+@click.option(
+    "--auth-keys-path",
+    type=click.Path(exists=True),
+    help="Path to auth keys file (legacy)",
+)
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    help="Path to identity file (preferred)",
+)
+@click.option(
+    "--algorithms",
+    type=str,
+    required=True,
+    help="Comma-separated list of PQ algorithms to remove (e.g., 'Falcon-512,SPHINCS+-SHA2-128f')",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def remove_pq_keys(auth_keys_path, identity_path, algorithms, api_url):
+    """Removes post-quantum keys from an existing account."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    # Validate that either auth_keys_path or identity_path is provided
+    if not auth_keys_path and not identity_path:
+        raise click.ClickException(
+            "Must provide either --auth-keys-path or --identity-path"
+        )
+
+    if auth_keys_path and identity_path:
+        click.echo(
+            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
+            err=True,
+        )
+
+    try:
+        # Parse algorithms
+        alg_list = [alg.strip() for alg in algorithms.split(",")]
+
+        # Initialize API client with appropriate key file
+        if identity_path:
+            client = DCypherClient(api_url, identity_path=identity_path)
+        else:
+            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+
+        pk_classic_hex = client.get_classic_public_key()
+
+        click.echo(
+            f"Removing {len(alg_list)} PQ key algorithms from account...", err=True
+        )
+        for alg in alg_list:
+            click.echo(f"  - {alg}", err=True)
+
+        result = client.remove_pq_keys(pk_classic_hex, alg_list)
+
+        click.echo(f"✓ Successfully removed PQ keys from account!", err=True)
+
+        # Note: This doesn't remove the keys from the local identity/auth file
+        # Users should manually clean up or rotate their identity if needed
+        click.echo(
+            "Note: Keys removed from server but still present in local identity file.",
+            err=True,
+        )
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to remove PQ keys: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("get-pre-context")
+@click.option(
+    "--output",
+    default="pre_context.dat",
+    help="Path to save the PRE crypto context file.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def get_pre_context(output, api_url):
+    """Downloads the PRE crypto context from the server."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url)
+        context_bytes = client.get_pre_crypto_context()
+
+        with open(output, "wb") as f:
+            f.write(context_bytes)
+
+        click.echo(f"✓ PRE crypto context saved to {output}", err=True)
+        click.echo(f"Size: {len(context_bytes)} bytes", err=True)
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to get PRE crypto context: {e}")
+
+
+@cli.command("init-pre")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to identity file to initialize PRE for.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def init_pre(identity_path, api_url):
+    """Initializes PRE capabilities for an identity file."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, identity_path=identity_path)
+
+        click.echo("Initializing PRE capabilities for identity...", err=True)
+        client.initialize_pre_for_identity()
+
+        click.echo("✓ PRE keys added to identity file!", err=True)
+        click.echo(
+            "Your identity now supports proxy re-encryption operations.", err=True
+        )
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to initialize PRE: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("create-share")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to your identity file (you must be the file owner).",
+)
+@click.option(
+    "--bob-public-key",
+    type=str,
+    required=True,
+    help="Bob's classic public key (who you're sharing with).",
+)
+@click.option(
+    "--file-hash",
+    type=str,
+    required=True,
+    help="Hash of the file to share.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def create_share(identity_path, bob_public_key, file_hash, api_url):
+    """Creates a sharing policy to allow another user to access your file."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, identity_path=identity_path)
+
+        click.echo(f"Creating share for file {file_hash}...", err=True)
+        click.echo(f"Sharing with: {bob_public_key[:16]}...", err=True)
+
+        # Generate re-encryption key
+        click.echo("Generating re-encryption key...", err=True)
+        re_key_hex = client.generate_re_encryption_key(bob_public_key)
+
+        # Create the share
+        result = client.create_share(bob_public_key, file_hash, re_key_hex)
+
+        share_id = result.get("share_id")
+        click.echo(f"✓ Share created successfully!", err=True)
+        click.echo(f"  Share ID: {share_id}", err=True)
+        click.echo(f"  File: {file_hash}", err=True)
+        click.echo(f"  Shared with: {bob_public_key[:16]}...", err=True)
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to create share: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("list-shares")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to your identity file.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def list_shares(identity_path, api_url):
+    """Lists all shares involving your account (sent and received)."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, identity_path=identity_path)
+        pk_classic_hex = client.get_classic_public_key()
+
+        shares = client.list_shares(pk_classic_hex)
+
+        shares_sent = shares.get("shares_sent", [])
+        shares_received = shares.get("shares_received", [])
+
+        if shares_sent:
+            click.echo(f"📤 Shares you've sent ({len(shares_sent)}):", err=True)
+            for share in shares_sent:
+                click.echo(
+                    f"  • {share.get('share_id', 'N/A')}: {share.get('file_hash', 'N/A')[:16]}... → {share.get('bob_public_key', 'N/A')[:16]}...",
+                    err=True,
+                )
+        else:
+            click.echo("📤 No shares sent", err=True)
+
+        if shares_received:
+            click.echo(f"📥 Shares you've received ({len(shares_received)}):", err=True)
+            for share in shares_received:
+                click.echo(
+                    f"  • {share.get('share_id', 'N/A')}: {share.get('file_hash', 'N/A')[:16]}... ← {share.get('alice_public_key', 'N/A')[:16]}...",
+                    err=True,
+                )
+        else:
+            click.echo("📥 No shares received", err=True)
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to list shares: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("download-shared")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to your identity file.",
+)
+@click.option(
+    "--share-id",
+    type=str,
+    required=True,
+    help="ID of the share to download.",
+)
+@click.option(
+    "--output-path",
+    type=click.Path(dir_okay=False, writable=True),
+    required=True,
+    help="Path to save the downloaded shared file.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def download_shared(identity_path, share_id, output_path, api_url):
+    """Downloads a file that has been shared with you."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, identity_path=identity_path)
+
+        click.echo(f"Downloading shared file with share ID: {share_id}...", err=True)
+
+        # Download the shared file (re-encrypted)
+        shared_content = client.download_shared_file(share_id)
+
+        # Save the content
+        with open(output_path, "wb") as f:
+            f.write(shared_content)
+
+        click.echo(
+            f"✓ Shared file downloaded successfully to '{output_path}'", err=True
+        )
+        click.echo(
+            f"Note: This is a re-encrypted version. You'll need to decrypt it with your PRE secret key.",
+            err=True,
+        )
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to download shared file: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
+
+
+@cli.command("revoke-share")
+@click.option(
+    "--identity-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to your identity file (you must be the file owner).",
+)
+@click.option(
+    "--share-id",
+    type=str,
+    required=True,
+    help="ID of the share to revoke.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    default="http://127.0.0.1:8000",
+    help="API base URL.",
+)
+def revoke_share(identity_path, share_id, api_url):
+    """Revokes a sharing policy (removes access for the shared user)."""
+    from lib.api_client import DCypherClient, DCypherAPIError
+
+    try:
+        client = DCypherClient(api_url, identity_path=identity_path)
+
+        click.echo(f"Revoking share: {share_id}...", err=True)
+
+        result = client.revoke_share(share_id)
+
+        click.echo(f"✓ Share revoked successfully!", err=True)
+        click.echo(f"The shared user no longer has access to the file.", err=True)
+
+    except DCypherAPIError as e:
+        raise click.ClickException(f"Failed to revoke share: {e}")
+    except Exception as e:
+        raise click.ClickException(f"Error: {e}")
 
 
 if __name__ == "__main__":
