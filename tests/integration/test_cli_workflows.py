@@ -24,6 +24,7 @@ import hashlib
 import socket
 import gzip
 from src.lib.api_client import DCypherClient
+import base64
 
 
 def test_full_workflow(cli_test_env):
@@ -425,7 +426,7 @@ def test_large_file_workflow(cli_test_env):
         cc_data = json.load(f)
     from lib import pre
 
-    cc = pre.deserialize_cc(cc_data["cc"])
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
     slot_count = pre.get_slot_count(cc)
 
     # Create a file larger than the slot count
@@ -568,7 +569,7 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
 
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    cc = pre.deserialize_cc(cc_data["cc"])
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
     slot_count = pre.get_slot_count(cc)
 
     run_command(["gen-keys", "--cc-path", str(cc_path), "--output-prefix", "user_pre"])

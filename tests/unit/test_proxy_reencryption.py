@@ -94,17 +94,6 @@ def test_coefficients_to_bytes_strict_behavior():
         pre.coefficients_to_bytes(invalid_coeffs, 8)
 
 
-def test_bytes_to_coefficients_oversized_data():
-    """
-    Tests that byte-to-coefficient conversion fails for data larger than the slot count.
-    """
-    slot_count = 10
-    # 11 shorts = 22 bytes > 10 slots * 2 bytes/slot
-    oversized_data = b"A" * (slot_count * 2 + 2)
-    with pytest.raises(ValueError):
-        pre.bytes_to_coefficients(oversized_data, slot_count)
-
-
 def test_decrypt_with_wrong_key(crypto_setup):
     """
     Tests that decrypting with the wrong key does not yield the original plaintext.
@@ -243,6 +232,42 @@ def test_ciphertext_serialization_behavior(crypto_setup):
     )
 
 
+def test_cc_serialization_behavior():
+    """
+    Tests that CryptoContext serialization is functional.
+    """
+    # 1. Create and serialize a context
+    cc1 = pre.create_crypto_context()
+    # We need to generate keys to fully initialize the context before serialization
+    pre.generate_keys(cc1)
+    ser_cc_bytes = pre.serialize_to_bytes(cc1)
+    assert isinstance(ser_cc_bytes, bytes)
+
+    # 2. Deserialize the context
+    cc2 = pre.deserialize_cc(ser_cc_bytes)
+
+    # 3. Verify the deserialized context is functional
+    # We can't directly compare cc1 and cc2, so we test by using cc2.
+    slot_count = pre.get_slot_count(cc2)
+    assert slot_count > 0
+
+    # Test key generation
+    alice_keys = pre.generate_keys(cc2)
+    bob_keys = pre.generate_keys(cc2)
+    assert alice_keys.publicKey is not None
+    assert bob_keys.publicKey is not None
+
+    # Test a simple encryption/decryption roundtrip
+    original_data = b"test for functional cc"
+    coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    ciphertext_alice = pre.encrypt(cc2, alice_keys.publicKey, coeffs)
+    decrypted_coeffs = pre.decrypt(
+        cc2, alice_keys.secretKey, ciphertext_alice, len(coeffs)
+    )
+    decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(original_data))
+    assert decrypted_data == original_data
+
+
 def test_workflow_with_deserialized_objects(crypto_setup):
     """
     Tests that deserialized objects are fully functional by running a
@@ -275,11 +300,7 @@ def test_workflow_with_deserialized_objects(crypto_setup):
     # Generate re-key with deserialized Alice SK and Bob PK
     re_key = pre.generate_re_encryption_key(cc, deser_alice_sk, deser_bob_pk)
     ser_re_key_bytes = pre.serialize_to_bytes(re_key)
-    # Note: deserialize_re_encryption_key expects a b64 string, which is an
-    # inconsistency in the pre.py API. We work around it here.
-    deser_re_key = pre.deserialize_re_encryption_key(
-        base64.b64encode(ser_re_key_bytes).decode("utf-8")
-    )
+    deser_re_key = pre.deserialize_re_encryption_key(ser_re_key_bytes)
 
     # Re-encrypt with deserialized re-key
     ciphertext_bob = pre.re_encrypt(cc, deser_re_key, ciphertext_alice)
@@ -302,6 +323,42 @@ def test_deserialization_failure(crypto_setup):
         pre.deserialize_secret_key(garbage_data)
     with pytest.raises(RuntimeError):
         pre.deserialize_ciphertext(garbage_data)
+    with pytest.raises(RuntimeError):
+        pre.deserialize_re_encryption_key(garbage_data)
+    with pytest.raises(RuntimeError):
+        pre.deserialize_cc(garbage_data)
+
+
+def test_workflow_with_multi_chunk_data(crypto_setup):
+    """
+    Tests the full PRE workflow with data that spans multiple ciphertexts.
+    """
+    cc = crypto_setup["cc"]
+    alice_keys = crypto_setup["alice_keys"]
+    bob_keys = crypto_setup["bob_keys"]
+
+    slot_count = pre.get_slot_count(cc)
+    # Create data that requires more than one chunk.
+    # Each char is 1 byte, each coeff is 2 bytes (unsigned short).
+    # So we need > slot_count * 2 bytes.
+    data_size = int(slot_count * 2 * 1.5)
+    original_data = b"X" * data_size
+
+    coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    assert len(coeffs) > slot_count
+
+    ciphertext_alice = pre.encrypt(cc, alice_keys.publicKey, coeffs)
+    assert len(ciphertext_alice) > 1
+
+    re_key = pre.generate_re_encryption_key(
+        cc, alice_keys.secretKey, bob_keys.publicKey
+    )
+    ciphertext_bob = pre.re_encrypt(cc, re_key, ciphertext_alice)
+
+    decrypted_coeffs = pre.decrypt(cc, bob_keys.secretKey, ciphertext_bob, len(coeffs))
+    decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(original_data))
+
+    assert decrypted_data == original_data
 
 
 @pytest.mark.parametrize(

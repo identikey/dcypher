@@ -343,7 +343,7 @@ def test_single_part_idk_message_flow(cli_test_env, api_base_url):
 
     # Decrypt to get original data
     with open(cc_path, "r") as f:
-        cc = pre.deserialize_cc(json.load(f)["cc"])
+        cc = pre.deserialize_cc(base64.b64decode(json.load(f)["cc"]))
     with open(test_dir / "user_pre.sec", "r") as f:
         sk_data = json.load(f)
         sk = pre.deserialize_secret_key(base64.b64decode(sk_data["key"]))

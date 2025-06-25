@@ -50,7 +50,7 @@ def generate_keys(cc):
 def bytes_to_coefficients(data: bytes, slot_count: int) -> List[int]:
     """
     Converts a byte string into a list of integer coefficients (unsigned shorts)
-    for PRE, padding with zeros to fill all available slots.
+    for PRE. Does not pad to fill slots, as chunking is handled by encrypt.
     """
     # Each coefficient is an unsigned short (2 bytes).
     # If data length is odd, pad with a null byte.
@@ -58,17 +58,9 @@ def bytes_to_coefficients(data: bytes, slot_count: int) -> List[int]:
         data += b"\0"
 
     num_coeffs = len(data) // 2
-    if num_coeffs > slot_count:
-        raise ValueError(
-            f"Data requires {num_coeffs} slots, but only {slot_count} are available."
-        )
 
     # Unpack bytes into a list of unsigned shorts (H).
     coeffs = list(struct.unpack(f"<{num_coeffs}H", data))
-
-    # Pad with zeros to fill all slots.
-    if len(coeffs) < slot_count:
-        coeffs.extend([0] * (slot_count - len(coeffs)))
 
     return coeffs
 
@@ -84,6 +76,9 @@ def encrypt(cc, public_key, data_coeffs):
     ]
     ciphertexts = []
     for chunk in chunks:
+        # Pad the chunk if it's smaller than slot_count
+        if len(chunk) < slot_count:
+            chunk.extend([0] * (slot_count - len(chunk)))
         pt = cc.MakePackedPlaintext(chunk)
         ciphertexts.append(cc.Encrypt(public_key, pt))
     return ciphertexts
@@ -169,18 +164,12 @@ def _deserialize_from_bytes(data: bytes, deserializer):
     return obj
 
 
-def _deserialize_from_base64_string(encoded_str, deserializer):
-    """Helper to deserialize from a base64 string via a temporary file."""
-    data = base64.b64decode(encoded_str)
-    return _deserialize_from_bytes(data, deserializer)
-
-
-def deserialize_cc(encoded_str):
+def deserialize_cc(data: bytes):
     """
-    Deserializes a CryptoContext from a base64 encoded string.
+    Deserializes a CryptoContext from raw bytes.
     """
     fhe.ReleaseAllContexts()
-    return _deserialize_from_base64_string(encoded_str, fhe.DeserializeCryptoContext)
+    return _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
 
 
 def deserialize_public_key(data: bytes):
@@ -198,12 +187,12 @@ def deserialize_ciphertext(data: bytes):
     return _deserialize_from_bytes(data, fhe.DeserializeCiphertext)
 
 
-def deserialize_re_encryption_key(encoded_str):
+def deserialize_re_encryption_key(data: bytes):
     """
-    Deserializes a re-encryption key from a base64 encoded string.
+    Deserializes a re-encryption key from raw bytes.
     """
     # Re-encryption keys are deserialized as generic EvalKeys
-    return _deserialize_from_base64_string(encoded_str, fhe.DeserializeEvalKey)
+    return _deserialize_from_bytes(data, fhe.DeserializeEvalKey)
 
 
 def coefficients_to_bytes(

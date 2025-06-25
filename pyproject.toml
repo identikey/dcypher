@@ -1,51 +1,62 @@
-[project]
-name = "dcypher"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.12,<3.13"
-dependencies = [
-    "bip-utils>=2.9.1",
-    "ecdsa>=0.19.1",
-    "fastapi>=0.115.13",
-    "liboqs-python>=0.13.0",
-    "openfhe",
-    "pybind11>=2.13.6",
-    "python-multipart>=0.0.20",
-    "requests>=2.32.4",
-    "uvicorn>=0.34.3",
-    "yowasp-yosys>=0.54.0.0.post930",
-]
-
-[dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-    "mypy>=1.16.1",
-    "openhands-ai>=0.45.0",
-    "pytest>=8.4.0",
-    "pytest-repeat>=0.9.1",
-    "pytest-xdist>=3.7.0",
-]
-
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[project.scripts]
-dcypher = "cli:cli"
+[project]
+name = "dcypher"
+version = "0.1.0"
+description = "dcypher"
+requires-python = ">=3.12"
+dependencies = [
+    "uv",
+    "fastapi",
+    "uvicorn",
+    "pytest",
+    "pytest-xdist",
+    "pytest-asyncio",
+    "requests",
+    "aiohttp",
+    "ruff",
+    "pre-commit",
+    "pandas",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "W", "I"]
+ignore-init-module-imports = true
 
-[tool.setuptools.package-dir]
-"" = "src"
+[tool.ruff.lint]
+# Add this line to ignore the F401 error for specific unused imports
+ignore = ["F401"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"src/dcypher/dcypher_front/src/App.test.js" = ["E501"]
+"src/dcypher/dcypher_front/src/reportWebVitals.js" = ["E501"]
+"src/dcypher/dcypher_front/src/index.js" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
 
 [tool.pytest.ini_options]
-# Suppress external dependency warnings that we cannot control
+testpaths = ["tests"]
+norecursedirs = ["openfhe-python"]
+addopts = [
+    "--import-mode=importlib",
+    "--ignore=setup.py",
+    "--ignore=src/dcypher/dcypher_front",
+    "--ignore=src/dcypher/dcypher_back",
+]
 filterwarnings = [
-    "ignore:websockets.legacy is deprecated.*:DeprecationWarning",
+    "ignore::DeprecationWarning",
+    # Ignore deprecation warnings from websockets library in FastAPI/Starlette
     "ignore:websockets.server.WebSocketServerProtocol is deprecated.*:DeprecationWarning",
 ]
 
 [tool.uv.sources]
-openfhe = { path = "openfhe-python", editable = true }
+dcypher-backend = { path = ".", editable = true }
+openfhe-python = { path = "./openfhe-python" }

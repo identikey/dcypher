@@ -357,46 +357,29 @@ def gen_signing_keys(output_prefix):
 @click.option("--output-prefix", default="key", help="Prefix for the output key files.")
 def gen_keys(cc_path, output_prefix):
     """Generates a public/private key pair."""
-    try:
-        click.echo(f"Loading crypto context from {cc_path}...", err=True)
-        with open(cc_path, "r") as f:
-            cc_data = json.load(f)
-    except FileNotFoundError:
-        raise click.ClickException(f"Crypto context file not found: {cc_path}")
-    except PermissionError:
-        raise click.ClickException(f"Permission denied accessing file: {cc_path}")
-    except json.JSONDecodeError as e:
-        raise click.ClickException(f"Invalid JSON in crypto context file: {e}")
-    except Exception as e:
-        raise click.ClickException(f"Error reading crypto context file: {e}")
+    click.echo(f"Loading crypto context from {cc_path}...", err=True)
+    with open(cc_path, "r") as f:
+        cc_data = json.load(f)
 
-    try:
-        cc = pre.deserialize_cc(cc_data["cc"])
-    except KeyError:
-        raise click.ClickException("Invalid crypto context file: missing 'cc' field")
-    except Exception as e:
-        raise click.ClickException(f"Error deserializing crypto context: {e}")
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
-    try:
-        click.echo("Generating keys...", err=True)
-        keys = pre.generate_keys(cc)
+    click.echo("Generating keys...", err=True)
+    keys = pre.generate_keys(cc)
 
-        serialized_pk = pre.serialize(keys.publicKey)
-        serialized_sk = pre.serialize(keys.secretKey)
+    serialized_pk = pre.serialize(keys.publicKey)
+    serialized_sk = pre.serialize(keys.secretKey)
 
-        pk_path = f"{output_prefix}.pub"
-        sk_path = f"{output_prefix}.sec"
+    pk_path = f"{output_prefix}.pub"
+    sk_path = f"{output_prefix}.sec"
 
-        with open(pk_path, "w") as f:
-            json.dump({"key": serialized_pk}, f)
+    with open(pk_path, "w") as f:
+        json.dump({"key": serialized_pk}, f)
 
-        with open(sk_path, "w") as f:
-            json.dump({"key": serialized_sk}, f)
+    with open(sk_path, "w") as f:
+        json.dump({"key": serialized_sk}, f)
 
-        click.echo(f"Public key saved to {pk_path}", err=True)
-        click.echo(f"Secret key saved to {sk_path}", err=True)
-    except Exception as e:
-        raise click.ClickException(f"Error generating or saving keys: {e}")
+    click.echo(f"Public key saved to {pk_path}", err=True)
+    click.echo(f"Secret key saved to {sk_path}", err=True)
 
 
 @cli.command()
@@ -429,7 +412,7 @@ def encrypt(cc_path, pk_path, signing_key_path, data, input_file, output):
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    cc = pre.deserialize_cc(cc_data["cc"])
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
     click.echo(f"Loading public key from {pk_path}...", err=True)
     with open(pk_path, "r") as f:
@@ -486,7 +469,7 @@ def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    cc = pre.deserialize_cc(cc_data["cc"])
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
     click.echo(f"Loading secret key from {sk_path}...", err=True)
     with open(sk_path, "r") as f:
@@ -536,7 +519,7 @@ def gen_rekey(cc_path, sk_path_from, pk_path_to, output):
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    cc = pre.deserialize_cc(cc_data["cc"])
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
     click.echo(f"Loading 'from' secret key from {sk_path_from}...", err=True)
     with open(sk_path_from, "r") as f:
@@ -576,7 +559,7 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    cc = pre.deserialize_cc(cc_data["cc"])
+    cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
     click.echo(f"Loading re-encryption key from {rekey_path}...", err=True)
     with open(rekey_path, "r") as f:
@@ -672,7 +655,7 @@ def upload(
         # Load crypto context
         with open(cc_path, "r") as f:
             cc_data = json.load(f)
-        cc = pre.deserialize_cc(cc_data["cc"])
+        cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
         # Load public key for encryption
         with open(pk_path, "r") as f:
