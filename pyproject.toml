@@ -8,7 +8,7 @@ dependencies = [
     "bip-utils>=2.9.1",
     "ecdsa>=0.19.1",
     "fastapi>=0.115.13",
-    "liboqs-python>=0.12.0",
+    "liboqs-python>=0.13.0",
     "openfhe",
     "pybind11>=2.13.6",
     "python-multipart>=0.0.20",
