@@ -125,10 +125,6 @@ class KeyManager:
     Supports both classic ECDSA and post-quantum ML-DSA signatures.
     """
 
-    # Class-level attributes for managing the patch
-    _original_randombytes: Optional[Any] = None
-    _patch_lock = threading.Lock()
-
     # Logger for key management operations
     _logger = logging.getLogger("dcypher.key_manager")
 
@@ -198,36 +194,46 @@ class KeyManager:
         try:
             import os
             import platform
-            
+
             # Determine local library paths based on platform
             system = platform.system().lower()
             if system == "linux":
                 local_lib_path = "/app/liboqs-local/lib/liboqs.so"  # Docker path
-                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.so")
+                host_lib_path = os.path.join(
+                    os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.so"
+                )
             elif system == "darwin":
                 local_lib_path = "/app/liboqs-local/lib/liboqs.dylib"  # Docker path
-                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.dylib")
+                host_lib_path = os.path.join(
+                    os.path.dirname(__file__), "../../liboqs-local/lib/liboqs.dylib"
+                )
             elif system == "windows":
                 local_lib_path = "/app/liboqs-local/bin/oqs.dll"  # Docker path
-                host_lib_path = os.path.join(os.path.dirname(__file__), "../../liboqs-local/bin/oqs.dll")
+                host_lib_path = os.path.join(
+                    os.path.dirname(__file__), "../../liboqs-local/bin/oqs.dll"
+                )
             else:
                 local_lib_path = None
                 host_lib_path = None
 
             # Try local paths in order of preference
             local_paths = [p for p in [local_lib_path, host_lib_path] if p is not None]
-            
+
             for path in local_paths:
                 KeyManager._log("info", f"Trying local liboqs path: {path}")
                 try:
                     if os.path.exists(path):
                         lib = ctypes.CDLL(path)
-                        KeyManager._log("info", f"Successfully loaded local liboqs: {path}")
+                        KeyManager._log(
+                            "info", f"Successfully loaded local liboqs: {path}"
+                        )
                         return lib
                     else:
                         KeyManager._log("info", f"Local path does not exist: {path}")
                 except OSError as e:
-                    KeyManager._log("warning", f"Failed to load local liboqs {path}: {e}")
+                    KeyManager._log(
+                        "warning", f"Failed to load local liboqs {path}: {e}"
+                    )
 
         except Exception as e:
             KeyManager._log("error", f"Local liboqs search failed: {e}", error=str(e))
@@ -856,7 +862,9 @@ class KeyManager:
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
+                "pq": [
+                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                ],
             },
         }
 

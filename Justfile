@@ -4,8 +4,8 @@
 default:
     @just --list
 
-# Build the Docker image
-docker-built:
+# Build the Docker image for Intel processor
+docker-build:
     docker build build --platform linux/amd64 -t dcypher --load .
 
 # Build the development Docker image
@@ -113,14 +113,14 @@ build-all: build-openfhe-python build-liboqs
 
 # Clean OpenFHE builds
 clean-openfhe:
-    rm -rf openfhe-development/build openfhe-local openfhe-python/build
+    rm -rf openfhe-development/build openfhe-local openfhe-python/build openfhe-python/openfhe/openfhe.so
 
 # Clean liboqs builds
 clean-liboqs:
     rm -rf liboqs/build liboqs-local
 
 # Clean all builds
-clean-all: clean-openfhe clean-liboqs
+clean: clean-openfhe clean-liboqs
 
 test:
     uv run pytest -n auto --dist worksteal tests/
