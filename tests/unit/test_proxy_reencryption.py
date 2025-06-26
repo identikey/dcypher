@@ -9,9 +9,13 @@ from lib import pre
 
 @pytest.fixture
 def crypto_setup():
-    """
-    Provides a shared crypto context and keys for all tests in this module.
-    Scope is function (default) to ensure test isolation for parallel execution.
+    """Provides a shared crypto context and keys for all tests.
+
+    This fixture initializes a single crypto context and generates key pairs for
+    two canonical users, "Alice" and "Bob". Using a fixture ensures that each
+    test function runs in isolation with a fresh set of keys, which is critical
+    for preventing side effects between tests. The scope is 'function' by
+    default, creating a new setup for each test.
     """
     cc = pre.create_crypto_context()
     alice_keys = pre.generate_keys(cc)
@@ -24,8 +28,16 @@ def crypto_setup():
 
 
 def test_full_workflow(crypto_setup):
-    """
-    Tests the end-to-end proxy re-encryption workflow.
+    """Tests the end-to-end proxy re-encryption workflow.
+
+    This test covers the entire standard PRE lifecycle:
+    1. Alice encrypts data with her public key.
+    2. Alice generates a re-encryption key for Bob.
+    3. A proxy uses the re-encryption key to transform the ciphertext.
+    4. Bob decrypts the transformed ciphertext with his secret key.
+
+    It serves as a high-level integration test to ensure the core components
+    of the library work together as expected.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]
@@ -66,8 +78,14 @@ def test_full_workflow(crypto_setup):
 
 
 def test_bytes_to_coefficients_padding():
-    """
-    Tests that byte-to-coefficient conversion correctly pads odd-length data.
+    """Tests that byte-to-coefficient conversion correctly pads odd-length data.
+
+    The data-to-coefficient packing scheme requires an even number of bytes to
+    create a list of unsigned shorts. This test ensures that if the input data
+    has an odd number of bytes, it is correctly padded with a null byte, and
+
+    that this padding is handled correctly during the reverse conversion, such
+    that the original data is recovered.
     """
     odd_length_data = b"12345"
     slot_count = 10
@@ -80,9 +98,14 @@ def test_bytes_to_coefficients_padding():
 
 
 def test_coefficients_to_bytes_strict_behavior():
-    """
-    Tests that coefficients_to_bytes raises an error in strict mode
-    when a coefficient is out of range.
+    """Tests that coefficient-to-byte conversion fails on out-of-range values.
+
+    The `coefficients_to_bytes` function has a `strict` mode that is enabled
+    by default. This is a critical security feature to prevent data corruption
+    or unexpected behavior from malformed or maliciously crafted coefficient
+    lists. This test verifies that the function raises a
+    `CoefficientOutOfRangeError` when it encounters a coefficient that cannot
+    be represented as a 16-bit unsigned integer.
     """
     # A coefficient that is too large for an unsigned short (max 65535)
     invalid_coeffs = [100, 200, 65536, 300]
@@ -94,20 +117,14 @@ def test_coefficients_to_bytes_strict_behavior():
         pre.coefficients_to_bytes(invalid_coeffs, 8)
 
 
-def test_bytes_to_coefficients_oversized_data():
-    """
-    Tests that byte-to-coefficient conversion fails for data larger than the slot count.
-    """
-    slot_count = 10
-    # 11 shorts = 22 bytes > 10 slots * 2 bytes/slot
-    oversized_data = b"A" * (slot_count * 2 + 2)
-    with pytest.raises(ValueError):
-        pre.bytes_to_coefficients(oversized_data, slot_count)
-
-
 def test_decrypt_with_wrong_key(crypto_setup):
-    """
-    Tests that decrypting with the wrong key does not yield the original plaintext.
+    """Tests that decrypting with an incorrect key fails.
+
+    This is a fundamental security test. It verifies that a ciphertext
+    encrypted for Alice cannot be decrypted by an unauthorized third party
+    (Mallory) who has their own valid key pair but not Alice's secret key.
+    The result of a failed decryption should be indistinguishable from random
+    data, not the original plaintext.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]
@@ -131,9 +148,16 @@ def test_decrypt_with_wrong_key(crypto_setup):
 
 
 def test_public_key_serialization_behavior(crypto_setup):
-    """
-    Tests that public key serialization is deterministic but NOT canonical,
-    and that the key remains functional after a serialization roundtrip.
+    """Tests the behavior of public key serialization.
+
+    This test documents and verifies important properties of the serialization
+    process, which is crucial for storing and transmitting keys:
+    1. Determinism: Serializing the same key twice produces the same bytes.
+    2. Non-Canonical Roundtrip: Deserializing and then re-serializing a key
+       produces a different byte representation. This is a known behavior of
+       the underlying OpenFHE library.
+    3. Functional Equivalence: A key remains fully functional for encryption
+       after a serialization-deserialization roundtrip.
     """
     cc = crypto_setup["cc"]
     pk = crypto_setup["alice_keys"].publicKey
@@ -162,10 +186,13 @@ def test_public_key_serialization_behavior(crypto_setup):
 
 
 def test_secret_key_serialization_behavior(crypto_setup):
-    """
-    Tests that secret key serialization is NOT canonical but remains functional.
-    This test documents the known non-deterministic serialization behavior of OpenFHE
-    secret keys and verifies that the key is still valid after a roundtrip.
+    """Tests the behavior of secret key serialization.
+
+    Similar to the public key test, this verifies the properties of secret key
+    serialization. It's particularly important to confirm that a deserialized
+    secret key remains fully functional for both:
+    a) Decrypting ciphertexts.
+    b) Generating re-encryption keys.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]
@@ -207,9 +234,13 @@ def test_secret_key_serialization_behavior(crypto_setup):
 
 
 def test_ciphertext_serialization_behavior(crypto_setup):
-    """
-    Tests that ciphertext serialization is deterministic but NOT canonical,
-    and that it remains functional after a serialization roundtrip.
+    """Tests the behavior of ciphertext serialization.
+
+    This test confirms that ciphertexts, like keys, can be serialized and
+    deserialized without losing their functional properties. It verifies the
+    same properties as the key serialization tests: determinism, non-canonical
+    roundtrip, and functional equivalence (i.e., a deserialized ciphertext
+    can still be correctly decrypted).
     """
     cc = crypto_setup["cc"]
     keys = crypto_setup["alice_keys"]
@@ -243,10 +274,56 @@ def test_ciphertext_serialization_behavior(crypto_setup):
     )
 
 
-def test_workflow_with_deserialized_objects(crypto_setup):
+def test_cc_serialization_behavior():
+    """Tests that CryptoContext serialization is functional.
+
+    A CryptoContext contains all the cryptographic parameters for the scheme.
+    Being able to serialize and deserialize it is essential for any system
+    where different components (e.g., a client and a server) need to perform
+    cryptographic operations using the same parameters. This test verifies
+    that a deserialized context can be used to generate keys and perform a
+    full encryption/decryption cycle.
     """
-    Tests that deserialized objects are fully functional by running a
-    full re-encryption workflow with them.
+    # 1. Create and serialize a context
+    cc1 = pre.create_crypto_context()
+    # We need to generate keys to fully initialize the context before serialization
+    pre.generate_keys(cc1)
+    ser_cc_bytes = pre.serialize_to_bytes(cc1)
+    assert isinstance(ser_cc_bytes, bytes)
+
+    # 2. Deserialize the context
+    cc2 = pre.deserialize_cc(ser_cc_bytes)
+
+    # 3. Verify the deserialized context is functional
+    # We can't directly compare cc1 and cc2, so we test by using cc2.
+    slot_count = pre.get_slot_count(cc2)
+    assert slot_count > 0
+
+    # Test key generation
+    alice_keys = pre.generate_keys(cc2)
+    bob_keys = pre.generate_keys(cc2)
+    assert alice_keys.publicKey is not None
+    assert bob_keys.publicKey is not None
+
+    # Test a simple encryption/decryption roundtrip
+    original_data = b"test for functional cc"
+    coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    ciphertext_alice = pre.encrypt(cc2, alice_keys.publicKey, coeffs)
+    decrypted_coeffs = pre.decrypt(
+        cc2, alice_keys.secretKey, ciphertext_alice, len(coeffs)
+    )
+    decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(original_data))
+    assert decrypted_data == original_data
+
+
+def test_workflow_with_deserialized_objects(crypto_setup):
+    """Tests a full workflow using only deserialized objects.
+
+    This is a comprehensive integration test that simulates a real-world
+    scenario where all cryptographic objects (keys, ciphertexts, etc.) might
+    be created on one machine, serialized, sent to another, deserialized, and
+    then used. It verifies that the entire PRE workflow functions correctly
+    with objects that have undergone a serialization roundtrip.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]
@@ -275,11 +352,7 @@ def test_workflow_with_deserialized_objects(crypto_setup):
     # Generate re-key with deserialized Alice SK and Bob PK
     re_key = pre.generate_re_encryption_key(cc, deser_alice_sk, deser_bob_pk)
     ser_re_key_bytes = pre.serialize_to_bytes(re_key)
-    # Note: deserialize_re_encryption_key expects a b64 string, which is an
-    # inconsistency in the pre.py API. We work around it here.
-    deser_re_key = pre.deserialize_re_encryption_key(
-        base64.b64encode(ser_re_key_bytes).decode("utf-8")
-    )
+    deser_re_key = pre.deserialize_re_encryption_key(ser_re_key_bytes)
 
     # Re-encrypt with deserialized re-key
     ciphertext_bob = pre.re_encrypt(cc, deser_re_key, ciphertext_alice)
@@ -292,8 +365,13 @@ def test_workflow_with_deserialized_objects(crypto_setup):
 
 
 def test_deserialization_failure(crypto_setup):
-    """
-    Tests that deserialization functions fail with malformed or garbage data.
+    """Tests that deserialization functions fail gracefully with invalid data.
+
+    A robust system must be able to handle malformed or garbage input without
+    crashing. This test feeds invalid byte strings to all deserialization
+    functions and asserts that they raise a `RuntimeError` (as expected from
+    the underlying C++ library) instead of causing an unhandled exception or
+    undefined behavior.
     """
     garbage_data = b"this is not a valid serialized object"
     with pytest.raises(RuntimeError):
@@ -302,6 +380,47 @@ def test_deserialization_failure(crypto_setup):
         pre.deserialize_secret_key(garbage_data)
     with pytest.raises(RuntimeError):
         pre.deserialize_ciphertext(garbage_data)
+    with pytest.raises(RuntimeError):
+        pre.deserialize_re_encryption_key(garbage_data)
+    with pytest.raises(RuntimeError):
+        pre.deserialize_cc(garbage_data)
+
+
+def test_workflow_with_multi_chunk_data(crypto_setup):
+    """Tests the PRE workflow with data larger than a single ciphertext.
+
+    The library is designed to handle data of arbitrary size by splitting it
+    into multiple chunks, each encrypted in a separate ciphertext. This test
+    verifies that this chunking mechanism works correctly and that the data
+    can be fully reconstructed after a multi-chunk re-encryption and
+    decryption cycle.
+    """
+    cc = crypto_setup["cc"]
+    alice_keys = crypto_setup["alice_keys"]
+    bob_keys = crypto_setup["bob_keys"]
+
+    slot_count = pre.get_slot_count(cc)
+    # Create data that requires more than one chunk.
+    # Each char is 1 byte, each coeff is 2 bytes (unsigned short).
+    # So we need > slot_count * 2 bytes.
+    data_size = int(slot_count * 2 * 1.5)
+    original_data = b"X" * data_size
+
+    coeffs = pre.bytes_to_coefficients(original_data, slot_count)
+    assert len(coeffs) > slot_count
+
+    ciphertext_alice = pre.encrypt(cc, alice_keys.publicKey, coeffs)
+    assert len(ciphertext_alice) > 1
+
+    re_key = pre.generate_re_encryption_key(
+        cc, alice_keys.secretKey, bob_keys.publicKey
+    )
+    ciphertext_bob = pre.re_encrypt(cc, re_key, ciphertext_alice)
+
+    decrypted_coeffs = pre.decrypt(cc, bob_keys.secretKey, ciphertext_bob, len(coeffs))
+    decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(original_data))
+
+    assert decrypted_data == original_data
 
 
 @pytest.mark.parametrize(
@@ -316,8 +435,13 @@ def test_deserialization_failure(crypto_setup):
     ],
 )
 def test_workflow_with_edge_case_data(crypto_setup, data_description, test_data_func):
-    """
-    Tests the full PRE workflow with various edge-case data sizes.
+    """Tests the full PRE workflow with various edge-case data sizes.
+
+    This parameterized test covers several boundary conditions for data size
+    to ensure the system is robust:
+    - Empty data (0 bytes).
+    - A single byte of data.
+    - Data that exactly fills the available slots in a ciphertext.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]

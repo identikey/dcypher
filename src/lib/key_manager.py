@@ -36,6 +36,20 @@ import time
 import logging
 import secrets
 import threading
+from lib import pre
+
+try:
+    from crypto.context_manager import CryptoContextManager
+except ImportError:
+    # Fallback for when running from CLI or different contexts
+    import sys
+    import os
+
+    # Add the parent directory to the path to find crypto module
+    parent_dir = os.path.dirname(os.path.dirname(__file__))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from crypto.context_manager import CryptoContextManager
 
 
 # Thread-local storage for deterministic PRNG
@@ -862,9 +876,7 @@ class KeyManager:
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [
-                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
-                ],
+                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
             },
         }
 
@@ -874,6 +886,51 @@ class KeyManager:
             json.dump(identity_data, f, indent=2)
 
         return str(mnemonic), identity_path
+
+    @staticmethod
+    def add_pre_keys_to_identity(identity_file: Path, cc_bytes: bytes) -> None:
+        """
+        Generates and adds PRE keys to an existing identity file.
+
+        Args:
+            identity_file: Path to the identity JSON file.
+            cc_bytes: Serialized crypto context from the server.
+        """
+        # CRITICAL: Use the context singleton to ensure consistency with other operations
+        # This prevents OpenFHE "Key was not generated with the same crypto context" errors
+        context_manager = CryptoContextManager()
+
+        # CRITICAL: Always reset the context to ensure clean state
+        # OpenFHE requires that the context be properly set up in its global registry
+        # before any key operations. We must deserialize the context fresh to ensure
+        # it's properly registered in OpenFHE's internal systems.
+        context_manager.reset()  # Clear any existing context
+
+        # Deserialize the context and set it up in the singleton
+        import base64
+
+        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+        cc = context_manager.deserialize_context(serialized_context)
+
+        # NOW generate PRE keys using the properly initialized context
+        # This ensures the keys are associated with the correct context instance
+        keys = pre.generate_keys(cc)
+        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+
+        # Load the identity file
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        # Add PRE keys to the 'pre' section
+        identity_data["auth_keys"]["pre"] = {
+            "pk_hex": pk_bytes.hex(),
+            "sk_hex": sk_bytes.hex(),
+        }
+
+        # Save the updated identity file
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
 
     @staticmethod
     def derive_key_at_path(
