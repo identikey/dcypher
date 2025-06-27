@@ -21,19 +21,19 @@ class TestDCypherClient:
 
     def test_client_initialization(self):
         """Test basic client initialization"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         assert client.api_url == "http://localhost:8000"
-        assert client.auth_keys_path is None
+        assert client.keys_path == "/path/to/identity.json"
 
         # Test URL normalization
-        client = DCypherClient("http://localhost:8000/")
+        client = DCypherClient("http://localhost:8000/", "/path/to/identity.json")
         assert client.api_url == "http://localhost:8000"
 
-    def test_client_initialization_with_auth_keys(self):
-        """Test client initialization with auth keys path"""
-        client = DCypherClient("http://localhost:8000", "/path/to/keys.json")
+    def test_client_initialization_with_identity(self):
+        """Test client initialization with identity path"""
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         assert client.api_url == "http://localhost:8000"
-        assert client.auth_keys_path == "/path/to/keys.json"
+        assert client.keys_path == "/path/to/identity.json"
 
     @patch("requests.get")
     def test_get_nonce_success(self, mock_get):
@@ -43,7 +43,7 @@ class TestDCypherClient:
         mock_response.json.return_value = {"nonce": "test_nonce_12345"}
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         nonce = client.get_nonce()
 
         assert nonce == "test_nonce_12345"
@@ -54,7 +54,7 @@ class TestDCypherClient:
         """Test nonce retrieval failure"""
         mock_get.side_effect = requests.exceptions.RequestException("Connection error")
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
 
         with pytest.raises(DCypherAPIError, match="Failed to get nonce from API"):
             client.get_nonce()
@@ -67,7 +67,7 @@ class TestDCypherClient:
         mock_response.json.return_value = {"algorithms": ["ML-DSA-87", "Falcon-512"]}
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         algorithms = client.get_supported_algorithms()
 
         assert algorithms == ["ML-DSA-87", "Falcon-512"]
@@ -75,7 +75,7 @@ class TestDCypherClient:
 
     def test_load_auth_keys_no_path(self):
         """Test loading auth keys when no path is configured"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
 
         with pytest.raises(
             AuthenticationError, match="No authentication keys configured"
@@ -84,7 +84,7 @@ class TestDCypherClient:
 
     def test_handle_response_success_json(self):
         """Test successful JSON response handling"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/json"}
@@ -95,7 +95,7 @@ class TestDCypherClient:
 
     def test_handle_response_success_binary(self):
         """Test successful binary response handling"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "application/octet-stream"}
@@ -106,7 +106,7 @@ class TestDCypherClient:
 
     def test_handle_response_validation_error(self):
         """Test validation error response handling"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.text = "Invalid request"
@@ -116,7 +116,7 @@ class TestDCypherClient:
 
     def test_handle_response_auth_error(self):
         """Test authentication error response handling"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         mock_response = Mock()
         mock_response.status_code = 401
         mock_response.text = "Unauthorized"
@@ -128,7 +128,7 @@ class TestDCypherClient:
 
     def test_handle_response_not_found_error(self):
         """Test not found error response handling"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         mock_response = Mock()
         mock_response.status_code = 404
         mock_response.text = "Not found"
@@ -140,7 +140,7 @@ class TestDCypherClient:
 
     def test_handle_response_generic_error(self):
         """Test generic error response handling"""
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.text = "Internal server error"
@@ -205,7 +205,7 @@ class TestDCypherClient:
         }
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         result = client.get_account("test_key")
 
         assert result["public_key"] == "test_key"
@@ -220,7 +220,7 @@ class TestDCypherClient:
         mock_response.text = "Account not found"
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
 
         with pytest.raises(
             ResourceNotFoundError, match="Resource not found: Account not found"
@@ -238,7 +238,7 @@ class TestDCypherClient:
         }
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         result = client.list_accounts()
 
         assert result == ["account1", "account2", "account3"]
@@ -258,7 +258,7 @@ class TestDCypherClient:
         }
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         result = client.get_account_graveyard("test_account")
 
         assert len(result) == 2
@@ -282,7 +282,7 @@ class TestDCypherClient:
         }
         mock_get.return_value = mock_response
 
-        client = DCypherClient("http://localhost:8000")
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
         result = client.list_files("test_account")
 
         assert len(result) == 2
@@ -421,7 +421,6 @@ def test_dcypher_client_with_auth_keys():
 
         # Create client with auth_keys
         client = DCypherClient(
-            "http://localhost:8000", auth_keys_path=str(auth_keys_file)
         )
 
         # Verify client can load keys
@@ -464,7 +463,6 @@ def test_dcypher_client_with_identity():
 
 
 def test_dcypher_client_identity_precedence():
-    """Test that identity_path takes precedence over auth_keys_path."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
@@ -477,7 +475,6 @@ def test_dcypher_client_identity_precedence():
         # Create client with both paths - identity should take precedence
         client = DCypherClient(
             "http://localhost:8000",
-            auth_keys_path=str(auth_keys_file),
             identity_path=str(identity_file),
         )
 
@@ -492,7 +489,7 @@ def test_dcypher_client_identity_precedence():
 
 def test_dcypher_client_no_keys_configured():
     """Test DCypherClient error handling when no keys are configured."""
-    client = DCypherClient("http://localhost:8000")
+    client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
 
     # Should raise error when trying to access keys
     with pytest.raises(AuthenticationError, match="No authentication keys configured"):
@@ -541,7 +538,6 @@ def test_dcypher_client_create_test_account_with_identity():
 
 
 def test_dcypher_client_backward_compatibility():
-    """Test that legacy auth_keys_path parameter still works."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
@@ -550,11 +546,9 @@ def test_dcypher_client_backward_compatibility():
 
         # Create client using legacy parameter name
         client = DCypherClient(
-            "http://localhost:8000", auth_keys_path=str(auth_keys_file)
         )
 
         # Should work exactly as before
-        assert client.auth_keys_path == str(auth_keys_file)
         assert client.keys_path == str(auth_keys_file)
 
         with client.signing_keys() as keys:

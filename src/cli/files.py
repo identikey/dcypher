@@ -150,14 +150,10 @@ def upload(identity_path, file_path, api_url):
 @click.command("download")
 @click.option("--pk-path", type=str, required=True)
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option("--file-hash", type=str, required=True)
 @click.option(
@@ -178,29 +174,14 @@ def upload(identity_path, file_path, api_url):
     help="API base URL.",
 )
 def download(
-    pk_path, auth_keys_path, identity_path, file_hash, output_path, compressed, api_url
+    pk_path, identity_path, file_hash, output_path, compressed, api_url
 ):
     """Downloads a file from the remote storage API with integrity verification."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
     click.echo(f"Starting download for file hash: {file_hash}...", err=True)
 
     try:
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         # Get the classic public key from the keys
         pk_classic_hex = client.get_classic_public_key()
@@ -268,14 +249,10 @@ def download(
 @click.command("download-chunks")
 @click.option("--pk-path", type=str, required=True)
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option("--file-hash", type=str, required=True)
 @click.option(
@@ -291,32 +268,17 @@ def download(
     help="API base URL.",
 )
 def download_chunks(
-    pk_path, auth_keys_path, identity_path, file_hash, output_path, api_url
+    pk_path, identity_path, file_hash, output_path, api_url
 ):
     """Downloads all chunks for a file as a single concatenated gzip file."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
     click.echo(
         f"Starting download for concatenated chunks of file hash: {file_hash}...",
         err=True,
     )
 
     try:
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         # Get the classic public key from the keys
         pk_classic_hex = client.get_classic_public_key()
