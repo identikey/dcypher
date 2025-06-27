@@ -124,3 +124,18 @@ clean: clean-openfhe clean-liboqs
 
 test:
     uv run pytest -n auto --dist worksteal tests/
+
+# Start OpenHands (All Hands AI) development environment
+doit:
+    docker pull docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik
+    docker run -it --rm --pull=always \
+        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik \
+        -e SANDBOX_VOLUMES=${PWD}:/workspace \
+        -e SANDBOX_USER_ID=$(id -u) \
+        -e LOG_ALL_EVENTS=true \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v ~/.openhands:/.openhands \
+        -p 127.0.0.1:3000:3000 \
+        --add-host host.docker.internal:host-gateway \
+        --name openhands-app \
+        docker.all-hands.dev/all-hands-ai/openhands:0.46

@@ -8,3 +8,4 @@ __pycache__
 .pytest_cache
 openfhe-local
 liboqs-local
+.vscode/
