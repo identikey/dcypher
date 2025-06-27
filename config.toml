@@ -1,0 +1,188 @@
+# OpenHands Configuration for DCypher Project
+# This file provides context to OpenHands about the DCypher project structure and preferences
+
+[core]
+# Maximum number of iterations to prevent infinite loops
+max_iterations = 100
+
+# Enable debugging for development
+debug = false
+
+# Cache directory for faster operations
+cache_dir = "/tmp/dcypher_cache"
+
+# File upload restrictions
+file_uploads_restrict_file_types = true
+file_uploads_allowed_extensions = [
+  ".py",
+  ".toml",
+  ".md",
+  ".txt",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".sh",
+  ".just",
+  ".dockerfile",
+  ".gitignore",
+]
+file_uploads_max_file_size_mb = 50
+
+[llm]
+# Default model configuration - can be overridden in UI
+model = "claude-3-5-sonnet-20241022"
+temperature = 0.1
+max_message_chars = 50000
+max_input_tokens = 100000
+max_output_tokens = 8192
+
+[agent]
+# Enable function calling for better tool use
+function_calling = true
+
+# Enable auto-linting after code changes
+enable_auto_lint = true
+
+# Enable history truncation to handle long sessions
+enable_history_truncation = true
+
+# Disable browsing and jupyter by default for security
+enable_browsing = false
+enable_jupyter = false
+
+[sandbox]
+# Use Python 3.12 with Node.js for completeness
+base_container_image = "nikolaik/python-nodejs:python3.12-nodejs22"
+
+# Timeout for sandbox operations (2 minutes)
+timeout = 120
+
+# Enable auto-linting after editing files
+enable_auto_lint = true
+
+# Install additional dependencies when the runtime is built
+runtime_extra_deps = """
+# Install uv package manager
+pip install uv
+
+# Install Just task runner
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+# Install system dependencies that might be needed
+apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    git \
+    curl \
+    wget
+"""
+
+# Environment variables for the runtime
+[sandbox.runtime_startup_env_vars]
+PYTHONPATH = "/workspace/src"
+UV_SYSTEM_PYTHON = "1"
+PATH = "/usr/local/bin:$PATH"
+
+[security]
+# Enable confirmation mode for destructive operations
+confirmation_mode = false
+
+# Custom project instructions for OpenHands
+[project]
+name = "DCypher"
+description = "A quantum-resistant recryption proxy for secure, shareable cloud storage"
+language = "Python"
+package_manager = "uv"
+task_runner = "just"
+
+# Directories that OpenHands should avoid or treat specially
+[project.directories]
+exclude = [
+  "vendor/",        # Git submodules - external libraries, don't modify
+  ".git/",          # Git metadata
+  "__pycache__/",   # Python cache
+  ".pytest_cache/", # Pytest cache
+  ".mypy_cache/",   # MyPy cache
+  ".venv/",         # Virtual environment
+  "openfhe-local/", # Local OpenFHE build artifacts
+  "liboqs-local/",  # Local liboqs build artifacts
+  "node_modules/",  # Node.js dependencies (if any)
+  ".claude/",       # Claude conversation history
+  "block_store/",   # Data storage directories
+  "chunk_store/",   # Data storage directories
+  "circuits/",      # Hardware description files
+  "vhdl_parser/",   # Hardware parser files
+]
+
+source_code = [
+  "src/",   # Main Python source code
+  "tests/", # Test files
+]
+
+documentation = [
+  "docs/",     # Documentation
+  "README.md", # Main documentation
+  "CLAUDE.md", # Development notes
+]
+
+configuration = [
+  "pyproject.toml",  # Python project configuration
+  "Justfile",        # Task definitions
+  "Dockerfile*",     # Container definitions
+  "docker-compose*", # Container orchestration
+  ".gitignore",      # Git exclusions
+]
+
+# Testing and development workflow
+[project.workflow]
+test_command = "uv run pytest -n auto --dist worksteal tests/"
+test_parallel = true
+test_framework = "pytest"
+
+lint_command = "uv run ruff check src/ tests/"
+format_command = "uv run ruff format src/ tests/"
+
+# Available Just tasks (from Justfile)
+build_command = "just build-all"
+dev_setup = "just dev-up"
+dev_shell = "just dev-shell"
+clean_command = "just clean"
+
+# Key technologies and concepts to understand
+[project.technologies]
+cryptography = [
+  "OpenFHE",                    # Fully Homomorphic Encryption library
+  "liboqs",                     # Post-quantum cryptography
+  "Proxy Re-Encryption (PRE)",  # Core concept
+  "Lattice-based cryptography",
+]
+
+frameworks = [
+  "FastAPI", # Web framework
+  "uvicorn", # ASGI server
+  "Docker",  # Containerization
+  "pytest",  # Testing framework
+]
+
+tools = [
+  "uv",             # Package manager and Python environment
+  "Just",           # Task runner (like Make)
+  "Ruff",           # Python linter and formatter
+  "Git submodules", # For vendor dependencies
+]
+
+# Important project-specific notes
+[project.notes]
+architecture = "This is a proxy re-encryption system that allows secure sharing of encrypted data without decrypting it. Uses post-quantum cryptography for future security."
+
+testing = "Run tests with 'just test' or 'uv run pytest -n auto' for parallel execution. Tests are in tests/ with unit/ and integration/ subdirectories."
+
+dependencies = "External cryptography libraries are in vendor/ as git submodules. Use 'just build-all' to compile them. Don't modify vendor/ directly."
+
+development = "Use 'just dev-up' for Docker development environment or 'just cli' for local CLI development. Check Justfile for all available tasks."
+
+security = "This project handles cryptographic operations. Be careful with key generation, secure random numbers, and side-channel considerations."
+
+performance = "OpenFHE operations can be computationally intensive. Consider performance implications when making changes to crypto operations."

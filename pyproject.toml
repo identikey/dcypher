@@ -19,6 +19,7 @@ dependencies = [
     "ruff",
     "pre-commit",
     "pandas",
+    "openfhe",
 ]
 
 [tool.ruff]
@@ -60,3 +61,4 @@ filterwarnings = [
 [tool.uv.sources]
 dcypher-backend = { path = ".", editable = true }
 openfhe-python = { path = "./openfhe-python" }
+openfhe = { path = "vendor/openfhe-python", editable = true }

@@ -63,18 +63,18 @@ build-openfhe:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building OpenFHE C++ library locally..."
-    cd openfhe-development
+    cd vendor/openfhe-development
     mkdir -p build
     cd build
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../openfhe-local" \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../openfhe-local" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_UNITTESTS=OFF \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_BENCHMARKS=OFF
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
-    echo "OpenFHE installed to: $(pwd)/../../openfhe-local"
+    echo "OpenFHE installed to: $(pwd)/../../../openfhe-local"
 
 # Build OpenFHE Python bindings using local C++ library
 build-openfhe-python: build-openfhe
@@ -84,40 +84,40 @@ build-openfhe-python: build-openfhe
     export CMAKE_PREFIX_PATH="$(pwd)/openfhe-local:${CMAKE_PREFIX_PATH:-}"
     export LD_LIBRARY_PATH="$(pwd)/openfhe-local/lib:${LD_LIBRARY_PATH:-}"
     export DYLD_LIBRARY_PATH="$(pwd)/openfhe-local/lib:${DYLD_LIBRARY_PATH:-}"
-    cd openfhe-python
+    cd vendor/openfhe-python
     uv run python setup.py build_ext --inplace
-    cd ..
+    cd ../..
     # Install in development mode to replace the file:// dependency
-    uv add --editable ./openfhe-python
+    uv add --editable ./vendor/openfhe-python
 
 # Clone and build liboqs C library locally (not system-wide)
 build-liboqs:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building liboqs C library locally..."
-    cd liboqs
+    cd vendor/liboqs
     mkdir -p build
     cd build
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../liboqs-local" \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../liboqs-local" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=ON \
         -DOQS_BUILD_ONLY_LIB=ON \
         -DOQS_MINIMAL_BUILD=OFF
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
-    echo "liboqs installed to: $(pwd)/../../liboqs-local"
+    echo "liboqs installed to: $(pwd)/../../../liboqs-local"
 
 # Build both OpenFHE C++ and Python bindings
 build-all: build-openfhe-python build-liboqs
 
 # Clean OpenFHE builds
 clean-openfhe:
-    rm -rf openfhe-development/build openfhe-local openfhe-python/build openfhe-python/openfhe/openfhe.so
+    rm -rf vendor/openfhe-development/build openfhe-local vendor/openfhe-python/build vendor/openfhe-python/openfhe/openfhe.so
 
 # Clean liboqs builds
 clean-liboqs:
-    rm -rf liboqs/build liboqs-local
+    rm -rf vendor/liboqs/build liboqs-local
 
 # Clean all builds
 clean: clean-openfhe clean-liboqs

@@ -187,6 +187,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "fastapi" },
+    { name = "openfhe" },
     { name = "pandas" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -202,6 +203,7 @@ dependencies = [
 requires-dist = [
     { name = "aiohttp" },
     { name = "fastapi" },
+    { name = "openfhe", editable = "vendor/openfhe-python" },
     { name = "pandas" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -458,6 +460,23 @@ wheels = [
 ]
 
 [[package]]
+name = "openfhe"
+version = "0.9.0"
+source = { editable = "vendor/openfhe-python" }
+dependencies = [
+    { name = "pybind11" },
+    { name = "pybind11-global" },
+    { name = "pybind11-stubgen" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pybind11" },
+    { name = "pybind11-global" },
+    { name = "pybind11-stubgen" },
+]
+
+[[package]]
 name = "packaging"
 version = "25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -589,6 +608,33 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9a/4c/b0fe775a2bdd01e176b14b574be679d84fc83958335790f7c9a686c1f468/propcache-0.3.2-cp313-cp313t-win32.whl", hash = "sha256:f86e5d7cd03afb3a1db8e9f9f6eff15794e79e791350ac48a8c924e6f439f394", size = 41175, upload-time = "2025-06-09T22:55:38.436Z" },
     { url = "https://files.pythonhosted.org/packages/a4/ff/47f08595e3d9b5e149c150f88d9714574f1a7cbd89fe2817158a952674bf/propcache-0.3.2-cp313-cp313t-win_amd64.whl", hash = "sha256:9704bedf6e7cbe3c65eca4379a9b53ee6a83749f047808cbb5044d40d7d72198", size = 44857, upload-time = "2025-06-09T22:55:39.687Z" },
     { url = "https://files.pythonhosted.org/packages/cc/35/cc0aaecf278bb4575b8555f2b137de5ab821595ddae9da9d3cd1da4072c7/propcache-0.3.2-py3-none-any.whl", hash = "sha256:98f1ec44fb675f5052cccc8e609c46ed23a35a1cfd18545ad4e29002d858a43f", size = 12663, upload-time = "2025-06-09T22:56:04.484Z" },
+]
+
+[[package]]
+name = "pybind11"
+version = "2.13.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/c1/72b9622fcb32ff98b054f724e213c7f70d6898baa714f4516288456ceaba/pybind11-2.13.6.tar.gz", hash = "sha256:ba6af10348c12b24e92fa086b39cfba0eff619b61ac77c406167d813b096d39a", size = 218403, upload-time = "2024-09-14T00:35:22.606Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/2f/0f24b288e2ce56f51c920137620b4434a38fd80583dbbe24fc2a1656c388/pybind11-2.13.6-py3-none-any.whl", hash = "sha256:237c41e29157b962835d356b370ededd57594a26d5894a795960f0047cb5caf5", size = 243282, upload-time = "2024-09-14T00:35:20.361Z" },
+]
+
+[[package]]
+name = "pybind11-global"
+version = "2.13.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/64/0c8b282908a6b2d6140bcffad9a6eceecdb64379d388a8d4bea938cfc54d/pybind11_global-2.13.6.tar.gz", hash = "sha256:cf5f33432817eadd21077e4af037af134261d4527308cb3995dfbb4f3239aa87", size = 218663, upload-time = "2024-09-14T00:35:31.121Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/21/ee/8ab74ca797f609bc5563fb6989c02a0535d8b836c7ec6c45c8a37b19950f/pybind11_global-2.13.6-py3-none-any.whl", hash = "sha256:aa5142ebf5a1bdaf8945997f62cc2f2e883ded4f9aa48b4925fc2646ea4bea6d", size = 439480, upload-time = "2024-09-14T00:35:29.019Z" },
+]
+
+[[package]]
+name = "pybind11-stubgen"
+version = "2.5.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/57/27/0bfd6cfc97a5c061d36465109f324ac4e7f9c67b90732bb24536c29325ab/pybind11_stubgen-2.5.4.tar.gz", hash = "sha256:b6bd44a6d4ba55cef80bd8af92f1f8195b1c6bb0f7bd2f6d785c9530ce6bcae9", size = 24824, upload-time = "2025-05-14T04:01:01.556Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/9d/236b014be46c1e75258daa672c9358ec089e6776d75499d2e4050d0fd97e/pybind11_stubgen-2.5.4-py3-none-any.whl", hash = "sha256:8625f25da48cf96eea24ba7cae673b5f49b45847b6ef01eead60c4eb762fe5c5", size = 30008, upload-time = "2025-05-14T04:01:00.275Z" },
 ]
 
 [[package]]
