@@ -78,7 +78,7 @@ class TestDCypherClient:
         client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
 
         with pytest.raises(
-            AuthenticationError, match="No authentication keys configured"
+            AuthenticationError, match="Failed to load authentication keys"
         ):
             client._load_auth_keys()
 
@@ -421,6 +421,8 @@ def test_dcypher_client_with_auth_keys():
 
         # Create client with auth_keys
         client = DCypherClient(
+            api_url="http://test.example.com",
+            identity_path=str(auth_keys_file)
         )
 
         # Verify client can load keys
@@ -492,11 +494,11 @@ def test_dcypher_client_no_keys_configured():
     client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
 
     # Should raise error when trying to access keys
-    with pytest.raises(AuthenticationError, match="No authentication keys configured"):
+    with pytest.raises(AuthenticationError, match="Failed to load authentication keys"):
         with client.signing_keys():
             pass
 
-    with pytest.raises(AuthenticationError, match="No authentication keys configured"):
+    with pytest.raises(AuthenticationError, match="Failed to load authentication keys"):
         client.get_classic_public_key()
 
 
@@ -512,7 +514,7 @@ def test_dcypher_client_create_test_account_with_identity():
         # But should create identity file and client properly
         try:
             client, pk_hex = DCypherClient.create_test_account(
-                "http://localhost:8000", temp_path, use_identity=True
+                "http://localhost:8000", temp_path
             )
         except Exception as e:
             # Expected to fail at API call, but client setup should work
@@ -546,6 +548,8 @@ def test_dcypher_client_backward_compatibility():
 
         # Create client using legacy parameter name
         client = DCypherClient(
+            api_url="http://test.example.com",
+            identity_path=str(auth_keys_file)
         )
 
         # Should work exactly as before

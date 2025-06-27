@@ -92,7 +92,7 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     assert file_hash, "Could not find file hash in upload output."
 
     # --- 4. Download the chunks using the new command ---
-    # Create temp auth file for download compatibility (download commands not yet updated)
+    # Extract public key from identity file for download
     with open(identity_file, "r") as f:
         identity_data = json.load(f)
 
@@ -104,34 +104,6 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     assert classic_vk is not None
     pk_classic_hex = classic_vk.to_string("uncompressed").hex()
 
-    # Create temporary secret key files in auth_keys format
-    classic_sk_file = test_dir / "temp_classic.sk"
-    with open(classic_sk_file, "w") as f:
-        f.write(classic_sk_hex)
-
-    # Create PQ secret key files and build pq_keys list
-    pq_keys_list = []
-    for i, pq_key_data in enumerate(identity_data["auth_keys"]["pq"]):
-        pq_sk_file = test_dir / f"temp_pq_{i}.sk"
-        with open(pq_sk_file, "wb") as f:
-            f.write(bytes.fromhex(pq_key_data["sk_hex"]))
-
-        pq_keys_list.append(
-            {
-                "sk_path": str(pq_sk_file),
-                "pk_hex": pq_key_data["pk_hex"],
-                "alg": pq_key_data["alg"],
-            }
-        )
-
-    temp_auth_file = test_dir / "temp_auth.json"
-    temp_auth_data = {
-        "classic_sk_path": str(classic_sk_file),
-        "pq_keys": pq_keys_list,
-    }
-    with open(temp_auth_file, "w") as f:
-        json.dump(temp_auth_data, f)
-
     downloaded_chunks_file = test_dir / "downloaded_1mb.chunks.gz"
     result = run_command(
         [
@@ -140,8 +112,8 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
             api_base_url,
             "--pk-path",
             pk_classic_hex,
-            "--auth-keys-path",
-            str(temp_auth_file),
+            "--identity-path",
+            str(identity_file),
             "--file-hash",
             file_hash,
             "--output-path",
@@ -263,8 +235,8 @@ def test_cli_download_compressed_verification(cli_test_env, api_base_url):
             api_base_url,
             "--pk-path",
             pk_classic_hex,
-            "--auth-keys-path",
-            str(temp_auth_file),
+            "--identity-path",
+            str(identity_file),
             "--file-hash",
             file_hash,
             "--output-path",
@@ -383,8 +355,8 @@ def test_cli_download_integrity_failure(cli_test_env, api_base_url):
             api_base_url,
             "--pk-path",
             pk_classic_hex,
-            "--auth-keys-path",
-            str(temp_auth_file),
+            "--identity-path",
+            str(identity_file),
             "--file-hash",
             file_hash,
             "--output-path",
@@ -531,8 +503,8 @@ def test_single_part_idk_message_flow(cli_test_env, api_base_url):
             api_base_url,
             "--pk-path",
             pk_classic_hex,
-            "--auth-keys-path",
-            str(temp_auth_file),
+            "--identity-path",
+            str(identity_file),
             "--file-hash",
             file_hash,
             "--output-path",

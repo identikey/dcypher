@@ -123,6 +123,10 @@ clean-liboqs:
 clean: clean-openfhe clean-liboqs
 
 test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export LD_LIBRARY_PATH="/workspace/openfhe-local/lib:/workspace/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
+    export PYTHONPATH="/workspace/src:${PYTHONPATH:-}"
     uv run pytest -n auto --dist worksteal tests/
 
 # Start OpenHands (All Hands AI) development environment

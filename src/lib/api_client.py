@@ -41,14 +41,14 @@ class DCypherClient:
     def __init__(
         self,
         api_url: str,
-        identity_path: str,
+        identity_path: Optional[str] = None,
     ):
         """
         Initialize the DCypher API client.
 
         Args:
             api_url: Base URL for the DCypher API
-            identity_path: Path to identity file
+            identity_path: Path to identity file (optional for operations that don't require auth)
         """
         self.api_url = api_url.rstrip("/")
         self.keys_path = identity_path
@@ -79,6 +79,25 @@ class DCypherClient:
         mnemonic, identity_file = KeyManager.create_identity_file(
             "test_account", temp_dir
         )
+
+        # Add additional PQ algorithms if specified
+        if additional_pq_algs:
+            # Load the identity file
+            with open(identity_file, 'r') as f:
+                identity_data = json.load(f)
+            
+            # Generate additional PQ keys
+            for alg in additional_pq_algs:
+                pq_pk, pq_sk = KeyManager.generate_pq_keypair(alg)
+                identity_data["auth_keys"]["pq"].append({
+                    "alg": alg,
+                    "pk_hex": pq_pk.hex(),
+                    "sk_hex": pq_sk.hex()
+                })
+            
+            # Save the updated identity file
+            with open(identity_file, 'w') as f:
+                json.dump(identity_data, f, indent=2)
 
         # Load identity to get public key
         keys_data = KeyManager.load_identity_file(identity_file)
@@ -121,8 +140,11 @@ class DCypherClient:
 
         # Use KeyManager's unified signing context
         assert self.keys_path is not None
-        with KeyManager.signing_context(Path(self.keys_path)) as keys:
-            yield keys
+        try:
+            with KeyManager.signing_context(Path(self.keys_path)) as keys:
+                yield keys
+        except Exception as e:
+            raise AuthenticationError(f"Failed to load authentication keys: {e}")
 
     def get_signing_keys(self) -> Dict[str, Any]:
         """
