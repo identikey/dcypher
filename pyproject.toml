@@ -26,6 +26,7 @@ dependencies = [
     "bip-utils>=2.9.3",
     "cryptography>=45.0.4",
     "psutil>=7.0.0",
+    "textual[syntax]>=3.5.0",
 ]
 
 [tool.ruff]
@@ -73,4 +74,5 @@ openfhe = { path = "vendor/openfhe-python", editable = true }
 dev = [
     "httpx>=0.28.1",
     "setuptools>=80.9.0",
+    "textual-dev>=1.7.0",
 ]
