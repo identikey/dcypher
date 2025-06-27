@@ -21,12 +21,12 @@ dependencies = [
     "pandas",
     "openfhe",
     "ecdsa>=0.19.1",
-    "liboqs-python>=0.13.0",
     "python-multipart>=0.0.20",
     "bip-utils>=2.9.3",
     "cryptography>=45.0.4",
     "psutil>=7.0.0",
     "textual[syntax]>=3.5.0",
+    "liboqs-python>=0.13.0",
 ]
 
 [tool.ruff]
