@@ -1,17 +1,78 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "dcypher"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.12,<3.13"
+description = "dcypher"
+requires-python = ">=3.12"
 dependencies = [
-    "openfhe>=1.3.0.0.24.4",
-    "pybind11>=2.13.6",
-    "yowasp-yosys>=0.54.0.0.post930",
+    "uv",
+    "fastapi",
+    "uvicorn",
+    "pytest",
+    "pytest-xdist",
+    "pytest-asyncio",
+    "requests",
+    "aiohttp",
+    "ruff",
+    "pre-commit",
+    "pandas",
+    "openfhe",
+    "ecdsa>=0.19.1",
+    "liboqs-python>=0.13.0",
+    "python-multipart>=0.0.20",
+    "bip-utils>=2.9.3",
+    "cryptography>=45.0.4",
+    "psutil>=7.0.0",
+    "textual[syntax]>=3.5.0",
 ]
+
+[tool.ruff]
+line-length = 88
+select = ["E", "F", "W", "I"]
+ignore-init-module-imports = true
+
+[tool.ruff.lint]
+# Add this line to ignore the F401 error for specific unused imports
+ignore = ["F401"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"src/dcypher/dcypher_front/src/App.test.js" = ["E501"]
+"src/dcypher/dcypher_front/src/reportWebVitals.js" = ["E501"]
+"src/dcypher/dcypher_front/src/index.js" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["openfhe-python"]
+addopts = [
+    "--import-mode=importlib",
+    "--ignore=setup.py",
+    "--ignore=src/dcypher/dcypher_front",
+    "--ignore=src/dcypher/dcypher_back",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    # Ignore deprecation warnings from websockets library in FastAPI/Starlette
+    "ignore:websockets.server.WebSocketServerProtocol is deprecated.*:DeprecationWarning",
+]
+
+[tool.uv.sources]
+dcypher-backend = { path = ".", editable = true }
+openfhe-python = { path = "./openfhe-python" }
+openfhe = { path = "vendor/openfhe-python", editable = true }
 
 [dependency-groups]
 dev = [
-    "mypy>=1.16.1",
-    "pytest>=8.4.0",
+    "httpx>=0.28.1",
+    "setuptools>=80.9.0",
+    "textual-dev>=1.7.0",
 ]

@@ -5,3 +5,12 @@ __pycache__
 /include
 .zig-cache
 zig-out
+/block_store
+/chunk_store
+.pytest_cache
+openfhe-local
+liboqs-local
+.vscode/
+
+# OpenHands/AllHands cache
+/tmp/dcypher_cache

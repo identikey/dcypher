@@ -1,0 +1,24 @@
+services:
+  dcypher-dev:
+    platform: linux/amd64  # Force x86_64 for OpenFHE compatibility
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      # Mount the entire project directory for development
+      - .:/app
+      # Preserve the virtual environment to avoid reinstalling dependencies
+      - dcypher-venv:/app/.venv
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
+      - PATH=/app/.venv/bin:$PATH
+    # Keep container running for development
+    tty: true
+    stdin_open: true
+    # Optional: expose ports if your app serves HTTP
+    # ports:
+    #   - "8000:8000"
+
+volumes:
+  dcypher-venv:

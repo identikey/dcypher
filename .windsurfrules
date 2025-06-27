@@ -21,3 +21,4 @@ When building the docker image, use the following command:
 
 
 
+Use `just docker-build`
