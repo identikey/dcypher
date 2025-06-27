@@ -138,5 +138,7 @@ doit:
         -p 127.0.0.1:3000:3000 \
         --add-host host.docker.internal:host-gateway \
         --dns 1.1.1.1 \
+        --dns 8.8.8.8 \
+        --dns 8.8.4.4 \
         --name openhands-app \
         docker.all-hands.dev/all-hands-ai/openhands:0.46
