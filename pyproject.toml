@@ -19,6 +19,13 @@ dependencies = [
     "ruff",
     "pre-commit",
     "pandas",
+    "openfhe",
+    "ecdsa>=0.19.1",
+    "liboqs-python>=0.13.0",
+    "python-multipart>=0.0.20",
+    "bip-utils>=2.9.3",
+    "cryptography>=45.0.4",
+    "psutil>=7.0.0",
 ]
 
 [tool.ruff]
@@ -60,3 +67,10 @@ filterwarnings = [
 [tool.uv.sources]
 dcypher-backend = { path = ".", editable = true }
 openfhe-python = { path = "./openfhe-python" }
+openfhe = { path = "vendor/openfhe-python", editable = true }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "setuptools>=80.9.0",
+]

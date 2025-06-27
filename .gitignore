@@ -8,3 +8,7 @@ __pycache__
 .pytest_cache
 openfhe-local
 liboqs-local
+.vscode/
+
+# OpenHands/AllHands cache
+/tmp/dcypher_cache

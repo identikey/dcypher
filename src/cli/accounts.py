@@ -51,14 +51,10 @@ def list_accounts(api_url):
 
 @click.command("create-account")
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option(
     "--api-url",
@@ -66,30 +62,14 @@ def list_accounts(api_url):
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def create_account(auth_keys_path, identity_path, api_url):
-    """Creates a new account on the server using your identity or auth keys."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
+def create_account(identity_path, api_url):
+    """Creates a new account on the server using your identity file."""
     try:
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         # Load keys to get PQ key info for account creation
-        keys_path = identity_path if identity_path else auth_keys_path
-        keys_data = KeyManager.load_keys_unified(Path(keys_path))
+        keys_data = KeyManager.load_keys_unified(Path(identity_path))
 
         pk_classic_hex = client.get_classic_public_key()
         pq_keys = [
@@ -150,14 +130,10 @@ def get_account(public_key, api_url):
 
 @click.command("list-files")
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option(
     "--api-url",
@@ -165,26 +141,11 @@ def get_account(public_key, api_url):
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def list_files(auth_keys_path, identity_path, api_url):
+def list_files(identity_path, api_url):
     """Lists files for the authenticated account."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
     try:
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         pk_classic_hex = client.get_classic_public_key()
         files = client.list_files(pk_classic_hex)
@@ -206,14 +167,10 @@ def list_files(auth_keys_path, identity_path, api_url):
 
 @click.command("get-graveyard")
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option(
     "--api-url",
@@ -221,26 +178,11 @@ def list_files(auth_keys_path, identity_path, api_url):
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def get_graveyard(auth_keys_path, identity_path, api_url):
+def get_graveyard(identity_path, api_url):
     """Gets retired keys (graveyard) for the authenticated account."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
     try:
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         pk_classic_hex = client.get_classic_public_key()
         graveyard = client.get_account_graveyard(pk_classic_hex)
@@ -260,14 +202,10 @@ def get_graveyard(auth_keys_path, identity_path, api_url):
 
 @click.command("add-pq-keys")
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option(
     "--algorithms",
@@ -281,29 +219,14 @@ def get_graveyard(auth_keys_path, identity_path, api_url):
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def add_pq_keys(auth_keys_path, identity_path, algorithms, api_url):
+def add_pq_keys(identity_path, algorithms, api_url):
     """Adds new post-quantum keys to an existing account."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
     try:
         # Parse algorithms
         alg_list = [alg.strip() for alg in algorithms.split(",")]
 
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         pk_classic_hex = client.get_classic_public_key()
 
@@ -357,14 +280,10 @@ def add_pq_keys(auth_keys_path, identity_path, algorithms, api_url):
 
 @click.command("remove-pq-keys")
 @click.option(
-    "--auth-keys-path",
-    type=click.Path(exists=True),
-    help="Path to auth keys file (legacy)",
-)
-@click.option(
     "--identity-path",
     type=click.Path(exists=True),
-    help="Path to identity file (preferred)",
+    required=True,
+    help="Path to identity file",
 )
 @click.option(
     "--algorithms",
@@ -378,29 +297,14 @@ def add_pq_keys(auth_keys_path, identity_path, algorithms, api_url):
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def remove_pq_keys(auth_keys_path, identity_path, algorithms, api_url):
+def remove_pq_keys(identity_path, algorithms, api_url):
     """Removes post-quantum keys from an existing account."""
-    # Validate that either auth_keys_path or identity_path is provided
-    if not auth_keys_path and not identity_path:
-        raise click.ClickException(
-            "Must provide either --auth-keys-path or --identity-path"
-        )
-
-    if auth_keys_path and identity_path:
-        click.echo(
-            "Warning: Both auth-keys-path and identity-path provided. Using identity-path.",
-            err=True,
-        )
-
     try:
         # Parse algorithms
         alg_list = [alg.strip() for alg in algorithms.split(",")]
 
-        # Initialize API client with appropriate key file
-        if identity_path:
-            client = DCypherClient(api_url, identity_path=identity_path)
-        else:
-            client = DCypherClient(api_url, auth_keys_path=auth_keys_path)
+        # Initialize API client with identity file
+        client = DCypherClient(api_url, identity_path=identity_path)
 
         pk_classic_hex = client.get_classic_public_key()
 

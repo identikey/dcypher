@@ -833,6 +833,7 @@ class KeyManager:
                     "sk_hex": sk_classic.to_string().hex(),
                 },
                 "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
+                "pre": {},
             },
         }
 
