@@ -1,9 +1,18 @@
 """
-Cyberpunk Theme for dCypher TUI
-Inspired by @repligate, Blade Runner, and cipherpunk aesthetics
+Cyberpunk theme for dCypher TUI
+Inspired by: Matrix, Blade Runner, @repligate aesthetics, art deco elements
 """
 
-CYBERPUNK_THEME = """
+
+def get_cyberpunk_theme(transparent_background: bool = False) -> str:
+    """
+    Generate cyberpunk theme CSS with optional transparent backgrounds
+
+    Args:
+        transparent_background: If True, removes background colors for terminal transparency
+    """
+    # Base colors remain the same
+    base_colors = """
 /* Global Variables - Cyberpunk Color Palette */
 $primary: #00ff41;        /* Matrix green */
 $secondary: #ff6b35;      /* Neon orange */
@@ -11,7 +20,24 @@ $accent: #00d4ff;         /* Cyan blue */
 $warning: #ffff00;        /* Electric yellow */
 $error: #ff073a;          /* Neon red */
 $success: #39ff14;        /* Bright green */
+"""
 
+    if transparent_background:
+        # Transparent mode - no backgrounds, enhanced borders and text
+        background_vars = """
+$bg-dark: transparent;
+$bg-medium: transparent;
+$bg-light: transparent;
+$text-primary: #00ff41;   /* Matrix green text */
+$text-secondary: #ffffff; /* White text */
+$text-dim: #888888;       /* Dim gray */
+
+$border-primary: #00ff41; /* Matrix green border */
+$border-secondary: #ff6b35; /* Orange border */
+"""
+    else:
+        # Normal mode with dark backgrounds
+        background_vars = """
 $bg-dark: #1a1a1a;        /* Dark gray (lightened) */
 $bg-medium: #2a2a2a;      /* Medium gray */
 $bg-light: #3a3a3a;       /* Light gray */
@@ -21,7 +47,10 @@ $text-dim: #888888;       /* Dim gray */
 
 $border-primary: #00ff41; /* Matrix green border */
 $border-secondary: #ff6b35; /* Orange border */
+"""
 
+    # Common styles that work for both modes
+    common_styles = """
 /* App-wide styles */
 App {
     background: $bg-dark;
@@ -49,17 +78,19 @@ Header .header--clock {
 /* Footer styling */
 Footer {
     background: $bg-medium;
-    color: $text-primary;
+    color: $text-secondary;
     border: solid $border-primary;
-}
-
-Footer .footer--key {
-    color: $accent;
     text-style: bold;
 }
 
-Footer .footer--description {
-    color: $text-secondary;
+/* ASCII Banner styling */
+ASCIIBanner {
+    height: 12;
+    background: $bg-medium;
+    color: $primary;
+    text-style: bold;
+    text-align: center;
+    border: solid $border-primary;
 }
 
 /* Main container */
@@ -70,79 +101,118 @@ Footer .footer--description {
     padding: 1;
 }
 
-/* ASCII Banner */
-ASCIIBanner {
-    height: 12;
-    background: $bg-dark;
-    color: $primary;
-    text-align: center;
-    text-style: bold;
-    border: solid $border-secondary;
-    margin-bottom: 1;
-}
-
-/* Tabbed Content - Art Deco inspired */
+/* Tabbed content styling */
 TabbedContent {
-    background: $bg-dark;
     border: solid $border-primary;
+    height: 100%;
 }
 
 TabbedContent > Tabs {
     background: $bg-medium;
-    border-bottom: solid $border-primary;
+    color: $text-primary;
+    height: auto;
 }
 
 TabbedContent > Tabs > Tab {
-    background: $bg-medium;
+    background: $bg-dark;
     color: $text-dim;
-    border: none;
-    margin-right: 1;
-    padding: 0 2;
-}
-
-TabbedContent > Tabs > Tab:hover {
-    background: $bg-light;
-    color: $text-primary;
+    border: solid $border-primary;
+    text-style: bold;
 }
 
 TabbedContent > Tabs > Tab.-active {
-    background: $bg-dark;
-    color: $primary;
-    border: solid $border-primary;
-    border-bottom: none;
+    background: $primary;
+    color: $bg-dark;
     text-style: bold;
 }
 
 TabbedContent > ContentSwitcher {
+    border: solid $border-primary;
+    height: 1fr;
+}
+
+/* TabPane content areas */
+TabPane {
+    height: 100%;
+}
+
+/* Screen widgets inside tabs */
+DashboardScreen, IdentityScreen, CryptoScreen, AccountsScreen, FilesScreen, SharingScreen {
     background: $bg-medium;
+    height: 100%;
     padding: 1;
 }
 
-/* System Monitor Widget */
+/* Dashboard specific styling */
+#dashboard-container {
+    height: 100%;
+}
+
+#monitors-row, #status-row, #actions-row {
+    height: auto;
+    margin: 1 0;
+    min-height: 3;
+}
+
+#monitors-row {
+    height: 1fr;
+}
+
+#status-row {
+    height: 1fr;
+}
+
+#actions-row {
+    height: auto;
+}
+
+#identity-status, #api-status, #files-status {
+    border: solid $border-primary;
+    margin: 0 1;
+    padding: 1;
+    min-height: 5;
+    height: 1fr;
+}
+
+/* System Monitor styling */
 SystemMonitor {
-    height: 10;
     background: $bg-light;
+    color: $text-primary;
     border: solid $border-primary;
     margin: 1;
     padding: 1;
 }
 
-SystemMonitor .title {
+/* Button styling */
+Button {
+    background: $bg-dark;
     color: $primary;
-    text-style: bold;
-    text-align: center;
-}
-
-SystemMonitor .metric {
-    color: $text-secondary;
-}
-
-SystemMonitor .value {
-    color: $accent;
+    border: solid $primary;
     text-style: bold;
 }
 
-/* Data Tables */
+Button:hover {
+    background: $primary;
+    color: $bg-dark;
+}
+
+Button.-primary {
+    background: $primary;
+    color: $bg-dark;
+}
+
+/* Input styling */
+Input {
+    background: $bg-dark;
+    color: $text-primary;
+    border: solid $border-primary;
+}
+
+Input:focus {
+    border: solid $accent;
+}
+
+/* Table styling */
 DataTable {
     background: $bg-dark;
     color: $text-primary;
@@ -155,119 +225,30 @@ DataTable > .datatable--header {
     text-style: bold;
 }
 
-DataTable > .datatable--cursor {
-    background: $bg-light;
+DataTable > .datatable--row {
+    background: $bg-dark;
     color: $text-secondary;
 }
 
-/* Input widgets */
-Input {
-    background: $bg-medium;
-    color: $text-primary;
-    border: solid $border-primary;
-}
-
-Input:focus {
-    border: solid $accent;
-}
-
-/* Buttons */
-Button {
-    background: $bg-medium;
-    color: $text-primary;
-    border: solid $border-primary;
-    text-style: bold;
-}
-
-Button:hover {
+DataTable > .datatable--row:hover {
     background: $bg-light;
-    color: $primary;
-    border: solid $primary;
 }
 
-Button.-primary {
-    background: $primary;
-    color: $bg-dark;
-    border: solid $primary;
-}
-
-Button.-primary:hover {
-    background: $success;
-    border: solid $success;
-}
-
-Button.-danger {
-    background: $error;
-    color: $text-secondary;
-    border: solid $error;
-}
-
-Button.-danger:hover {
-    background: #cc0000;
-    border: solid #cc0000;
-}
-
-/* Progress bars */
+/* Progress bar styling */
 ProgressBar {
-    background: $bg-medium;
-    border: solid $border-primary;
-}
-
-ProgressBar > .bar--bar {
-    background: $primary;
-}
-
-ProgressBar > .bar--percentage {
-    color: $text-secondary;
-    text-style: bold;
-}
-
-/* Log display */
-RichLog {
     background: $bg-dark;
-    color: $text-primary;
-    border: solid $border-primary;
-    scrollbar-background: $bg-medium;
-    scrollbar-color: $primary;
-}
-
-/* Tree widget */
-Tree {
-    background: $bg-dark;
-    color: $text-primary;
-    border: solid $border-primary;
-}
-
-Tree > .tree--guides {
-    color: $text-dim;
-}
-
-Tree > .tree--guides-selected {
     color: $primary;
+    border: solid $border-primary;
 }
 
-/* Static text containers */
+/* Static text styling */
 Static {
-    background: $bg-dark;
-    color: $text-primary;
-}
-
-Static.panel {
-    background: $bg-medium;
-    border: solid $border-primary;
-    padding: 1;
-    margin: 1;
-}
-
-Static.highlight {
-    background: $bg-light;
-    color: $primary;
-    text-style: bold;
-}
-
-Static.error {
-    background: $error;
     color: $text-secondary;
+}
+
+Static.info {
+    background: $accent;
+    color: $bg-dark;
     text-style: bold;
 }
 
@@ -283,17 +264,20 @@ Static.warning {
     text-style: bold;
 }
 
+Static.error {
+    background: $error;
+    color: $text-secondary;
+    text-style: bold;
+}
+
 /* Containers */
 Container {
-    background: $bg-dark;
 }
 
 Horizontal {
-    background: $bg-dark;
 }
 
 Vertical {
-    background: $bg-dark;
 }
 
 /* Scrollbars */
@@ -347,3 +331,9 @@ LoadingIndicator {
     /* Will be used for glow effects */
 }
 """
+
+    return base_colors + background_vars + common_styles
+
+
+# Default theme with normal backgrounds
+CYBERPUNK_THEME = get_cyberpunk_theme(transparent_background=False)

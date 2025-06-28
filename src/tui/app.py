@@ -10,7 +10,7 @@ from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
 
-from .theme import CYBERPUNK_THEME
+from .theme import CYBERPUNK_THEME, get_cyberpunk_theme
 from .widgets.ascii_art import ASCIIBanner
 from .widgets.system_monitor import SystemMonitor
 from .screens.dashboard import DashboardScreen
@@ -29,14 +29,13 @@ class DCypherTUI(App):
     Influences: btop, cipherpunk aesthetics, art deco, @repligate
     """
 
-    CSS = CYBERPUNK_THEME
-
     TITLE = "dCypher - Quantum-Resistant Encryption TUI"
     SUB_TITLE = "REPLICANT TERMINAL v2.1.0"
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", priority=True),
         Binding("ctrl+d", "toggle_dark", "Toggle Dark Mode"),
+        Binding("ctrl+t", "toggle_transparent", "Toggle Transparent Background"),
         Binding("f1", "show_help", "Help"),
         Binding("f2", "show_logs", "Logs"),
         Binding("f12", "screenshot", "Screenshot"),
@@ -58,6 +57,7 @@ class DCypherTUI(App):
     current_identity = reactive(None)
     api_url = reactive("http://127.0.0.1:8000")
     connection_status = reactive("disconnected")
+    transparent_background = reactive(False)
 
     def __init__(self, identity_path=None, api_url=None):
         super().__init__()
@@ -65,6 +65,16 @@ class DCypherTUI(App):
             self.current_identity = identity_path
         if api_url:
             self.api_url = api_url
+
+    @property
+    def CSS(self) -> str:
+        """Dynamic CSS based on transparency setting"""
+        return get_cyberpunk_theme(transparent_background=self.transparent_background)
+
+    def watch_transparent_background(self, transparent: bool) -> None:
+        """Update CSS when transparency mode changes"""
+        if hasattr(self, "_dom"):  # Only refresh if app is running
+            self.refresh_css()
 
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
@@ -126,6 +136,11 @@ class DCypherTUI(App):
             self.theme = "textual-light"
         else:
             self.theme = "textual-dark"
+
+    def action_toggle_transparent(self) -> None:
+        """Toggle transparent background mode"""
+        self.transparent_background = not self.transparent_background
+        self.refresh_css()  # Refresh the CSS to apply changes
 
     def action_show_help(self) -> None:
         """Show help screen"""

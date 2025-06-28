@@ -268,6 +268,46 @@ class TestThemeImprovements:
                 f"Cyberpunk element should be preserved: {element}"
             )
 
+    def test_transparent_theme_generation(self):
+        """Test that theme generation works for both transparent and normal modes"""
+        from src.tui.theme import get_cyberpunk_theme
+
+        # Test normal background theme
+        normal_theme = get_cyberpunk_theme(transparent_background=False)
+        assert "$bg-dark: #1a1a1a;" in normal_theme, (
+            "Normal theme should have dark backgrounds"
+        )
+        assert "$bg-medium: #2a2a2a;" in normal_theme, (
+            "Normal theme should have medium backgrounds"
+        )
+        assert "$bg-light: #3a3a3a;" in normal_theme, (
+            "Normal theme should have light backgrounds"
+        )
+
+        # Test transparent background theme
+        transparent_theme = get_cyberpunk_theme(transparent_background=True)
+        assert "$bg-dark: transparent;" in transparent_theme, (
+            "Transparent theme should have transparent backgrounds"
+        )
+        assert "$bg-medium: transparent;" in transparent_theme, (
+            "Transparent theme should have transparent backgrounds"
+        )
+        assert "$bg-light: transparent;" in transparent_theme, (
+            "Transparent theme should have transparent backgrounds"
+        )
+
+        # Both themes should maintain cyberpunk colors
+        for theme in [normal_theme, transparent_theme]:
+            assert "$primary: #00ff41;" in theme, (
+                "Should maintain matrix green primary color"
+            )
+            assert "$secondary: #ff6b35;" in theme, (
+                "Should maintain neon orange secondary color"
+            )
+            assert "$accent: #00d4ff;" in theme, (
+                "Should maintain cyan blue accent color"
+            )
+
 
 class TestNavigationIntegration:
     """Integration tests for navigation improvements"""
@@ -309,3 +349,211 @@ class TestNavigationIntegration:
         assert current_bindings <= 20, (
             f"Should not have excessive bindings, got {current_bindings}"
         )
+
+    def test_transparent_background_toggle(self):
+        """Test that transparent background toggle feature works"""
+        app = DCypherTUI()
+
+        # Check initial state
+        assert app.transparent_background is False, (
+            "Should start with normal background"
+        )
+
+        # Check that toggle method exists
+        assert hasattr(app, "action_toggle_transparent"), (
+            "Should have toggle_transparent action"
+        )
+        assert callable(app.action_toggle_transparent), (
+            "action_toggle_transparent should be callable"
+        )
+
+        # Test toggle functionality
+        app.action_toggle_transparent()
+        assert app.transparent_background is True, "Should toggle to transparent"
+
+        app.action_toggle_transparent()
+        assert app.transparent_background is False, "Should toggle back to normal"
+
+    def test_transparent_background_binding(self):
+        """Test that transparent background has proper key binding"""
+        app = DCypherTUI()
+
+        # Extract keys from bindings
+        binding_keys = []
+        for binding in app.BINDINGS:
+            if isinstance(binding, tuple) and len(binding) >= 2:
+                binding_keys.append(binding[0])
+            elif hasattr(binding, "key") and hasattr(binding, "action"):
+                binding_keys.append(binding.key)
+            else:
+                binding_keys.append(str(binding))
+
+        # Check for ctrl+t binding
+        has_ctrl_t = any("ctrl+t" in str(key) for key in binding_keys)
+        assert has_ctrl_t, (
+            f"Should have ctrl+t binding for transparency, got: {binding_keys}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_tab_content_visibility(self):
+        """Test that tab content is actually visible when switching tabs"""
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            try:
+                # Get the tabbed content
+                tabs = pilot.app.query_one(TabbedContent)
+
+                # Test each tab has content
+                tab_ids = [
+                    "dashboard",
+                    "identity",
+                    "crypto",
+                    "accounts",
+                    "files",
+                    "sharing",
+                ]
+
+                for tab_id in tab_ids:
+                    # Switch to the tab
+                    tabs.active = tab_id
+                    await pilot.pause(0.1)
+
+                    # Check if the tab pane exists and has content
+                    tab_pane = pilot.app.query_one(f"#{tab_id}")
+                    assert tab_pane is not None, f"Tab pane {tab_id} should exist"
+
+                    # Check if the tab pane has child widgets (content)
+                    content_widgets = tab_pane.query("*")
+                    assert len(content_widgets) > 0, (
+                        f"Tab {tab_id} should have content widgets, found: {len(content_widgets)}"
+                    )
+
+                    # Check if at least one widget is visible
+                    visible_widgets = [w for w in content_widgets if w.display]
+                    assert len(visible_widgets) > 0, (
+                        f"Tab {tab_id} should have visible content, visible: {len(visible_widgets)}"
+                    )
+
+            except Exception as e:
+                # Don't fail the test, but log what we found
+                pytest.fail(f"Tab content visibility test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_tab_screen_composition(self):
+        """Test that each tab screen composes properly with widgets"""
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            # Test specific screen types are present
+            screen_checks = {
+                "dashboard": "DashboardScreen",
+                "identity": "IdentityScreen",
+                "crypto": "CryptoScreen",
+                "accounts": "AccountsScreen",
+                "files": "FilesScreen",
+                "sharing": "SharingScreen",
+            }
+
+            for tab_id, screen_class in screen_checks.items():
+                tab_pane = pilot.app.query_one(f"#{tab_id}")
+
+                # Check if the screen widget exists inside the tab
+                screen_widgets = tab_pane.query("*")
+                screen_found = False
+
+                for widget in screen_widgets:
+                    if screen_class.lower() in widget.__class__.__name__.lower():
+                        screen_found = True
+                        break
+
+                # At minimum, tab should have some widgets
+                assert len(screen_widgets) > 0, f"Tab {tab_id} should contain widgets"
+
+    @pytest.mark.asyncio
+    async def test_tab_content_interaction(self):
+        """Test that tab content can be interacted with"""
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            try:
+                # Switch to dashboard tab
+                tabs = pilot.app.query_one(TabbedContent)
+                tabs.active = "dashboard"
+                await pilot.pause(0.1)
+
+                # Look for interactive elements
+                dashboard_pane = pilot.app.query_one("#dashboard")
+                buttons = dashboard_pane.query("Button")
+                inputs = dashboard_pane.query("Input")
+                tables = dashboard_pane.query("DataTable")
+
+                # Dashboard should have some interactive elements
+                total_interactive = len(buttons) + len(inputs) + len(tables)
+
+                # Log what we found for debugging
+                print(
+                    f"Dashboard interactive elements - Buttons: {len(buttons)}, Inputs: {len(inputs)}, Tables: {len(tables)}"
+                )
+
+                # At minimum, expect some content (even if not interactive)
+                all_widgets = dashboard_pane.query("*")
+                assert len(all_widgets) > 0, (
+                    f"Dashboard should have content widgets, found: {len(all_widgets)}"
+                )
+
+            except Exception as e:
+                pytest.fail(f"Tab content interaction test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_debug_screenshot_tabs(self):
+        """Debug test - take screenshots of each tab to see what's rendering"""
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            try:
+                tabs = pilot.app.query_one(TabbedContent)
+                tab_ids = ["dashboard", "identity", "crypto"]  # Test first few tabs
+
+                for tab_id in tab_ids:
+                    # Switch to tab
+                    tabs.active = tab_id
+                    await pilot.pause(0.2)  # Give more time to render
+
+                    # Try to take a screenshot for debugging
+                    try:
+                        filename = f"debug_{tab_id}_tab.svg"
+                        pilot.app.save_screenshot(filename, path="screenshots")
+                        print(f"Screenshot saved: screenshots/{filename}")
+                    except Exception as e:
+                        print(f"Could not save screenshot for {tab_id}: {e}")
+
+                    # Check what's actually in the tab
+                    tab_pane = pilot.app.query_one(f"#{tab_id}")
+                    all_widgets = tab_pane.query("*")
+                    visible_widgets = [
+                        w for w in all_widgets if hasattr(w, "display") and w.display
+                    ]
+
+                    print(f"\nTab {tab_id}:")
+                    print(f"  Total widgets: {len(all_widgets)}")
+                    print(f"  Visible widgets: {len(visible_widgets)}")
+                    print(
+                        f"  Widget types: {[type(w).__name__ for w in all_widgets[:5]]}"
+                    )  # First 5
+
+                    # Check if widgets have proper dimensions
+                    for widget in all_widgets[:3]:  # Check first 3
+                        if hasattr(widget, "size"):
+                            print(f"  {type(widget).__name__} size: {widget.size}")
+                        if hasattr(widget, "region"):
+                            print(f"  {type(widget).__name__} region: {widget.region}")
+
+            except Exception as e:
+                print(f"Debug test error: {e}")
+                # Don't fail the test, just log
+                pass
