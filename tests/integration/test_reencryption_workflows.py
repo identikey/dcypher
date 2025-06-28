@@ -110,56 +110,14 @@ def test_complete_reencryption_workflow_live_server(
         api_base_url, identity_path=str(bob_identity["identity_file"])
     )
 
-    # Get the server's crypto context
-    server_cc_bytes = alice_client.get_pre_crypto_context()
+    # CRITICAL: Use the proper client methods for PRE initialization
+    # This ensures proper context coordination between client and server
 
-    # CRITICAL: Use the context singleton pattern to ensure ALL operations use the SAME context instance
-    # This resolves the OpenFHE limitation where crypto objects must be created with the same context.
+    # Initialize PRE capabilities for both Alice and Bob
+    alice_client.initialize_pre_for_identity()
+    bob_client.initialize_pre_for_identity()
 
-    # Reset singleton to start fresh
-    CryptoContextManager._instance = None
-    context_manager = CryptoContextManager()
-
-    # Initialize the singleton with the server's context
-    serialized_context = base64.b64encode(server_cc_bytes).decode("ascii")
-    server_cc = context_manager.deserialize_context(serialized_context)
-
-    # CRITICAL: Generate different PRE keys for Alice and Bob from the SAME context instance
-    # This ensures proper proxy re-encryption while maintaining crypto context consistency
-    alice_keys = pre.generate_keys(server_cc)
-    bob_keys = pre.generate_keys(server_cc)
-
-    alice_pk_bytes = pre.serialize_to_bytes(alice_keys.publicKey)
-    alice_sk_bytes = pre.serialize_to_bytes(alice_keys.secretKey)
-    bob_pk_bytes = pre.serialize_to_bytes(bob_keys.publicKey)
-    bob_sk_bytes = pre.serialize_to_bytes(bob_keys.secretKey)
-
-    print(f"✅ Generated Alice's PRE keys: {alice_pk_bytes.hex()[:32]}...")
-    print(f"✅ Generated Bob's PRE keys: {bob_pk_bytes.hex()[:32]}...")
-
-    # Add Alice's PRE keys to her identity
-    with open(alice_identity["identity_file"], "r") as f:
-        alice_data = json.load(f)
-    alice_data["auth_keys"]["pre"] = {
-        "pk_hex": alice_pk_bytes.hex(),
-        "sk_hex": alice_sk_bytes.hex(),
-    }
-    with open(alice_identity["identity_file"], "w") as f:
-        json.dump(alice_data, f, indent=2)
-    alice_identity["identity_data"] = alice_data
-    print("✅ Added Alice's PRE keys to her identity")
-
-    # Add Bob's PRE keys to his identity
-    with open(bob_identity["identity_file"], "r") as f:
-        bob_data = json.load(f)
-    bob_data["auth_keys"]["pre"] = {
-        "pk_hex": bob_pk_bytes.hex(),
-        "sk_hex": bob_sk_bytes.hex(),
-    }
-    with open(bob_identity["identity_file"], "w") as f:
-        json.dump(bob_data, f, indent=2)
-    bob_identity["identity_data"] = bob_data
-    print("✅ Added Bob's PRE keys to his identity")
+    print("✅ Initialized PRE capabilities for Alice and Bob")
 
     # Get Alice's keys for account creation and message operations
     alice_keys_data = KeyManager.load_identity_file(alice_identity["identity_file"])
@@ -169,7 +127,6 @@ def test_complete_reencryption_workflow_live_server(
         for key in alice_keys_data["pq_keys"]
     ]
     alice_classic_sk = alice_keys_data["classic_sk"]  # ECDSA signing key
-    alice_classic_vk = alice_classic_sk.verifying_key  # ECDSA verifying key
 
     # Get Bob's keys for account creation and decryption
     bob_keys_data = KeyManager.load_identity_file(bob_identity["identity_file"])
@@ -177,8 +134,6 @@ def test_complete_reencryption_workflow_live_server(
     bob_pq_keys = [
         {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in bob_keys_data["pq_keys"]
     ]
-    # Bob's PRE secret key (different from Alice's)
-    bob_pre_sk = bob_keys.secretKey
 
     # Create accounts on the live server
     alice_client.create_account(alice_pk, alice_pq_keys)
@@ -202,14 +157,22 @@ def test_complete_reencryption_workflow_live_server(
     test_file = temp_dir / "secret_message.txt"
     test_file.write_bytes(secret_message)
 
-    # Use Alice's PRE public key for creating IDK message
-    alice_pre_pk = alice_keys.publicKey
+    # Use Alice's crypto context to create and upload the file
+    # Get the crypto context object using the client's method
+    alice_cc = alice_client.get_crypto_context_object()
 
-    # Create IDK message parts using the server's crypto context
+    # Load Alice's PRE keys from her identity
+    with open(alice_identity["identity_file"], "r") as f:
+        alice_data = json.load(f)
+    alice_pre_pk_hex = alice_data["auth_keys"]["pre"]["pk_hex"]
+    alice_pre_pk_bytes = bytes.fromhex(alice_pre_pk_hex)
+    alice_pre_pk = pre.deserialize_public_key(alice_pre_pk_bytes)
+
+    # Create IDK message parts using the client's crypto context
     optional_headers = {"Filename": "secret_message.txt", "ContentType": "text/plain"}
 
     idk_parts = idk_message.create_idk_message_parts(
-        secret_message, server_cc, alice_pre_pk, alice_classic_sk, optional_headers
+        secret_message, alice_cc, alice_pre_pk, alice_classic_sk, optional_headers
     )
 
     # Get the file hash from the first IDK part
@@ -248,7 +211,9 @@ def test_complete_reencryption_workflow_live_server(
     print("🔗 Alice shares the file with Bob using proxy re-encryption...")
 
     # Get Bob's PRE public key for re-encryption key generation
-    bob_pre_pk_hex = bob_identity["identity_data"]["auth_keys"]["pre"]["pk_hex"]
+    with open(bob_identity["identity_file"], "r") as f:
+        bob_data = json.load(f)
+    bob_pre_pk_hex = bob_data["auth_keys"]["pre"]["pk_hex"]
 
     # Alice generates a re-encryption key for Bob
     re_key_hex = alice_client.generate_re_encryption_key(bob_pre_pk_hex)
@@ -299,8 +264,14 @@ def test_complete_reencryption_workflow_live_server(
     # the re-encrypted content using his own secret key
 
     try:
+        # Get Bob's crypto context and PRE secret key
+        bob_cc = bob_client.get_crypto_context_object()
+        bob_pre_sk_hex = bob_data["auth_keys"]["pre"]["sk_hex"]
+        bob_pre_sk_bytes = bytes.fromhex(bob_pre_sk_hex)
+        bob_pre_sk = pre.deserialize_secret_key(bob_pre_sk_bytes)
+
         decrypted_content = idk_message.decrypt_idk_message(
-            cc=server_cc,  # Same server crypto context Alice used
+            cc=bob_cc,  # Bob's crypto context (should be same as server's)
             sk=bob_pre_sk,  # Bob's own PRE secret key
             message_str=shared_file_str,
         )
@@ -618,12 +589,8 @@ def test_pre_key_management_with_live_server(api_base_url, temp_dir):
         # Create client and test PRE initialization
         client = DCypherClient(api_base_url, identity_path=str(identity_file))
 
-        # Get the server's crypto context and initialize the singleton
-        server_cc_bytes = client.get_pre_crypto_context()
-        serialized_context = base64.b64encode(server_cc_bytes).decode("ascii")
-        server_cc = context_manager.deserialize_context(serialized_context)
-
-        # Initialize PRE capabilities using the server's context
+        # CRITICAL: Let the client initialize PRE using its own context flow
+        # This ensures consistency between client and server context handling
         client.initialize_pre_for_identity()
 
         # Verify PRE keys were added

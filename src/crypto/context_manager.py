@@ -132,6 +132,15 @@ class CryptoContextManager:
             raise RuntimeError("PRE module is not available")
 
         with self._lock:
+            # CRITICAL: Check if we already have the same context to avoid unnecessary deserialization
+            # OpenFHE's ReleaseAllContexts() in deserialize_cc() can break existing context objects
+            if (
+                self._serialized_context == serialized_data
+                and self._context is not None
+            ):
+                # We already have this exact context - return it to maintain object consistency
+                return self._context
+
             # Clear any existing context
             if self._context is not None:
                 # Note: In production, we might need to call context factory cleanup

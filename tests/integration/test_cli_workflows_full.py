@@ -117,9 +117,10 @@ def test_full_workflow(cli_test_env):
     )
     assert (test_dir / "rekey_alice_to_bob.json").exists()
 
-    # Test basic re-encryption workflow (without IDK format - just for crypto primitives)
-    # Note: For proper re-encryption workflow, use test_cli_re_encryption_workflow
-    # which demonstrates server-side re-encryption
+    # Note: The CLI re-encrypt command is not compatible with IDK message format
+    # Modern workflow uses server-side re-encryption as demonstrated in test_complete_cli_reencryption_workflow
+    # The encrypt command creates IDK messages (.idk), but re-encrypt expects JSON format (.json)
+    # For actual proxy re-encryption, use the upload → share → download-shared workflow
 
 
 def test_cli_sharing_commands(cli_test_env, api_base_url):
@@ -605,38 +606,9 @@ def test_full_workflow_with_string(cli_test_env):
             "rekey_alice_to_bob.json",
         ]
     )
+    assert (test_dir / "rekey_alice_to_bob.json").exists()
 
-    # Re-encrypt ciphertext for Bob
-    run_command(
-        [
-            "re-encrypt",
-            "--cc-path",
-            "cc.json",
-            "--rekey-path",
-            "rekey_alice_to_bob.json",
-            "--ciphertext-path",
-            "ciphertext_alice.json",
-            "--output",
-            "reciphertext_bob.json",
-        ]
-    )
-
-    # # Decrypt with Bob's secret key
-    # decrypted_file_bob = test_dir / "decrypted_by_bob.txt"
-    # run_command(
-    #     [
-    #         "decrypt",
-    #         "--cc-path",
-    #         "cc.json",
-    #         "--sk-path",
-    #         "bob.sec",
-    #         "--verifying-key-path",
-    #         str(vk_path),
-    #         "--ciphertext-path",
-    #         "reciphertext_bob.json",
-    #         "--output-file",
-    #         str(decrypted_file_bob),
-    #     ]
-    # )
-    # # with open(decrypted_file_bob, "rb") as f:
-    # #     assert f.read() == original_data
+    # Note: The CLI re-encrypt command is not compatible with IDK message format
+    # Modern workflow uses server-side re-encryption as demonstrated in test_complete_cli_reencryption_workflow
+    # The encrypt command creates IDK messages (.idk), but re-encrypt expects JSON format (.json)
+    # For actual proxy re-encryption, use the upload → share → download-shared workflow

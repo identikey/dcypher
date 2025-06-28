@@ -940,17 +940,20 @@ class KeyManager:
         # This prevents OpenFHE "Key was not generated with the same crypto context" errors
         context_manager = CryptoContextManager()
 
-        # CRITICAL: Always reset the context to ensure clean state
-        # OpenFHE requires that the context be properly set up in its global registry
-        # before any key operations. We must deserialize the context fresh to ensure
-        # it's properly registered in OpenFHE's internal systems.
-        context_manager.reset()  # Clear any existing context
+        # CRITICAL: Check if context is already initialized and use it if available
+        # This ensures we don't break existing context consistency by resetting
+        cc = context_manager.get_context()
 
-        # Deserialize the context and set it up in the singleton
-        import base64
+        if cc is None:
+            # No context exists, deserialize from the provided bytes
+            import base64
 
-        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
+            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
+            # Initialize the deserialized context's internal state
+            pre.generate_keys(cc)
+        # If context already exists, use it as-is to maintain consistency
+        # The server ensures all operations use the same context bytes
 
         # NOW generate PRE keys using the properly initialized context
         # This ensures the keys are associated with the correct context instance
