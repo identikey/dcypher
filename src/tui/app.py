@@ -5,7 +5,7 @@ Cyberpunk-inspired terminal interface with @repligate aesthetics
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Static, TabbedContent, TabPane
+from textual.widgets import Header, Footer, Static, TabbedContent, Tabs, Button
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -84,25 +84,34 @@ class DCypherTUI(App):
             # ASCII Banner
             yield ASCIIBanner()
 
-            # Main content area with tabs
-            with TabbedContent(initial="dashboard"):
-                with TabPane("Dashboard", id="dashboard"):
-                    yield DashboardScreen()
-
-                with TabPane("Identity", id="identity"):
-                    yield IdentityScreen()
-
-                with TabPane("Crypto", id="crypto"):
-                    yield CryptoScreen()
-
-                with TabPane("Accounts", id="accounts"):
-                    yield AccountsScreen()
-
-                with TabPane("Files", id="files"):
-                    yield FilesScreen()
-
-                with TabPane("Sharing", id="sharing"):
-                    yield SharingScreen()
+            # Simplified TabbedContent test - just Static widgets
+            with TabbedContent(
+                "Dashboard", "Identity", "Crypto", "Accounts", "Files", "Sharing"
+            ):
+                yield Static(
+                    "🎛️  Dashboard Content\n\nThis is where system monitoring and quick actions would appear.\n\nSystem Status: ✅ Online\nIdentity: Not loaded\nAPI: Connecting...",
+                    id="dashboard-content",
+                )
+                yield Static(
+                    "🆔  Identity Management\n\nLoad and manage your digital identities here.\n\nStatus: No identity loaded\nActions: Load, Create, Backup",
+                    id="identity-content",
+                )
+                yield Static(
+                    "🔐  Cryptography Operations\n\nEncrypt and decrypt files with quantum-resistant algorithms.\n\nAvailable: CRYSTALS-Kyber, CRYSTALS-Dilithium\nStatus: Ready",
+                    id="crypto-content",
+                )
+                yield Static(
+                    "👥  Account Management\n\nManage contacts and shared keys.\n\nContacts: 0\nShared Keys: 0",
+                    id="accounts-content",
+                )
+                yield Static(
+                    "📁  File Operations\n\nSecure file storage and sharing.\n\nEncrypted Files: 0\nShared Files: 0",
+                    id="files-content",
+                )
+                yield Static(
+                    "🔗  Secure Sharing\n\nShare encrypted content securely.\n\nActive Shares: 0\nPending Invites: 0",
+                    id="sharing-content",
+                )
 
         yield Footer()
 
@@ -177,22 +186,9 @@ class DCypherTUI(App):
         """Navigate to previous tab"""
         try:
             tabs = self.query_one(TabbedContent)
-            current_tabs = tabs.query("TabPane")
-            current_index = -1
-
-            # Find current active tab
-            for i, tab in enumerate(current_tabs):
-                if tab.id == tabs.active:
-                    current_index = i
-                    break
-
-            # Navigate to previous tab (with wrap-around)
-            if current_index > 0:
-                new_tab = current_tabs[current_index - 1]
-                tabs.active = new_tab.id
-            elif current_tabs:
-                # Wrap to last tab
-                tabs.active = current_tabs[-1].id
+            # Access the internal Tabs widget for navigation
+            tabs_widget = tabs.query_one(Tabs)
+            tabs_widget.action_previous_tab()
         except Exception as e:
             self.log.warning(f"Could not navigate to previous tab: {e}")
 
@@ -200,22 +196,9 @@ class DCypherTUI(App):
         """Navigate to next tab"""
         try:
             tabs = self.query_one(TabbedContent)
-            current_tabs = tabs.query("TabPane")
-            current_index = -1
-
-            # Find current active tab
-            for i, tab in enumerate(current_tabs):
-                if tab.id == tabs.active:
-                    current_index = i
-                    break
-
-            # Navigate to next tab (with wrap-around)
-            if current_index < len(current_tabs) - 1:
-                new_tab = current_tabs[current_index + 1]
-                tabs.active = new_tab.id
-            elif current_tabs:
-                # Wrap to first tab
-                tabs.active = current_tabs[0].id
+            # Access the internal Tabs widget for navigation
+            tabs_widget = tabs.query_one(Tabs)
+            tabs_widget.action_next_tab()
         except Exception as e:
             self.log.warning(f"Could not navigate to next tab: {e}")
 
@@ -223,7 +206,17 @@ class DCypherTUI(App):
         """Switch to specific tab by ID"""
         try:
             tabs = self.query_one(TabbedContent)
-            tabs.active = tab_id
+            # Map our friendly names to auto-generated tab IDs
+            tab_mapping = {
+                "dashboard": "tab-1",
+                "identity": "tab-2",
+                "crypto": "tab-3",
+                "accounts": "tab-4",
+                "files": "tab-5",
+                "sharing": "tab-6",
+            }
+            actual_tab_id = tab_mapping.get(tab_id, tab_id)
+            tabs.active = actual_tab_id
         except Exception as e:
             self.log.warning(f"Could not switch to tab {tab_id}: {e}")
 

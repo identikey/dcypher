@@ -110,7 +110,7 @@ TabbedContent {
 TabbedContent > Tabs {
     background: $bg-medium;
     color: $text-primary;
-    height: auto;
+    height: 3;  /* Fixed height for tab headers */
 }
 
 TabbedContent > Tabs > Tab {
@@ -128,12 +128,14 @@ TabbedContent > Tabs > Tab.-active {
 
 TabbedContent > ContentSwitcher {
     border: solid $border-primary;
-    height: 1fr;
+    height: 1fr;  /* Take remaining space after tabs */
+    min-height: 10;  /* Ensure minimum content height */
 }
 
 /* TabPane content areas */
 TabPane {
     height: 100%;
+    min-height: 8;  /* Ensure content has minimum height */
 }
 
 /* Screen widgets inside tabs */
