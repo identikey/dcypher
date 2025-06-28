@@ -463,8 +463,9 @@ class TestSharingScreen:
             sharing = pilot.app.query_one(SharingScreen)
             table = pilot.app.query_one("#shares-table")
 
-            # Check table has correct columns
-            assert len(table.columns) == 5
+            # Check table has correct columns - SharingScreen uses 6 columns:
+            # "Share ID", "File Hash", "Recipient/Sender", "Created", "Status", "Type"
+            assert len(table.columns) == 6
 
     @pytest.mark.asyncio
     async def test_sharing_button_actions(self):

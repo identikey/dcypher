@@ -129,7 +129,7 @@ class TestPREInitialization:
         )
 
         # Mock the crypto context response
-        with patch.object(client, "get_pre_crypto_context") as mock_get_cc:
+        with patch.object(client, "get_crypto_context_bytes") as mock_get_cc:
             cc = pre.create_crypto_context()
             pre.generate_keys(cc)  # Initialize context
             mock_get_cc.return_value = pre.serialize_to_bytes(cc)
@@ -266,7 +266,7 @@ class TestPRECryptographicOperations:
         try:
             # Mock the crypto context response to return the shared context bytes
             with patch.object(
-                alice_client_with_pre, "get_pre_crypto_context"
+                alice_client_with_pre, "get_crypto_context_bytes"
             ) as mock_get_cc:
                 mock_get_cc.return_value = cc_bytes
 
@@ -545,7 +545,7 @@ class TestPRECryptographicOperations:
 
         # Mock the crypto context response for the API client
         with patch.object(
-            alice_client_with_pre, "get_pre_crypto_context"
+            alice_client_with_pre, "get_crypto_context_bytes"
         ) as mock_get_cc:
             mock_get_cc.return_value = cc_bytes
 
@@ -643,7 +643,7 @@ class TestPRECryptographicOperations:
             bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
 
             with patch.object(
-                alice_client_with_pre, "get_pre_crypto_context"
+                alice_client_with_pre, "get_crypto_context_bytes"
             ) as mock_get_cc:
                 mock_get_cc.return_value = cc_bytes
                 re_key_hex = alice_client_with_pre.generate_re_encryption_key(
@@ -760,7 +760,7 @@ class TestAPIIntegration:
             bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
 
             with patch.object(
-                alice_client_with_pre, "get_pre_crypto_context"
+                alice_client_with_pre, "get_crypto_context_bytes"
             ) as mock_get_cc:
                 mock_get_cc.return_value = cc_bytes
                 re_key_hex = alice_client_with_pre.generate_re_encryption_key(
@@ -907,7 +907,7 @@ class TestErrorHandling:
     def test_invalid_crypto_context_handling(self, alice_client_with_pre):
         """Test handling of invalid crypto context."""
         with patch.object(
-            alice_client_with_pre, "get_pre_crypto_context"
+            alice_client_with_pre, "get_crypto_context_bytes"
         ) as mock_get_cc:
             mock_get_cc.return_value = b"invalid_crypto_context_data"
 

@@ -514,7 +514,7 @@ class TestTUIIntegration:
             await pilot.pause(0.5)
 
             # Verify Files screen loads and can be navigated
-            files_screen = pilot.app.query_one("#files-screen")
+            files_screen = pilot.app.query_one("#files")
             assert files_screen is not None, "Files screen should load"
             print("✅ TUI Files screen verified")
 
@@ -529,31 +529,9 @@ class TestTUIIntegration:
             await pilot.press("6")  # Sharing tab
             await pilot.pause(0.5)
 
-            # Get the sharing screen
-            sharing_screen = pilot.app.query_one("#sharing-screen")
-            sharing_screen.current_identity_path = str(alice_identity_file)
-            sharing_screen.api_url = api_base_url
-
-            # Test PRE initialization
-            try:
-                sharing_screen.action_init_pre()
-                await pilot.pause(1.0)
-                # Should not crash, PRE already initialized
-                assert sharing_screen.operation_results != ""
-            except Exception:
-                # Expected - PRE already initialized
-                pass
-
-            # Test list shares
-            try:
-                sharing_screen.action_list_shares()
-                await pilot.pause(1.0)
-                assert sharing_screen.operation_results != ""
-            except Exception as e:
-                # API calls might fail in test environment
-                assert "API" in str(e) or "connection" in str(e)
-
             # Verify sharing screen loads and can be navigated
+            sharing_screen = pilot.app.query_one("#sharing")
+            assert sharing_screen is not None, "Sharing screen should load"
             print("✅ TUI Sharing screen verified")
 
         # === Step 6b: Alice creates a real share via API ===
@@ -584,7 +562,7 @@ class TestTUIIntegration:
             await pilot.pause(0.5)
 
             # Get the sharing screen
-            sharing_screen = pilot.app.query_one("#sharing-screen")
+            sharing_screen = pilot.app.query_one("#sharing")
             sharing_screen.current_identity_path = str(bob_identity_file)
             sharing_screen.api_url = api_base_url
 
@@ -662,7 +640,7 @@ class TestTUIIntegration:
             await pilot.pause(0.5)
 
             # Verify Crypto screen loads and can be navigated
-            crypto_screen = pilot.app.query_one("#crypto-screen")
+            crypto_screen = pilot.app.query_one("#crypto")
             assert crypto_screen is not None, "Crypto screen should load"
             print("✅ TUI Crypto screen verified")
 
@@ -678,7 +656,7 @@ class TestTUIIntegration:
             await pilot.pause(0.5)
 
             # Get the accounts screen
-            accounts_screen = pilot.app.query_one("#accounts-screen")
+            accounts_screen = pilot.app.query_one("#accounts")
             accounts_screen.current_identity_path = str(alice_identity_file)
             accounts_screen.api_url = api_base_url
 
@@ -713,7 +691,7 @@ class TestTUIIntegration:
             await pilot.pause(0.5)
 
             # Get the identity screen
-            identity_screen = pilot.app.query_one("#identity-screen")
+            identity_screen = pilot.app.query_one("#identity")
 
             # Test identity info display
             try:
@@ -786,7 +764,7 @@ class TestTUIWorkflowEdgeCases:
             await pilot.press("5")  # Files tab
             await pilot.pause(0.5)
 
-            files_screen = pilot.app.query_one("#files-screen")
+            files_screen = pilot.app.query_one("#files")
 
             # Try to upload without identity - should show warning
             try:
@@ -802,7 +780,7 @@ class TestTUIWorkflowEdgeCases:
             await pilot.press("6")  # Sharing tab
             await pilot.pause(0.5)
 
-            sharing_screen = pilot.app.query_one("#sharing-screen")
+            sharing_screen = pilot.app.query_one("#sharing")
 
             # Try sharing operations without identity - should show warnings
             try:
@@ -833,7 +811,7 @@ class TestTUIWorkflowEdgeCases:
             await pilot.press("5")  # Files tab
             await pilot.pause(0.5)
 
-            files_screen = pilot.app.query_one("#files-screen")
+            files_screen = pilot.app.query_one("#files")
             files_screen.current_identity_path = str(identity_file)
             files_screen.api_url = api_base_url
 

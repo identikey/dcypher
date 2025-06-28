@@ -82,10 +82,16 @@ class DCypherTUI(App[None]):
 
             # Main content area with tabs - Each tab gets proper screen widgets
             with TabbedContent(
-                "Dashboard", "Identity", "Crypto", "Accounts", "Files", "Sharing"
+                "Dashboard",
+                "Identity",
+                "Crypto",
+                "Accounts",
+                "Files",
+                "Sharing",
+                id="main-tabs",
             ):
                 # Dashboard content as a proper container with widgets
-                with Container(id="dashboard-container"):
+                with Container(id="dashboard"):
                     with Horizontal(id="monitors-row"):
                         yield SystemMonitor(id="system-monitor")
                         # yield CryptoMonitor(id="crypto-monitor")  # Comment out for now
@@ -106,19 +112,19 @@ class DCypherTUI(App[None]):
                         yield Button("Help", id="help-btn")
 
                 # Identity Management - Use proper IdentityScreen
-                yield IdentityScreen(id="identity-screen")
+                yield IdentityScreen(id="identity")
 
                 # Crypto Operations - Use proper CryptoScreen
-                yield CryptoScreen(id="crypto-screen")
+                yield CryptoScreen(id="crypto")
 
                 # Accounts Management - Use proper AccountsScreen
-                yield AccountsScreen(id="accounts-screen")
+                yield AccountsScreen(id="accounts")
 
                 # File Operations - Use proper FilesScreen
-                yield FilesScreen(id="files-screen")
+                yield FilesScreen(id="files")
 
                 # Sharing & Collaboration - Use proper SharingScreen
-                yield SharingScreen(id="sharing-screen")
+                yield SharingScreen(id="sharing")
 
         yield Footer()
 

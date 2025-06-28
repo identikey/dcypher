@@ -83,20 +83,18 @@ class DCypherClient:
         # Add additional PQ algorithms if specified
         if additional_pq_algs:
             # Load the identity file
-            with open(identity_file, 'r') as f:
+            with open(identity_file, "r") as f:
                 identity_data = json.load(f)
-            
+
             # Generate additional PQ keys
             for alg in additional_pq_algs:
                 pq_pk, pq_sk = KeyManager.generate_pq_keypair(alg)
-                identity_data["auth_keys"]["pq"].append({
-                    "alg": alg,
-                    "pk_hex": pq_pk.hex(),
-                    "sk_hex": pq_sk.hex()
-                })
-            
+                identity_data["auth_keys"]["pq"].append(
+                    {"alg": alg, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                )
+
             # Save the updated identity file
-            with open(identity_file, 'w') as f:
+            with open(identity_file, "w") as f:
                 json.dump(identity_data, f, indent=2)
 
         # Load identity to get public key
@@ -312,14 +310,21 @@ class DCypherClient:
         except (requests.exceptions.RequestException, KeyError) as e:
             raise DCypherAPIError(f"Failed to get supported algorithms: {e}")
 
-    def get_pre_crypto_context(self) -> bytes:
-        """Get the serialized crypto context for PRE from the API server."""
+    def get_crypto_context_bytes(self) -> bytes:
+        """Get the serialized crypto context bytes from the API server."""
         try:
             response = requests.get(f"{self.api_url}/pre-crypto-context")
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:
             raise DCypherAPIError(f"Failed to get PRE crypto context: {e}")
+
+    def get_pre_crypto_context(self) -> bytes:
+        """
+        DEPRECATED: Use get_crypto_context_bytes() instead.
+        Get the serialized crypto context for PRE from the API server.
+        """
+        return self.get_crypto_context_bytes()
 
     def initialize_pre_for_identity(self) -> None:
         """
@@ -330,7 +335,7 @@ class DCypherClient:
             raise AuthenticationError("Identity file not configured or does not exist.")
 
         # 1. Get crypto context from server
-        cc_bytes = self.get_pre_crypto_context()
+        cc_bytes = self.get_crypto_context_bytes()
 
         # 2. Add PRE keys to identity file
         KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_bytes)
@@ -1014,7 +1019,7 @@ class DCypherClient:
         # Always get a fresh context from the server to ensure consistency
         # This ensures we're using the exact same context that was used to create
         # the ciphertexts and other crypto objects
-        cc_bytes = self.get_pre_crypto_context()
+        cc_bytes = self.get_crypto_context_bytes()
 
         # CRITICAL: Reset OpenFHE's global context registry and set up the singleton
         # This ensures that when we deserialize keys, they will be associated with
@@ -1034,3 +1039,33 @@ class DCypherClient:
         # Serialize and return as hex
         re_key_bytes = pre.serialize_to_bytes(re_key)
         return re_key_bytes.hex()
+
+    def get_crypto_context_object(self):
+        """
+        Get a properly initialized crypto context object ready for operations.
+
+        This is a higher-level method that:
+        1. Fetches the raw context bytes from the server
+        2. Sets up the singleton context manager for consistency
+        3. Returns a ready-to-use context object
+
+        Use this instead of manually calling get_crypto_context_bytes() + singleton setup.
+        Use get_crypto_context_bytes() only when you need the raw bytes (e.g., saving to file).
+
+        Returns:
+            Initialized crypto context object compatible with server operations
+        """
+        from crypto.context_manager import CryptoContextManager
+        import base64
+
+        context_manager = CryptoContextManager()
+
+        # Get server's crypto context bytes
+        cc_bytes = self.get_crypto_context_bytes()
+
+        # Reset and initialize the singleton with server context
+        context_manager.reset()
+        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+        cc = context_manager.deserialize_context(serialized_context)
+
+        return cc

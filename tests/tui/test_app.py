@@ -54,13 +54,14 @@ class TestDCypherTUI:
             tabs = pilot.app.query("TabPane")
             tab_ids = [tab.id for tab in tabs]
 
+            # App uses auto-generated tab IDs (tab-1, tab-2, etc.)
             expected_tabs = [
-                "dashboard",
-                "identity",
-                "crypto",
-                "accounts",
-                "files",
-                "sharing",
+                "tab-1",  # Dashboard
+                "tab-2",  # Identity
+                "tab-3",  # Crypto
+                "tab-4",  # Accounts
+                "tab-5",  # Files
+                "tab-6",  # Sharing
             ]
             for expected_tab in expected_tabs:
                 assert expected_tab in tab_ids
@@ -68,11 +69,11 @@ class TestDCypherTUI:
     def test_app_bindings(self):
         """Test that key bindings are properly configured"""
         app = DCypherTUI()
-        # Extract keys from bindings (bindings are tuples: key, action, description)
+        # Extract keys from bindings (bindings are Binding objects with .key attribute)
         binding_keys = []
         for binding in app.BINDINGS:
-            if isinstance(binding, tuple) and len(binding) >= 1:
-                binding_keys.append(binding[0])  # First element is the key
+            if hasattr(binding, "key"):
+                binding_keys.append(binding.key)
             else:
                 binding_keys.append(str(binding))
 
