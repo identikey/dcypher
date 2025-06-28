@@ -69,14 +69,8 @@ class DCypherTUI(App[None]):
 
     def watch_transparent_background(self, transparent: bool) -> None:
         """Update CSS when transparency mode changes"""
-        # Future implementation for dynamic CSS updates
-        if hasattr(self, "_dom"):  # Only refresh if app is running
-            self.refresh_css()
-
-    @property
-    def CSS(self) -> str:
-        """Dynamic CSS based on transparency setting"""
-        return get_cyberpunk_theme(transparent_background=self.transparent_background)
+        # TODO: Implement dynamic CSS updates in future version
+        pass
 
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
@@ -86,7 +80,7 @@ class DCypherTUI(App[None]):
             # ASCII Banner
             yield ASCIIBanner()
 
-            # Main content area with tabs - Each tab gets proper content widgets
+            # Main content area with tabs - Each tab gets proper screen widgets
             with TabbedContent(
                 "Dashboard", "Identity", "Crypto", "Accounts", "Files", "Sharing"
             ):
@@ -111,68 +105,26 @@ class DCypherTUI(App[None]):
                         yield Button("System Info", id="system-info-btn")
                         yield Button("Help", id="help-btn")
 
-                # Identity Management content
-                with Container(id="identity-container"):
-                    yield Static(
-                        "🆔 Identity Management\n\nLoad and manage your digital identities here.\n\nStatus: No identity loaded\nActions: Load, Create, Export",
-                        id="identity-content",
-                    )
-                    with Horizontal():
-                        yield Button("Load Identity", variant="primary")
-                        yield Button("Create New", variant="success")
-                        yield Button("Export", variant="warning")
+                # Identity Management - Use proper IdentityScreen
+                yield IdentityScreen(id="identity-screen")
 
-                # Crypto Operations content
-                with Container(id="crypto-container"):
-                    yield Static(
-                        "🔐 Cryptographic Operations\n\nQuantum-resistant encryption and signing operations.\n\nAlgorithms: Classic + Post-Quantum\nStatus: Ready",
-                        id="crypto-content",
-                    )
-                    with Horizontal():
-                        yield Button("Encrypt", variant="primary")
-                        yield Button("Decrypt", variant="warning")
-                        yield Button("Sign", variant="success")
-                        yield Button("Verify", variant="error")
+                # Crypto Operations - Use proper CryptoScreen
+                yield CryptoScreen(id="crypto-screen")
 
-                # Accounts Management content
-                with Container(id="accounts-container"):
-                    yield Static(
-                        "👥 Account Management\n\nManage user accounts and permissions.\n\nActive accounts: 0\nPending: 0",
-                        id="accounts-content",
-                    )
-                    with Horizontal():
-                        yield Button("Add Account", variant="primary")
-                        yield Button("View All", variant="success")
-                        yield Button("Permissions", variant="warning")
+                # Accounts Management - Use proper AccountsScreen
+                yield AccountsScreen(id="accounts-screen")
 
-                # File Operations content
-                with Container(id="files-container"):
-                    yield Static(
-                        "📁 File Operations\n\nSecure file encryption and management.\n\nEncrypted files: 0\nTotal size: 0 bytes",
-                        id="files-content",
-                    )
-                    with Horizontal():
-                        yield Button("Encrypt File", variant="primary")
-                        yield Button("Decrypt File", variant="warning")
-                        yield Button("Browse", variant="success")
+                # File Operations - Use proper FilesScreen
+                yield FilesScreen(id="files-screen")
 
-                # Sharing & Collaboration content
-                with Container(id="sharing-container"):
-                    yield Static(
-                        "🤝 Sharing & Collaboration\n\nSecure sharing and collaboration tools.\n\nActive shares: 0\nCollaborations: 0",
-                        id="sharing-content",
-                    )
-                    with Horizontal():
-                        yield Button("Share File", variant="primary")
-                        yield Button("View Shares", variant="success")
-                        yield Button("Collaborate", variant="warning")
+                # Sharing & Collaboration - Use proper SharingScreen
+                yield SharingScreen(id="sharing-screen")
 
         yield Footer()
 
     def on_mount(self) -> None:
         """Initialize the application"""
-        self.title = self.TITLE
-        self.sub_title = self.SUB_TITLE
+        # Note: title and sub_title are set via class attributes TITLE and SUB_TITLE
 
         # Start background tasks
         self.set_interval(1.0, self.update_system_status)
