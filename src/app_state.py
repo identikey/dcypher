@@ -23,6 +23,19 @@ class ServerState:
         # We need to generate keys to fully initialize the context before serialization
         pre.generate_keys(self.pre_crypto_context)
         self.pre_cc_serialized = pre.serialize_to_bytes(self.pre_crypto_context)
+
+        # CRITICAL: Initialize the server's context singleton for consistency
+        # This ensures all server operations use the same context instance
+        from crypto.context_manager import CryptoContextManager
+        import base64
+
+        context_manager = CryptoContextManager()
+        # Set the server's context in the singleton
+        context_manager._context = self.pre_crypto_context
+        context_manager._serialized_context = base64.b64encode(
+            self.pre_cc_serialized
+        ).decode("ascii")
+
         # { classic_pk: pre_public_key_bytes }
         self.pre_keys = {}
         # { share_id: {from: classic_pk, to: classic_pk, file_hash: str, re_key: bytes} }

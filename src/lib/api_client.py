@@ -1007,26 +1007,34 @@ class DCypherClient:
         except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
             raise AuthenticationError(f"Failed to load PRE keys: {e}")
 
-        # CRITICAL: Use the context singleton to ensure consistency
+        # CRITICAL FIX: Use consistent context management
         # The key insight is that OpenFHE requires all crypto objects to be associated
-        # with the SAME context instance. We must deserialize the context FIRST,
-        # then deserialize the keys AFTER the context is properly set up.
+        # with the SAME context instance. We must ensure consistency with the server's context.
         from crypto.context_manager import CryptoContextManager
         import base64
 
         context_manager = CryptoContextManager()
 
-        # Always get a fresh context from the server to ensure consistency
-        # This ensures we're using the exact same context that was used to create
-        # the ciphertexts and other crypto objects
+        # Get server's crypto context bytes
         cc_bytes = self.get_crypto_context_bytes()
-
-        # CRITICAL: Reset OpenFHE's global context registry and set up the singleton
-        # This ensures that when we deserialize keys, they will be associated with
-        # the correct context in OpenFHE's internal registry
-        context_manager.reset()  # Clear any existing context
         serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
+
+        # CRITICAL: Only reset if we don't have a context or if it's different from server's
+        # This ensures consistency across multiple operations in the same workflow
+        current_context = context_manager.get_context()
+        if current_context is None:
+            # No context exists, initialize with server's context
+            cc = context_manager.deserialize_context(serialized_context)
+        else:
+            # We have a context, check if it matches the server's
+            current_serialized = context_manager._serialized_context
+            if current_serialized != serialized_context:
+                # Context is different from server's, update it
+                context_manager.reset()
+                cc = context_manager.deserialize_context(serialized_context)
+            else:
+                # Context matches server's, reuse it
+                cc = current_context
 
         # NOW deserialize the keys AFTER the context is properly set up
         # This ensures the keys are associated with the same context instance
@@ -1062,10 +1070,23 @@ class DCypherClient:
 
         # Get server's crypto context bytes
         cc_bytes = self.get_crypto_context_bytes()
-
-        # Reset and initialize the singleton with server context
-        context_manager.reset()
         serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
+
+        # CRITICAL: Only reset if we don't have a context or if it's different from server's
+        # This ensures consistency across multiple operations in the same workflow
+        current_context = context_manager.get_context()
+        if current_context is None:
+            # No context exists, initialize with server's context
+            cc = context_manager.deserialize_context(serialized_context)
+        else:
+            # We have a context, check if it matches the server's
+            current_serialized = context_manager._serialized_context
+            if current_serialized != serialized_context:
+                # Context is different from server's, update it
+                context_manager.reset()
+                cc = context_manager.deserialize_context(serialized_context)
+            else:
+                # Context matches server's, reuse it
+                cc = current_context
 
         return cc

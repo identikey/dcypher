@@ -15,9 +15,11 @@ from crypto.context_manager import CryptoContextManager
 import ecdsa
 
 # Generate a signing key for the server (for re-signed IDK messages)
-SERVER_SK = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-SERVER_VK = SERVER_SK.get_verifying_key()
-SERVER_PUBLIC_KEY = SERVER_VK.to_string("uncompressed").hex()
+SERVER_SK: ecdsa.SigningKey = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+_server_vk = SERVER_SK.get_verifying_key()
+assert _server_vk is not None, "Failed to generate server verifying key"
+SERVER_VK: ecdsa.VerifyingKey = _server_vk
+SERVER_PUBLIC_KEY: str = SERVER_VK.to_string("uncompressed").hex()
 
 router = APIRouter()
 
@@ -242,16 +244,15 @@ async def download_shared_file(
         # Get the server's singleton context - this is the SAME instance used for all operations
         context_manager = CryptoContextManager()
 
-        # If the context isn't initialized, initialize it from the stored serialized context
-        if context_manager.get_context() is None:
-            # Initialize from the stored context bytes
+        # IMPORTANT: Check if context is already initialized to avoid race conditions
+        server_context = context_manager.get_context()
+        if server_context is None:
+            # Context not initialized, initialize it from the stored serialized context
             import base64 as b64
 
             serialized_context = b64.b64encode(state.pre_cc_serialized).decode("ascii")
             server_context = context_manager.deserialize_context(serialized_context)
-        else:
-            # Use the existing singleton context
-            server_context = context_manager.get_context()
+        # If context exists, reuse it - DON'T reset it during active operations
 
         # Now ALL operations use the SAME context instance from the singleton
         re_key_bytes = share_policy["re_encryption_key"]
