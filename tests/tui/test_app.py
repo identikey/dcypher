@@ -15,8 +15,8 @@ class TestDCypherTUI:
     def test_app_initialization(self):
         """Test that the app initializes correctly"""
         app = DCypherTUI()
-        assert app.title == "dCypher - Quantum-Resistant Encryption TUI"
-        assert app.sub_title == "REPLICANT TERMINAL v2.1.0"
+        assert app.TITLE == "dCypher - Quantum-Resistant Encryption TUI"
+        assert app.SUB_TITLE == "REPLICANT TERMINAL v2.1.0"
         assert app.current_identity is None
         assert app.api_url == "http://127.0.0.1:8000"
         assert app.connection_status == "disconnected"
@@ -51,30 +51,31 @@ class TestDCypherTUI:
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            tabs = pilot.app.query("TabPane")
-            tab_ids = [tab.id for tab in tabs]
-
-            # App uses auto-generated tab IDs (tab-1, tab-2, etc.)
-            expected_tabs = [
-                "tab-1",  # Dashboard
-                "tab-2",  # Identity
-                "tab-3",  # Crypto
-                "tab-4",  # Accounts
-                "tab-5",  # Files
-                "tab-6",  # Sharing
+            # Check for specific tab content containers
+            tab_containers = [
+                "#dashboard",
+                "#identity",
+                "#crypto",
+                "#accounts",
+                "#files",
+                "#sharing",
             ]
-            for expected_tab in expected_tabs:
-                assert expected_tab in tab_ids
+
+            for container_id in tab_containers:
+                container = pilot.app.query_one(container_id)
+                assert container is not None, f"Container {container_id} should exist"
 
     def test_app_bindings(self):
         """Test that key bindings are properly configured"""
         app = DCypherTUI()
-        # Extract keys from bindings (bindings are Binding objects with .key attribute)
+        # Bindings are Binding objects with .key attribute
         binding_keys = []
         for binding in app.BINDINGS:
+            # Handle Binding objects properly
             if hasattr(binding, "key"):
                 binding_keys.append(binding.key)
             else:
+                # Fallback for other formats
                 binding_keys.append(str(binding))
 
         expected_bindings = ["ctrl+c", "ctrl+d", "f1", "f2", "f12"]
@@ -202,17 +203,17 @@ class TestTUIIntegration:
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            # Set some state
-            pilot.app.current_identity = "/test/identity.json"
-            pilot.app.api_url = "https://test.api.com"
+            # Set some state using the app instance directly
+            app.current_identity = "/test/identity.json"
+            app.api_url = "https://test.api.com"
 
             # Switch tabs (simulate user interaction)
             await pilot.press("f2")  # Assuming this switches tabs
             await pilot.pause()
 
             # State should persist
-            assert pilot.app.current_identity == "/test/identity.json"
-            assert pilot.app.api_url == "https://test.api.com"
+            assert app.current_identity == "/test/identity.json"
+            assert app.api_url == "https://test.api.com"
 
 
 class TestTUIUserInteractions:
@@ -300,8 +301,8 @@ class TestTUIWithMockData:
 
             # This would test the actual identity loading process
             # For now, just verify the app can handle the file path
-            pilot.app.current_identity = mock_identity_file
-            assert pilot.app.current_identity == mock_identity_file
+            app.current_identity = mock_identity_file
+            assert app.current_identity == mock_identity_file
 
 
 class TestTUIErrorHandling:
@@ -327,7 +328,7 @@ class TestTUIErrorHandling:
             await pilot.pause()
 
             # App should handle network errors gracefully
-            assert pilot.app.connection_status in ["disconnected", "error"]
+            assert app.connection_status in ["disconnected", "error"]
 
     @pytest.mark.asyncio
     async def test_app_shutdown_cleanup(self):
