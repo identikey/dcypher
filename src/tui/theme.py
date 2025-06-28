@@ -12,9 +12,9 @@ $warning: #ffff00;        /* Electric yellow */
 $error: #ff073a;          /* Neon red */
 $success: #39ff14;        /* Bright green */
 
-$bg-dark: #0a0a0a;        /* Deep black */
-$bg-medium: #1a1a1a;      /* Dark gray */
-$bg-light: #2a2a2a;       /* Medium gray */
+$bg-dark: #1a1a1a;        /* Dark gray (lightened) */
+$bg-medium: #2a2a2a;      /* Medium gray */
+$bg-light: #3a3a3a;       /* Light gray */
 $text-primary: #00ff41;   /* Matrix green text */
 $text-secondary: #ffffff; /* White text */
 $text-dim: #888888;       /* Dim gray */
@@ -64,7 +64,7 @@ Footer .footer--description {
 
 /* Main container */
 #main-container {
-    background: $bg-dark;
+    background: $bg-medium;
     border: solid $border-primary;
     margin: 1;
     padding: 1;
@@ -72,7 +72,7 @@ Footer .footer--description {
 
 /* ASCII Banner */
 ASCIIBanner {
-    height: 8;
+    height: 12;
     background: $bg-dark;
     color: $primary;
     text-align: center;
@@ -114,14 +114,14 @@ TabbedContent > Tabs > Tab.-active {
 }
 
 TabbedContent > ContentSwitcher {
-    background: $bg-dark;
+    background: $bg-medium;
     padding: 1;
 }
 
 /* System Monitor Widget */
 SystemMonitor {
     height: 10;
-    background: $bg-medium;
+    background: $bg-light;
     border: solid $border-primary;
     margin: 1;
     padding: 1;

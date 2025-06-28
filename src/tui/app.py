@@ -40,6 +40,18 @@ class DCypherTUI(App):
         Binding("f1", "show_help", "Help"),
         Binding("f2", "show_logs", "Logs"),
         Binding("f12", "screenshot", "Screenshot"),
+        # Tab navigation
+        Binding("left", "previous_tab", "Previous Tab"),
+        Binding("right", "next_tab", "Next Tab"),
+        Binding("shift+tab", "previous_tab", "Previous Tab"),
+        Binding("tab", "next_tab", "Next Tab"),
+        # Quick tab access
+        Binding("1", "switch_tab('dashboard')", "Dashboard"),
+        Binding("2", "switch_tab('identity')", "Identity"),
+        Binding("3", "switch_tab('crypto')", "Crypto"),
+        Binding("4", "switch_tab('accounts')", "Accounts"),
+        Binding("5", "switch_tab('files')", "Files"),
+        Binding("6", "switch_tab('sharing')", "Sharing"),
     ]
 
     # Reactive state
@@ -125,9 +137,80 @@ class DCypherTUI(App):
         # TODO: Implement logs screen
         pass
 
-    def action_screenshot(self) -> None:
+    def action_screenshot(
+        self, filename: str | None = None, path: str | None = None
+    ) -> None:
         """Take a screenshot"""
-        self.save_screenshot()
+        import os
+        from datetime import datetime
+
+        # Ensure screenshots directory exists
+        screenshots_dir = "screenshots"
+        os.makedirs(screenshots_dir, exist_ok=True)
+
+        # Generate timestamped filename if not provided
+        if not filename:
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"dcypher_tui_{timestamp}.svg"
+
+        # Save screenshot to the screenshots directory
+        filepath = os.path.join(screenshots_dir, filename)
+        self.save_screenshot(filename, path=screenshots_dir)
+        self.log.info(f"Screenshot saved to {filepath}")
+
+    def action_previous_tab(self) -> None:
+        """Navigate to previous tab"""
+        try:
+            tabs = self.query_one(TabbedContent)
+            current_tabs = tabs.query("TabPane")
+            current_index = -1
+
+            # Find current active tab
+            for i, tab in enumerate(current_tabs):
+                if tab.id == tabs.active:
+                    current_index = i
+                    break
+
+            # Navigate to previous tab (with wrap-around)
+            if current_index > 0:
+                new_tab = current_tabs[current_index - 1]
+                tabs.active = new_tab.id
+            elif current_tabs:
+                # Wrap to last tab
+                tabs.active = current_tabs[-1].id
+        except Exception as e:
+            self.log.warning(f"Could not navigate to previous tab: {e}")
+
+    def action_next_tab(self) -> None:
+        """Navigate to next tab"""
+        try:
+            tabs = self.query_one(TabbedContent)
+            current_tabs = tabs.query("TabPane")
+            current_index = -1
+
+            # Find current active tab
+            for i, tab in enumerate(current_tabs):
+                if tab.id == tabs.active:
+                    current_index = i
+                    break
+
+            # Navigate to next tab (with wrap-around)
+            if current_index < len(current_tabs) - 1:
+                new_tab = current_tabs[current_index + 1]
+                tabs.active = new_tab.id
+            elif current_tabs:
+                # Wrap to first tab
+                tabs.active = current_tabs[0].id
+        except Exception as e:
+            self.log.warning(f"Could not navigate to next tab: {e}")
+
+    def action_switch_tab(self, tab_id: str) -> None:
+        """Switch to specific tab by ID"""
+        try:
+            tabs = self.query_one(TabbedContent)
+            tabs.active = tab_id
+        except Exception as e:
+            self.log.warning(f"Could not switch to tab {tab_id}: {e}")
 
 
 def run_tui(identity_path=None, api_url=None):

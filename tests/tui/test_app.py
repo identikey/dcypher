@@ -68,7 +68,13 @@ class TestDCypherTUI:
     def test_app_bindings(self):
         """Test that key bindings are properly configured"""
         app = DCypherTUI()
-        binding_keys = [binding.key for binding in app.BINDINGS]
+        # Extract keys from bindings (bindings are tuples: key, action, description)
+        binding_keys = []
+        for binding in app.BINDINGS:
+            if isinstance(binding, tuple) and len(binding) >= 1:
+                binding_keys.append(binding[0])  # First element is the key
+            else:
+                binding_keys.append(str(binding))
 
         expected_bindings = ["ctrl+c", "ctrl+d", "f1", "f2", "f12"]
         for expected_binding in expected_bindings:

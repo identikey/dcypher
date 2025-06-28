@@ -12,3 +12,6 @@ liboqs-local
 
 # OpenHands/AllHands cache
 /tmp/dcypher_cache
+
+# TUI Screenshots and generated images
+/screenshots/
