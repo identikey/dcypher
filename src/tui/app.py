@@ -21,7 +21,7 @@ from .screens.files import FilesScreen
 from .screens.sharing import SharingScreen
 
 
-class DCypherTUI(App):
+class DCypherTUI(App[None]):
     """
     dCypher Terminal User Interface
 
@@ -31,6 +31,7 @@ class DCypherTUI(App):
 
     TITLE = "dCypher - Quantum-Resistant Encryption TUI"
     SUB_TITLE = "REPLICANT TERMINAL v2.1.0"
+    CSS = CYBERPUNK_THEME
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", priority=True),
@@ -53,11 +54,11 @@ class DCypherTUI(App):
         Binding("6", "switch_tab('sharing')", "Sharing"),
     ]
 
-    # Reactive state
-    current_identity = reactive(None)
-    api_url = reactive("http://127.0.0.1:8000")
-    connection_status = reactive("disconnected")
-    transparent_background = reactive(False)
+    # Reactive properties for app state
+    current_identity: reactive[str | None] = reactive(None)
+    api_url: reactive[str] = reactive("http://127.0.0.1:8000")
+    connection_status: reactive[str] = reactive("disconnected")
+    transparent_background: reactive[bool] = reactive(False)
 
     def __init__(self, identity_path=None, api_url=None):
         super().__init__()
@@ -66,15 +67,16 @@ class DCypherTUI(App):
         if api_url:
             self.api_url = api_url
 
+    def watch_transparent_background(self, transparent: bool) -> None:
+        """Update CSS when transparency mode changes"""
+        # Future implementation for dynamic CSS updates
+        if hasattr(self, "_dom"):  # Only refresh if app is running
+            self.refresh_css()
+
     @property
     def CSS(self) -> str:
         """Dynamic CSS based on transparency setting"""
         return get_cyberpunk_theme(transparent_background=self.transparent_background)
-
-    def watch_transparent_background(self, transparent: bool) -> None:
-        """Update CSS when transparency mode changes"""
-        if hasattr(self, "_dom"):  # Only refresh if app is running
-            self.refresh_css()
 
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
@@ -84,34 +86,86 @@ class DCypherTUI(App):
             # ASCII Banner
             yield ASCIIBanner()
 
-            # Simplified TabbedContent test - just Static widgets
+            # Main content area with tabs - Each tab gets proper content widgets
             with TabbedContent(
                 "Dashboard", "Identity", "Crypto", "Accounts", "Files", "Sharing"
             ):
-                yield Static(
-                    "🎛️  Dashboard Content\n\nThis is where system monitoring and quick actions would appear.\n\nSystem Status: ✅ Online\nIdentity: Not loaded\nAPI: Connecting...",
-                    id="dashboard-content",
-                )
-                yield Static(
-                    "🆔  Identity Management\n\nLoad and manage your digital identities here.\n\nStatus: No identity loaded\nActions: Load, Create, Backup",
-                    id="identity-content",
-                )
-                yield Static(
-                    "🔐  Cryptography Operations\n\nEncrypt and decrypt files with quantum-resistant algorithms.\n\nAvailable: CRYSTALS-Kyber, CRYSTALS-Dilithium\nStatus: Ready",
-                    id="crypto-content",
-                )
-                yield Static(
-                    "👥  Account Management\n\nManage contacts and shared keys.\n\nContacts: 0\nShared Keys: 0",
-                    id="accounts-content",
-                )
-                yield Static(
-                    "📁  File Operations\n\nSecure file storage and sharing.\n\nEncrypted Files: 0\nShared Files: 0",
-                    id="files-content",
-                )
-                yield Static(
-                    "🔗  Secure Sharing\n\nShare encrypted content securely.\n\nActive Shares: 0\nPending Invites: 0",
-                    id="sharing-content",
-                )
+                # Dashboard content as a proper container with widgets
+                with Container(id="dashboard-container"):
+                    with Horizontal(id="monitors-row"):
+                        yield SystemMonitor(id="system-monitor")
+                        # yield CryptoMonitor(id="crypto-monitor")  # Comment out for now
+
+                    with Horizontal(id="status-row"):
+                        yield Static(
+                            "🔍 Loading identity status...", id="identity-status"
+                        )
+                        yield Static("🌐 Checking API connection...", id="api-status")
+                        yield Static("📁 Loading file status...", id="files-status")
+
+                    with Horizontal(id="actions-row"):
+                        yield Button(
+                            "Load Identity", id="load-identity-btn", variant="primary"
+                        )
+                        yield Button("Generate Keys", id="generate-keys-btn")
+                        yield Button("System Info", id="system-info-btn")
+                        yield Button("Help", id="help-btn")
+
+                # Identity Management content
+                with Container(id="identity-container"):
+                    yield Static(
+                        "🆔 Identity Management\n\nLoad and manage your digital identities here.\n\nStatus: No identity loaded\nActions: Load, Create, Export",
+                        id="identity-content",
+                    )
+                    with Horizontal():
+                        yield Button("Load Identity", variant="primary")
+                        yield Button("Create New", variant="success")
+                        yield Button("Export", variant="warning")
+
+                # Crypto Operations content
+                with Container(id="crypto-container"):
+                    yield Static(
+                        "🔐 Cryptographic Operations\n\nQuantum-resistant encryption and signing operations.\n\nAlgorithms: Classic + Post-Quantum\nStatus: Ready",
+                        id="crypto-content",
+                    )
+                    with Horizontal():
+                        yield Button("Encrypt", variant="primary")
+                        yield Button("Decrypt", variant="warning")
+                        yield Button("Sign", variant="success")
+                        yield Button("Verify", variant="error")
+
+                # Accounts Management content
+                with Container(id="accounts-container"):
+                    yield Static(
+                        "👥 Account Management\n\nManage user accounts and permissions.\n\nActive accounts: 0\nPending: 0",
+                        id="accounts-content",
+                    )
+                    with Horizontal():
+                        yield Button("Add Account", variant="primary")
+                        yield Button("View All", variant="success")
+                        yield Button("Permissions", variant="warning")
+
+                # File Operations content
+                with Container(id="files-container"):
+                    yield Static(
+                        "📁 File Operations\n\nSecure file encryption and management.\n\nEncrypted files: 0\nTotal size: 0 bytes",
+                        id="files-content",
+                    )
+                    with Horizontal():
+                        yield Button("Encrypt File", variant="primary")
+                        yield Button("Decrypt File", variant="warning")
+                        yield Button("Browse", variant="success")
+
+                # Sharing & Collaboration content
+                with Container(id="sharing-container"):
+                    yield Static(
+                        "🤝 Sharing & Collaboration\n\nSecure sharing and collaboration tools.\n\nActive shares: 0\nCollaborations: 0",
+                        id="sharing-content",
+                    )
+                    with Horizontal():
+                        yield Button("Share File", variant="primary")
+                        yield Button("View Shares", variant="success")
+                        yield Button("Collaborate", variant="warning")
 
         yield Footer()
 
@@ -149,6 +203,7 @@ class DCypherTUI(App):
     def action_toggle_transparent(self) -> None:
         """Toggle transparent background mode"""
         self.transparent_background = not self.transparent_background
+        # Note: CSS transparency will be implemented in a future update
         self.refresh_css()  # Refresh the CSS to apply changes
 
     def action_show_help(self) -> None:
