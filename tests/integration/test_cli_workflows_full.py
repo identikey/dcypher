@@ -395,6 +395,80 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     assert shared_file_path.exists()
     click.echo("✅ Bob downloaded the re-encrypted file", err=True)
 
+    # === Step 10b: Bob decrypts the downloaded file and verifies content ===
+    click.echo("🔓 Bob decrypting the re-encrypted content...", err=True)
+
+    # CRITICAL: Use the context singleton pattern to ensure proper decryption
+    # This follows the same pattern as the working TUI test
+    from crypto.context_manager import CryptoContextManager
+    import gzip
+    import base64
+    from src.lib import pre, idk_message
+    import json
+
+    # Reset singleton to start fresh
+    CryptoContextManager._instance = None
+    context_manager = CryptoContextManager()
+
+    # Get server's crypto context
+    bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
+    cc_bytes = bob_client.get_pre_crypto_context()
+    serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+    cc = context_manager.deserialize_context(serialized_context)
+
+    # CRITICAL: Use Bob's actual PRE secret key from his identity (not generated keys)
+    # The server used Bob's real PRE public key for re-encryption, so we need the corresponding secret key
+    with open(bob_identity_file, "r") as f:
+        bob_identity_data = json.load(f)
+
+    bob_pre_sk_hex = bob_identity_data["auth_keys"]["pre"]["sk_hex"]
+    bob_pre_sk_bytes = bytes.fromhex(bob_pre_sk_hex)
+    bob_sk_enc = pre.deserialize_secret_key(bob_pre_sk_bytes)
+
+    # Read and decompress the downloaded file
+    with open(shared_file_path, "rb") as f:
+        shared_file_data = f.read()
+
+    # Decompress the gzip data
+    try:
+        decompressed_data = gzip.decompress(shared_file_data)
+        shared_file_str = decompressed_data.decode("utf-8")
+        click.echo(
+            f"✅ Decompressed {len(decompressed_data)} bytes to IDK message", err=True
+        )
+    except Exception:
+        shared_file_str = shared_file_data.decode("utf-8")
+        click.echo("⚠️  Data was not compressed, treating as raw text", err=True)
+
+    # CRITICAL VERIFICATION: Decrypt and verify content matches
+    try:
+        decrypted_content = idk_message.decrypt_idk_message(
+            cc=cc,
+            sk=bob_sk_enc,
+            message_str=shared_file_str,
+        )
+
+        click.echo(
+            f"✅ Bob decrypted {len(decrypted_content)} bytes of content", err=True
+        )
+
+        # THE MOMENT OF TRUTH: Verify Bob received exactly what Alice uploaded
+        assert decrypted_content == secret_message, (
+            f"Content mismatch! Alice uploaded: {secret_message!r}, "
+            f"Bob received: {decrypted_content!r}"
+        )
+        click.echo(
+            "🎉 SUCCESS: Bob received exactly the same content Alice uploaded!",
+            err=True,
+        )
+        click.echo("✅ Proxy re-encryption is working correctly!", err=True)
+
+    except Exception as e:
+        click.echo(
+            f"❌ FAILED: Bob could not decrypt the shared content: {e}", err=True
+        )
+        raise AssertionError(f"Proxy re-encryption verification failed: {e}")
+
     # === Step 11: Alice revokes the share ===
     revoke_result = run_command(
         [
@@ -436,9 +510,17 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
         click.echo("✅ Bob correctly cannot access revoked share", err=True)
 
     click.echo("🎉 Complete CLI re-encryption workflow successful!", err=True)
-    click.echo("✅ Upload → Share → Download → Revoke all work via CLI!", err=True)
     click.echo(
-        "📝 Note: Decryption step can be added once server PRE transformation is implemented",
+        "✅ Upload → Share → Download → Decrypt → Verify → Revoke all work via CLI!",
+        err=True,
+    )
+    click.echo(
+        "✅ END-TO-END CONTENT VERIFICATION: Bob received Alice's exact content!",
+        err=True,
+    )
+    click.echo("✅ Server PRE transformation is working correctly!", err=True)
+    click.echo(
+        "✅ Proxy re-encryption cryptographic workflow is complete and verified!",
         err=True,
     )
 

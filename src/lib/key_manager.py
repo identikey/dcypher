@@ -845,7 +845,11 @@ class KeyManager:
 
     @staticmethod
     def create_identity_file(
-        identity_name: str, key_dir: Path, overwrite: bool = False
+        identity_name: str,
+        key_dir: Path,
+        overwrite: bool = False,
+        context_bytes: Optional[bytes] = None,
+        context_source: Optional[str] = None,
     ) -> Tuple[str, Path]:
         """
         Create a complete, derivable identity file with all necessary keys.
@@ -864,24 +868,59 @@ class KeyManager:
         )
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
-        # 3. Construct the identity data structure correctly
+        # 3. Generate PRE keys if context is provided and store context in identity
+        pre_keys_data = {}
+        crypto_context_data = {}
+
+        if context_bytes:
+            # Use the context singleton to ensure consistency
+            context_manager = CryptoContextManager()
+            context_manager.reset()  # Clear any existing context
+
+            # Deserialize the context and set it up in the singleton
+            import base64
+
+            serialized_context = base64.b64encode(context_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
+
+            # Generate PRE keys using the provided context
+            keys = pre.generate_keys(cc)
+            pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+            sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+
+            pre_keys_data = {
+                "pk_hex": pk_bytes.hex(),
+                "sk_hex": sk_bytes.hex(),
+            }
+
+            # Store the crypto context in the identity file for future use
+            crypto_context_data = {
+                "context_bytes_hex": context_bytes.hex(),
+                "context_source": context_source or "unknown",
+                "context_size": len(context_bytes),
+            }
+
+        # 4. Construct the identity data structure correctly
         identity_data = {
             "mnemonic": str(mnemonic),
             "version": "hd_v1",
             "derivable": True,  # This identity is derivable from the mnemonic
             "rotation_count": 0,
             "derivation_paths": {"classic": classic_path, "pq": pq_path},
+            "crypto_context": crypto_context_data,  # Store the crypto context for self-contained identity
             "auth_keys": {
                 "classic": {
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
-                "pre": {},
+                "pq": [
+                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                ],
+                "pre": pre_keys_data,
             },
         }
 
-        # 4. Save the identity file
+        # 5. Save the identity file
         key_dir.mkdir(parents=True, exist_ok=True)
         with open(identity_path, "w") as f:
             json.dump(identity_data, f, indent=2)
