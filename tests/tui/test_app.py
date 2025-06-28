@@ -81,11 +81,12 @@ class TestDCypherTUI:
         async with app.run_test() as pilot:
             await pilot.pause()
 
-            initial_dark = pilot.app.dark
-            await pilot.press("ctrl+t")  # Assuming this is the toggle binding
+            initial_theme = pilot.app.theme
+            await pilot.press("ctrl+d")  # The correct binding for toggle_dark
             await pilot.pause()
 
-            assert pilot.app.dark != initial_dark
+            # Theme should have changed
+            assert pilot.app.theme != initial_theme
 
     def test_reactive_properties(self):
         """Test reactive property updates"""

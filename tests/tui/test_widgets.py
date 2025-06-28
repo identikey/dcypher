@@ -124,8 +124,11 @@ class TestSystemMonitor:
         assert monitor.disk_percent == 0.0
         assert monitor.network_sent == 0
         assert monitor.network_recv == 0
-        assert monitor.cpu_history == []
-        assert monitor.memory_history == []
+        # Check that history lists are properly initialized as empty
+        assert hasattr(monitor, "cpu_history")
+        assert hasattr(monitor, "memory_history")
+        assert len(monitor.cpu_history) == 0
+        assert len(monitor.memory_history) == 0
         assert monitor.max_history == 50
 
     @patch("psutil.cpu_percent")
@@ -143,7 +146,10 @@ class TestSystemMonitor:
         mock_net.return_value = Mock(bytes_sent=1000, bytes_recv=2000)
 
         monitor = SystemMonitor()
-        monitor.update_stats()
+
+        # Mock the update_display method to avoid widget query issues
+        with patch.object(monitor, "update_display"):
+            monitor.update_stats()
 
         assert monitor.cpu_percent == 45.5
         assert monitor.memory_percent == 67.8
