@@ -801,7 +801,11 @@ class KeyManager:
 
     @staticmethod
     def create_identity_file(
-        identity_name: str, key_dir: Path, overwrite: bool = False
+        identity_name: str,
+        key_dir: Path,
+        overwrite: bool = False,
+        context_bytes: Optional[bytes] = None,
+        context_source: Optional[str] = None,
     ) -> Tuple[str, Path]:
         """
         Create a complete, derivable identity file with all necessary keys.
@@ -820,24 +824,59 @@ class KeyManager:
         )
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
-        # 3. Construct the identity data structure correctly
+        # 3. Generate PRE keys if context is provided and store context in identity
+        pre_keys_data = {}
+        crypto_context_data = {}
+
+        if context_bytes:
+            # Use the context singleton to ensure consistency
+            context_manager = CryptoContextManager()
+            context_manager.reset()  # Clear any existing context
+
+            # Deserialize the context and set it up in the singleton
+            import base64
+
+            serialized_context = base64.b64encode(context_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
+
+            # Generate PRE keys using the provided context
+            keys = pre.generate_keys(cc)
+            pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+            sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+
+            pre_keys_data = {
+                "pk_hex": pk_bytes.hex(),
+                "sk_hex": sk_bytes.hex(),
+            }
+
+            # Store the crypto context in the identity file for future use
+            crypto_context_data = {
+                "context_bytes_hex": context_bytes.hex(),
+                "context_source": context_source or "unknown",
+                "context_size": len(context_bytes),
+            }
+
+        # 4. Construct the identity data structure correctly
         identity_data = {
             "mnemonic": str(mnemonic),
             "version": "hd_v1",
             "derivable": True,  # This identity is derivable from the mnemonic
             "rotation_count": 0,
             "derivation_paths": {"classic": classic_path, "pq": pq_path},
+            "crypto_context": crypto_context_data,  # Store the crypto context for self-contained identity
             "auth_keys": {
                 "classic": {
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
-                "pre": {},
+                "pq": [
+                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                ],
+                "pre": pre_keys_data,
             },
         }
 
-        # 4. Save the identity file
+        # 5. Save the identity file
         key_dir.mkdir(parents=True, exist_ok=True)
         with open(identity_path, "w") as f:
             json.dump(identity_data, f, indent=2)
@@ -853,41 +892,55 @@ class KeyManager:
             identity_file: Path to the identity JSON file.
             cc_bytes: Serialized crypto context from the server.
         """
-        # CRITICAL: Use the context singleton to ensure consistency with other operations
+        # CRITICAL: Use a fresh context manager instance to avoid parallel execution conflicts
         # This prevents OpenFHE "Key was not generated with the same crypto context" errors
+        # that can occur when multiple tests or processes interfere with the singleton state
         context_manager = CryptoContextManager()
 
-        # CRITICAL: Always reset the context to ensure clean state
-        # OpenFHE requires that the context be properly set up in its global registry
-        # before any key operations. We must deserialize the context fresh to ensure
-        # it's properly registered in OpenFHE's internal systems.
-        context_manager.reset()  # Clear any existing context
+        try:
+            # CRITICAL: Always reset and use a fresh context for this operation
+            # This ensures we don't inherit conflicting state from other operations
+            # TODO: This is a hack to avoid context conflicts. We need to find a better way to handle this.
+            context_manager.reset()
 
-        # Deserialize the context and set it up in the singleton
-        import base64
+            # Deserialize the context from the provided bytes
+            import base64
 
-        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
+            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
 
-        # NOW generate PRE keys using the properly initialized context
-        # This ensures the keys are associated with the correct context instance
-        keys = pre.generate_keys(cc)
-        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
-        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+            # CRITICAL: Initialize the deserialized context's internal state
+            # This is required for OpenFHE to work properly with the deserialized context
+            pre.generate_keys(cc)
 
-        # Load the identity file
-        with open(identity_file, "r") as f:
-            identity_data = json.load(f)
+            # NOW generate PRE keys using the properly initialized context
+            # This ensures the keys are associated with the correct context instance
+            keys = pre.generate_keys(cc)
+            pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+            sk_bytes = pre.serialize_to_bytes(keys.secretKey)
 
-        # Add PRE keys to the 'pre' section
-        identity_data["auth_keys"]["pre"] = {
-            "pk_hex": pk_bytes.hex(),
-            "sk_hex": sk_bytes.hex(),
-        }
+            # Load the identity file
+            with open(identity_file, "r") as f:
+                identity_data = json.load(f)
 
-        # Save the updated identity file
-        with open(identity_file, "w") as f:
-            json.dump(identity_data, f, indent=2)
+            # Add PRE keys to the 'pre' section
+            identity_data["auth_keys"]["pre"] = {
+                "pk_hex": pk_bytes.hex(),
+                "sk_hex": sk_bytes.hex(),
+            }
+
+            # Save the updated identity file
+            with open(identity_file, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
+        finally:
+            # CRITICAL: Always clean up the context state to prevent interference
+            # with other operations that might be running in parallel
+            try:
+                context_manager.reset()
+            except Exception:
+                # Ignore cleanup errors - the important part is that we tried
+                pass
 
     @staticmethod
     def derive_key_at_path(

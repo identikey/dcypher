@@ -31,6 +31,13 @@ from .sharing import (
     revoke_share,
 )
 
+# Import TUI command
+try:
+    from ..tui_main import tui_command
+    TUI_AVAILABLE = True
+except ImportError:
+    TUI_AVAILABLE = False
+
 
 @click.group()
 def cli():
@@ -72,6 +79,10 @@ cli.add_command(create_share)
 cli.add_command(list_shares)
 cli.add_command(download_shared)
 cli.add_command(revoke_share)
+
+# Add TUI command if available
+if TUI_AVAILABLE:
+    cli.add_command(tui_command)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,34 @@ This document outlines the comprehensive integration test suite designed to meet
 - `test_api_files_comprehensive.py` - Enhanced file operation security
 - `test_pq_keys_comprehensive.py` - PQ cryptography edge cases
 - `test_cli_comprehensive.py` - CLI security and robustness
+- `test_tui_workflows.py` - **NEW**: Terminal User Interface integration testing
+
+### Terminal User Interface (TUI) Testing 🖥️
+
+**Purpose**: Validate the interactive terminal interface functionality and integration with live server
+
+**Implementation**:
+
+- TUI application startup and basic functionality
+- Navigation between all tabs (Dashboard, Identity, Crypto, Accounts, Files, Sharing)
+- Keyboard shortcuts and accessibility features
+- Integration with real identity files and server APIs
+- Error handling and user feedback
+
+**Test Coverage**:
+
+- `test_tui_basic_functionality` - App startup, navigation, API connection
+- `test_tui_with_real_identity` - Identity integration with KeyManager
+- `test_tui_navigation_and_shortcuts` - Keyboard shortcuts and tab switching
+- Component-specific tests for each screen
+- Performance tests for responsiveness
+
+**Benefits for Audit**:
+
+- Demonstrates complete feature parity between CLI and TUI interfaces
+- Validates user experience and accessibility requirements
+- Ensures both interfaces maintain security and functionality standards
+- Provides end-to-end testing of user workflows
 
 ## Security Testing Enhancements
 
@@ -255,6 +283,12 @@ pip install pytest pytest-xdist psutil requests
 pytest tests/integration/*_comprehensive.py -v
 ```
 
+#### Run TUI Integration Tests
+
+```bash
+pytest tests/integration/test_tui_workflows.py -v
+```
+
 #### Run Specific Security Categories
 
 ```bash
@@ -266,6 +300,9 @@ pytest tests/integration/ -k "concurrent" -v
 
 # Input validation tests
 pytest tests/integration/ -k "validation" -v
+
+# TUI functionality tests
+pytest tests/integration/ -k "tui" -v
 ```
 
 #### Parallel Execution (Faster)

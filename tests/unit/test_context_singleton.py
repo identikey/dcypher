@@ -16,8 +16,8 @@ class TestCryptoContextManager:
 
     def setup_method(self):
         """Reset singleton state before each test"""
-        # Reset the singleton instance
-        CryptoContextManager._instance = None
+        # Reset all process-specific singleton instances
+        CryptoContextManager.reset_all_instances()
         # Create fresh instance
         self.manager: CryptoContextManager = CryptoContextManager()
 
@@ -142,7 +142,7 @@ class TestCryptoEndpoints:
     def setup_method(self):
         """Setup test client"""
         # Reset singleton
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
 
         # Create test app
         self.app: FastAPI = create_app()
@@ -208,7 +208,7 @@ class TestContextCompatibilityWorkflow:
 
     def setup_method(self):
         """Setup test environment"""
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         self.app: FastAPI = create_app()
         self.client: TestClient = TestClient(self.app)
 
@@ -260,7 +260,7 @@ class TestContextErrorHandling:
 
     def setup_method(self):
         """Setup test environment"""
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         self.app: FastAPI = create_app()
         self.client: TestClient = TestClient(self.app)
 

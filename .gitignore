@@ -11,6 +11,21 @@ zig-out
 openfhe-local
 liboqs-local
 .vscode/
+.coverage
 
 # OpenHands/AllHands cache
 /tmp/dcypher_cache
+
+# TUI Screenshots and generated images
+/screenshots/
+
+# Crypto files from old approach (should not be in repo root)
+cc.json
+key.pub
+key.sec
+*.pub
+*.sec
+rekey.json
+ciphertext.idk
+idk_signing.pub
+idk_signing.sec

@@ -9,6 +9,7 @@ from .key_manager import KeyManager
 from lib import pre
 import ecdsa
 import oqs
+import base64
 
 
 class DCypherAPIError(Exception):
@@ -83,20 +84,18 @@ class DCypherClient:
         # Add additional PQ algorithms if specified
         if additional_pq_algs:
             # Load the identity file
-            with open(identity_file, 'r') as f:
+            with open(identity_file, "r") as f:
                 identity_data = json.load(f)
-            
+
             # Generate additional PQ keys
             for alg in additional_pq_algs:
                 pq_pk, pq_sk = KeyManager.generate_pq_keypair(alg)
-                identity_data["auth_keys"]["pq"].append({
-                    "alg": alg,
-                    "pk_hex": pq_pk.hex(),
-                    "sk_hex": pq_sk.hex()
-                })
-            
+                identity_data["auth_keys"]["pq"].append(
+                    {"alg": alg, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                )
+
             # Save the updated identity file
-            with open(identity_file, 'w') as f:
+            with open(identity_file, "w") as f:
                 json.dump(identity_data, f, indent=2)
 
         # Load identity to get public key
@@ -312,14 +311,21 @@ class DCypherClient:
         except (requests.exceptions.RequestException, KeyError) as e:
             raise DCypherAPIError(f"Failed to get supported algorithms: {e}")
 
-    def get_pre_crypto_context(self) -> bytes:
-        """Get the serialized crypto context for PRE from the API server."""
+    def get_crypto_context_bytes(self) -> bytes:
+        """Get the serialized crypto context bytes from the API server."""
         try:
             response = requests.get(f"{self.api_url}/pre-crypto-context")
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:
             raise DCypherAPIError(f"Failed to get PRE crypto context: {e}")
+
+    def get_pre_crypto_context(self) -> bytes:
+        """
+        DEPRECATED: Use get_crypto_context_bytes() instead.
+        Get the serialized crypto context for PRE from the API server.
+        """
+        return self.get_crypto_context_bytes()
 
     def initialize_pre_for_identity(self) -> None:
         """
@@ -330,7 +336,7 @@ class DCypherClient:
             raise AuthenticationError("Identity file not configured or does not exist.")
 
         # 1. Get crypto context from server
-        cc_bytes = self.get_pre_crypto_context()
+        cc_bytes = self.get_crypto_context_bytes()
 
         # 2. Add PRE keys to identity file
         KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_bytes)
@@ -990,47 +996,92 @@ class DCypherClient:
             if (
                 "auth_keys" not in identity_data
                 or "pre" not in identity_data["auth_keys"]
+                or not identity_data["auth_keys"]["pre"]
             ):
-                raise AuthenticationError("PRE keys not found in identity file")
+                raise ValueError("PRE keys not found in identity file")
 
-            pre_keys = identity_data["auth_keys"]["pre"]
-            if "sk_hex" not in pre_keys:
-                raise AuthenticationError("PRE secret key not found in identity file")
+            alice_sk_hex = identity_data["auth_keys"]["pre"]["sk_hex"]
+            alice_sk_bytes = bytes.fromhex(alice_sk_hex)
 
-            alice_sk_hex = pre_keys["sk_hex"]
-
-        except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
             raise AuthenticationError(f"Failed to load PRE keys: {e}")
 
-        # CRITICAL: Use the context singleton to ensure consistency
-        # The key insight is that OpenFHE requires all crypto objects to be associated
-        # with the SAME context instance. We must deserialize the context FIRST,
-        # then deserialize the keys AFTER the context is properly set up.
-        from crypto.context_manager import CryptoContextManager
-        import base64
+        # CRITICAL FIX: Check if context singleton is already initialized
+        # If so, use it directly to maintain context consistency (important for tests)
+        try:
+            from src.crypto.context_manager import CryptoContextManager
+        except ImportError:
+            # Handle CLI context where src module isn't in path
+            from crypto.context_manager import CryptoContextManager
 
         context_manager = CryptoContextManager()
+        existing_context = context_manager.get_context()
 
-        # Always get a fresh context from the server to ensure consistency
-        # This ensures we're using the exact same context that was used to create
-        # the ciphertexts and other crypto objects
-        cc_bytes = self.get_pre_crypto_context()
+        if existing_context is not None:
+            # Use the existing context (maintains consistency for tests)
+            cc = existing_context
+        else:
+            # Get the server's crypto context and initialize singleton
+            cc_bytes = self.get_crypto_context_bytes()
+            context_manager.reset()  # Reset to clean state
+            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
+            # Context is ready for use - no additional key generation needed
 
-        # CRITICAL: Reset OpenFHE's global context registry and set up the singleton
-        # This ensures that when we deserialize keys, they will be associated with
-        # the correct context in OpenFHE's internal registry
-        context_manager.reset()  # Clear any existing context
-        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
+        # Deserialize Alice's secret key and Bob's public key
+        alice_sk = pre.deserialize_secret_key(alice_sk_bytes)
+        bob_pk_bytes = bytes.fromhex(bob_public_key_hex)
+        bob_pk = pre.deserialize_public_key(bob_pk_bytes)
 
-        # NOW deserialize the keys AFTER the context is properly set up
-        # This ensures the keys are associated with the same context instance
-        alice_sk = pre.deserialize_secret_key(bytes.fromhex(alice_sk_hex))
-        bob_pk = pre.deserialize_public_key(bytes.fromhex(bob_public_key_hex))
-
-        # Generate re-encryption key using the properly initialized context
+        # Generate the re-encryption key
         re_key = pre.generate_re_encryption_key(cc, alice_sk, bob_pk)
 
         # Serialize and return as hex
         re_key_bytes = pre.serialize_to_bytes(re_key)
         return re_key_bytes.hex()
+
+    def get_crypto_context_object(self):
+        """
+        Get a properly initialized crypto context object ready for operations.
+
+        This is a higher-level method that:
+        1. Fetches the raw context bytes from the server
+        2. Sets up the singleton context manager for consistency
+        3. Returns a ready-to-use context object
+
+        Use this instead of manually calling get_crypto_context_bytes() + singleton setup.
+        Use get_crypto_context_bytes() only when you need the raw bytes (e.g., saving to file).
+
+        Returns:
+            Initialized crypto context object compatible with server operations
+        """
+        try:
+            from src.crypto.context_manager import CryptoContextManager
+        except ImportError:
+            # Handle CLI context where src module isn't in path
+            from crypto.context_manager import CryptoContextManager
+
+        context_manager = CryptoContextManager()
+
+        # Get server's crypto context bytes
+        cc_bytes = self.get_crypto_context_bytes()
+        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+
+        # CRITICAL: Only reset if we don't have a context or if it's different from server's
+        # This ensures consistency across multiple operations in the same workflow
+        current_context = context_manager.get_context()
+        if current_context is None:
+            # No context exists, initialize with server's context
+            cc = context_manager.deserialize_context(serialized_context)
+        else:
+            # We have a context, check if it matches the server's
+            current_serialized = context_manager._serialized_context
+            if current_serialized != serialized_context:
+                # Context is different from server's, update it
+                context_manager.reset()
+                cc = context_manager.deserialize_context(serialized_context)
+            else:
+                # Context matches server's, reuse it
+                cc = current_context
+
+        return cc

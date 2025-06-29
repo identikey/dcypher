@@ -92,7 +92,7 @@ class TestCryptoContextDeserialization:
     def test_context_singleton_resolves_instance_requirement(self, base_crypto_context):
         """Test that the context singleton pattern resolves the instance requirement."""
         # Reset the singleton to start fresh
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         context_manager = CryptoContextManager()
 
         # Set the context in the singleton
@@ -165,7 +165,7 @@ class TestDocumentedLimitations:
     def test_solution_context_singleton_pattern(self, base_crypto_context):
         """Demonstrate: Context singleton pattern resolves the limitation."""
         # Reset the singleton
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         context_manager = CryptoContextManager()
 
         # Initialize with the base context
@@ -198,7 +198,7 @@ class TestContextSingletonIntegration:
     ):
         """Test the complete singleton serialization/deserialization workflow."""
         # Reset singleton
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         server_context_manager = CryptoContextManager()
 
         # Server initializes context
@@ -208,7 +208,7 @@ class TestContextSingletonIntegration:
         serialized_context = server_context_manager.serialize_context()
 
         # Client gets context from server
-        CryptoContextManager._instance = None  # Simulate different client process
+        CryptoContextManager.reset_all_instances()  # Simulate different client process
         client_context_manager = CryptoContextManager()
 
         # Client deserializes the server's context

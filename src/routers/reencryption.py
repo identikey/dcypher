@@ -15,9 +15,11 @@ from crypto.context_manager import CryptoContextManager
 import ecdsa
 
 # Generate a signing key for the server (for re-signed IDK messages)
-SERVER_SK = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-SERVER_VK = SERVER_SK.get_verifying_key()
-SERVER_PUBLIC_KEY = SERVER_VK.to_string("uncompressed").hex()
+SERVER_SK: ecdsa.SigningKey = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+_server_vk = SERVER_SK.get_verifying_key()
+assert _server_vk is not None, "Failed to generate server verifying key"
+SERVER_VK: ecdsa.VerifyingKey = _server_vk
+SERVER_PUBLIC_KEY: str = SERVER_VK.to_string("uncompressed").hex()
 
 router = APIRouter()
 
@@ -242,18 +244,20 @@ async def download_shared_file(
         # Get the server's singleton context - this is the SAME instance used for all operations
         context_manager = CryptoContextManager()
 
-        # If the context isn't initialized, initialize it from the stored serialized context
-        if context_manager.get_context() is None:
-            # Initialize from the stored context bytes
+        # IMPORTANT: Ensure the singleton is initialized with the server's context
+        server_context = context_manager.get_context()
+        if server_context is None:
+            # Context not initialized, initialize it from the server's context
             import base64 as b64
 
             serialized_context = b64.b64encode(state.pre_cc_serialized).decode("ascii")
             server_context = context_manager.deserialize_context(serialized_context)
-        else:
-            # Use the existing singleton context
-            server_context = context_manager.get_context()
+            # Context is ready for use - no additional key generation needed
 
-        # Now ALL operations use the SAME context instance from the singleton
+        # CRITICAL: All operations must use the SAME context instance from the singleton
+        # This includes deserialization of keys and ciphertexts
+
+        # Deserialize the re-encryption key using the server's context
         re_key_bytes = share_policy["re_encryption_key"]
         re_key = pre.deserialize_re_encryption_key(re_key_bytes)
 
@@ -295,15 +299,12 @@ async def download_shared_file(
             # Extract the ciphertext payload
             payload_bytes = base64.b64decode(parsed_part["payload_b64"])
 
-            # IMPORTANT: All operations must use the SAME context instance
-            # This is the key insight from the OpenFHE documentation and our tests:
-            # ciphertexts, keys, and re-encryption operations must all use the exact same context
-
-            # Deserialize Alice's ciphertext (it was created with a context from the same bytes)
+            # CRITICAL: Deserialize Alice's ciphertext using the SAME context instance
+            # This ensures context consistency across all operations
             alice_ciphertext = pre.deserialize_ciphertext(payload_bytes)
 
             # Apply re-encryption transformation using the same context instance
-            # The re-encryption key was also created with a context from the same bytes
+            # All objects (ciphertext, re-key, context) are now consistent
             bob_ciphertexts = pre.re_encrypt(server_context, re_key, [alice_ciphertext])
             bob_ciphertext = bob_ciphertexts[0]
 
