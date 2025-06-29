@@ -851,6 +851,7 @@ class KeyManager:
         context_bytes: Optional[bytes] = None,
         context_source: Optional[str] = None,
         api_url: Optional[str] = None,
+        _test_context=None,  # For unit tests only - pre-deserialized context
     ) -> Tuple[str, Path]:
         """
         Create a complete, derivable identity file with all necessary keys.
@@ -874,9 +875,9 @@ class KeyManager:
             raise FileExistsError(f"Identity file already exists: {identity_path}")
 
         # Validate that we have a way to get crypto context
-        if context_bytes is None and api_url is None:
+        if context_bytes is None and api_url is None and _test_context is None:
             raise ValueError(
-                "Either 'context_bytes' or 'api_url' must be provided to create an identity with PRE capabilities. "
+                "Either 'context_bytes', 'api_url', or '_test_context' must be provided to create an identity with PRE capabilities. "
                 "This ensures the identity is compatible with the server's crypto context."
             )
         
@@ -903,13 +904,28 @@ class KeyManager:
         context_manager = CryptoContextManager()
         # context_manager.reset()  # Clear any existing context - REMOVED: Let tests use live server context
 
-        # Deserialize the context and set it up in the singleton
-        import base64
+        # Handle different ways of providing crypto context
+        if _test_context is not None:
+            # For unit tests: use pre-deserialized context directly
+            cc = _test_context
+            # Set it directly in the singleton to avoid deserialization issues
+            context_manager._context = cc
+            if context_bytes is not None:
+                import base64
+                serialized_context = base64.b64encode(context_bytes).decode("ascii")
+                context_manager._serialized_context = serialized_context
+        else:
+            # For production: deserialize the context bytes
+            import base64
+            serialized_context = base64.b64encode(context_bytes).decode("ascii")
+            cc = context_manager.deserialize_context(serialized_context)
 
-        serialized_context = base64.b64encode(context_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
-
-        # Generate PRE keys using the provided context
+            # CRITICAL: Initialize the deserialized context's internal state
+            # This is required for OpenFHE to work properly with the deserialized context
+            # We need to call generate_keys once to initialize, then use it for actual key generation
+            _ = pre.generate_keys(cc)  # Initialize the context
+        
+        # Generate PRE keys using the context
         keys = pre.generate_keys(cc)
         pk_bytes = pre.serialize_to_bytes(keys.publicKey)
         sk_bytes = pre.serialize_to_bytes(keys.secretKey)

@@ -1,7 +1,7 @@
 import pytest
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, patch, mock_open, MagicMock
 import requests
 import tempfile
 
@@ -516,23 +516,33 @@ def test_dcypher_client_create_test_account_with_identity():
     """Test DCypherClient.create_test_account with identity system."""
     import tempfile
     from pathlib import Path
+    from unittest.mock import patch
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Should not actually try to create account (no API server)
-        # But should create identity file and client properly
-        try:
-            client, pk_hex = DCypherClient.create_test_account(
-                "http://localhost:8000", temp_path
-            )
-        except Exception as e:
-            # Expected to fail at API call, but client setup should work
-            if "Failed to get nonce" not in str(
-                e
-            ) and "Failed to create account" not in str(e):
-                # If it fails for a different reason, re-raise
-                raise
+        # Mock the crypto context fetch to avoid server connection
+        mock_context_bytes = _generate_mock_context_bytes()
+        
+        with patch('lib.api_client.DCypherClient') as mock_client_class:
+            # Mock the DCypherClient class used inside KeyManager.create_identity_file
+            mock_client_instance = MagicMock()
+            mock_client_instance.get_pre_crypto_context.return_value = mock_context_bytes
+            mock_client_class.return_value = mock_client_instance
+            
+            # Should not actually try to create account (no API server)
+            # But should create identity file and client properly
+            try:
+                client, pk_hex = DCypherClient.create_test_account(
+                    "http://localhost:8000", temp_path
+                )
+            except Exception as e:
+                # Expected to fail at API call, but client setup should work
+                if "Failed to get nonce" not in str(
+                    e
+                ) and "Failed to create account" not in str(e):
+                    # If it fails for a different reason, re-raise
+                    raise
 
         # Verify identity file was created
         identity_files = list(temp_path.glob("*.json"))

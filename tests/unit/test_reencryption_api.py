@@ -82,11 +82,11 @@ def deserialized_crypto_context(shared_crypto_context):
 @pytest.fixture
 def alice_client_with_pre(temp_dir, deserialized_crypto_context):
     """Create Alice's client with PRE capabilities using shared crypto context."""
-    # Create identity file
-    mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir, context_bytes=_generate_mock_context_bytes())
-
-    # Get the shared deserialized context and its bytes
+    # Get the shared context bytes
     deserialized_cc, cc_bytes = deserialized_crypto_context
+    
+    # Create identity file using the pre-deserialized context
+    mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir, context_bytes=cc_bytes, _test_context=deserialized_cc)
 
     # CRITICAL: Use the SAME deserialized context that's already been initialized
     # Don't create another context from the same bytes - that creates a different instance
@@ -118,11 +118,11 @@ def alice_client_with_pre(temp_dir, deserialized_crypto_context):
 @pytest.fixture
 def bob_client_with_pre(temp_dir, deserialized_crypto_context):
     """Create Bob's client with PRE capabilities using shared crypto context."""
-    # Create identity file
-    mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir, context_bytes=_generate_mock_context_bytes())
-
-    # Get the shared deserialized context and its bytes
+    # Get the shared context bytes
     deserialized_cc, cc_bytes = deserialized_crypto_context
+    
+    # Create identity file using the pre-deserialized context
+    mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir, context_bytes=cc_bytes, _test_context=deserialized_cc)
 
     # CRITICAL: Use the SAME deserialized context that's already been initialized
     # Don't create another context from the same bytes - that creates a different instance
@@ -154,10 +154,13 @@ def bob_client_with_pre(temp_dir, deserialized_crypto_context):
 class TestPREInitialization:
     """Test PRE initialization and key management."""
 
-    def test_initialize_pre_for_identity(self, temp_dir):
+    def test_initialize_pre_for_identity(self, temp_dir, deserialized_crypto_context):
         """Test PRE initialization for identity files."""
-        # Create identity file
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
+        # Get the shared context bytes
+        deserialized_cc, cc_bytes = deserialized_crypto_context
+        
+        # Create identity file using the pre-deserialized context
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=cc_bytes, _test_context=deserialized_cc)
 
         # Create client
         client = DCypherClient(
@@ -205,66 +208,69 @@ class TestPREInitialization:
         assert len(identity_data["auth_keys"]["pre"]["pk_hex"]) > 0
         assert len(identity_data["auth_keys"]["pre"]["sk_hex"]) > 0
 
-    def test_key_manager_add_pre_keys_to_identity(self, temp_dir):
-        """Test adding PRE keys to an existing identity file."""
-        # Create identity file
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
+    def test_key_manager_add_pre_keys_to_identity(self, temp_dir, deserialized_crypto_context):
+        """Test adding PRE keys to an existing identity file that somehow lacks them."""
+        # Get the shared context bytes
+        deserialized_cc, cc_bytes = deserialized_crypto_context
+        
+        # Create identity file using the pre-deserialized context
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=cc_bytes, _test_context=deserialized_cc)
 
-        # Verify initial state (empty PRE section)
+        # Verify that PRE keys are automatically included (this is the new expected behavior)
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+        
+        assert "pre" in identity_data["auth_keys"]
+        assert "pk_hex" in identity_data["auth_keys"]["pre"]
+        assert "sk_hex" in identity_data["auth_keys"]["pre"]
+        original_pk = identity_data["auth_keys"]["pre"]["pk_hex"]
+        original_sk = identity_data["auth_keys"]["pre"]["sk_hex"]
+        
+        # Now simulate a scenario where PRE keys need to be regenerated/updated
+        # (e.g., after a context change or key rotation)
+        # Manually clear the PRE section to test the add_pre_keys functionality
+        identity_data["auth_keys"]["pre"] = {}
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
+        
+        # Verify PRE section is now empty
         with open(identity_file, "r") as f:
             identity_data = json.load(f)
         assert identity_data["auth_keys"]["pre"] == {}
-
-        # Create crypto context and test the add_pre_keys function directly
-        # but with a controlled context to avoid parallel execution issues
-        cc = pre.create_crypto_context()
-        pre.generate_keys(cc)  # Initialize context
-        cc_bytes = pre.serialize_to_bytes(cc)
-
-        # Instead of calling the real function that might have context conflicts,
-        # we'll test the logic directly with a controlled context
+        
+        # Test the add_pre_keys functionality by manually adding PRE keys
+        # using the same context as the test fixtures
         context_manager = CryptoContextManager()
-
-        try:
-            # Set up a fresh context in the singleton for this test
-            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-            context_manager._context = cc
-            context_manager._serialized_context = serialized_context
-
-            # Generate PRE keys using the controlled context
-            keys = pre.generate_keys(cc)
-            pk_bytes = pre.serialize_to_bytes(keys.publicKey)
-            sk_bytes = pre.serialize_to_bytes(keys.secretKey)
-
-            # Manually add PRE keys to the identity file (simulating what add_pre_keys_to_identity does)
-            with open(identity_file, "r") as f:
-                identity_data = json.load(f)
-
-            identity_data["auth_keys"]["pre"] = {
-                "pk_hex": pk_bytes.hex(),
-                "sk_hex": sk_bytes.hex(),
-            }
-
-            with open(identity_file, "w") as f:
-                json.dump(identity_data, f, indent=2)
-
-        finally:
-            # Clean up context singleton
-            context_manager.reset()
-
-        # Verify PRE keys were added
+        context_manager._context = deserialized_cc
+        context_manager._serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+        
+        # Generate new PRE keys
+        keys = pre.generate_keys(deserialized_cc)
+        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+        
+        # Add PRE keys to the identity file
+        identity_data["auth_keys"]["pre"] = {
+            "pk_hex": pk_bytes.hex(),
+            "sk_hex": sk_bytes.hex(),
+        }
+        
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
+        
+        # Verify PRE keys were added successfully
         with open(identity_file, "r") as f:
             updated_identity = json.load(f)
-
-        assert "pk_hex" in updated_identity["auth_keys"]["pre"]
-        assert "sk_hex" in updated_identity["auth_keys"]["pre"]
         assert len(updated_identity["auth_keys"]["pre"]["pk_hex"]) > 0
         assert len(updated_identity["auth_keys"]["pre"]["sk_hex"]) > 0
 
-    def test_create_account_with_pre_key(self, temp_dir):
+    def test_create_account_with_pre_key(self, temp_dir, deserialized_crypto_context):
         """Test that account creation includes PRE public key if available."""
-        # Create identity with PRE keys
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
+        # Get the shared context bytes
+        deserialized_cc, cc_bytes = deserialized_crypto_context
+        
+        # Create identity with PRE keys using the pre-deserialized context
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=cc_bytes, _test_context=deserialized_cc)
 
         # Create a controlled context and add PRE keys manually to avoid context conflicts
         cc = pre.create_crypto_context()
@@ -900,20 +906,35 @@ class TestAppStateIntegration:
 class TestErrorHandling:
     """Test error handling in PRE operations."""
 
-    def test_generate_re_key_without_pre_keys(self, temp_dir):
+    def test_generate_re_key_without_pre_keys(self, temp_dir, deserialized_crypto_context):
         """Test that generating re-encryption key fails without PRE keys."""
-        # Create identity without PRE keys
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
-        client = DCypherClient(
-            "http://localhost:8000", identity_path=str(identity_file)
-        )
+        # Get the shared context bytes
+        deserialized_cc, cc_bytes = deserialized_crypto_context
+        
+        # Create identity with PRE keys using the pre-deserialized context
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=cc_bytes, _test_context=deserialized_cc)
+        
+        # Manually remove PRE keys from the identity to simulate the error condition
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+        identity_data["auth_keys"]["pre"] = {}  # Remove PRE keys
+        with open(identity_file, "w") as f:
+            json.dump(identity_data, f, indent=2)
+        
+        # Mock the server response to avoid connection errors
+        with patch('src.lib.api_client.DCypherClient.get_pre_crypto_context') as mock_get_context:
+            mock_get_context.return_value = cc_bytes
+            
+            client = DCypherClient(
+                "http://localhost:8000", identity_path=str(identity_file)
+            )
 
-        # Try to generate re-encryption key
-        with pytest.raises(Exception) as exc_info:
-            client.generate_re_encryption_key("fake_bob_pk_hex")
+            # Try to generate re-encryption key - should fail because PRE keys are missing
+            with pytest.raises(Exception) as exc_info:
+                client.generate_re_encryption_key("fake_bob_pk_hex")
 
-        # Update to match the actual error message
-        assert "PRE keys not found in identity file" in str(exc_info.value)
+            # Check for the expected error message
+            assert "PRE keys not found in identity file" in str(exc_info.value)
 
     def test_invalid_crypto_context_handling(self, alice_client_with_pre):
         """Test handling of invalid crypto context."""
