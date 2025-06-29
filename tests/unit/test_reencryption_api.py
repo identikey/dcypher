@@ -23,26 +23,6 @@ def _generate_mock_context_bytes():
     return pre.serialize_to_bytes(cc)
 
 
-@pytest.fixture(autouse=True)
-def reset_context_singleton():
-    """Automatically reset the context singleton before each test.
-
-    This fixture ensures proper test isolation when running tests in parallel.
-    The autouse=True means it runs automatically for every test in this file.
-
-    Now uses the process-specific singleton reset for proper parallel execution.
-    """
-    # Reset all process instances before test
-    CryptoContextManager.reset_all_instances()
-    yield
-    # Clean up after test (optional)
-    try:
-        CryptoContextManager.reset_all_instances()
-    except Exception:
-        # Ignore cleanup errors - the important part is the fresh start
-        pass
-
-
 @pytest.fixture
 def temp_dir():
     """Create a temporary directory for test files."""

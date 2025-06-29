@@ -92,7 +92,7 @@ class TestDCypherTUI:
             "tui_test",
             tmp_path,
             overwrite=True,
-            api_url=api_base_url,  # Use API URL to get context from server
+            context_bytes=cc_bytes,  # Use pre-fetched context bytes
             context_source=api_base_url,
         )
         assert identity_file.exists()
@@ -383,15 +383,31 @@ class TestTUIIntegration:
         This ensures TUI has feature parity with CLI for the core workflow.
         """
 
+        # === Step 0: Get crypto context from server ONCE for both identities ===
+        # FIXED: Work with singleton pattern by getting context once and reusing it
+        temp_client = DCypherClient(api_base_url)
+        cc_bytes = temp_client.get_pre_crypto_context()
+        assert cc_bytes is not None
+
         # === Step 1: Create Alice's Identity ===
+        # FIXED: Use context_bytes instead of api_url to work with singleton
         alice_mnemonic, alice_identity_file = KeyManager.create_identity_file(
-            "Alice", tmp_path, overwrite=True, api_url=api_base_url
+            "Alice",
+            tmp_path,
+            overwrite=True,
+            context_bytes=cc_bytes,
+            context_source=api_base_url,
         )
         assert alice_identity_file.exists()
 
         # === Step 2: Create Bob's Identity ===
+        # FIXED: Use same context_bytes to avoid singleton re-initialization
         bob_mnemonic, bob_identity_file = KeyManager.create_identity_file(
-            "Bob", tmp_path, overwrite=True, api_url=api_base_url
+            "Bob",
+            tmp_path,
+            overwrite=True,
+            context_bytes=cc_bytes,
+            context_source=api_base_url,
         )
         assert bob_identity_file.exists()
 
@@ -438,16 +454,15 @@ class TestTUIIntegration:
             api_base_url, identity_path=str(alice_identity_file)
         )
 
-        # CRITICAL: Use the context singleton pattern to ensure ALL operations use the SAME context instance
-        # This resolves the OpenFHE limitation where crypto objects must be created with the same context.
-        from crypto.context_manager import CryptoContextManager
+        # CRITICAL: Use the existing context singleton without trying to reset it
+        # FIXED: Remove reset call that doesn't work and get existing context
+        from crypto.context_manager import get_context_manager
         import base64
 
-        # Reset singleton to start fresh
-        CryptoContextManager.reset_all_instances()
-        context_manager = CryptoContextManager()
+        # Get the existing context manager (singleton)
+        context_manager = get_context_manager()
 
-        # Get server's crypto context and initialize the singleton
+        # Get server's crypto context using the improved API method
         # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
         # which would destroy contexts in parallel test execution
         cc = alice_client.get_crypto_context_object()
@@ -807,9 +822,19 @@ class TestTUIWorkflowEdgeCases:
     @pytest.mark.asyncio
     async def test_tui_with_invalid_file_paths(self, api_base_url: str, tmp_path):
         """Test TUI behavior with invalid file paths"""
+        # FIXED: Get context bytes first to work with singleton pattern
+        temp_client = DCypherClient(api_base_url)
+        cc_bytes = temp_client.get_pre_crypto_context()
+        assert cc_bytes is not None
+
         # Create a test identity with server context
+        # FIXED: Use context_bytes instead of api_url to work with singleton
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_user", tmp_path, overwrite=True, api_url=api_base_url
+            "test_user",
+            tmp_path,
+            overwrite=True,
+            context_bytes=cc_bytes,
+            context_source=api_base_url,
         )
 
         app = DCypherTUI(identity_path=str(identity_file), api_url=api_base_url)

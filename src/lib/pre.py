@@ -404,13 +404,13 @@ def deserialize_cc(data: bytes):
     """Deserializes a CryptoContext from raw bytes.
 
     Important:
-        This function calls `fhe.ReleaseAllContexts()` before deserialization.
-        OpenFHE maintains a global registry of contexts, and this is necessary
-        to prevent conflicts or memory leaks when loading a new context. This
-        means an application can typically only have one active crypto context
-        at a time.
+        This function now ALWAYS uses the process-safe deserialization to prevent
+        context destruction during parallel test execution. OpenFHE maintains a
+        global registry of contexts, and calling ReleaseAllContexts() can destroy
+        contexts that other tests/processes are using.
 
-        For parallel execution, use deserialize_cc_safe() instead.
+        For safety, this function now delegates to deserialize_cc_safe() which
+        uses process-local context management without destructive cleanup.
 
     Args:
         data (bytes): The raw byte representation of the CryptoContext.
@@ -418,13 +418,9 @@ def deserialize_cc(data: bytes):
     Returns:
         The deserialized CryptoContext object.
     """
-    # Check if we're in a parallel execution environment
-    if os.environ.get("PYTEST_XDIST_WORKER") or os.environ.get("PARALLEL_EXECUTION"):
-        # Use the safe version for parallel execution
-        return deserialize_cc_safe(data)
-
-    fhe.ReleaseAllContexts()
-    return _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
+    # ALWAYS use the safe version to prevent context destruction
+    # This prevents "Context was destroyed during parallel execution" errors
+    return deserialize_cc_safe(data)
 
 
 def deserialize_public_key(data: bytes):
