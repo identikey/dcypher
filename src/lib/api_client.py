@@ -1067,21 +1067,18 @@ class DCypherClient:
         cc_bytes = self.get_crypto_context_bytes()
         serialized_context = base64.b64encode(cc_bytes).decode("ascii")
 
-        # CRITICAL: Only reset if we don't have a context or if it's different from server's
-        # This ensures consistency across multiple operations in the same workflow
-        current_context = context_manager.get_context()
-        if current_context is None:
-            # No context exists, initialize with server's context
-            cc = context_manager.deserialize_context(serialized_context)
-        else:
-            # We have a context, check if it matches the server's
-            current_serialized = context_manager._serialized_context
-            if current_serialized != serialized_context:
-                # Context is different from server's, update it
-                context_manager.reset()
-                cc = context_manager.deserialize_context(serialized_context)
-            else:
-                # Context matches server's, reuse it
-                cc = current_context
-
+        # CRITICAL: Always use a fresh context from the server to avoid context conflicts
+        # This ensures that client operations use the exact same context as the server
+        
+        # Clear any existing contexts to start fresh
+        from lib import pre
+        pre.fhe.ReleaseAllContexts()
+        
+        # Deserialize a fresh context from the server's context bytes
+        cc = pre.deserialize_cc(cc_bytes, release_contexts=False)  # Already cleared above
+        
+        # Update the singleton with the fresh context for consistency
+        context_manager._context = cc
+        context_manager._serialized_context = serialized_context
+        
         return cc

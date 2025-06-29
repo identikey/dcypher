@@ -238,21 +238,20 @@ async def download_shared_file(
 
     # Apply re-encryption using the stored re-encryption key
     try:
-        # CRITICAL FIX: Use the context singleton to ensure ALL operations use the SAME context instance
-        # This resolves the OpenFHE limitation where crypto objects must be created with the same context.
-
-        # Get the server's singleton context - this is the SAME instance used for all operations
-        context_manager = CryptoContextManager()
-
-        # IMPORTANT: Ensure the singleton is initialized with the server's context
-        server_context = context_manager.get_context()
-        if server_context is None:
-            # Context not initialized, initialize it from the server's context
-            import base64 as b64
-
-            serialized_context = b64.b64encode(state.pre_cc_serialized).decode("ascii")
-            server_context = context_manager.deserialize_context(serialized_context)
-            # Context is ready for use - no additional key generation needed
+        # CRITICAL FIX: Always use a fresh context for re-encryption to avoid context conflicts
+        # This ensures that the server's re-encryption context is always consistent and clean
+        
+        # Always deserialize a fresh context from the server's stored context bytes
+        # This avoids issues with context state corruption or singleton conflicts
+        import base64 as b64
+        
+        # Clear any existing contexts to start fresh
+        from lib import pre
+        pre.fhe.ReleaseAllContexts()
+        
+        # Deserialize the server's context fresh for this operation
+        context_bytes = state.pre_cc_serialized
+        server_context = pre.deserialize_cc(context_bytes, release_contexts=False)  # Already cleared above
 
         # CRITICAL: All operations must use the SAME context instance from the singleton
         # This includes deserialization of keys and ciphertexts
