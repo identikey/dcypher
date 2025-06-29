@@ -914,8 +914,15 @@ class KeyManager:
                 import base64
                 serialized_context = base64.b64encode(context_bytes).decode("ascii")
                 context_manager._serialized_context = serialized_context
+        elif api_url is not None:
+            # CRITICAL FIX: When we have an API URL, get the context from the server
+            # This ensures we use the SAME context instance as the server, avoiding context conflicts
+            from lib.api_client import DCypherClient
+            client = DCypherClient(api_url)
+            cc = client.get_crypto_context_object()
+            # The client's get_crypto_context_object() method handles context management properly
         else:
-            # For production: deserialize the context bytes
+            # For production without API: deserialize the context bytes
             import base64
             serialized_context = base64.b64encode(context_bytes).decode("ascii")
             cc = context_manager.deserialize_context(serialized_context)
@@ -926,7 +933,32 @@ class KeyManager:
             _ = pre.generate_keys(cc)  # Initialize the context
         
         # Generate PRE keys using the context
-        keys = pre.generate_keys(cc)
+        # CRITICAL: Handle context destruction during parallel test execution
+        try:
+            keys = pre.generate_keys(cc)
+        except RuntimeError as e:
+            if "Cannot find context for the given pointer" in str(e):
+                # Context was destroyed by another process calling fhe.ReleaseAllContexts()
+                # This can happen during parallel test execution
+                # Try to recover by getting a fresh context from the server
+                if api_url:
+                    # We have an API URL, try to get a fresh context
+                    # Import here to avoid circular imports
+                    from lib.api_client import DCypherClient
+                    client = DCypherClient(api_url)
+                    cc = client.get_crypto_context_object()
+                    # Initialize the fresh context
+                    _ = pre.generate_keys(cc)  # Initialize
+                    # Try again with the fresh context
+                    keys = pre.generate_keys(cc)
+                else:
+                    # No API URL, we can't recover
+                    raise RuntimeError(
+                        f"Context was destroyed during parallel execution and cannot be recovered: {e}"
+                    ) from e
+            else:
+                # Different error, re-raise
+                raise
         pk_bytes = pre.serialize_to_bytes(keys.publicKey)
         sk_bytes = pre.serialize_to_bytes(keys.secretKey)
 
@@ -970,13 +1002,14 @@ class KeyManager:
         return str(mnemonic), identity_path
 
     @staticmethod
-    def add_pre_keys_to_identity(identity_file: Path, cc_bytes: bytes) -> None:
+    def add_pre_keys_to_identity(identity_file: Path, cc_bytes: bytes = None, cc_object=None) -> None:
         """
         Generates and adds PRE keys to an existing identity file.
 
         Args:
             identity_file: Path to the identity JSON file.
-            cc_bytes: Serialized crypto context from the server.
+            cc_bytes: Serialized crypto context from the server (optional if cc_object provided).
+            cc_object: Pre-deserialized crypto context object (optional, preferred over cc_bytes).
         """
         # CRITICAL: Use a fresh context manager instance to avoid parallel execution conflicts
         # This prevents OpenFHE "Key was not generated with the same crypto context" errors
@@ -984,20 +1017,22 @@ class KeyManager:
         context_manager = CryptoContextManager()
 
         try:
-            # CRITICAL: Always reset and use a fresh context for this operation
-            # This ensures we don't inherit conflicting state from other operations
-            # TODO: This is a hack to avoid context conflicts. We need to find a better way to handle this.
-            # context_manager.reset()  # REMOVED: Let tests use live server context
+            # CRITICAL: Use provided context object if available, otherwise deserialize from bytes
+            # This avoids calling fhe.ReleaseAllContexts() when we already have a good context
+            if cc_object is not None:
+                # Use the provided context object directly
+                cc = cc_object
+            elif cc_bytes is not None:
+                # Deserialize the context from the provided bytes
+                import base64
+                serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+                cc = context_manager.deserialize_context(serialized_context)
 
-            # Deserialize the context from the provided bytes
-            import base64
-
-            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-            cc = context_manager.deserialize_context(serialized_context)
-
-            # CRITICAL: Initialize the deserialized context's internal state
-            # This is required for OpenFHE to work properly with the deserialized context
-            pre.generate_keys(cc)
+                # CRITICAL: Initialize the deserialized context's internal state
+                # This is required for OpenFHE to work properly with the deserialized context
+                pre.generate_keys(cc)
+            else:
+                raise ValueError("Either cc_bytes or cc_object must be provided")
 
             # NOW generate PRE keys using the properly initialized context
             # This ensures the keys are associated with the correct context instance

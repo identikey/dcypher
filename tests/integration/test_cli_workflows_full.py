@@ -418,9 +418,9 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
 
     # Get server's crypto context
     bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
-    cc_bytes = bob_client.get_pre_crypto_context()
-    serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-    cc = context_manager.deserialize_context(serialized_context)
+    # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
+    # which would destroy contexts in parallel test execution
+    cc = bob_client.get_crypto_context_object()
 
     # CRITICAL: Use Bob's actual PRE secret key from his identity (not generated keys)
     # The server used Bob's real PRE public key for re-encryption, so we need the corresponding secret key

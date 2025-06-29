@@ -178,7 +178,7 @@ class TestPREInitialization:
             mock_get_cc.return_value = cc_bytes
 
             # Mock the add_pre_keys_to_identity to simulate successful addition
-            def mock_add_keys(identity_file_path, context_bytes):
+            def mock_add_keys(identity_file_path, cc_bytes=None, cc_object=None):
                 # Load the identity file
                 with open(identity_file_path, "r") as f:
                     identity_data = json.load(f)

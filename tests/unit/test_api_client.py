@@ -523,11 +523,16 @@ def test_dcypher_client_create_test_account_with_identity():
 
         # Mock the crypto context fetch to avoid server connection
         mock_context_bytes = _generate_mock_context_bytes()
+        # Also create a real context object for the new API
+        from src.lib import pre
+        mock_context_object = pre.create_crypto_context()
+        pre.generate_keys(mock_context_object)  # Initialize it
         
         with patch('lib.api_client.DCypherClient') as mock_client_class:
             # Mock the DCypherClient class used inside KeyManager.create_identity_file
             mock_client_instance = MagicMock()
             mock_client_instance.get_pre_crypto_context.return_value = mock_context_bytes
+            mock_client_instance.get_crypto_context_object.return_value = mock_context_object
             mock_client_class.return_value = mock_client_instance
             
             # Should not actually try to create account (no API server)

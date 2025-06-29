@@ -92,7 +92,7 @@ class TestDCypherTUI:
             "tui_test",
             tmp_path,
             overwrite=True,
-            context_bytes=cc_bytes,
+            api_url=api_base_url,  # Use API URL to get context from server
             context_source=api_base_url,
         )
         assert identity_file.exists()
@@ -448,9 +448,9 @@ class TestTUIIntegration:
         context_manager = CryptoContextManager()
 
         # Get server's crypto context and initialize the singleton
-        cc_bytes = alice_client.get_pre_crypto_context()
-        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
+        # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
+        # which would destroy contexts in parallel test execution
+        cc = alice_client.get_crypto_context_object()
 
         # CRITICAL: Generate different PRE keys for Alice and Bob from the SAME context instance
         # This ensures proper proxy re-encryption while maintaining crypto context consistency

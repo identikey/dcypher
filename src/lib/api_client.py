@@ -335,11 +335,11 @@ class DCypherClient:
         if not self.keys_path or not Path(self.keys_path).exists():
             raise AuthenticationError("Identity file not configured or does not exist.")
 
-        # 1. Get crypto context from server
-        cc_bytes = self.get_crypto_context_bytes()
+        # 1. Get crypto context object from server (avoids local deserialization)
+        cc_object = self.get_crypto_context_object()
 
-        # 2. Add PRE keys to identity file
-        KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_bytes)
+        # 2. Add PRE keys to identity file using the context object
+        KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_object=cc_object)
 
     def get_classic_public_key(self) -> str:
         """
@@ -1021,11 +1021,9 @@ class DCypherClient:
             # Use the existing context (maintains consistency for tests)
             cc = existing_context
         else:
-            # Get the server's crypto context and initialize singleton
-            cc_bytes = self.get_crypto_context_bytes()
-            context_manager.reset()  # Reset to clean state
-            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-            cc = context_manager.deserialize_context(serialized_context)
+            # CRITICAL FIX: Get the context object directly from server to avoid deserialization
+            # This prevents calling fhe.ReleaseAllContexts() which would destroy the server's context
+            cc = self.get_crypto_context_object()
             # Context is ready for use - no additional key generation needed
 
         # Deserialize Alice's secret key and Bob's public key
@@ -1067,18 +1065,22 @@ class DCypherClient:
         cc_bytes = self.get_crypto_context_bytes()
         serialized_context = base64.b64encode(cc_bytes).decode("ascii")
 
-        # CRITICAL: Always use a fresh context from the server to avoid context conflicts
+        # CRITICAL: Ensure we have a context that matches the server's context
         # This ensures that client operations use the exact same context as the server
         
-        # Clear any existing contexts to start fresh
-        from lib import pre
-        pre.fhe.ReleaseAllContexts()
-        
-        # Deserialize a fresh context from the server's context bytes
-        cc = pre.deserialize_cc(cc_bytes, release_contexts=False)  # Already cleared above
-        
-        # Update the singleton with the fresh context for consistency
-        context_manager._context = cc
-        context_manager._serialized_context = serialized_context
+        current_context = context_manager.get_context()
+        if current_context is None:
+            # No context exists, initialize with server's context
+            cc = context_manager.deserialize_context(serialized_context)
+        else:
+            # We have a context, check if it matches the server's
+            current_serialized = context_manager._serialized_context
+            if current_serialized != serialized_context:
+                # Context is different from server's, we need to update it
+                # But we need to be careful about ReleaseAllContexts() destroying other contexts
+                cc = context_manager.deserialize_context(serialized_context)
+            else:
+                # Context matches server's, reuse it
+                cc = current_context
         
         return cc

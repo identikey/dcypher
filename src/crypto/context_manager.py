@@ -119,17 +119,8 @@ class CryptoContextManager:
 
             # Use our pre.py deserialization functions
             context_bytes = base64.b64decode(serialized_data.encode("ascii"))
-            
-            # CRITICAL: Don't release existing contexts when deserializing the same context
-            # This prevents destroying the server's context when clients deserialize the same context
-            # We only release contexts when we're loading a truly different context
-            should_release = True
-            if hasattr(self, '_last_context_bytes'):
-                should_release = self._last_context_bytes != context_bytes
-            
-            self._context = pre.deserialize_cc(context_bytes, release_contexts=should_release)
+            self._context = pre.deserialize_cc(context_bytes)
             self._serialized_context = serialized_data
-            self._last_context_bytes = context_bytes
 
             return self._context
 

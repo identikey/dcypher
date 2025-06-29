@@ -308,29 +308,23 @@ def _deserialize_from_bytes(data: bytes, deserializer):
     return obj
 
 
-def deserialize_cc(data: bytes, release_contexts: bool = True):
+def deserialize_cc(data: bytes):
     """Deserializes a CryptoContext from raw bytes.
 
     Important:
-        By default, this function calls `fhe.ReleaseAllContexts()` before deserialization.
+        This function calls `fhe.ReleaseAllContexts()` before deserialization.
         OpenFHE maintains a global registry of contexts, and this is necessary
         to prevent conflicts or memory leaks when loading a new context. This
         means an application can typically only have one active crypto context
         at a time.
-        
-        However, in some cases (like when reusing the same context across processes),
-        you may want to skip the ReleaseAllContexts() call by setting release_contexts=False.
 
     Args:
         data (bytes): The raw byte representation of the CryptoContext.
-        release_contexts (bool): Whether to call fhe.ReleaseAllContexts() before deserialization.
-                                Defaults to True for backward compatibility.
 
     Returns:
         The deserialized CryptoContext object.
     """
-    if release_contexts:
-        fhe.ReleaseAllContexts()
+    fhe.ReleaseAllContexts()
     return _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
 
 
