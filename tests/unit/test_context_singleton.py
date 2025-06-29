@@ -92,7 +92,7 @@ class TestCryptoContextManager:
 
         # Reset and deserialize
         self.manager.reset()
-        result = self.manager.deserialize_context(serialized_data)
+        result = self.manager.deserialize_context_safe(serialized_data)
 
         assert result is not None
         assert self.manager.get_context() is not None
@@ -229,7 +229,7 @@ class TestContextCompatibilityWorkflow:
         # Step 3: Client would deserialize the same context
         # Simulate client-side context deserialization
         client_manager = CryptoContextManager()
-        client_context = client_manager.deserialize_context(serialized_context)
+        client_context = client_manager.deserialize_context_safe(serialized_context)
 
         # Verify both contexts are using the same serialized data
         assert client_manager.serialize_context() == serialized_context

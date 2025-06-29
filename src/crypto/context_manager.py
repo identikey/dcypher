@@ -118,8 +118,39 @@ class CryptoContextManager:
                 return self._context
 
             # Use our pre.py deserialization functions
+            # In parallel execution, always use the safe method
             context_bytes = base64.b64decode(serialized_data.encode("ascii"))
-            self._context = pre.deserialize_cc(context_bytes)
+            if os.environ.get('PYTEST_XDIST_WORKER') or os.environ.get('PARALLEL_EXECUTION'):
+                self._context = pre.deserialize_cc_safe(context_bytes)
+            else:
+                self._context = pre.deserialize_cc(context_bytes)
+            self._serialized_context = serialized_data
+
+            return self._context
+
+    def deserialize_context_safe(self, serialized_data: str) -> Any:
+        """Process-safe deserialization that avoids ReleaseAllContexts().
+        
+        This method explicitly uses the safe deserialization to prevent
+        context destruction in parallel execution environments.
+        """
+        if not OPENFHE_AVAILABLE:
+            raise RuntimeError("OpenFHE library is not available")
+
+        if not PRE_MODULE_AVAILABLE:
+            raise RuntimeError("PRE module is not available")
+
+        with self._instance_lock:
+            # Check if we already have the same context
+            if (
+                self._serialized_context == serialized_data
+                and self._context is not None
+            ):
+                return self._context
+
+            # Use the safe deserialization function
+            context_bytes = base64.b64decode(serialized_data.encode("ascii"))
+            self._context = pre.deserialize_cc_safe(context_bytes)
             self._serialized_context = serialized_data
 
             return self._context
