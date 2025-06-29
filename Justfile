@@ -133,9 +133,9 @@ test:
 
 # Start OpenHands (All Hands AI) development environment
 doit:
-    docker pull docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik
+    docker pull docker.all-hands.dev/all-hands-ai/runtime:0.47-nikolaik
     docker run -it --rm --pull=always \
-        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik \
+        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.47-nikolaik \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
         -e SANDBOX_USER_ID=$(id -u) \
         -e LOG_ALL_EVENTS=true \
@@ -147,4 +147,4 @@ doit:
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
         --name openhands-app \
-        docker.all-hands.dev/all-hands-ai/openhands:0.46
+        docker.all-hands.dev/all-hands-ai/openhands:0.47
