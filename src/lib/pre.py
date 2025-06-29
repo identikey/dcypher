@@ -1,4 +1,3 @@
-import openfhe as fhe
 import random
 import base64
 import tempfile
@@ -7,11 +6,34 @@ import struct
 import threading
 from typing import List
 
+# Import guard for OpenFHE availability
+_fhe_module = None
+_openfhe_available = False
+try:
+    import openfhe as fhe  # type: ignore
+
+    _fhe_module = fhe
+    _openfhe_available = True
+except ImportError:
+    _openfhe_available = False
+
+    # Create a dummy fhe module for graceful handling
+    class _DummyFHE:
+        def __getattr__(self, name):
+            raise RuntimeError("OpenFHE library is not available")
+
+    fhe = _DummyFHE()
+
 
 class CoefficientOutOfRangeError(ValueError):
     """Raised when a coefficient is outside the valid range for packing."""
 
     pass
+
+
+def is_openfhe_available() -> bool:
+    """Check if OpenFHE library is available."""
+    return _openfhe_available
 
 
 def create_crypto_context(
@@ -36,6 +58,9 @@ def create_crypto_context(
     Returns:
         A fully configured OpenFHE CryptoContext object enabled for PRE.
     """
+    if not _openfhe_available:
+        raise RuntimeError("OpenFHE library is not available")
+
     parameters = fhe.CCParamsBFVRNS()
     parameters.SetPlaintextModulus(plaintext_modulus)
     parameters.SetScalingModSize(scaling_mod_size)
@@ -78,6 +103,8 @@ def generate_keys(cc):
     Returns:
         An OpenFHE KeyPair object containing a public and private key.
     """
+    if not _openfhe_available:
+        raise RuntimeError("OpenFHE library is not available")
     return cc.KeyGen()
 
 
@@ -315,21 +342,25 @@ _context_lock = threading.Lock()
 # Process-local context registry to track contexts per process
 _process_contexts = {}
 
+
 def deserialize_cc_safe(data: bytes):
     """Process-safe deserialization of CryptoContext from raw bytes.
-    
+
     This version uses process-local context management to prevent destroying
     contexts from other processes while ensuring proper OpenFHE registration.
-    
+
     Args:
         data (bytes): The raw byte representation of the CryptoContext.
-        
+
     Returns:
         The deserialized CryptoContext object.
     """
+    if not _openfhe_available:
+        raise RuntimeError("OpenFHE library is not available")
+
     process_id = os.getpid()
     data_hash = hash(data)
-    
+
     with _context_lock:
         # Check if we already have this context for this process
         if process_id in _process_contexts:
@@ -337,35 +368,37 @@ def deserialize_cc_safe(data: bytes):
                 return _process_contexts[process_id][data_hash]
         else:
             _process_contexts[process_id] = {}
-        
+
         # In parallel execution, avoid ReleaseAllContexts() entirely to prevent
         # destroying contexts from other processes/threads
         # Only call it if we're not in a parallel environment and have no cached contexts
-        # if (len(_process_contexts[process_id]) == 0 and 
-        #     not os.environ.get('PYTEST_XDIST_WORKER') and 
+        # if (len(_process_contexts[process_id]) == 0 and
+        #     not os.environ.get('PYTEST_XDIST_WORKER') and
         #     not os.environ.get('PARALLEL_EXECUTION')):
         #     fhe.ReleaseAllContexts()
-        
+
         # Deserialize the context
         context = _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
-        
+
         # Cache the context for this process
         _process_contexts[process_id][data_hash] = context
-        
+
         return context
+
 
 def cleanup_process_contexts(process_id=None):
     """Clean up cached contexts for a specific process or all processes.
-    
+
     Args:
         process_id: Process ID to clean up. If None, cleans up current process.
     """
     if process_id is None:
         process_id = os.getpid()
-    
+
     with _context_lock:
         if process_id in _process_contexts:
             del _process_contexts[process_id]
+
 
 def deserialize_cc(data: bytes):
     """Deserializes a CryptoContext from raw bytes.
@@ -376,7 +409,7 @@ def deserialize_cc(data: bytes):
         to prevent conflicts or memory leaks when loading a new context. This
         means an application can typically only have one active crypto context
         at a time.
-        
+
         For parallel execution, use deserialize_cc_safe() instead.
 
     Args:
@@ -386,10 +419,10 @@ def deserialize_cc(data: bytes):
         The deserialized CryptoContext object.
     """
     # Check if we're in a parallel execution environment
-    if os.environ.get('PYTEST_XDIST_WORKER') or os.environ.get('PARALLEL_EXECUTION'):
+    if os.environ.get("PYTEST_XDIST_WORKER") or os.environ.get("PARALLEL_EXECUTION"):
         # Use the safe version for parallel execution
         return deserialize_cc_safe(data)
-    
+
     fhe.ReleaseAllContexts()
     return _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
 

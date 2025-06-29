@@ -16,7 +16,21 @@ try:
     _pre_module = pre
     _pre_module_available = True
 except ImportError:
-    _pre_module_available = False
+    # Fallback for when running from CLI or different contexts
+    try:
+        import sys
+        import os
+
+        # Add the parent directory to the path to find lib module
+        parent_dir = os.path.dirname(os.path.dirname(__file__))
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        from lib import pre
+
+        _pre_module = pre
+        _pre_module_available = True
+    except ImportError:
+        _pre_module_available = False
 
 _fhe_module = None
 _openfhe_available = False
