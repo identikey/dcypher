@@ -49,6 +49,12 @@ class CryptoContextManager:
     _serialization_lock = threading.RLock()  # Reentrant lock for serialization
     _initialization_lock = threading.RLock()  # Reentrant lock for initialization
 
+    # Instance variables that will be initialized in __new__
+    _context: Optional[Any] = None
+    _serialized_context: Optional[str] = None
+    _context_params: Optional[Dict[str, Any]] = None
+    _initialized: bool = False
+
     def __new__(cls) -> "CryptoContextManager":
         """Create or return the global singleton instance with maximum thread safety."""
         # Double-checked locking with maximum safety
@@ -305,11 +311,12 @@ class CryptoContextManager:
                             raise ValueError(f"Unsupported scheme: {scheme}")
 
                         # Enable required features
-                        self._context.Enable(_fhe_module.PKE)
-                        self._context.Enable(_fhe_module.KEYSWITCH)
-                        self._context.Enable(_fhe_module.LEVELEDSHE)
-                        self._context.Enable(_fhe_module.ADVANCEDSHE)
-                        self._context.Enable(_fhe_module.PRE)
+                        if self._context is not None:
+                            self._context.Enable(_fhe_module.PKE)
+                            self._context.Enable(_fhe_module.KEYSWITCH)
+                            self._context.Enable(_fhe_module.LEVELEDSHE)
+                            self._context.Enable(_fhe_module.ADVANCEDSHE)
+                            self._context.Enable(_fhe_module.PRE)
 
                         self._initialized = True
                         return self._context

@@ -39,7 +39,7 @@ import threading
 from lib import pre
 
 try:
-    from crypto.context_manager import CryptoContextManager
+    from crypto.context_manager import CryptoContextManager, get_context_manager
 except ImportError:
     # Fallback for when running from CLI or different contexts
     import sys
@@ -49,7 +49,7 @@ except ImportError:
     parent_dir = os.path.dirname(os.path.dirname(__file__))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from crypto.context_manager import CryptoContextManager
+    from crypto.context_manager import CryptoContextManager, get_context_manager
 
 
 # Thread-local storage for deterministic PRNG
@@ -288,6 +288,8 @@ class KeyManager:
 
         # Method 3: Platform-specific common paths (fallback)
         try:
+            import platform
+
             system = platform.system().lower()
             KeyManager._log("info", f"Platform: {system}")
 
@@ -855,7 +857,7 @@ class KeyManager:
     ) -> Tuple[str, Path]:
         """
         Create a complete, derivable identity file with all necessary keys.
-        
+
         Args:
             identity_name: Name for the identity
             key_dir: Directory to store the identity file
@@ -863,10 +865,10 @@ class KeyManager:
             context_bytes: Pre-serialized crypto context bytes
             context_source: Source description for the context
             api_url: API URL to fetch crypto context from (if context_bytes not provided)
-            
+
         Returns:
             Tuple of (mnemonic_phrase, identity_file_path)
-            
+
         Raises:
             ValueError: If neither context_bytes nor api_url is provided
         """
@@ -880,10 +882,11 @@ class KeyManager:
                 "Either 'context_bytes', 'api_url', or '_test_context' must be provided to create an identity with PRE capabilities. "
                 "This ensures the identity is compatible with the server's crypto context."
             )
-        
+
         # Fetch context from API if not provided directly
         if context_bytes is None and api_url is not None:
             from lib.api_client import DCypherClient
+
             client = DCypherClient(api_url)
             context_bytes = client.get_pre_crypto_context()
             if context_source is None:
@@ -900,38 +903,33 @@ class KeyManager:
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
         # 3. Generate PRE keys using the crypto context and store context in identity
-        # Use the context singleton to ensure consistency
-        context_manager = CryptoContextManager()
+        # Use the thread-safe singleton to ensure consistency
+        context_manager = get_context_manager()
         # context_manager.reset()  # Clear any existing context - REMOVED: Let tests use live server context
 
         # Handle different ways of providing crypto context
         if _test_context is not None:
             # For unit tests: use pre-deserialized context directly
             cc = _test_context
-            # Set it directly in the singleton to avoid deserialization issues
-            context_manager._context = cc
-            if context_bytes is not None:
-                import base64
-                serialized_context = base64.b64encode(context_bytes).decode("ascii")
-                context_manager._serialized_context = serialized_context
         elif api_url is not None:
             # CRITICAL FIX: When we have an API URL, get the context from the server
             # This ensures we use the SAME context instance as the server, avoiding context conflicts
             from lib.api_client import DCypherClient
+
             client = DCypherClient(api_url)
             cc = client.get_crypto_context_object()
-            # The client's get_crypto_context_object() method handles context management properly
         else:
             # For production without API: deserialize the context bytes
+            if context_bytes is None:
+                raise ValueError(
+                    "context_bytes cannot be None when no api_url is provided"
+                )
+
             import base64
+
             serialized_context = base64.b64encode(context_bytes).decode("ascii")
             cc = context_manager.deserialize_context(serialized_context)
 
-            # CRITICAL: Initialize the deserialized context's internal state
-            # This is required for OpenFHE to work properly with the deserialized context
-            # We need to call generate_keys once to initialize, then use it for actual key generation
-            _ = pre.generate_keys(cc)  # Initialize the context
-        
         # Generate PRE keys using the context
         # CRITICAL: Handle context destruction during parallel test execution
         try:
@@ -945,10 +943,9 @@ class KeyManager:
                     # We have an API URL, try to get a fresh context
                     # Import here to avoid circular imports
                     from lib.api_client import DCypherClient
+
                     client = DCypherClient(api_url)
                     cc = client.get_crypto_context_object()
-                    # Initialize the fresh context
-                    _ = pre.generate_keys(cc)  # Initialize
                     # Try again with the fresh context
                     keys = pre.generate_keys(cc)
                 else:
@@ -968,11 +965,20 @@ class KeyManager:
         }
 
         # Store the crypto context in the identity file for future use
-        crypto_context_data = {
-            "context_bytes_hex": context_bytes.hex(),
-            "context_source": context_source or "unknown",
-            "context_size": len(context_bytes),
-        }
+        # Handle case where we use _test_context without context_bytes
+        if context_bytes is not None:
+            crypto_context_data = {
+                "context_bytes_hex": context_bytes.hex(),
+                "context_source": context_source or "unknown",
+                "context_size": len(context_bytes),
+            }
+        else:
+            # For test contexts where we don't have the raw bytes
+            crypto_context_data = {
+                "context_bytes_hex": "",  # Empty for test contexts
+                "context_source": context_source or "test_context",
+                "context_size": 0,
+            }
 
         # 4. Construct the identity data structure correctly
         identity_data = {
@@ -1002,7 +1008,9 @@ class KeyManager:
         return str(mnemonic), identity_path
 
     @staticmethod
-    def add_pre_keys_to_identity(identity_file: Path, cc_bytes: bytes = None, cc_object=None) -> None:
+    def add_pre_keys_to_identity(
+        identity_file: Path, cc_bytes: Optional[bytes] = None, cc_object=None
+    ) -> None:
         """
         Generates and adds PRE keys to an existing identity file.
 
@@ -1011,10 +1019,10 @@ class KeyManager:
             cc_bytes: Serialized crypto context from the server (optional if cc_object provided).
             cc_object: Pre-deserialized crypto context object (optional, preferred over cc_bytes).
         """
-        # CRITICAL: Use a fresh context manager instance to avoid parallel execution conflicts
+        # CRITICAL: Use the thread-safe singleton context manager to avoid parallel execution conflicts
         # This prevents OpenFHE "Key was not generated with the same crypto context" errors
         # that can occur when multiple tests or processes interfere with the singleton state
-        context_manager = CryptoContextManager()
+        context_manager = get_context_manager()
 
         try:
             # CRITICAL: Use provided context object if available, otherwise deserialize from bytes
@@ -1025,6 +1033,7 @@ class KeyManager:
             elif cc_bytes is not None:
                 # Deserialize the context from the provided bytes
                 import base64
+
                 serialized_context = base64.b64encode(cc_bytes).decode("ascii")
                 cc = context_manager.deserialize_context(serialized_context)
 
