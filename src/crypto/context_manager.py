@@ -4,47 +4,147 @@ Crypto Context Manager - Singleton pattern for OpenFHE context management
 
 import threading
 import base64
-from typing import Optional, Dict, Any
+import os
+from typing import Optional, Any, Dict
 
-# Try to import OpenFHE, but handle gracefully if not available
-try:
-    import openfhe
-
-    OPENFHE_AVAILABLE = True
-except ImportError:
-    OPENFHE_AVAILABLE = False
-    openfhe = None
-
-# Import our PRE module for serialization functions
+# Import guards for OpenFHE availability
 try:
     from lib import pre
 
     PRE_MODULE_AVAILABLE = True
 except ImportError:
     PRE_MODULE_AVAILABLE = False
-    pre = None
+
+try:
+    import openfhe as fhe  # type: ignore
+
+    OPENFHE_AVAILABLE = True
+except ImportError:
+    OPENFHE_AVAILABLE = False
+    fhe = None  # type: ignore
 
 
 class CryptoContextManager:
-    """Singleton manager for OpenFHE crypto context"""
+    """Thread-safe singleton manager for OpenFHE crypto context.
 
-    _instance: Optional["CryptoContextManager"] = None
+    Ensures all crypto operations use the same context instance to avoid
+    OpenFHE's 'Key was not generated with the same crypto context' errors.
+
+    This class implements a process-specific singleton pattern to handle
+    parallel test execution properly - each process gets its own singleton.
+    """
+
+    # Use process ID in the class variable to make it process-specific
+    _instances: Dict[int, "CryptoContextManager"] = {}
     _lock = threading.Lock()
 
-    def __new__(cls) -> "CryptoContextManager":
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
     def __init__(self) -> None:
-        if not getattr(self, "_initialized", False):
+        """Initialize instance variables."""
+        # These will be set in __new__ but define them for type checking
+        if not hasattr(self, "_context"):
             self._context: Optional[Any] = None
-            self._context_params: Optional[Dict[str, Any]] = None
+        if not hasattr(self, "_serialized_context"):
             self._serialized_context: Optional[str] = None
-            self._initialized = True
+        if not hasattr(self, "_context_params"):
+            self._context_params: Optional[Dict[str, Any]] = None
+        if not hasattr(self, "_instance_lock"):
+            self._instance_lock = threading.Lock()
+
+    def __new__(cls) -> "CryptoContextManager":
+        """Create or return the singleton instance for the current process."""
+        process_id = os.getpid()
+
+        with cls._lock:
+            if process_id not in cls._instances:
+                instance = super().__new__(cls)
+                cls._instances[process_id] = instance
+                # Initialize the instance attributes before __init__ is called
+                instance._context = None
+                instance._serialized_context = None
+                instance._context_params = None
+                instance._instance_lock = threading.Lock()
+                instance._initialized = True
+            return cls._instances[process_id]
+
+    @classmethod
+    def reset_all_instances(cls) -> None:
+        """Reset all process instances. Used for testing."""
+        with cls._lock:
+            for instance in cls._instances.values():
+                try:
+                    instance.reset()
+                except Exception:
+                    pass  # Ignore cleanup errors
+            cls._instances.clear()
+
+    def reset(self) -> None:
+        """Reset the context manager state."""
+        with self._instance_lock:
+            self._context = None
+            self._serialized_context = None
+            self._context_params = None
+
+    def get_context(self) -> Optional[Any]:
+        """Get the current crypto context."""
+        with self._instance_lock:
+            return self._context
+
+    def get_context_params(self) -> Optional[Dict[str, Any]]:
+        """Get the current context parameters."""
+        with self._instance_lock:
+            return self._context_params
+
+    def set_context_params(self, params: Dict[str, Any]) -> None:
+        """Set the context parameters."""
+        with self._instance_lock:
+            self._context_params = params
+
+    def deserialize_context(self, serialized_data: str) -> Any:
+        """Deserialize context from string using our pre.py serialization functions"""
+        if not OPENFHE_AVAILABLE:
+            raise RuntimeError("OpenFHE library is not available")
+
+        if not PRE_MODULE_AVAILABLE:
+            raise RuntimeError("PRE module is not available")
+
+        with self._instance_lock:
+            # CRITICAL: Check if we already have the same context to avoid unnecessary deserialization
+            # OpenFHE's ReleaseAllContexts() in deserialize_cc() can break existing context objects
+            if (
+                self._serialized_context == serialized_data
+                and self._context is not None
+            ):
+                # We already have this exact context - return it without deserializing again
+                return self._context
+
+            # Use our pre.py deserialization functions
+            context_bytes = base64.b64decode(serialized_data.encode("ascii"))
+            self._context = pre.deserialize_cc(context_bytes)
+            self._serialized_context = serialized_data
+
+            return self._context
+
+    def serialize_context(self) -> str:
+        """Serialize the current context to string using our pre.py serialization functions"""
+        if not OPENFHE_AVAILABLE:
+            raise RuntimeError("OpenFHE library is not available")
+
+        if not PRE_MODULE_AVAILABLE:
+            raise RuntimeError("PRE module is not available")
+
+        with self._instance_lock:
+            if self._context is None:
+                raise RuntimeError("Context not initialized")
+
+            if self._serialized_context is not None:
+                # We already have the serialized version
+                return self._serialized_context
+
+            # Serialize using our pre.py functions
+            context_bytes = pre.serialize_to_bytes(self._context)
+            self._serialized_context = base64.b64encode(context_bytes).decode("ascii")
+
+            return self._serialized_context
 
     def initialize_context(
         self,
@@ -60,7 +160,7 @@ class CryptoContextManager:
                 "OpenFHE library is not available. Please install openfhe-python."
             )
 
-        with self._lock:
+        with self._instance_lock:
             if self._context is not None:
                 return self._context
 
@@ -75,90 +175,24 @@ class CryptoContextManager:
 
             # Create context based on scheme
             if scheme == "BFV":
-                parameters = openfhe.CCParamsBFVRNS()
+                parameters = fhe.CCParamsBFVRNS()
                 parameters.SetPlaintextModulus(plaintext_modulus)
                 parameters.SetMultiplicativeDepth(multiplicative_depth)
                 parameters.SetScalingModSize(scaling_mod_size)
                 parameters.SetBatchSize(batch_size)
 
-                self._context = openfhe.GenCryptoContext(parameters)
+                self._context = fhe.GenCryptoContext(parameters)
             else:
                 raise ValueError(f"Unsupported scheme: {scheme}")
 
             # Enable required features based on OpenFHE Python API
-            self._context.Enable(openfhe.PKE)
-            self._context.Enable(openfhe.KEYSWITCH)
-            self._context.Enable(openfhe.LEVELEDSHE)
-            self._context.Enable(openfhe.ADVANCEDSHE)
-            self._context.Enable(openfhe.PRE)
+            self._context.Enable(fhe.PKE)
+            self._context.Enable(fhe.KEYSWITCH)
+            self._context.Enable(fhe.LEVELEDSHE)
+            self._context.Enable(fhe.ADVANCEDSHE)
+            self._context.Enable(fhe.PRE)
 
             return self._context
-
-    def get_context(self) -> Optional[Any]:
-        """Get the current crypto context"""
-        return self._context
-
-    def get_context_params(self) -> Optional[Dict[str, Any]]:
-        """Get the context parameters"""
-        return self._context_params.copy() if self._context_params else None
-
-    def serialize_context(self) -> str:
-        """Serialize the context to string using our pre.py serialization functions"""
-        if not OPENFHE_AVAILABLE:
-            raise RuntimeError("OpenFHE library is not available")
-
-        if not PRE_MODULE_AVAILABLE:
-            raise RuntimeError("PRE module is not available")
-
-        with self._lock:
-            if self._context is None:
-                raise RuntimeError("Context not initialized")
-
-            if self._serialized_context is None:
-                # Use our pre.py serialization functions
-                context_bytes = pre.serialize_to_bytes(self._context)
-                self._serialized_context = base64.b64encode(context_bytes).decode(
-                    "ascii"
-                )
-
-            return self._serialized_context
-
-    def deserialize_context(self, serialized_data: str) -> Any:
-        """Deserialize context from string using our pre.py serialization functions"""
-        if not OPENFHE_AVAILABLE:
-            raise RuntimeError("OpenFHE library is not available")
-
-        if not PRE_MODULE_AVAILABLE:
-            raise RuntimeError("PRE module is not available")
-
-        with self._lock:
-            # CRITICAL: Check if we already have the same context to avoid unnecessary deserialization
-            # OpenFHE's ReleaseAllContexts() in deserialize_cc() can break existing context objects
-            if (
-                self._serialized_context == serialized_data
-                and self._context is not None
-            ):
-                # We already have this exact context - return it to maintain object consistency
-                return self._context
-
-            # Clear any existing context
-            if self._context is not None:
-                # Note: In production, we might need to call context factory cleanup
-                pass
-
-            # Use our pre.py deserialization functions
-            context_bytes = base64.b64decode(serialized_data.encode("ascii"))
-            self._context = pre.deserialize_cc(context_bytes)
-            self._serialized_context = serialized_data
-
-            return self._context
-
-    def reset(self) -> None:
-        """Reset the singleton (mainly for testing)"""
-        with self._lock:
-            self._context = None
-            self._context_params = None
-            self._serialized_context = None
 
     def is_available(self) -> bool:
         """Check if OpenFHE library and PRE module are available"""

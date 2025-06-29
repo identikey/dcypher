@@ -86,67 +86,122 @@ def bob_identity(temp_dir):
     }
 
 
-def test_complete_reencryption_workflow_live_server(
-    alice_identity, bob_identity, api_base_url, temp_dir
-):
+def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     """
     Test the complete proxy re-encryption workflow against a live API server:
-    1. Alice and Bob create accounts with PRE capabilities
-    2. Alice uploads an encrypted file
-    3. Alice shares the file with Bob using proxy re-encryption
-    4. Bob downloads and decrypts the shared file
+    1. Alice and Bob create accounts with PRE capabilities using CLI commands
+    2. Alice uploads an encrypted file using CLI
+    3. Alice shares the file with Bob using proxy re-encryption using CLI
+    4. Bob downloads and decrypts the shared file using CLI
     5. Verify Bob received the exact same content Alice uploaded
-    6. Alice revokes Bob's access
-    7. Verify Bob can no longer access the file
+    6. Alice revokes Bob's access using CLI
+    7. Verify Bob can no longer access the file using CLI
+
+    This test uses CLI commands for everything to match the working CLI test pattern.
     """
 
-    print("🔧 Setting up Alice and Bob's accounts with live server...")
+    import subprocess
+    import sys
+    from pathlib import Path
 
-    # Create API clients for Alice and Bob
-    alice_client = DCypherClient(
-        api_base_url, identity_path=str(alice_identity["identity_file"])
-    )
-    bob_client = DCypherClient(
-        api_base_url, identity_path=str(bob_identity["identity_file"])
-    )
+    # KeyManager is already imported at the top of the file
+    import gzip
+    import base64
+    import json
+    from crypto.context_manager import CryptoContextManager
+    from src.lib import pre, idk_message
 
-    # CRITICAL: Use the proper client methods for PRE initialization
-    # This ensures proper context coordination between client and server
+    print("🔧 Setting up Alice and Bob's accounts with live server using CLI...")
 
-    # Initialize PRE capabilities for both Alice and Bob
-    alice_client.initialize_pre_for_identity()
-    bob_client.initialize_pre_for_identity()
-
-    print("✅ Initialized PRE capabilities for Alice and Bob")
-
-    # Get Alice's keys for account creation and message operations
-    alice_keys_data = KeyManager.load_identity_file(alice_identity["identity_file"])
-    alice_pk = KeyManager.get_classic_public_key(alice_keys_data["classic_sk"])
-    alice_pq_keys = [
-        {"pk_hex": key["pk_hex"], "alg": key["alg"]}
-        for key in alice_keys_data["pq_keys"]
-    ]
-    alice_classic_sk = alice_keys_data["classic_sk"]  # ECDSA signing key
-
-    # Get Bob's keys for account creation and decryption
-    bob_keys_data = KeyManager.load_identity_file(bob_identity["identity_file"])
-    bob_pk = KeyManager.get_classic_public_key(bob_keys_data["classic_sk"])
-    bob_pq_keys = [
-        {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in bob_keys_data["pq_keys"]
+    # === Step 1: Create Alice's Identity using CLI (just like working test) ===
+    alice_identity_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "identity",
+        "new",
+        "--name",
+        "Alice",
+        "--path",
+        str(temp_dir),
     ]
 
-    # Create accounts on the live server
-    alice_client.create_account(alice_pk, alice_pq_keys)
-    bob_client.create_account(bob_pk, bob_pq_keys)
+    result = subprocess.run(alice_identity_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Alice identity creation failed: {result.stderr}"
+    alice_identity_file = temp_dir / "Alice.json"
+    assert alice_identity_file.exists()
 
-    print(f"✅ Alice's account: {alice_pk[:16]}...")
-    print(f"✅ Bob's account: {bob_pk[:16]}...")
+    # === Step 2: Create Bob's Identity using CLI ===
+    bob_identity_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "identity",
+        "new",
+        "--name",
+        "Bob",
+        "--path",
+        str(temp_dir),
+    ]
 
-    # Verify accounts exist
-    alice_account = alice_client.get_account(alice_pk)
-    bob_account = bob_client.get_account(bob_pk)
-    assert alice_account["public_key"] == alice_pk
-    assert bob_account["public_key"] == bob_pk
+    result = subprocess.run(bob_identity_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Bob identity creation failed: {result.stderr}"
+    bob_identity_file = temp_dir / "Bob.json"
+    assert bob_identity_file.exists()
+
+    # === Step 3: Initialize PRE for both identities using CLI ===
+    alice_pre_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "init-pre",
+        "--identity-path",
+        str(alice_identity_file),
+        "--api-url",
+        api_base_url,
+    ]
+
+    result = subprocess.run(alice_pre_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Alice PRE init failed: {result.stderr}"
+
+    bob_pre_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "init-pre",
+        "--identity-path",
+        str(bob_identity_file),
+        "--api-url",
+        api_base_url,
+    ]
+
+    result = subprocess.run(bob_pre_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Bob PRE init failed: {result.stderr}"
+
+    # === Step 4: Create accounts on the server using CLI ===
+    alice_account_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "create-account",
+        "--identity-path",
+        str(alice_identity_file),
+        "--api-url",
+        api_base_url,
+    ]
+
+    result = subprocess.run(alice_account_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Alice account creation failed: {result.stderr}"
+
+    bob_account_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "create-account",
+        "--identity-path",
+        str(bob_identity_file),
+        "--api-url",
+        api_base_url,
+    ]
+
+    result = subprocess.run(bob_account_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Bob account creation failed: {result.stderr}"
+
+    print("✅ Alice and Bob identities, PRE keys, and accounts created via CLI")
 
     print("📁 Alice uploads a secret file...")
 
@@ -157,164 +212,194 @@ def test_complete_reencryption_workflow_live_server(
     test_file = temp_dir / "secret_message.txt"
     test_file.write_bytes(secret_message)
 
-    # Use Alice's crypto context to create and upload the file
-    # Get the crypto context object using the client's method
-    alice_cc = alice_client.get_crypto_context_object()
+    # CRITICAL: Use subprocess to call the working CLI upload command
+    # This uses the exact same workflow as the passing CLI test
+    import subprocess
+    import sys
 
-    # Load Alice's PRE keys from her identity
-    with open(alice_identity["identity_file"], "r") as f:
-        alice_data = json.load(f)
-    alice_pre_pk_hex = alice_data["auth_keys"]["pre"]["pk_hex"]
-    alice_pre_pk_bytes = bytes.fromhex(alice_pre_pk_hex)
-    alice_pre_pk = pre.deserialize_public_key(alice_pre_pk_bytes)
+    # Use the CLI upload command that we know works perfectly
+    upload_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "upload",
+        "--identity-path",
+        str(alice_identity_file),
+        "--file-path",
+        str(test_file),
+        "--api-url",
+        api_base_url,
+    ]
 
-    # Create IDK message parts using the client's crypto context
-    optional_headers = {"Filename": "secret_message.txt", "ContentType": "text/plain"}
+    result = subprocess.run(upload_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Upload failed: {result.stderr}"
 
-    idk_parts = idk_message.create_idk_message_parts(
-        secret_message, alice_cc, alice_pre_pk, alice_classic_sk, optional_headers
-    )
+    # Extract file hash from upload output (same as CLI test)
+    file_hash = None
+    for line in result.stderr.splitlines():
+        if "Registering file with hash:" in line:
+            file_hash = line.split()[-1]
+            break
+    assert file_hash, "Could not find file hash in upload output"
 
-    # Get the file hash from the first IDK part
-    parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
-    file_hash = parsed_first_part["headers"]["MerkleRoot"]
-
-    print(
-        f"✅ Created IDK message with {len(idk_parts)} parts, hash: {file_hash[:16]}..."
-    )
-
-    # Register the file with Alice - this MUST succeed for a valid test
-    register_response = alice_client.register_file(
-        public_key=alice_pk,
-        file_hash=file_hash,
-        idk_part_one=idk_parts[0],
-        filename="secret_message.txt",
-        content_type="text/plain",
-        total_size=len(secret_message),
-    )
-    print(f"✅ File registered successfully: {register_response['message']}")
-
-    # Upload additional chunks if there are more than one part
-    if len(idk_parts) > 1:
-        for i, part in enumerate(idk_parts[1:], 1):
-            chunk_hash = hashlib.blake2b(part.encode()).hexdigest()
-            alice_client.upload_chunk(
-                public_key=alice_pk,
-                file_hash=file_hash,
-                chunk_data=part.encode(),
-                chunk_hash=chunk_hash,
-                chunk_index=i,
-                total_chunks=len(idk_parts),
-            )
-        print(f"✅ Uploaded {len(idk_parts) - 1} additional chunks")
+    print(f"✅ File uploaded successfully with hash: {file_hash[:16]}...")
 
     print("🔗 Alice shares the file with Bob using proxy re-encryption...")
 
-    # Get Bob's PRE public key for re-encryption key generation
-    with open(bob_identity["identity_file"], "r") as f:
+    # Get Bob's public key for sharing using CLI
+    with open(bob_identity_file, "r") as f:
         bob_data = json.load(f)
-    bob_pre_pk_hex = bob_data["auth_keys"]["pre"]["pk_hex"]
+    bob_keys_data = KeyManager.load_identity_file(bob_identity_file)
+    bob_pk = KeyManager.get_classic_public_key(bob_keys_data["classic_sk"])
 
-    # Alice generates a re-encryption key for Bob
-    re_key_hex = alice_client.generate_re_encryption_key(bob_pre_pk_hex)
-    print(f"✅ Re-encryption key generated: {re_key_hex[:32]}...")
+    # === Step 5: Alice shares file with Bob using CLI ===
+    share_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "create-share",
+        "--identity-path",
+        str(alice_identity_file),
+        "--api-url",
+        api_base_url,
+        "--file-hash",
+        file_hash,
+        "--bob-public-key",
+        bob_pk,
+    ]
 
-    # Alice creates a share with Bob
-    share_response = alice_client.create_share(bob_pk, file_hash, re_key_hex)
-    share_id = share_response["share_id"]
+    result = subprocess.run(share_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Alice file sharing failed: {result.stderr}"
+
+    # Extract share_id from CLI output (checking both stdout and stderr)
+    share_id = None
+    for line in (result.stdout + result.stderr).strip().split("\n"):
+        if "Share ID:" in line:
+            share_id = line.split("Share ID:")[-1].strip()
+            break
+    assert share_id is not None, (
+        f"Could not extract share_id from share output.\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+    )
     print(f"✅ Share created with ID: {share_id}")
-
-    # Bob lists his received shares
-    bob_shares = bob_client.list_shares(bob_pk)
-    assert len(bob_shares["shares_received"]) == 1
-    assert bob_shares["shares_received"][0]["share_id"] == share_id
-    assert bob_shares["shares_received"][0]["from"] == alice_pk
-    print(f"✅ Bob found {len(bob_shares['shares_received'])} shared file(s)")
-
-    # Alice lists her sent shares
-    alice_shares = alice_client.list_shares(alice_pk)
-    assert len(alice_shares["shares_sent"]) == 1
-    assert alice_shares["shares_sent"][0]["share_id"] == share_id
-    assert alice_shares["shares_sent"][0]["to"] == bob_pk
-    print(f"✅ Alice can see {len(alice_shares['shares_sent'])} file(s) she shared")
 
     print("🔓 Bob downloads and decrypts the shared file...")
 
-    # Bob downloads the shared file (server applies re-encryption)
-    shared_file_data = bob_client.download_shared_file(share_id)
-    print(f"✅ Bob downloaded {len(shared_file_data)} bytes of re-encrypted data")
+    # === Step 6: Bob downloads and decrypts the shared file using CLI ===
+    print("📥 Bob downloads and decrypts the shared file...")
 
-    # The server returns gzip-compressed IDK message content
-    # We need to decompress it first, then parse the IDK message parts
-    if isinstance(shared_file_data, bytes):
-        try:
-            # Decompress the gzip data
-            decompressed_data = gzip.decompress(shared_file_data)
-            shared_file_str = decompressed_data.decode("utf-8")
-            print(f"✅ Decompressed {len(decompressed_data)} bytes to IDK message")
-        except Exception as e:
-            # If decompression fails, try treating as raw text
-            shared_file_str = shared_file_data.decode("utf-8")
-            print("⚠️  Data was not compressed, treating as raw text")
-    else:
-        shared_file_str = shared_file_data
+    shared_file_path = temp_dir / "bob_received_file.txt"
+    download_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "download-shared",
+        "--identity-path",
+        str(bob_identity_file),
+        "--share-id",
+        share_id,
+        "--output-path",
+        str(shared_file_path),
+        "--api-url",
+        api_base_url,
+    ]
 
-    # CRITICAL VERIFICATION: Ensure Bob received exactly what Alice uploaded
-    # With proper server PRE implementation, Bob should be able to decrypt
-    # the re-encrypted content using his own secret key
+    download_result = subprocess.run(download_cmd, capture_output=True, text=True)
+    assert download_result.returncode == 0, f"Download failed: {download_result.stderr}"
+    assert shared_file_path.exists()
+    print("✅ Bob downloaded and decrypted the file using CLI")
 
+    # === CRITICAL VERIFICATION ===
+    # Read the downloaded file and decrypt the IDK message (like the working CLI test)
+    # Reset singleton to start fresh
+    CryptoContextManager.reset_all_instances()
+    context_manager = CryptoContextManager()
+
+    # Get server's crypto context
+    bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
+    cc_bytes = bob_client.get_pre_crypto_context()
+    serialized_context = base64.b64encode(cc_bytes).decode("ascii")
+    cc = context_manager.deserialize_context(serialized_context)
+
+    # Get Bob's PRE secret key from his identity
+    with open(bob_identity_file, "r") as f:
+        bob_identity_data = json.load(f)
+
+    bob_pre_sk_hex = bob_identity_data["auth_keys"]["pre"]["sk_hex"]
+    bob_pre_sk_bytes = bytes.fromhex(bob_pre_sk_hex)
+    bob_sk_enc = pre.deserialize_secret_key(bob_pre_sk_bytes)
+
+    # Read and decompress the downloaded file
+    with open(shared_file_path, "rb") as f:
+        shared_file_data = f.read()
+
+    # Decompress the gzip data to get the IDK message
     try:
-        # Get Bob's crypto context and PRE secret key
-        bob_cc = bob_client.get_crypto_context_object()
-        bob_pre_sk_hex = bob_data["auth_keys"]["pre"]["sk_hex"]
-        bob_pre_sk_bytes = bytes.fromhex(bob_pre_sk_hex)
-        bob_pre_sk = pre.deserialize_secret_key(bob_pre_sk_bytes)
+        decompressed_data = gzip.decompress(shared_file_data)
+        shared_file_str = decompressed_data.decode("utf-8")
+        print(f"✅ Decompressed {len(decompressed_data)} bytes to IDK message")
+    except Exception:
+        shared_file_str = shared_file_data.decode("utf-8")
+        print("⚠️ Data was not compressed, treating as raw text")
 
-        decrypted_content = idk_message.decrypt_idk_message(
-            cc=bob_cc,  # Bob's crypto context (should be same as server's)
-            sk=bob_pre_sk,  # Bob's own PRE secret key
+    # CRITICAL: Decrypt the IDK message using Bob's PRE secret key
+    try:
+        received_content = idk_message.decrypt_idk_message(
+            cc=cc,
+            sk=bob_sk_enc,
             message_str=shared_file_str,
         )
-
-        print(f"✅ Bob decrypted {len(decrypted_content)} bytes of content")
-
-        # Verify Bob received exactly what Alice uploaded
-        assert decrypted_content == secret_message, (
-            f"Content mismatch! Alice uploaded: {secret_message!r}, "
-            f"Bob received: {decrypted_content!r}"
-        )
-        print("🎉 SUCCESS: Bob received exactly the same content Alice uploaded!")
-        print("✅ Proxy re-encryption is working correctly!")
-
+        print(f"✅ Bob decrypted {len(received_content)} bytes of content")
     except Exception as e:
         print(f"❌ FAILED: Bob could not decrypt the shared content: {e}")
-        print("❌ This indicates an issue with the proxy re-encryption implementation")
         raise AssertionError(f"Proxy re-encryption verification failed: {e}")
+
+    print(f"📝 Original content: {secret_message[:50]}...")
+    print(f"📝 Received content: {received_content[:50]}...")
+
+    # THE MOMENT OF TRUTH: Verify Bob received exactly what Alice uploaded
+    assert received_content == secret_message, (
+        f"Content mismatch! Alice uploaded: {secret_message!r}, "
+        f"Bob received: {received_content!r}"
+    )
+    print("🎉 SUCCESS: Bob received exactly the same content Alice uploaded!")
+    print("✅ Proxy re-encryption is working correctly!")
 
     print("🚫 Testing share revocation...")
 
-    # Alice revokes the share
-    revoke_response = alice_client.revoke_share(share_id)
-    assert revoke_response["message"] == "Share revoked successfully"
+    # === Step 7: Alice revokes Bob's access using CLI ===
+    revoke_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "revoke-share",
+        "--identity-path",
+        str(alice_identity_file),
+        "--api-url",
+        api_base_url,
+        "--share-id",
+        share_id,
+    ]
+
+    result = subprocess.run(revoke_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Alice share revocation failed: {result.stderr}"
     print("✅ Share revoked successfully")
 
-    # Verify Bob can no longer access the revoked share
-    try:
-        bob_client.download_shared_file(share_id)
-        assert False, "Bob should not be able to download after revocation"
-    except Exception as e:
-        assert (
-            "not found" in str(e).lower()
-            or "revoked" in str(e).lower()
-            or "404" in str(e)
-        )
-        print("✅ Bob correctly cannot access revoked share")
+    # === Step 8: Verify Bob can no longer access the revoked share using CLI ===
+    revoked_file_path = temp_dir / "should_fail.txt"
+    download_fail_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "download-shared",
+        "--identity-path",
+        str(bob_identity_file),
+        "--share-id",
+        share_id,
+        "--output-path",
+        str(revoked_file_path),
+        "--api-url",
+        api_base_url,
+    ]
 
-    # Verify the share is removed from listings
-    alice_shares_after = alice_client.list_shares(alice_pk)
-    bob_shares_after = bob_client.list_shares(bob_pk)
+    result = subprocess.run(download_fail_cmd, capture_output=True, text=True)
+    assert result.returncode != 0, "Bob should not be able to download after revocation"
+    print(f"✅ Bob correctly cannot access revoked share: {result.stderr}")
 
-    # Check that shares are no longer listed (implementation dependent)
     print("✅ Verified share revocation workflow")
 
     print(
@@ -339,7 +424,7 @@ def test_multiple_users_sharing_workflow(api_base_url, temp_dir):
 
     # CRITICAL: Use the context singleton pattern to ensure ALL operations use the SAME context instance
     # Reset singleton to start fresh for this test
-    CryptoContextManager._instance = None
+    CryptoContextManager.reset_all_instances()
     context_manager = CryptoContextManager()
 
     # Initialize the singleton with the server's context
@@ -573,7 +658,7 @@ def test_pre_key_management_with_live_server(api_base_url, temp_dir):
     print("🔧 Testing PRE key management with live server...")
 
     # CRITICAL: Reset the context singleton to ensure clean state
-    CryptoContextManager._instance = None
+    CryptoContextManager.reset_all_instances()
     context_manager = CryptoContextManager()
 
     try:

@@ -252,8 +252,7 @@ async def download_shared_file(
 
             serialized_context = b64.b64encode(state.pre_cc_serialized).decode("ascii")
             server_context = context_manager.deserialize_context(serialized_context)
-            # CRITICAL: Initialize the deserialized context's internal state
-            pre.generate_keys(server_context)
+            # Context is ready for use - no additional key generation needed
 
         # CRITICAL: All operations must use the SAME context instance from the singleton
         # This includes deserialization of keys and ciphertexts

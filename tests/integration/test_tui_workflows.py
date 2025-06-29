@@ -430,7 +430,7 @@ class TestTUIIntegration:
         import base64
 
         # Reset singleton to start fresh
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         context_manager = CryptoContextManager()
 
         # Get server's crypto context and initialize the singleton

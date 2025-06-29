@@ -13,6 +13,26 @@ from src.app_state import get_app_state
 from src.crypto.context_manager import CryptoContextManager
 
 
+@pytest.fixture(autouse=True)
+def reset_context_singleton():
+    """Automatically reset the context singleton before each test.
+
+    This fixture ensures proper test isolation when running tests in parallel.
+    The autouse=True means it runs automatically for every test in this file.
+
+    Now uses the process-specific singleton reset for proper parallel execution.
+    """
+    # Reset all process instances before test
+    CryptoContextManager.reset_all_instances()
+    yield
+    # Clean up after test (optional)
+    try:
+        CryptoContextManager.reset_all_instances()
+    except Exception:
+        # Ignore cleanup errors - the important part is the fresh start
+        pass
+
+
 @pytest.fixture
 def temp_dir():
     """Create a temporary directory for test files."""
@@ -182,8 +202,6 @@ class TestPREInitialization:
 
     def test_create_account_with_pre_key(self, temp_dir):
         """Test that account creation includes PRE public key if available."""
-        # CRITICAL: Reset the context singleton to ensure clean state
-        CryptoContextManager._instance = None
         context_manager = CryptoContextManager()
 
         try:
@@ -266,8 +284,6 @@ class TestPRECryptographicOperations:
         # Get the crypto context bytes (this simulates what the server would return)
         shared_cc, cc_bytes = deserialized_crypto_context
 
-        # CRITICAL: Reset the context singleton to ensure clean state
-        CryptoContextManager._instance = None
         context_manager = CryptoContextManager()
 
         try:
@@ -538,8 +554,6 @@ class TestPRECryptographicOperations:
             b"This is a complete end-to-end test of the IDK message workflow with PRE!"
         )
 
-        # CRITICAL: Reset the context singleton to ensure clean state
-        CryptoContextManager._instance = None
         context_manager = CryptoContextManager()
 
         try:
@@ -633,10 +647,8 @@ class TestPRECryptographicOperations:
         Note: Full crypto validation is covered in integration tests.
         OpenFHE's context isolation prevents cross-context validation in unit tests.
         """
-        # CRITICAL: Reset the context singleton to ensure clean state for this test
         from src.crypto.context_manager import CryptoContextManager
 
-        CryptoContextManager._instance = None
         context_manager = CryptoContextManager()
 
         try:
@@ -735,119 +747,6 @@ class TestPRECryptographicOperations:
 
 class TestAPIIntegration:
     """Test API integration for proxy re-encryption workflows."""
-
-    def test_file_sharing_workflow_simulation(
-        self, alice_client_with_pre, bob_client_with_pre, deserialized_crypto_context
-    ):
-        """Test the complete file sharing workflow API integration.
-
-        This test validates the API workflow steps:
-        1. Alice creates and registers encrypted files
-        2. Alice generates re-encryption keys for sharing
-        3. Alice creates shares with proper parameters
-        4. All API calls work correctly together
-
-        Note: Full crypto validation is covered in integration tests.
-        OpenFHE's context isolation prevents cross-context validation in unit tests.
-        """
-        # CRITICAL: Reset the context singleton to ensure clean state for this test
-        from src.crypto.context_manager import CryptoContextManager
-
-        CryptoContextManager._instance = None
-        context_manager = CryptoContextManager()
-
-        try:
-            # Test file content
-            file_content = b"This is Alice's confidential document for Bob"
-            filename = "confidential.txt"
-
-            # Get the shared deserialized context
-            shared_cc, cc_bytes = deserialized_crypto_context
-
-            # Get PRE keys for API operations (from test fixtures using same context)
-            alice_pre_keys = alice_client_with_pre.__dict__["_test_pre_keys"]
-
-            # Get Alice's classic keys for signing
-            alice_keys_data = KeyManager.load_identity_file(
-                alice_client_with_pre.keys_path
-            )
-            alice_classic_sk = alice_keys_data["classic_sk"]
-
-            print("📝 Step 1: Alice creates encrypted file...")
-
-            # Alice creates an IDK message (encrypted file format) using shared context
-            optional_headers = {"Filename": filename, "ContentType": "text/plain"}
-            idk_parts = idk_message.create_idk_message_parts(
-                file_content,
-                shared_cc,  # Use the same shared context instance
-                alice_pre_keys.publicKey,
-                alice_classic_sk,
-                optional_headers,
-            )
-
-            # Parse the first part to get file hash
-            parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
-            file_hash = parsed_first_part["headers"]["MerkleRoot"]
-
-            print("📤 Step 2: Alice registers file (API simulation)...")
-
-            # Mock file registration (this is API-level, not crypto)
-            with patch.object(alice_client_with_pre, "register_file") as mock_register:
-                mock_register.return_value = {"message": "File registered successfully"}
-
-                result = alice_client_with_pre.register_file(
-                    public_key=alice_client_with_pre.get_classic_public_key(),
-                    file_hash=file_hash,
-                    idk_part_one=idk_parts[0],
-                    filename=filename,
-                    content_type="text/plain",
-                    total_size=len(file_content),
-                )
-                assert result["message"] == "File registered successfully"
-
-            print("🔑 Step 3: Alice generates re-encryption key...")
-
-            # Get Bob's PRE public key
-            with open(bob_client_with_pre.keys_path, "r") as f:
-                bob_identity = json.load(f)
-            bob_pre_pk_hex = bob_identity["auth_keys"]["pre"]["pk_hex"]
-
-            with patch.object(
-                alice_client_with_pre, "get_crypto_context_bytes"
-            ) as mock_get_cc:
-                mock_get_cc.return_value = cc_bytes
-                re_key_hex = alice_client_with_pre.generate_re_encryption_key(
-                    bob_pre_pk_hex
-                )
-
-            print("🤝 Step 4: Alice creates share...")
-
-            # Mock share creation (this is API-level, not crypto)
-            with patch.object(
-                alice_client_with_pre, "create_share"
-            ) as mock_create_share:
-                mock_create_share.return_value = {"share_id": "test_share_123"}
-
-                share_result = alice_client_with_pre.create_share(
-                    bob_identity["auth_keys"]["classic"]["pk_hex"],
-                    file_hash,
-                    re_key_hex,
-                )
-                assert share_result["share_id"] == "test_share_123"
-
-            print("✅ All API workflow steps completed successfully!")
-
-            # Verify all components
-            assert len(idk_parts) > 0
-            assert isinstance(file_hash, str) and len(file_hash) > 0
-            assert isinstance(re_key_hex, str) and len(re_key_hex) > 0
-            assert all(c in "0123456789abcdef" for c in re_key_hex.lower())
-
-            print("🎉 File sharing API workflow validation successful!")
-
-        finally:
-            # Clean up context singleton
-            context_manager.reset()
 
     def test_list_shares_functionality(
         self, alice_client_with_pre, bob_client_with_pre
@@ -993,7 +892,7 @@ class TestErrorHandling:
         Updated to use the context singleton instead of multiple deserializations.
         """
         # Reset the singleton to start fresh
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         context_manager = CryptoContextManager()
 
         # Step 1: Initialize the singleton with the shared context

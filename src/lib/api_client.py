@@ -1026,8 +1026,7 @@ class DCypherClient:
             context_manager.reset()  # Reset to clean state
             serialized_context = base64.b64encode(cc_bytes).decode("ascii")
             cc = context_manager.deserialize_context(serialized_context)
-            # CRITICAL: Initialize the deserialized context's internal state
-            pre.generate_keys(cc)
+            # Context is ready for use - no additional key generation needed
 
         # Deserialize Alice's secret key and Bob's public key
         alice_sk = pre.deserialize_secret_key(alice_sk_bytes)

@@ -408,7 +408,7 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     import json
 
     # Reset singleton to start fresh
-    CryptoContextManager._instance = None
+    CryptoContextManager.reset_all_instances()
     context_manager = CryptoContextManager()
 
     # Get server's crypto context
