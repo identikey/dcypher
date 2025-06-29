@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
     // for actually invoking the compiler.
     const lib = b.addLibrary(.{
         .linkage = .static,
-        .name = "zig_proxy",
+        .name = "dcypher",
         .root_module = lib_mod,
     });
 
@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) void {
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
     const exe = b.addExecutable(.{
-        .name = "zig_proxy",
+        .name = "dcypher",
         .root_module = exe_mod,
     });
 
@@ -92,6 +92,11 @@ pub fn build(b: *std.Build) void {
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    // Add a clean step to remove build artifacts
+    const clean_step = b.step("clean", "Remove build artifacts");
+    const clean_cmd = b.addSystemCommand(&[_][]const u8{"rm", "-rf", ".zig-cache/", "zig-cache/", "zig-out/"});
+    clean_step.dependOn(&clean_cmd.step);
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.

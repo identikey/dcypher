@@ -1,0 +1,27 @@
+# Use the AllHands runtime as base image
+FROM docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik
+
+# Install Zig
+RUN apt-get update && apt-get install -y \
+    wget \
+    && wget -O zig.tar.xz https://ziglang.org/download/0.12.0/zig-linux-x86_64-0.12.0.tar.xz \
+    && tar xvf zig.tar.xz \
+    && mv zig-linux-x86_64-0.12.0 /usr/local/zig \
+    && ln -s /usr/local/zig/zig /usr/local/bin/zig \
+    && rm zig.tar.xz \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV PATH="/usr/local/zig:$PATH" \
+    ZIG_VERSION="0.12.0"
+
+# Add labels
+LABEL maintainer="duke@identikey.io" \
+      description="AllHands runtime with Zig installed"
+
+# Expose port 3000
+EXPOSE 3000
+
+# Default command
+# CMD ["/bin/bash"]
