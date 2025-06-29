@@ -39,7 +39,11 @@ import threading
 from lib import pre
 
 try:
-    from crypto.context_manager import CryptoContextManager, get_context_manager
+    from crypto.context_manager import (
+        CryptoContextManager,
+        get_context_manager,
+        get_client_context_manager,
+    )
 except ImportError:
     # Fallback for when running from CLI or different contexts
     import sys
@@ -49,7 +53,11 @@ except ImportError:
     parent_dir = os.path.dirname(os.path.dirname(__file__))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from crypto.context_manager import CryptoContextManager, get_context_manager
+    from crypto.context_manager import (
+        CryptoContextManager,
+        get_context_manager,
+        get_client_context_manager,
+    )
 
 
 # Thread-local storage for deterministic PRNG
@@ -903,9 +911,15 @@ class KeyManager:
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
         # 3. Generate PRE keys using the crypto context and store context in identity
-        # Use the thread-safe singleton to ensure consistency
-        context_manager = get_context_manager()
-        # context_manager.reset()  # Clear any existing context - REMOVED: Let tests use live server context
+        # Use the appropriate context manager based on context:
+        # - Client context manager when api_url is provided (client-side operations)
+        # - Server context manager otherwise (server-side or test operations)
+        if api_url is not None:
+            # Client-side operation: use client context manager
+            context_manager = get_client_context_manager()
+        else:
+            # Server-side or test operation: use server context manager
+            context_manager = get_context_manager()
 
         # Handle different ways of providing crypto context
         if _test_context is not None:
@@ -1019,10 +1033,10 @@ class KeyManager:
             cc_bytes: Serialized crypto context from the server (optional if cc_object provided).
             cc_object: Pre-deserialized crypto context object (optional, preferred over cc_bytes).
         """
-        # CRITICAL: Use the thread-safe singleton context manager to avoid parallel execution conflicts
+        # CRITICAL: Use the client-side context manager to avoid conflicts with server-side operations
         # This prevents OpenFHE "Key was not generated with the same crypto context" errors
-        # that can occur when multiple tests or processes interfere with the singleton state
-        context_manager = get_context_manager()
+        # that can occur when client and server operations interfere
+        context_manager = get_client_context_manager()
 
         try:
             # CRITICAL: Use provided context object if available, otherwise deserialize from bytes
