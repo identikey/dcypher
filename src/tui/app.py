@@ -112,7 +112,7 @@ class DCypherTUI(App[None]):
                         yield Button("Help", id="help-btn")
 
                 # Identity Management - Use proper IdentityScreen
-                yield IdentityScreen(id="identity")
+                yield IdentityScreen(id="identity", api_url=getattr(self, 'api_url', None))
 
                 # Crypto Operations - Use proper CryptoScreen
                 yield CryptoScreen(id="crypto")

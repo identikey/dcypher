@@ -76,9 +76,9 @@ class DCypherClient:
         Returns:
             tuple: (DCypherClient instance, classic_public_key_hex)
         """
-        # Create identity file
+        # Create identity file with server context
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_account", temp_dir
+            "test_account", temp_dir, api_url=api_url
         )
 
         # Add additional PQ algorithms if specified

@@ -25,6 +25,10 @@ class IdentityScreen(Widget):
     # Reactive state
     current_identity_path = reactive(None)
     identity_info = reactive(None)
+    
+    def __init__(self, api_url=None, **kwargs):
+        super().__init__(**kwargs)
+        self.api_url = api_url
 
     def compose(self):
         """Compose the identity management interface"""
@@ -203,10 +207,18 @@ class IdentityScreen(Widget):
         path = path_input.value or str(Path.home() / ".dcypher")
 
         try:
-            # Use KeyManager to create identity
+            # Check if we have an API URL to fetch crypto context
+            if not self.api_url:
+                self.notify(
+                    "No API URL configured. Cannot create identity without server context.",
+                    severity="error"
+                )
+                return
+            
+            # Use KeyManager to create identity with server context
             identity_dir = Path(path)
             mnemonic, file_path = KeyManager.create_identity_file(
-                name, identity_dir, False
+                name, identity_dir, False, api_url=self.api_url
             )
 
             self.notify(

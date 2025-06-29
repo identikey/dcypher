@@ -139,12 +139,12 @@ def test_cli_sharing_commands(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # === Step 1: Create Alice's Identity ===
-    run_command(["identity", "new", "--name", "Alice", "--path", str(test_dir)])
+    run_command(["identity", "new", "--name", "Alice", "--path", str(test_dir), "--api-url", api_base_url])
     alice_identity_file = test_dir / "Alice.json"
     assert alice_identity_file.exists()
 
     # === Step 2: Create Bob's Identity ===
-    run_command(["identity", "new", "--name", "Bob", "--path", str(test_dir)])
+    run_command(["identity", "new", "--name", "Bob", "--path", str(test_dir), "--api-url", api_base_url])
     bob_identity_file = test_dir / "Bob.json"
     assert bob_identity_file.exists()
 

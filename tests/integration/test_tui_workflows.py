@@ -326,9 +326,9 @@ class TestTUIIntegration:
     @pytest.mark.asyncio
     async def test_tui_with_keymanager_integration(self, api_base_url: str, tmp_path):
         """Test TUI integration with KeyManager operations"""
-        # Create identity using KeyManager
+        # Create identity using KeyManager with server context
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "integration_test", tmp_path, overwrite=True
+            "integration_test", tmp_path, overwrite=True, api_url=api_base_url
         )
 
         # Test TUI with the created identity
@@ -385,13 +385,13 @@ class TestTUIIntegration:
 
         # === Step 1: Create Alice's Identity ===
         alice_mnemonic, alice_identity_file = KeyManager.create_identity_file(
-            "Alice", tmp_path, overwrite=True
+            "Alice", tmp_path, overwrite=True, api_url=api_base_url
         )
         assert alice_identity_file.exists()
 
         # === Step 2: Create Bob's Identity ===
         bob_mnemonic, bob_identity_file = KeyManager.create_identity_file(
-            "Bob", tmp_path, overwrite=True
+            "Bob", tmp_path, overwrite=True, api_url=api_base_url
         )
         assert bob_identity_file.exists()
 
@@ -807,9 +807,9 @@ class TestTUIWorkflowEdgeCases:
     @pytest.mark.asyncio
     async def test_tui_with_invalid_file_paths(self, api_base_url: str, tmp_path):
         """Test TUI behavior with invalid file paths"""
-        # Create a test identity
+        # Create a test identity with server context
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_user", tmp_path, overwrite=True
+            "test_user", tmp_path, overwrite=True, api_url=api_base_url
         )
 
         app = DCypherTUI(identity_path=str(identity_file), api_url=api_base_url)

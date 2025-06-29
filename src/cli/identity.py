@@ -69,8 +69,16 @@ def identity_new(name, path, overwrite, context_file, api_url):
                     "To create a non-PRE identity, omit the --api-url flag."
                 )
 
+        # Now that KeyManager requires either context_bytes or api_url, we need to handle the case
+        # where neither is provided by the user
+        if context_bytes is None and api_url is None:
+            raise click.ClickException(
+                "Either --context-file or --api-url must be provided to create an identity with PRE capabilities. "
+                "This ensures the identity is compatible with the server's crypto context."
+            )
+        
         mnemonic, file_path = KeyManager.create_identity_file(
-            name, identity_dir, overwrite, context_bytes, context_source
+            name, identity_dir, overwrite, context_bytes, context_source, api_url
         )
 
         if context_bytes:

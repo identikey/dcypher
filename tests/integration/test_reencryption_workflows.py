@@ -61,10 +61,12 @@ def temp_dir():
 
 
 @pytest.fixture
-def alice_identity(temp_dir):
-    """Create Alice's identity (PRE keys will be added by tests using server context)."""
-    # Create identity file without PRE keys initially
-    mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir)
+def alice_identity(temp_dir, api_base_url):
+    """Create Alice's identity with PRE keys using server context."""
+    # Create identity file with PRE keys using server context
+    mnemonic, identity_file = KeyManager.create_identity_file(
+        "alice", temp_dir, api_url=api_base_url
+    )
 
     return {
         "mnemonic": mnemonic,
@@ -74,10 +76,12 @@ def alice_identity(temp_dir):
 
 
 @pytest.fixture
-def bob_identity(temp_dir):
-    """Create Bob's identity (PRE keys will be added by tests using server context)."""
-    # Create identity file without PRE keys initially
-    mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir)
+def bob_identity(temp_dir, api_base_url):
+    """Create Bob's identity with PRE keys using server context."""
+    # Create identity file with PRE keys using server context
+    mnemonic, identity_file = KeyManager.create_identity_file(
+        "bob", temp_dir, api_url=api_base_url
+    )
 
     return {
         "mnemonic": mnemonic,
@@ -123,6 +127,8 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
         "Alice",
         "--path",
         str(temp_dir),
+        "--api-url",
+        api_base_url,
     ]
 
     result = subprocess.run(alice_identity_cmd, capture_output=True, text=True)
@@ -140,6 +146,8 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
         "Bob",
         "--path",
         str(temp_dir),
+        "--api-url",
+        api_base_url,
     ]
 
     result = subprocess.run(bob_identity_cmd, capture_output=True, text=True)

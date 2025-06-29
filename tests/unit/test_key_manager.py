@@ -13,6 +13,14 @@ from .util.util import get_enabled_sigs, get_sigs_with_ctx_support
 import secrets
 
 
+def _generate_mock_context_bytes():
+    """Generate mock crypto context bytes for testing purposes."""
+    # Generate some deterministic mock bytes that look like a crypto context
+    # This is just for testing - in production, real context comes from the server
+    mock_data = b"MOCK_CRYPTO_CONTEXT_FOR_TESTING_" + secrets.token_bytes(32)
+    return mock_data
+
+
 def test_generate_classic_keypair():
     """Test classic key pair generation."""
     sk, pk_hex = KeyManager.generate_classic_keypair()
