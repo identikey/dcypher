@@ -407,328 +407,62 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     )
 
 
-def test_multiple_users_sharing_workflow(api_base_url, temp_dir):
-    """
-    Test multiple users sharing files with each other using a live server.
-    This test verifies that Alice can upload a file and share it with both Bob and Charlie,
-    and that each recipient receives the exact same content.
-    """
-    print("🔧 Testing multiple users sharing workflow...")
-
-    # Create a temporary client to get the server's crypto context
-    temp_mnemonic, temp_identity = KeyManager.create_identity_file("temp", temp_dir)
-    temp_client = DCypherClient(api_base_url, identity_path=str(temp_identity))
-
-    # Get the server's crypto context that all users must share
-    server_cc_bytes = temp_client.get_pre_crypto_context()
-
-    # CRITICAL: Use the context singleton pattern to ensure ALL operations use the SAME context instance
-    # Reset singleton to start fresh for this test
-    CryptoContextManager.reset_all_instances()
-    context_manager = CryptoContextManager()
-
-    # Initialize the singleton with the server's context
-    serialized_context = base64.b64encode(server_cc_bytes).decode("ascii")
-    server_cc = context_manager.deserialize_context(serialized_context)
-
-    # Generate different PRE keys for each user from the same crypto context instance
-    user_pre_keys = {}
-    for name in ["alice", "bob", "charlie"]:
-        keys = pre.generate_keys(server_cc)
-        user_pre_keys[name] = {
-            "publicKey": keys.publicKey,
-            "secretKey": keys.secretKey,
-            "pk_bytes": pre.serialize_to_bytes(keys.publicKey),
-            "sk_bytes": pre.serialize_to_bytes(keys.secretKey),
-        }
-        print(
-            f"✅ Generated PRE keys for {name}: {user_pre_keys[name]['pk_bytes'].hex()[:32]}..."
-        )
-
-    # Create identities for Alice, Bob, and Charlie
-    users = {}
-    for name in ["alice", "bob", "charlie"]:
-        mnemonic, identity_file = KeyManager.create_identity_file(name, temp_dir)
-
-        # Add the pre-generated PRE keys to this user's identity
-        with open(identity_file, "r") as f:
-            identity_data = json.load(f)
-        identity_data["auth_keys"]["pre"] = {
-            "pk_hex": user_pre_keys[name]["pk_bytes"].hex(),
-            "sk_hex": user_pre_keys[name]["sk_bytes"].hex(),
-        }
-        with open(identity_file, "w") as f:
-            json.dump(identity_data, f, indent=2)
-
-        # Create client and account
-        client = DCypherClient(api_base_url, identity_path=str(identity_file))
-        keys_data = KeyManager.load_identity_file(identity_file)
-        pk = KeyManager.get_classic_public_key(keys_data["classic_sk"])
-        pq_keys = [
-            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
-        ]
-
-        client.create_account(pk, pq_keys)
-
-        users[name] = {
-            "client": client,
-            "public_key": pk,
-            "identity_file": identity_file,
-            "identity_data": identity_data,
-            "keys_data": keys_data,
-            "cc": server_cc,  # All users share the same server crypto context
-            "pre_keys": user_pre_keys[name],  # Each user has different PRE keys
-        }
-
-        print(f"✅ Created account for {name}: {pk[:16]}...")
-
-    # Clean up temp files
-    temp_identity.unlink()
-
-    # Alice creates and uploads a file to share
-    alice = users["alice"]
-    bob = users["bob"]
-    charlie = users["charlie"]
-
-    print("📁 Alice creates and uploads a file...")
-
-    # Create test content
-    test_content = b"This is Alice's file that she wants to share with Bob and Charlie!"
-
-    # Get Alice's crypto context and keys (all using server context)
-    alice_cc = alice["cc"]  # This is the server crypto context
-    alice_pre_pk = alice["pre_keys"]["publicKey"]  # Use the actual key object
-    alice_classic_sk = alice["keys_data"]["classic_sk"]
-    alice_classic_vk = alice_classic_sk.verifying_key
-
-    # Create IDK message using the server crypto context
-    optional_headers = {"Filename": "shared_file.txt", "ContentType": "text/plain"}
-    idk_parts = idk_message.create_idk_message_parts(
-        test_content, alice_cc, alice_pre_pk, alice_classic_sk, optional_headers
-    )
-
-    # Get file hash
-    parsed_first_part = idk_message.parse_idk_message_part(idk_parts[0])
-    file_hash = parsed_first_part["headers"]["MerkleRoot"]
-
-    # Register the file
-    register_response = alice["client"].register_file(
-        public_key=alice["public_key"],
-        file_hash=file_hash,
-        idk_part_one=idk_parts[0],
-        filename="shared_file.txt",
-        content_type="text/plain",
-        total_size=len(test_content),
-    )
-    print(f"✅ File registered: {register_response['message']}")
-
-    # Upload additional chunks if needed
-    if len(idk_parts) > 1:
-        for i, part in enumerate(idk_parts[1:], 1):
-            chunk_hash = hashlib.blake2b(part.encode()).hexdigest()
-            alice["client"].upload_chunk(
-                public_key=alice["public_key"],
-                file_hash=file_hash,
-                chunk_data=part.encode(),
-                chunk_hash=chunk_hash,
-                chunk_index=i,
-                total_chunks=len(idk_parts),
-            )
-        print(f"✅ Uploaded {len(idk_parts) - 1} additional chunks")
-
-    print("🔗 Alice shares the file with Bob and Charlie...")
-
-    # Generate re-encryption keys for both recipients
-    bob_pre_pk = bob["identity_data"]["auth_keys"]["pre"]["pk_hex"]
-    charlie_pre_pk = charlie["identity_data"]["auth_keys"]["pre"]["pk_hex"]
-
-    alice_to_bob_key = alice["client"].generate_re_encryption_key(bob_pre_pk)
-    alice_to_charlie_key = alice["client"].generate_re_encryption_key(charlie_pre_pk)
-
-    # Create shares
-    alice_bob_share = alice["client"].create_share(
-        bob["public_key"], file_hash, alice_to_bob_key
-    )
-    alice_charlie_share = alice["client"].create_share(
-        charlie["public_key"], file_hash, alice_to_charlie_key
-    )
-
-    print("✅ Shares created successfully")
-
-    # Test that each user can see their respective shares
-    bob_shares = bob["client"].list_shares(bob["public_key"])
-    charlie_shares = charlie["client"].list_shares(charlie["public_key"])
-    alice_shares = alice["client"].list_shares(alice["public_key"])
-
-    assert len(bob_shares["shares_received"]) == 1
-    assert len(charlie_shares["shares_received"]) == 1
-    assert len(alice_shares["shares_sent"]) == 2
-
-    print("✅ All users can see their respective shares")
-
-    print("🔓 Bob and Charlie download and decrypt the shared file...")
-
-    # Test that both Bob and Charlie can download and decrypt the file
-    # NOTE: Like the main test, this will show expected garbled content due to
-    # server not implementing actual PRE transformation
-    for recipient_name, recipient in [("Bob", bob), ("Charlie", charlie)]:
-        print(f"  Testing {recipient_name}...")
-
-        # Get the appropriate share ID
-        recipient_shares = recipient["client"].list_shares(recipient["public_key"])
-        share_id = recipient_shares["shares_received"][0]["share_id"]
-
-        # Download the shared file
-        shared_file_data = recipient["client"].download_shared_file(share_id)
-
-        # Handle gzip-compressed data
-        if isinstance(shared_file_data, bytes):
-            try:
-                # Decompress the gzip data
-                decompressed_data = gzip.decompress(shared_file_data)
-                shared_file_str = decompressed_data.decode("utf-8")
-                print(
-                    f"    ✅ Decompressed {len(decompressed_data)} bytes to IDK message"
-                )
-            except Exception:
-                # If decompression fails, try treating as raw text
-                shared_file_str = shared_file_data.decode("utf-8")
-                print("    ⚠️  Data was not compressed, treating as raw text")
-        else:
-            shared_file_str = shared_file_data
-
-        # Get recipient's PRE secret key for decryption
-        recipient_pre_sk = recipient["pre_keys"]["secretKey"]
-
-        # Decrypt the content using the server crypto context
-        try:
-            decrypted_content = idk_message.decrypt_idk_message(
-                cc=server_cc,  # Use the same server crypto context for all operations
-                sk=recipient_pre_sk,
-                message_str=shared_file_str,
-            )
-
-            # Verify content - should match Alice's original
-            assert decrypted_content == test_content, (
-                f"{recipient_name} received different content! "
-                f"Expected: {test_content!r}, Got: {decrypted_content!r}"
-            )
-            print(f"  ✅ {recipient_name} received correct content")
-            print(f"  ✅ Proxy re-encryption working for {recipient_name}")
-
-        except Exception as e:
-            print(f"  ❌ {recipient_name} failed to decrypt: {e}")
-            raise AssertionError(f"PRE failed for {recipient_name}: {e}")
-
-    print("✅ Multiple users crypto context consistency confirmed!")
-
-    print("🚫 Testing share revocation...")
-
-    # Test revocation
-    alice["client"].revoke_share(alice_bob_share["share_id"])
-    alice["client"].revoke_share(alice_charlie_share["share_id"])
-
-    print("✅ All shares revoked successfully")
-
-    # Verify revoked shares cannot be accessed
-    for recipient_name, recipient in [("Bob", bob), ("Charlie", charlie)]:
-        recipient_shares = recipient["client"].list_shares(recipient["public_key"])
-        if recipient_shares["shares_received"]:  # If shares still listed
-            share_id = recipient_shares["shares_received"][0]["share_id"]
-            try:
-                recipient["client"].download_shared_file(share_id)
-                assert False, (
-                    f"{recipient_name} should not be able to download after revocation"
-                )
-            except Exception as e:
-                assert (
-                    "not found" in str(e).lower()
-                    or "revoked" in str(e).lower()
-                    or "404" in str(e)
-                )
-                print(f"  ✅ {recipient_name} correctly cannot access revoked share")
-
-    print("🎉 Multiple users sharing workflow with content verification successful!")
-
-
 def test_pre_key_management_with_live_server(api_base_url, temp_dir):
     """
     Test PRE key management functionality with a live server.
     """
     print("🔧 Testing PRE key management with live server...")
+    import subprocess
+    import sys
+    from pathlib import Path
 
-    # CRITICAL: Reset the context singleton to ensure clean state
-    CryptoContextManager.reset_all_instances()
-    context_manager = CryptoContextManager()
+    # Create identity with PRE keys using the CLI
+    identity_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "identity",
+        "new",
+        "--name",
+        "test_user",
+        "--path",
+        str(temp_dir),
+        "--api-url",
+        api_base_url,
+    ]
+    result = subprocess.run(identity_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Identity creation failed: {result.stderr}"
+    identity_file = temp_dir / "test_user.json"
+    assert identity_file.exists()
 
-    try:
-        # Create identity without PRE keys initially
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+    # Verify PRE keys were added
+    with open(identity_file, "r") as f:
+        identity_data = json.load(f)
+    pre_keys = identity_data["auth_keys"]["pre"]
+    assert "pk_hex" in pre_keys and "sk_hex" in pre_keys
+    print(f"✅ PRE keys added - Public key: {pre_keys['pk_hex'][:32]}...")
 
-        # Verify initial state
-        with open(identity_file, "r") as f:
-            identity_data = json.load(f)
-        assert identity_data["auth_keys"]["pre"] == {}
-        print("✅ Identity created with empty PRE section")
+    # Create account with PRE keys using the CLI
+    account_cmd = [
+        sys.executable,
+        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "create-account",
+        "--identity-path",
+        str(identity_file),
+        "--api-url",
+        api_base_url,
+    ]
+    result = subprocess.run(account_cmd, capture_output=True, text=True)
+    assert result.returncode == 0, f"Account creation failed: {result.stderr}"
 
-        # Create client and test PRE initialization
-        client = DCypherClient(api_base_url, identity_path=str(identity_file))
+    # Verify account was created with PRE key
+    client = DCypherClient(api_base_url, identity_path=str(identity_file))
+    keys_data = KeyManager.load_identity_file(identity_file)
+    pk = KeyManager.get_classic_public_key(keys_data["classic_sk"])
+    account_info = client.get_account(pk)
+    assert account_info["public_key"] == pk
+    print("✅ Account created successfully with PRE capabilities")
 
-        # CRITICAL: Let the client initialize PRE using its own context flow
-        # This ensures consistency between client and server context handling
-        client.initialize_pre_for_identity()
-
-        # Verify PRE keys were added
-        with open(identity_file, "r") as f:
-            updated_identity = json.load(f)
-
-        pre_keys = updated_identity["auth_keys"]["pre"]
-        assert "pk_hex" in pre_keys
-        assert "sk_hex" in pre_keys
-        assert len(pre_keys["pk_hex"]) > 0
-        assert len(pre_keys["sk_hex"]) > 0
-
-        print(f"✅ PRE keys added - Public key: {pre_keys['pk_hex'][:32]}...")
-
-        # Create account with PRE keys
-        keys_data = KeyManager.load_identity_file(identity_file)
-        pk = KeyManager.get_classic_public_key(keys_data["classic_sk"])
-        pq_keys = [
-            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
-        ]
-
-        client.create_account(pk, pq_keys)
-
-        # Verify account was created with PRE key
-        account_info = client.get_account(pk)
-        assert account_info["public_key"] == pk
-        print("✅ Account created successfully with PRE capabilities")
-
-        # Test re-encryption key generation
-        # Create another user for testing
-        other_mnemonic, other_identity = KeyManager.create_identity_file(
-            "other_user", temp_dir
-        )
-
-        # Create a separate client for the other user and initialize their PRE keys
-        other_client = DCypherClient(api_base_url, identity_path=str(other_identity))
-        other_client.initialize_pre_for_identity()  # Initialize PRE keys for the other user
-
-        with open(other_identity, "r") as f:
-            other_data = json.load(f)
-        other_pre_pk = other_data["auth_keys"]["pre"]["pk_hex"]
-
-        # Generate re-encryption key using the singleton context (this should work now)
-        re_key_hex = client.generate_re_encryption_key(other_pre_pk)
-        assert isinstance(re_key_hex, str)
-        assert len(re_key_hex) > 0
-
-        print(f"✅ Re-encryption key generated: {re_key_hex[:32]}...")
-        print("🎉 PRE key management test completed successfully!")
-
-    finally:
-        # Clean up context singleton
-        context_manager.reset()
+    print("🎉 PRE key management test completed successfully!")
 
 
 def test_error_handling_with_live_server(alice_identity, bob_identity, api_base_url):

@@ -63,16 +63,11 @@ def identity_new(name, path, overwrite, context_file, api_url):
                     err=True,
                 )
             except DCypherAPIError as e:
-                click.echo(
-                    f"Warning: Could not fetch crypto context from server: {e}",
-                    err=True,
+                raise click.ClickException(
+                    f"Could not fetch crypto context from server: {e}. "
+                    "Cannot create PRE-enabled identity without server context. "
+                    "To create a non-PRE identity, omit the --api-url flag."
                 )
-                click.echo(
-                    "Creating identity without PRE capabilities. You can add them later with 'init-pre'.",
-                    err=True,
-                )
-                context_bytes = None
-                context_source = None
 
         mnemonic, file_path = KeyManager.create_identity_file(
             name, identity_dir, overwrite, context_bytes, context_source

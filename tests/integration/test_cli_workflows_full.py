@@ -254,35 +254,40 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     """
     run_command, test_dir = cli_test_env
 
-    # === Step 1: Create Alice's Identity ===
-    run_command(["identity", "new", "--name", "Alice", "--path", str(test_dir)])
+    # === Step 1: Create Alice's Identity with server's crypto context ===
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "Alice",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     alice_identity_file = test_dir / "Alice.json"
     assert alice_identity_file.exists()
 
-    # === Step 2: Create Bob's Identity ===
-    run_command(["identity", "new", "--name", "Bob", "--path", str(test_dir)])
+    # === Step 2: Create Bob's Identity with server's crypto context ===
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "Bob",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     bob_identity_file = test_dir / "Bob.json"
     assert bob_identity_file.exists()
 
-    # === Step 3: Initialize PRE for both identities ===
-    run_command(
-        [
-            "init-pre",
-            "--identity-path",
-            str(alice_identity_file),
-            "--api-url",
-            api_base_url,
-        ]
-    )
-    run_command(
-        [
-            "init-pre",
-            "--identity-path",
-            str(bob_identity_file),
-            "--api-url",
-            api_base_url,
-        ]
-    )
+    # === Step 3: Initialize PRE for both identities (NO LONGER NEEDED) ===
+    # Identity is now created with PRE keys from the start
 
     # === Step 4: Create accounts on the server ===
     run_command(
