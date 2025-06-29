@@ -128,10 +128,8 @@ test:
     export LD_LIBRARY_PATH="/workspace/openfhe-local/lib:/workspace/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
     export PYTHONPATH="/workspace/src:${PYTHONPATH:-}"
     echo "🧪 Running DCypher test suite..."
-    echo "📋 Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
-    uv run pytest tests/unit/test_reencryption_api.py tests/unit/test_context_singleton.py tests/unit/test_crypto_context_deserialization.py tests/integration/test_reencryption_workflows.py tests/integration/test_cli_workflows_full.py tests/integration/test_tui_workflows.py -v
-    echo "📋 Running other tests in parallel..."
-    uv run pytest --ignore=tests/unit/test_reencryption_api.py --ignore=tests/unit/test_context_singleton.py --ignore=tests/unit/test_crypto_context_deserialization.py --ignore=tests/integration/test_reencryption_workflows.py --ignore=tests/integration/test_cli_workflows_full.py --ignore=tests/integration/test_tui_workflows.py --ignore=vendor/ -n auto --dist worksteal
+    # echo "📋 Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
+    uv run pytest -n auto --dist worksteal ./tests/
 
 # Start OpenHands (All Hands AI) development environment
 doit:
