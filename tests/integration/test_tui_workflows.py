@@ -326,9 +326,18 @@ class TestTUIIntegration:
     @pytest.mark.asyncio
     async def test_tui_with_keymanager_integration(self, api_base_url: str, tmp_path):
         """Test TUI integration with KeyManager operations"""
-        # Create identity using KeyManager with server context
+        # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
+        temp_client = DCypherClient(api_base_url)
+        cc_bytes = temp_client.get_pre_crypto_context()
+        assert cc_bytes is not None
+
+        # Create identity using KeyManager with fetched context bytes
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "integration_test", tmp_path, overwrite=True, api_url=api_base_url
+            "integration_test",
+            tmp_path,
+            overwrite=True,
+            context_bytes=cc_bytes,
+            context_source=f"server:{api_base_url}",
         )
 
         # Test TUI with the created identity

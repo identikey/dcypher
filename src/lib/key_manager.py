@@ -893,12 +893,10 @@ class KeyManager:
 
         # Fetch context from API if not provided directly
         if context_bytes is None and api_url is not None:
-            from lib.api_client import DCypherClient
-
-            client = DCypherClient(api_url)
-            context_bytes = client.get_pre_crypto_context()
-            if context_source is None:
-                context_source = f"server:{api_url}"
+            raise ValueError(
+                "When api_url is provided, please fetch the context externally and pass it via context_bytes parameter. "
+                "This avoids circular imports and improves architectural separation."
+            )
 
         # 1. Generate mnemonic and master seed
         mnemonic = Bip39MnemonicGenerator().FromWordsNumber(Bip39WordsNum.WORDS_NUM_24)
@@ -911,27 +909,23 @@ class KeyManager:
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
         # 3. Generate PRE keys using the crypto context and store context in identity
-        # Use the appropriate context manager based on context:
-        # - Client context manager when api_url is provided (client-side operations)
-        # - Server context manager otherwise (server-side or test operations)
-        if api_url is not None:
-            # Client-side operation: use client context manager
-            context_manager = get_client_context_manager()
-        else:
-            # Server-side or test operation: use server context manager
-            context_manager = get_context_manager()
+        # ARCHITECTURAL FIX: KeyManager is PURELY CLIENT-SIDE
+        # It should never interfere with server's context singleton
+        # Always use client context manager for proper separation of concerns
+        context_manager = get_client_context_manager()
 
         # Handle different ways of providing crypto context
         if _test_context is not None:
             # For unit tests: use pre-deserialized context directly
             cc = _test_context
         elif api_url is not None:
-            # CRITICAL FIX: When we have an API URL, get the context from the server
-            # This ensures we use the SAME context instance as the server, avoiding context conflicts
-            from lib.api_client import DCypherClient
-
-            client = DCypherClient(api_url)
-            cc = client.get_crypto_context_object()
+            # ARCHITECTURAL FIX: Break circular import dependency
+            # For client-side operations with API, the caller should provide the context
+            # This improves separation of concerns and avoids circular imports
+            raise ValueError(
+                "When api_url is provided, please fetch the context externally and pass it via context_bytes parameter. "
+                "This avoids circular imports and improves architectural separation."
+            )
         else:
             # For production without API: deserialize the context bytes
             if context_bytes is None:
@@ -952,20 +946,20 @@ class KeyManager:
             if "Cannot find context for the given pointer" in str(e):
                 # Context was destroyed by another process calling fhe.ReleaseAllContexts()
                 # This can happen during parallel test execution
-                # Try to recover by getting a fresh context from the server
-                if api_url:
-                    # We have an API URL, try to get a fresh context
-                    # Import here to avoid circular imports
-                    from lib.api_client import DCypherClient
+                # Try to recover by getting a fresh context
+                if context_bytes is not None:
+                    # We have context bytes - re-deserialize from the bytes
+                    import base64
 
-                    client = DCypherClient(api_url)
-                    cc = client.get_crypto_context_object()
+                    serialized_context = base64.b64encode(context_bytes).decode("ascii")
+                    cc = context_manager.deserialize_context(serialized_context)
                     # Try again with the fresh context
                     keys = pre.generate_keys(cc)
                 else:
-                    # No API URL, we can't recover
+                    # No way to recover - we don't have context bytes to re-deserialize
                     raise RuntimeError(
-                        f"Context was destroyed during parallel execution and cannot be recovered: {e}"
+                        f"Context was destroyed during parallel execution and cannot be recovered: {e}. "
+                        f"To make this more robust, provide context_bytes parameter."
                     ) from e
             else:
                 # Different error, re-raise
@@ -1033,9 +1027,8 @@ class KeyManager:
             cc_bytes: Serialized crypto context from the server (optional if cc_object provided).
             cc_object: Pre-deserialized crypto context object (optional, preferred over cc_bytes).
         """
-        # CRITICAL: Use the client-side context manager to avoid conflicts with server-side operations
-        # This prevents OpenFHE "Key was not generated with the same crypto context" errors
-        # that can occur when client and server operations interfere
+        # ARCHITECTURAL FIX: KeyManager is PURELY CLIENT-SIDE
+        # Always use client context manager for proper separation of concerns
         context_manager = get_client_context_manager()
 
         try:

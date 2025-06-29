@@ -959,12 +959,13 @@ class DCypherClient:
         # CRITICAL FIX: Check if context singleton is already initialized
         # If so, use it directly to maintain context consistency (important for tests)
         try:
-            from src.crypto.context_manager import CryptoContextManager
+            from src.crypto.context_manager import get_client_context_manager
         except ImportError:
             # Handle CLI context where src module isn't in path
-            from crypto.context_manager import CryptoContextManager
+            from crypto.context_manager import get_client_context_manager
 
-        context_manager = CryptoContextManager()
+        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
+        context_manager = get_client_context_manager()
         existing_context = context_manager.get_context()
 
         if existing_context is not None:
@@ -1004,12 +1005,13 @@ class DCypherClient:
             Initialized crypto context object compatible with server operations
         """
         try:
-            from src.crypto.context_manager import CryptoContextManager
+            from src.crypto.context_manager import get_client_context_manager
         except ImportError:
             # Handle CLI context where src module isn't in path
-            from crypto.context_manager import CryptoContextManager
+            from crypto.context_manager import get_client_context_manager
 
-        context_manager = CryptoContextManager()
+        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
+        context_manager = get_client_context_manager()
 
         # Get server's crypto context bytes
         cc_bytes = self.get_crypto_context_bytes()
@@ -1060,16 +1062,14 @@ class DCypherClient:
         # Get context bytes from server for PRE capabilities
         cc_bytes = requests.get(f"{api_url}/pre-crypto-context").content
 
-        # CRITICAL FIX: For integration tests, use context_bytes instead of _test_context
-        # This avoids sharing context objects between client and server which can lead to
-        # context destruction issues during parallel execution
-        # The KeyManager will use a separate context manager for client operations
+        # ARCHITECTURAL FIX: Now that KeyManager doesn't accept api_url (to avoid circular imports),
+        # we fetch the context bytes and pass them directly. This improves separation of concerns.
         mnemonic, identity_file = KeyManager.create_identity_file(
             "test_account",
             temp_dir,
             context_bytes=cc_bytes,
             context_source=f"server:{api_url}",
-            api_url=api_url,  # This triggers client-side context manager usage
+            # Note: api_url parameter removed to break circular import
         )
 
         # Add additional PQ algorithms if specified
