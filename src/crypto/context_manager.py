@@ -183,19 +183,6 @@ class CryptoContextManager:
                     ):
                         return self._context
 
-                    # CRITICAL FIX: Allow updating context if the serialized data is different
-                    # This is necessary for client-server synchronization where the server's
-                    # context might be different from the client's current context
-                    if (
-                        self._initialized
-                        and self._serialized_context != serialized_data
-                    ):
-                        # Context is initialized but with different data - this is allowed for client-server sync
-                        # Reset the context to allow updating to the new server context
-                        self._context = None
-                        self._serialized_context = None
-                        self._initialized = False
-
                     if self._initialized:
                         raise RuntimeError("Cannot modify context after initialization")
 

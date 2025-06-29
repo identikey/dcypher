@@ -139,12 +139,34 @@ def test_cli_sharing_commands(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # === Step 1: Create Alice's Identity ===
-    run_command(["identity", "new", "--name", "Alice", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "Alice",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     alice_identity_file = test_dir / "Alice.json"
     assert alice_identity_file.exists()
 
     # === Step 2: Create Bob's Identity ===
-    run_command(["identity", "new", "--name", "Bob", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "Bob",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     bob_identity_file = test_dir / "Bob.json"
     assert bob_identity_file.exists()
 
@@ -404,23 +426,14 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     # === Step 10b: Bob decrypts the downloaded file and verifies content ===
     click.echo("🔓 Bob decrypting the re-encrypted content...", err=True)
 
-    # CRITICAL: Use the context singleton pattern to ensure proper decryption
-    # This follows the same pattern as the working TUI test
-    from crypto.context_manager import CryptoContextManager
+    # Use the DCypherClient's built-in context management instead of manual singleton manipulation
     import gzip
     import base64
     from src.lib import pre, idk_message
     import json
 
-    # Reset singleton to start fresh
-    CryptoContextManager.reset_all_instances()
-    context_manager = CryptoContextManager()
-
-    # Get server's crypto context
-    bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
-    # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
-    # which would destroy contexts in parallel test execution
-    cc = bob_client.get_crypto_context_object()
+    # Bob client is already created above - reuse it for context consistency
+    # No need to manually manage the singleton - let the client handle context synchronization
 
     # CRITICAL: Use Bob's actual PRE secret key from his identity (not generated keys)
     # The server used Bob's real PRE public key for re-encryption, so we need the corresponding secret key
@@ -430,6 +443,10 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     bob_pre_sk_hex = bob_identity_data["auth_keys"]["pre"]["sk_hex"]
     bob_pre_sk_bytes = bytes.fromhex(bob_pre_sk_hex)
     bob_sk_enc = pre.deserialize_secret_key(bob_pre_sk_bytes)
+
+    # Get the crypto context through the client's proper method
+    # This handles context synchronization automatically
+    cc = bob_client.get_crypto_context_object()
 
     # Read and decompress the downloaded file
     with open(shared_file_path, "rb") as f:
