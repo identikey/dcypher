@@ -82,21 +82,35 @@ class TestDCypherTUI:
         Test TUI functionality with a real identity created via KeyManager.
         This verifies the integration between TUI and backend systems.
         """
-        # Create a real identity file using KeyManager
+        # === Step 1: Get crypto context from server ===
+        client = DCypherClient(api_base_url)
+        cc_bytes = client.get_pre_crypto_context()
+        assert cc_bytes is not None
+
+        # === Step 2: Create a real identity file using KeyManager with server's context ===
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "tui_test", tmp_path, overwrite=True
+            "tui_test",
+            tmp_path,
+            overwrite=True,
+            context_bytes=cc_bytes,
+            context_source=api_base_url,
         )
         assert identity_file.exists()
 
-        # Verify identity file structure
+        # === Step 3: Verify identity file structure ===
         with open(identity_file, "r") as f:
             identity_data = json.load(f)
 
         assert "mnemonic" in identity_data
         assert "auth_keys" in identity_data
         assert identity_data["derivable"] is True
+        # Verify that PRE keys and context were stored
+        assert "pre" in identity_data["auth_keys"]
+        assert identity_data["auth_keys"]["pre"]["pk_hex"]
+        assert "crypto_context" in identity_data
+        assert identity_data["crypto_context"]["context_source"] == api_base_url
 
-        # Test TUI with the real identity
+        # === Step 4: Test TUI with the real identity ===
         app = DCypherTUI(identity_path=str(identity_file), api_url=api_base_url)
 
         async with app.run_test(size=(120, 40)) as pilot:
