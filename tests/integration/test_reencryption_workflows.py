@@ -63,9 +63,18 @@ def temp_dir():
 @pytest.fixture
 def alice_identity(temp_dir, api_base_url):
     """Create Alice's identity with PRE keys using server context."""
-    # Create identity file with PRE keys using server context
+    # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
+    from src.lib.api_client import DCypherClient
+
+    temp_client = DCypherClient(api_base_url)
+    cc_bytes = temp_client.get_pre_crypto_context()
+
+    # Create identity file with PRE keys using fetched context bytes
     mnemonic, identity_file = KeyManager.create_identity_file(
-        "alice", temp_dir, api_url=api_base_url
+        "alice",
+        temp_dir,
+        context_bytes=cc_bytes,
+        context_source=f"server:{api_base_url}",
     )
 
     return {
@@ -78,9 +87,15 @@ def alice_identity(temp_dir, api_base_url):
 @pytest.fixture
 def bob_identity(temp_dir, api_base_url):
     """Create Bob's identity with PRE keys using server context."""
-    # Create identity file with PRE keys using server context
+    # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
+    from src.lib.api_client import DCypherClient
+
+    temp_client = DCypherClient(api_base_url)
+    cc_bytes = temp_client.get_pre_crypto_context()
+
+    # Create identity file with PRE keys using fetched context bytes
     mnemonic, identity_file = KeyManager.create_identity_file(
-        "bob", temp_dir, api_url=api_base_url
+        "bob", temp_dir, context_bytes=cc_bytes, context_source=f"server:{api_base_url}"
     )
 
     return {
