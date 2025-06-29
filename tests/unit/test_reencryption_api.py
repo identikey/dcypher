@@ -13,6 +13,15 @@ from src.app_state import get_app_state
 from src.crypto.context_manager import CryptoContextManager
 
 
+def _generate_mock_context_bytes():
+    """Generate valid crypto context bytes for testing purposes."""
+    # Create a real crypto context and serialize it for testing
+    # This ensures unit tests work with valid crypto context data
+    from src.lib import pre
+    cc = pre.create_crypto_context()
+    return pre.serialize_to_bytes(cc)
+
+
 @pytest.fixture(autouse=True)
 def reset_context_singleton():
     """Automatically reset the context singleton before each test.
@@ -74,7 +83,7 @@ def deserialized_crypto_context(shared_crypto_context):
 def alice_client_with_pre(temp_dir, deserialized_crypto_context):
     """Create Alice's client with PRE capabilities using shared crypto context."""
     # Create identity file
-    mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir)
+    mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir, context_bytes=_generate_mock_context_bytes())
 
     # Get the shared deserialized context and its bytes
     deserialized_cc, cc_bytes = deserialized_crypto_context
@@ -110,7 +119,7 @@ def alice_client_with_pre(temp_dir, deserialized_crypto_context):
 def bob_client_with_pre(temp_dir, deserialized_crypto_context):
     """Create Bob's client with PRE capabilities using shared crypto context."""
     # Create identity file
-    mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir)
+    mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir, context_bytes=_generate_mock_context_bytes())
 
     # Get the shared deserialized context and its bytes
     deserialized_cc, cc_bytes = deserialized_crypto_context
@@ -148,7 +157,7 @@ class TestPREInitialization:
     def test_initialize_pre_for_identity(self, temp_dir):
         """Test PRE initialization for identity files."""
         # Create identity file
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
 
         # Create client
         client = DCypherClient(
@@ -199,7 +208,7 @@ class TestPREInitialization:
     def test_key_manager_add_pre_keys_to_identity(self, temp_dir):
         """Test adding PRE keys to an existing identity file."""
         # Create identity file
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
 
         # Verify initial state (empty PRE section)
         with open(identity_file, "r") as f:
@@ -255,7 +264,7 @@ class TestPREInitialization:
     def test_create_account_with_pre_key(self, temp_dir):
         """Test that account creation includes PRE public key if available."""
         # Create identity with PRE keys
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
 
         # Create a controlled context and add PRE keys manually to avoid context conflicts
         cc = pre.create_crypto_context()
@@ -894,7 +903,7 @@ class TestErrorHandling:
     def test_generate_re_key_without_pre_keys(self, temp_dir):
         """Test that generating re-encryption key fails without PRE keys."""
         # Create identity without PRE keys
-        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir)
+        mnemonic, identity_file = KeyManager.create_identity_file("test_user", temp_dir, context_bytes=_generate_mock_context_bytes())
         client = DCypherClient(
             "http://localhost:8000", identity_path=str(identity_file)
         )

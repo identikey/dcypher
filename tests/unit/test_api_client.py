@@ -14,6 +14,16 @@ from src.lib.api_client import (
 )
 from src.lib.key_manager import KeyManager
 from src.config import ML_DSA_ALG
+import secrets
+
+
+def _generate_mock_context_bytes():
+    """Generate valid crypto context bytes for testing purposes."""
+    # Create a real crypto context and serialize it for testing
+    # This ensures unit tests work with valid crypto context data
+    from src.lib import pre
+    cc = pre.create_crypto_context()
+    return pre.serialize_to_bytes(cc)
 
 
 class TestDCypherClient:
@@ -444,7 +454,7 @@ def test_dcypher_client_with_identity():
 
         # Create identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Create client with identity file
@@ -471,7 +481,7 @@ def test_dcypher_client_identity_precedence():
         # Create both auth_keys and identity files
         pk_hex_auth, auth_keys_file = KeyManager.create_auth_keys_bundle(temp_path)
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Create client with both paths - identity should take precedence

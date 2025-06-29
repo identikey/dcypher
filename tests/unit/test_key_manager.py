@@ -14,11 +14,12 @@ import secrets
 
 
 def _generate_mock_context_bytes():
-    """Generate mock crypto context bytes for testing purposes."""
-    # Generate some deterministic mock bytes that look like a crypto context
-    # This is just for testing - in production, real context comes from the server
-    mock_data = b"MOCK_CRYPTO_CONTEXT_FOR_TESTING_" + secrets.token_bytes(32)
-    return mock_data
+    """Generate valid crypto context bytes for testing purposes."""
+    # Create a real crypto context and serialize it for testing
+    # This ensures unit tests work with valid crypto context data
+    from src.lib import pre
+    cc = pre.create_crypto_context()
+    return pre.serialize_to_bytes(cc)
 
 
 def test_generate_classic_keypair():
@@ -191,7 +192,7 @@ def test_identity_file_deterministic():
 
         # Create an identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Verify the file was created
@@ -234,7 +235,7 @@ def test_load_identity_file():
 
         # Create an identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Load the identity file
@@ -292,7 +293,7 @@ def test_load_keys_unified_with_identity():
 
         # Create identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Load using unified loader
@@ -326,7 +327,7 @@ def test_signing_context_with_identity():
 
         # Create identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Test signing context with identity file
@@ -394,7 +395,7 @@ class TestKeyDerivationAndRotation:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             mnemonic, identity_file = KeyManager.create_identity_file(
-                "rotation_test", temp_path
+                "rotation_test", temp_path, context_bytes=_generate_mock_context_bytes()
             )
             yield identity_file
 
@@ -460,7 +461,7 @@ class TestSecureBackup:
 
             # Create an identity
             mnemonic, identity_file = KeyManager.create_identity_file(
-                "backup_test", temp_path
+                "backup_test", temp_path, context_bytes=_generate_mock_context_bytes()
             )
 
             # Create a backup
@@ -500,7 +501,7 @@ def test_create_identity_file_is_deterministic():
 
         # 1. Create an identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "deterministic_test", temp_path
+            "deterministic_test", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         with open(identity_file, "r") as f:
