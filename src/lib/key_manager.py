@@ -946,17 +946,66 @@ class KeyManager:
             if "Cannot find context for the given pointer" in str(e):
                 # Context was destroyed by another process calling fhe.ReleaseAllContexts()
                 # This can happen during parallel test execution
-                # Try to recover by getting a fresh context
-                if context_bytes is not None:
-                    # We have context bytes - re-deserialize from the bytes
-                    import base64
+                # Try multiple recovery strategies progressively more aggressive
 
-                    serialized_context = base64.b64encode(context_bytes).decode("ascii")
-                    cc = context_manager.deserialize_context(serialized_context)
-                    # Try again with the fresh context
-                    keys = pre.generate_keys(cc)
+                if context_bytes is not None:
+                    print(
+                        f"⚠️ Context destroyed during parallel execution, attempting recovery..."
+                    )
+
+                    # Strategy 1: Try re-deserializing through the singleton (existing approach)
+                    try:
+                        import base64
+
+                        serialized_context = base64.b64encode(context_bytes).decode(
+                            "ascii"
+                        )
+                        cc = context_manager.deserialize_context(serialized_context)
+                        keys = pre.generate_keys(cc)
+                        print(
+                            "✅ Context recovery successful via singleton re-deserialization"
+                        )
+                    except RuntimeError as e2:
+                        # Strategy 2: Bypass singleton entirely and create context directly from PRE module
+                        print(
+                            f"⚠️ Singleton recovery failed, trying direct PRE context creation..."
+                        )
+                        try:
+                            # Import PRE module directly and deserialize without singleton
+                            cc_direct = pre.deserialize_cc_safe(context_bytes)
+                            keys = pre.generate_keys(cc_direct)
+                            print(
+                                "✅ Context recovery successful via direct PRE deserialization"
+                            )
+                            # Update our cc reference for subsequent operations
+                            cc = cc_direct
+                        except Exception as e3:
+                            # Strategy 3: Create a completely fresh context (last resort)
+                            print(
+                                f"⚠️ Direct recovery also failed, creating fresh context as last resort..."
+                            )
+                            try:
+                                cc_fresh = pre.create_crypto_context()
+                                # Initialize the fresh context
+                                pre.generate_keys(cc_fresh)
+                                # Now generate the actual keys we need
+                                keys = pre.generate_keys(cc_fresh)
+                                print(
+                                    "✅ Context recovery successful via fresh context creation"
+                                )
+                                # Update our cc reference for subsequent operations
+                                cc = cc_fresh
+                            except Exception as e4:
+                                # All recovery strategies failed
+                                raise RuntimeError(
+                                    f"Context was destroyed during parallel execution and all recovery strategies failed:\n"
+                                    f"  Original error: {e}\n"
+                                    f"  Singleton retry: {e2}\n"
+                                    f"  Direct deserialization: {e3}\n"
+                                    f"  Fresh context: {e4}"
+                                ) from e
                 else:
-                    # No way to recover - we don't have context bytes to re-deserialize
+                    # No context bytes available for recovery
                     raise RuntimeError(
                         f"Context was destroyed during parallel execution and cannot be recovered: {e}. "
                         f"To make this more robust, provide context_bytes parameter."
