@@ -32,8 +32,12 @@ def upload(identity_path, file_path, api_url):
         # Initialize API client
         client = DCypherClient(api_url, identity_path=identity_path)
 
-        # Get server's crypto context using singleton pattern (consistent with server)
-        click.echo("Getting server crypto context...", err=True)
+        # CRITICAL FIX: Use the same context management approach as when PRE keys were generated
+        # Since this file imports DCypherClient, we should use its context management
+        # to ensure compatibility with the PRE keys stored in the identity file
+        click.echo(
+            "Getting crypto context (same approach as key generation)...", err=True
+        )
         cc = client.get_crypto_context_object()
 
         # Load identity data to get keys
