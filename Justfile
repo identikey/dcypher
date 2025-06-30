@@ -67,14 +67,14 @@ build-openfhe:
     mkdir -p build
     cd build
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../openfhe-local" \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../build" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_UNITTESTS=OFF \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_BENCHMARKS=OFF
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
-    echo "OpenFHE installed to: $(pwd)/../../../openfhe-local"
+    echo "OpenFHE installed to: $(pwd)/../../../build"
 
 # Build OpenFHE Python bindings using local C++ library
 build-openfhe-python: build-openfhe
@@ -99,14 +99,14 @@ build-liboqs:
     mkdir -p build
     cd build
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../liboqs-local" \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../build" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=ON \
         -DOQS_BUILD_ONLY_LIB=ON \
         -DOQS_MINIMAL_BUILD=OFF
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
-    echo "liboqs installed to: $(pwd)/../../../liboqs-local"
+    echo "liboqs installed to: $(pwd)/../../../build"
 
 # Build both OpenFHE C++ and Python bindings
 build-all: build-openfhe-python build-liboqs
