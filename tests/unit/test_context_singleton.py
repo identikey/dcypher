@@ -150,8 +150,16 @@ class TestCryptoContextManager:
                 # If we get a ValueError, it should be about unsupported scheme
                 assert "Unsupported scheme" in str(e)
             except RuntimeError as e:
-                # If we get RuntimeError about modification after init, that's also acceptable
-                assert "Cannot modify context after initialization" in str(e)
+                # RuntimeError can be either about modification after init, or wrapping
+                # the unsupported scheme ValueError
+                error_msg = str(e)
+                assert any(
+                    phrase in error_msg
+                    for phrase in [
+                        "Cannot modify context after initialization",
+                        "Unsupported scheme",
+                    ]
+                )
         else:
             with pytest.raises(RuntimeError, match="OpenFHE library is not available"):
                 self.manager.initialize_context(scheme="CKKS")
