@@ -9,7 +9,7 @@ __pycache__
 openfhe-local
 liboqs-local
 .vscode/
-.coverage
+.coverage*
 
 # OpenHands/AllHands cache
 /tmp/dcypher_cache
