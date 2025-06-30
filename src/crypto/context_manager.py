@@ -358,6 +358,20 @@ class CryptoClientContextManager(CryptoContextManager):
     # Separate singleton instance for client operations
     _client_instance: Optional["CryptoClientContextManager"] = None
 
+    # Define separate locks for the client manager to ensure complete isolation from the
+    # server-side manager and prevent state conflicts in multithreaded environments.
+    _creation_lock = threading.RLock()
+    _context_lock = threading.RLock()
+    _serialization_lock = threading.RLock()
+    _initialization_lock = threading.RLock()
+
+    # Define separate state variables for the client manager to prevent any chance of
+    # state leakage from the parent class.
+    _context: Optional[Any] = None
+    _serialized_context: Optional[str] = None
+    _context_params: Optional[Dict[str, Any]] = None
+    _initialized: bool = False
+
     def __new__(cls) -> "CryptoClientContextManager":
         """Create or return the client-side singleton instance."""
         # Double-checked locking with maximum safety for client instance
