@@ -62,8 +62,29 @@ async def initialize_crypto_context(
     Once initialized, all clients should use the same context via /context endpoint.
     """
     try:
-        # Reset context if already initialized
-        context_manager.reset()
+        # Check if context is already initialized with compatible parameters
+        existing_context = context_manager.get_context()
+        existing_params = context_manager.get_context_params()
+
+        requested_params = {
+            "scheme": scheme,
+            "plaintext_modulus": plaintext_modulus,
+            "multiplicative_depth": multiplicative_depth,
+            "scaling_mod_size": scaling_mod_size,
+            "batch_size": batch_size,
+        }
+
+        if existing_context is not None and existing_params == requested_params:
+            # Context already exists with the same parameters, no need to reset
+            return {
+                "message": "Crypto context already initialized with these parameters",
+                "params": existing_params,
+            }
+
+        # Only reset if we need different parameters or no context exists
+        if existing_context is not None:
+            # Reset context if already initialized with different parameters
+            context_manager.reset()
 
         # Initialize with new parameters
         context_manager.initialize_context(

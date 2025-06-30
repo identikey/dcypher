@@ -21,16 +21,24 @@ def get_pre_crypto_context():
     NOTE: This endpoint is deprecated and should be replaced with /pre-crypto-params
     for proper client-server architecture. Keeping for backward compatibility.
     """
-    # Always return the same crypto context that was created at server startup
-    app_state = get_app_state()
+    # Use the same context manager that the crypto router and re-encryption use
+    # This ensures complete consistency across all server operations
+    context_manager = CryptoContextManager()
 
-    # app_state.pre_cc_serialized should always exist (initialized in ServerState.__init__)
-    if not hasattr(app_state, "pre_cc_serialized") or not app_state.pre_cc_serialized:
-        raise RuntimeError("Server crypto context not properly initialized")
+    # Ensure context is initialized
+    if context_manager.get_context() is None:
+        # Initialize with default parameters (same as crypto router)
+        context_manager.initialize_context()
 
-    return Response(
-        content=app_state.pre_cc_serialized, media_type="application/octet-stream"
-    )
+    # Return the serialized context from the singleton
+    try:
+        serialized_context = context_manager.serialize_context()
+        # Convert from base64 string to raw bytes for consistency with old API
+        context_bytes = base64.b64decode(serialized_context.encode("ascii"))
+
+        return Response(content=context_bytes, media_type="application/octet-stream")
+    except Exception as e:
+        raise RuntimeError(f"Failed to get server crypto context: {e}")
 
 
 @router.get("/pre-crypto-params")
