@@ -150,10 +150,10 @@ test-until-break:
 
 # Build OpenHands (All Hands AI) development environment
 doit-build:
-    docker build -t dcypher-allhands -f dockerfile.allhands .
+    docker build -t dcypher-allhands -f Dockerfile.allhands .
 
 # Start OpenHands (All Hands AI) development environment
-doit:
+doit: doit-build
     docker run -it --rm --pull=always \
         -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-allhands \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
