@@ -342,19 +342,20 @@ class CryptoContextManager(CryptoContextManagerBase):
     @classmethod
     def reset_instance(cls) -> None:
         """Reset the global singleton instance. Use with extreme caution."""
-        with cls._creation_lock:
-            with cls._context_lock:
-                with cls._serialization_lock:
-                    with cls._initialization_lock:
-                        if cls._instance is not None:
-                            try:
-                                cls._instance._context = None
-                                cls._instance._serialized_context = None
-                                cls._instance._context_params = None
-                                cls._instance._initialized = False
-                            except Exception:
-                                pass  # Ignore cleanup errors
-                        cls._instance = None
+        pass
+        # with cls._creation_lock:
+        #     with cls._context_lock:
+        #         with cls._serialization_lock:
+        #             with cls._initialization_lock:
+        #                 if cls._instance is not None:
+        #                     try:
+        #                         cls._instance._context = None
+        #                         cls._instance._serialized_context = None
+        #                         cls._instance._context_params = None
+        #                         cls._instance._initialized = False
+        #                     except Exception:
+        #                         pass  # Ignore cleanup errors
+        #                 cls._instance = None
 
     @classmethod
     def reset_all_instances(cls) -> None:
@@ -429,19 +430,20 @@ class CryptoClientContextManager(CryptoContextManagerBase):
     @classmethod
     def reset_client_instance(cls) -> None:
         """Reset the client-side singleton instance."""
-        with cls._creation_lock:
-            with cls._context_lock:
-                with cls._serialization_lock:
-                    with cls._initialization_lock:
-                        if cls._client_instance is not None:
-                            try:
-                                cls._client_instance._context = None
-                                cls._client_instance._serialized_context = None
-                                cls._client_instance._context_params = None
-                                cls._client_instance._initialized = False
-                            except Exception:
-                                pass  # Ignore cleanup errors
-                        cls._client_instance = None
+        pass
+        # with cls._creation_lock:
+        #     with cls._context_lock:
+        #         with cls._serialization_lock:
+        #             with cls._initialization_lock:
+        #                 if cls._client_instance is not None:
+        #                     try:
+        #                         cls._client_instance._context = None
+        #                         cls._client_instance._serialized_context = None
+        #                         cls._client_instance._context_params = None
+        #                         cls._client_instance._initialized = False
+        #                     except Exception:
+        #                         pass  # Ignore cleanup errors
+        #                 cls._client_instance = None
 
 
 # Global client-side singleton instance - thread-safe access
