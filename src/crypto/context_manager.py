@@ -47,91 +47,29 @@ OPENFHE_AVAILABLE = _openfhe_available
 PRE_MODULE_AVAILABLE = _pre_module_available
 
 
-class CryptoContextManager:
-    """Global thread-safe singleton manager for OpenFHE crypto context.
+class CryptoContextManagerBase:
+    """Base class for thread-safe OpenFHE crypto context management.
 
-    This class implements a global singleton pattern with maximum thread safety
-    for C bindings. All operations are heavily locked to prevent race conditions
-    in multi-threaded environments.
+    This class provides the core logic for initializing, serializing, and
+    managing an OpenFHE crypto context. It is designed to be subclassed by
+    singleton managers for server and client contexts.
     """
 
-    # Global singleton instance
-    _instance: Optional["CryptoContextManager"] = None
-    # Multiple locks for different operations
-    _creation_lock = threading.RLock()  # Reentrant lock for instance creation
-    _context_lock = threading.RLock()  # Reentrant lock for context operations
-    _serialization_lock = threading.RLock()  # Reentrant lock for serialization
-    _initialization_lock = threading.RLock()  # Reentrant lock for initialization
+    # These locks and state variables should be redefined in subclasses
+    # to ensure complete isolation between different manager instances.
+    _creation_lock = threading.RLock()
+    _context_lock = threading.RLock()
+    _serialization_lock = threading.RLock()
+    _initialization_lock = threading.RLock()
 
-    # Instance variables that will be initialized in __new__
     _context: Optional[Any] = None
     _serialized_context: Optional[str] = None
     _context_params: Optional[Dict[str, Any]] = None
     _initialized: bool = False
 
-    def __new__(cls) -> "CryptoContextManager":
-        """Create or return the global singleton instance with maximum thread safety."""
-        # Double-checked locking with maximum safety
-        if cls._instance is not None:
-            return cls._instance
-
-        with cls._creation_lock:
-            if cls._instance is not None:
-                return cls._instance
-
-            # Create new instance with all locks
-            instance = super().__new__(cls)
-
-            # Initialize all instance variables under lock
-            with cls._context_lock:
-                instance._context = None
-                instance._serialized_context = None
-                instance._context_params = None
-                instance._initialized = False
-
-            cls._instance = instance
-            return cls._instance
-
     def __init__(self) -> None:
         """Initialize instance - called every time but only acts once."""
         # No-op since everything is done in __new__
-        pass
-
-    @classmethod
-    def get_instance(cls) -> "CryptoContextManager":
-        """Get the global singleton instance."""
-        if cls._instance is None:
-            with cls._creation_lock:
-                if cls._instance is None:
-                    cls._instance = cls()
-        return cls._instance
-
-    @classmethod
-    def reset_instance(cls) -> None:
-        """Reset the global singleton instance. Use with extreme caution."""
-        with cls._creation_lock:
-            with cls._context_lock:
-                with cls._serialization_lock:
-                    with cls._initialization_lock:
-                        if cls._instance is not None:
-                            try:
-                                cls._instance._context = None
-                                cls._instance._serialized_context = None
-                                cls._instance._context_params = None
-                                cls._instance._initialized = False
-                            except Exception:
-                                pass  # Ignore cleanup errors
-                        cls._instance = None
-
-    @classmethod
-    def reset_all_instances(cls) -> None:
-        """Reset all instances - backward compatibility."""
-        # cls.reset_instance()
-        pass
-
-    def reset(self) -> None:
-        """Reset the current instance - backward compatibility."""
-        # self.reset_instance()
         pass
 
     def get_context(self) -> Optional[Any]:
@@ -347,7 +285,91 @@ class CryptoContextManager:
         return _openfhe_available and _pre_module_available
 
 
-class CryptoClientContextManager(CryptoContextManager):
+class CryptoContextManager(CryptoContextManagerBase):
+    """Global thread-safe singleton manager for OpenFHE crypto context.
+
+    This class implements a global singleton pattern with maximum thread safety
+    for C bindings. All operations are heavily locked to prevent race conditions
+    in multi-threaded environments.
+    """
+
+    # Global singleton instance
+    _instance: Optional["CryptoContextManager"] = None
+    # Multiple locks for different operations
+    _creation_lock = threading.RLock()
+    _context_lock = threading.RLock()
+    _serialization_lock = threading.RLock()
+    _initialization_lock = threading.RLock()
+
+    # Instance variables that will be initialized in __new__
+    _context: Optional[Any] = None
+    _serialized_context: Optional[str] = None
+    _context_params: Optional[Dict[str, Any]] = None
+    _initialized: bool = False
+
+    def __new__(cls) -> "CryptoContextManager":
+        """Create or return the global singleton instance with maximum thread safety."""
+        # Double-checked locking with maximum safety
+        if cls._instance is not None:
+            return cls._instance
+
+        with cls._creation_lock:
+            if cls._instance is not None:
+                return cls._instance
+
+            # Create new instance with all locks
+            instance = super().__new__(cls)
+
+            # Initialize all instance variables under lock
+            with cls._context_lock:
+                instance._context = None
+                instance._serialized_context = None
+                instance._context_params = None
+                instance._initialized = False
+
+            cls._instance = instance
+            return cls._instance
+
+    @classmethod
+    def get_instance(cls) -> "CryptoContextManager":
+        """Get the global singleton instance."""
+        if cls._instance is None:
+            with cls._creation_lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset the global singleton instance. Use with extreme caution."""
+        pass
+        # with cls._creation_lock:
+        #     with cls._context_lock:
+        #         with cls._serialization_lock:
+        #             with cls._initialization_lock:
+        #                 if cls._instance is not None:
+        #                     try:
+        #                         cls._instance._context = None
+        #                         cls._instance._serialized_context = None
+        #                         cls._instance._context_params = None
+        #                         cls._instance._initialized = False
+        #                     except Exception:
+        #                         pass  # Ignore cleanup errors
+        #                 cls._instance = None
+
+    @classmethod
+    def reset_all_instances(cls) -> None:
+        """Reset all instances - backward compatibility."""
+        # cls.reset_instance()
+        pass
+
+    def reset(self) -> None:
+        """Reset the current instance - backward compatibility."""
+        # self.reset_instance()
+        pass
+
+
+class CryptoClientContextManager(CryptoContextManagerBase):
     """Client-side crypto context manager with separate singleton instance.
 
     This class provides the same thread-safe functionality as CryptoContextManager
@@ -408,19 +430,20 @@ class CryptoClientContextManager(CryptoContextManager):
     @classmethod
     def reset_client_instance(cls) -> None:
         """Reset the client-side singleton instance."""
-        with cls._creation_lock:
-            with cls._context_lock:
-                with cls._serialization_lock:
-                    with cls._initialization_lock:
-                        if cls._client_instance is not None:
-                            try:
-                                cls._client_instance._context = None
-                                cls._client_instance._serialized_context = None
-                                cls._client_instance._context_params = None
-                                cls._client_instance._initialized = False
-                            except Exception:
-                                pass  # Ignore cleanup errors
-                        cls._client_instance = None
+        pass
+        # with cls._creation_lock:
+        #     with cls._context_lock:
+        #         with cls._serialization_lock:
+        #             with cls._initialization_lock:
+        #                 if cls._client_instance is not None:
+        #                     try:
+        #                         cls._client_instance._context = None
+        #                         cls._client_instance._serialized_context = None
+        #                         cls._client_instance._context_params = None
+        #                         cls._client_instance._initialized = False
+        #                     except Exception:
+        #                         pass  # Ignore cleanup errors
+        #                 cls._client_instance = None
 
 
 # Global client-side singleton instance - thread-safe access
