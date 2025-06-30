@@ -463,13 +463,13 @@ class TestTUIIntegration:
             api_base_url, identity_path=str(alice_identity_file)
         )
 
-        # CRITICAL: Use the existing context singleton without trying to reset it
-        # FIXED: Remove reset call that doesn't work and get existing context
-        from crypto.context_manager import get_context_manager
+        # CRITICAL: Use the client context singleton without interfering with server's context
+        # ARCHITECTURAL FIX: Always use client context manager for client-side operations
+        from crypto.context_manager import get_client_context_manager
         import base64
 
-        # Get the existing context manager (singleton)
-        context_manager = get_context_manager()
+        # Get the client context manager (separate from server's context)
+        client_context_manager = get_client_context_manager()
 
         # Get server's crypto context using the improved API method
         # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
