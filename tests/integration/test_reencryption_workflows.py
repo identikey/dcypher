@@ -127,7 +127,6 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     import gzip
     import base64
     import json
-    from crypto.context_manager import get_client_context_manager
     from src.lib import pre, idk_message
 
     print("🔧 Setting up Alice and Bob's accounts with live server using CLI...")
@@ -330,14 +329,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === CRITICAL VERIFICATION ===
     # Read the downloaded file and decrypt the IDK message (like the working CLI test)
-    # ARCHITECTURAL FIX: Use client context manager - never interfere with server's context
-    # The server's context must remain stable throughout the test
-    client_context_manager = get_client_context_manager()
-
-    # Get server's crypto context
+    # Get server's crypto context directly from the client without using shared singletons
     bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
-    # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
-    # which would destroy contexts in parallel test execution
+    # Use get_crypto_context_object() which handles context synchronization internally
     cc = bob_client.get_crypto_context_object()
 
     # Get Bob's PRE secret key from his identity

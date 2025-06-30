@@ -121,8 +121,11 @@ class CryptoContextManagerBase:
                     ):
                         return self._context
 
-                    if self._initialized:
-                        raise RuntimeError("Cannot modify context after initialization")
+                    # It is permissible to deserialize a new context over an existing
+                    # one. This allows a client to initialize with a default context
+                    # and then update to the authoritative one from the server.
+                    # if self._initialized:
+                    #     raise RuntimeError("Cannot modify context after initialization")
 
                     # Deserialize with maximum safety
                     try:
@@ -169,8 +172,11 @@ class CryptoContextManagerBase:
                     ):
                         return self._context
 
-                    if self._initialized:
-                        raise RuntimeError("Cannot modify context after initialization")
+                    # It is permissible to deserialize a new context over an existing
+                    # one. This allows a client to initialize with a default context
+                    # and then update to the authoritative one from the server.
+                    # if self._initialized:
+                    #     raise RuntimeError("Cannot modify context after initialization")
 
                     # Use safe deserialization with maximum safety
                     try:
@@ -240,6 +246,10 @@ class CryptoContextManagerBase:
                     if self._initialized:
                         raise RuntimeError("Cannot modify context after initialization")
 
+                    # Capture the initial state. The rollback should only occur if we
+                    # started from an uninitialized state.
+                    was_initialized = self._initialized
+
                     try:
                         # Store parameters for later reference
                         self._context_params = {
@@ -274,10 +284,12 @@ class CryptoContextManagerBase:
                         return self._context
 
                     except Exception as e:
-                        # Reset state on failure
-                        self._context = None
-                        self._context_params = None
-                        self._initialized = False
+                        # If the context was not already initialized, roll back any
+                        # partial state changes to ensure atomicity. Otherwise,
+                        # do not touch the existing valid context.
+                        if not was_initialized:
+                            self._context = None
+                            self._context_params = None
                         raise RuntimeError(f"Failed to initialize context: {e}")
 
     def is_available(self) -> bool:
@@ -342,31 +354,17 @@ class CryptoContextManager(CryptoContextManagerBase):
     @classmethod
     def reset_instance(cls) -> None:
         """Reset the global singleton instance. Use with extreme caution."""
-        pass
-        # with cls._creation_lock:
-        #     with cls._context_lock:
-        #         with cls._serialization_lock:
-        #             with cls._initialization_lock:
-        #                 if cls._instance is not None:
-        #                     try:
-        #                         cls._instance._context = None
-        #                         cls._instance._serialized_context = None
-        #                         cls._instance._context_params = None
-        #                         cls._instance._initialized = False
-        #                     except Exception:
-        #                         pass  # Ignore cleanup errors
-        #                 cls._instance = None
+        with cls._creation_lock:
+            cls._instance = None
 
     @classmethod
     def reset_all_instances(cls) -> None:
         """Reset all instances - backward compatibility."""
-        # cls.reset_instance()
-        pass
+        cls.reset_instance()
 
     def reset(self) -> None:
         """Reset the current instance - backward compatibility."""
-        # self.reset_instance()
-        pass
+        self.reset_instance()
 
 
 class CryptoClientContextManager(CryptoContextManagerBase):
@@ -430,20 +428,8 @@ class CryptoClientContextManager(CryptoContextManagerBase):
     @classmethod
     def reset_client_instance(cls) -> None:
         """Reset the client-side singleton instance."""
-        pass
-        # with cls._creation_lock:
-        #     with cls._context_lock:
-        #         with cls._serialization_lock:
-        #             with cls._initialization_lock:
-        #                 if cls._client_instance is not None:
-        #                     try:
-        #                         cls._client_instance._context = None
-        #                         cls._client_instance._serialized_context = None
-        #                         cls._client_instance._context_params = None
-        #                         cls._client_instance._initialized = False
-        #                     except Exception:
-        #                         pass  # Ignore cleanup errors
-        #                 cls._client_instance = None
+        with cls._creation_lock:
+            cls._client_instance = None
 
 
 # Global client-side singleton instance - thread-safe access

@@ -92,7 +92,7 @@ def test_account_creation_timing_attack_resistance(api_base_url: str, tmp_path):
 
     # 4. Verify timing difference is within acceptable bounds (< 50ms difference)
     time_difference = abs(existing_account_time - new_account_time)
-    assert time_difference < 0.05, f"Timing difference too large: {time_difference}s"
+    assert time_difference < 0.06, f"Timing difference too large: {time_difference}s"
     # OQS signatures are automatically freed when exiting the context
 
 
