@@ -13,7 +13,6 @@ from lib import pre
 import ecdsa
 import oqs
 import base64
-from crypto.context_manager import get_client_context_manager
 import time
 
 
@@ -968,26 +967,9 @@ class DCypherClient:
         except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
             raise AuthenticationError(f"Failed to load PRE keys: {e}")
 
-        # CRITICAL FIX: Check if context singleton is already initialized
-        # If so, use it directly to maintain context consistency (important for tests)
-        try:
-            from src.crypto.context_manager import get_client_context_manager
-        except ImportError:
-            # Handle CLI context where src module isn't in path
-            from crypto.context_manager import get_client_context_manager
-
-        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
-        context_manager = get_client_context_manager()
-        existing_context = context_manager.get_context()
-
-        if existing_context is not None:
-            # Use the existing context (maintains consistency for tests)
-            cc = existing_context
-        else:
-            # CRITICAL FIX: Get the context object directly from server to avoid deserialization
-            # This prevents calling fhe.ReleaseAllContexts() which would destroy the server's context
-            cc = self.get_crypto_context_object()
-            # Context is ready for use - no additional key generation needed
+        # Use the private context from this client instance to avoid race conditions
+        # This ensures consistency with other operations on this client
+        cc = self.get_crypto_context_object()
 
         # Deserialize Alice's secret key and Bob's public key
         alice_sk = pre.deserialize_secret_key(alice_sk_bytes)
