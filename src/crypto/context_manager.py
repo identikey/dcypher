@@ -432,12 +432,6 @@ class CryptoClientContextManager(CryptoContextManagerBase):
             cls._client_instance = None
 
 
-# Global client-side singleton instance - thread-safe access
-def get_client_context_manager() -> CryptoClientContextManager:
-    """Get the global thread-safe client-side singleton context manager."""
-    return CryptoClientContextManager.get_client_instance()
-
-
 # Global singleton instance - thread-safe access
 def get_context_manager() -> CryptoContextManager:
     """Get the global thread-safe singleton context manager."""

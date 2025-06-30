@@ -1004,22 +1004,9 @@ class DCypherClient:
         ):
             return self._private_context
 
-        # Need to create or update the private context
-        try:
-            from src.crypto.context_manager import CryptoClientContextManager
-        except ImportError:
-            # Handle CLI context where src module isn't in path
-            from crypto.context_manager import CryptoClientContextManager
-
-        # Create a new private context manager instance (not the singleton)
-        private_manager = object.__new__(CryptoClientContextManager)
-        private_manager._context = None
-        private_manager._serialized_context = None
-        private_manager._context_params = None
-        private_manager._initialized = False
-
-        # Deserialize the server's context into our private manager
-        self._private_context = private_manager.deserialize_context(serialized_context)
+        # Use direct PRE module deserialization to avoid singleton issues
+        # This creates a private context without relying on shared state
+        self._private_context = pre.deserialize_cc_safe(cc_bytes)
         self._private_context_serialized = serialized_context
 
         return self._private_context

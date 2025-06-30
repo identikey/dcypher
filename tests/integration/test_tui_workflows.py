@@ -463,20 +463,11 @@ class TestTUIIntegration:
             api_base_url, identity_path=str(alice_identity_file)
         )
 
-        # CRITICAL: Use the client context singleton without interfering with server's context
-        # ARCHITECTURAL FIX: Always use client context manager for client-side operations
-        from crypto.context_manager import get_client_context_manager
-        import base64
-
-        # Get the client context manager (separate from server's context)
-        client_context_manager = get_client_context_manager()
-
+        # Use alice_client's private context to avoid singleton race conditions
         # Get server's crypto context using the improved API method
-        # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
-        # which would destroy contexts in parallel test execution
         cc = alice_client.get_crypto_context_object()
 
-        # CRITICAL: Generate different PRE keys for Alice and Bob from the SAME context instance
+        # Generate different PRE keys for Alice and Bob from the SAME context instance
         # This ensures proper proxy re-encryption while maintaining crypto context consistency
         print("🔑 Generating compatible Alice and Bob keys from server context...")
         alice_keys = pre.generate_keys(cc)
