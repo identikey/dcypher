@@ -368,8 +368,9 @@ class CryptoClientContextManager(CryptoContextManager):
             if cls._client_instance is not None:
                 return cls._client_instance
 
-            # Create new client instance with all locks
-            instance = super(CryptoContextManager, cls).__new__(cls)
+            # Create new client instance using the base object.__new__ to avoid
+            # calling the parent's __new__ and mixing up singletons.
+            instance = object.__new__(cls)
 
             # Initialize all instance variables under lock
             with cls._context_lock:
