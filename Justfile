@@ -5,31 +5,31 @@ default:
     @just --list
 
 # Build the Docker image for Intel processor
-docker-build:
+docker-build-intel:
     docker build build --platform linux/amd64 -t dcypher --load .
 
 # Build the development Docker image
-docker-build-dev:
+docker-build-intel-dev:
     docker buildx build --platform linux/amd64 -f dockerfile.dev -t dcypher-dev --load .
 
 # Run the Docker container
-docker-run:
+docker-run-intel:
     docker run --rm dcypher
 
 # Start development environment with volume mounting
-dev-up:
+dev-up-intel:
     docker-compose -f docker-compose.dev.yml up -d
 
 # Stop development environment
-dev-down:
+dev-down-intel:
     docker-compose -f docker-compose.dev.yml down
 
 # Open an interactive bash shell in the development container
-dev-shell:
+dev-shell-intel:
     docker-compose -f docker-compose.dev.yml exec dcypher-dev bash
 
 # Run tests in development container
-dev-test:
+dev-test-intel:
     docker-compose -f docker-compose.dev.yml exec dcypher-dev uv run pytest tests/ -v
 
 # Run CLI in development container
@@ -58,8 +58,6 @@ docker-cli *args:
 docker-exec command:
     docker run --rm -it dcypher {{command}}
 
-proxy *args:
-    ./zig-out/bin/zig_proxy {{args}}
 # Build OpenFHE C++ library locally (not system-wide)
 build-openfhe:
     #!/usr/bin/env bash
