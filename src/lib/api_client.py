@@ -13,7 +13,6 @@ from lib import pre
 import ecdsa
 import oqs
 import base64
-from crypto.context_manager import get_client_context_manager
 import time
 
 
@@ -968,26 +967,9 @@ class DCypherClient:
         except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
             raise AuthenticationError(f"Failed to load PRE keys: {e}")
 
-        # CRITICAL FIX: Check if context singleton is already initialized
-        # If so, use it directly to maintain context consistency (important for tests)
-        try:
-            from src.crypto.context_manager import get_client_context_manager
-        except ImportError:
-            # Handle CLI context where src module isn't in path
-            from crypto.context_manager import get_client_context_manager
-
-        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
-        context_manager = get_client_context_manager()
-        existing_context = context_manager.get_context()
-
-        if existing_context is not None:
-            # Use the existing context (maintains consistency for tests)
-            cc = existing_context
-        else:
-            # CRITICAL FIX: Get the context object directly from server to avoid deserialization
-            # This prevents calling fhe.ReleaseAllContexts() which would destroy the server's context
-            cc = self.get_crypto_context_object()
-            # Context is ready for use - no additional key generation needed
+        # Use the private context from this client instance to avoid race conditions
+        # This ensures consistency with other operations on this client
+        cc = self.get_crypto_context_object()
 
         # Deserialize Alice's secret key and Bob's public key
         alice_sk = pre.deserialize_secret_key(alice_sk_bytes)
@@ -1022,22 +1004,9 @@ class DCypherClient:
         ):
             return self._private_context
 
-        # Need to create or update the private context
-        try:
-            from src.crypto.context_manager import CryptoClientContextManager
-        except ImportError:
-            # Handle CLI context where src module isn't in path
-            from crypto.context_manager import CryptoClientContextManager
-
-        # Create a new private context manager instance (not the singleton)
-        private_manager = object.__new__(CryptoClientContextManager)
-        private_manager._context = None
-        private_manager._serialized_context = None
-        private_manager._context_params = None
-        private_manager._initialized = False
-
-        # Deserialize the server's context into our private manager
-        self._private_context = private_manager.deserialize_context(serialized_context)
+        # Use direct PRE module deserialization to avoid singleton issues
+        # This creates a private context without relying on shared state
+        self._private_context = pre.deserialize_cc_safe(cc_bytes)
         self._private_context_serialized = serialized_context
 
         return self._private_context
