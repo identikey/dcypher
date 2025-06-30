@@ -1,12 +1,12 @@
-[submodule "vendor/openfhe-python"]
+[submodule "openfhe-python"]
 	path = vendor/openfhe-python
 	url = https://github.com/identikey/openfhe-python
-[submodule "vendor/openfhe-rs"]
+[submodule "openfhe-rs"]
 	path = vendor/openfhe-rs
 	url = https://github.com/fairmath/openfhe-rs
-[submodule "vendor/openfhe-development"]
+[submodule "openfhe-development"]
 	path = vendor/openfhe-development
 	url = https://github.com/openfheorg/openfhe-development.git
-[submodule "vendor/liboqs"]
+[submodule "liboqs"]
 	path = vendor/liboqs
 	url = https://github.com/open-quantum-safe/liboqs.git
