@@ -68,7 +68,6 @@ class CryptoContextManager:
         scaling_mod_size: int = 50,
         batch_size: int = 8,
         serialized_data: Optional[str] = None,
-        deserialize_safe: bool = False,
     ) -> None:
         """Initialize the crypto context manager.
 
@@ -84,7 +83,6 @@ class CryptoContextManager:
             serialized_data (Optional[str]): A base64-encoded string of a
                                              serialized context. If provided,
                                              other parameters are ignored.
-            deserialize_safe (bool): If true, use process-safe deserialization.
         """
         self._context_lock = threading.RLock()
         self._serialization_lock = threading.RLock()
@@ -96,10 +94,7 @@ class CryptoContextManager:
         self._initialized: bool = False
 
         if serialized_data:
-            if deserialize_safe:
-                self.deserialize_context_safe(serialized_data)
-            else:
-                self.deserialize_context(serialized_data)
+            self.deserialize_context(serialized_data)
         else:
             self.initialize_context(
                 scheme=scheme,
@@ -169,19 +164,12 @@ class CryptoContextManager:
                     if self._initialized:
                         raise RuntimeError("Context is already initialized.")
 
-                    # Deserialize with maximum safety
+                    # Deserialize the context
                     try:
                         context_bytes = base64.b64decode(
                             serialized_data.encode("ascii")
                         )
-                        if os.environ.get("PYTEST_XDIST_WORKER") or os.environ.get(
-                            "PARALLEL_EXECUTION"
-                        ):
-                            self._context = _pre_module.deserialize_cc_safe(
-                                context_bytes
-                            )
-                        else:
-                            self._context = _pre_module.deserialize_cc(context_bytes)
+                        self._context = _pre_module.deserialize_cc(context_bytes)
 
                         self._serialized_context = serialized_data
                         self._initialized = True
@@ -193,38 +181,6 @@ class CryptoContextManager:
                         self._serialized_context = None
                         self._initialized = False
                         raise RuntimeError(f"Failed to deserialize context: {e}")
-
-    def deserialize_context_safe(self, serialized_data: str) -> Any:
-        """Process-safe deserialization with maximum thread safety."""
-        if not _openfhe_available:
-            raise RuntimeError("OpenFHE library is not available")
-
-        if not _pre_module_available or _pre_module is None:
-            raise RuntimeError("PRE module is not available")
-
-        # Use locks for thread safety
-        with self._serialization_lock:
-            with self._context_lock:
-                with self._initialization_lock:
-                    if self._initialized:
-                        raise RuntimeError("Context is already initialized.")
-
-                    # Use safe deserialization with maximum safety
-                    try:
-                        context_bytes = base64.b64decode(
-                            serialized_data.encode("ascii")
-                        )
-                        self._context = _pre_module.deserialize_cc_safe(context_bytes)
-                        self._serialized_context = serialized_data
-                        self._initialized = True
-
-                        return self._context
-                    except Exception as e:
-                        # Reset state on failure
-                        self._context = None
-                        self._serialized_context = None
-                        self._initialized = False
-                        raise RuntimeError(f"Failed to safely deserialize context: {e}")
 
     def serialize_context(self) -> str:
         """Serialize the current context with maximum thread safety."""

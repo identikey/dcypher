@@ -3,7 +3,6 @@ import base64
 import tempfile
 import os
 import struct
-import threading
 from typing import List
 
 # Import guard for OpenFHE availability
@@ -336,18 +335,8 @@ def _deserialize_from_bytes(data: bytes, deserializer):
     return obj
 
 
-# Global lock for context deserialization to prevent race conditions
-_context_lock = threading.Lock()
-
-# Process-local context registry to track contexts per process
-_process_contexts = {}
-
-
-def deserialize_cc_safe(data: bytes):
-    """Process-safe deserialization of CryptoContext from raw bytes.
-
-    This version uses process-local context management to prevent destroying
-    contexts from other processes while ensuring proper OpenFHE registration.
+def deserialize_cc(data: bytes):
+    """Deserializes a CryptoContext from raw bytes.
 
     Args:
         data (bytes): The raw byte representation of the CryptoContext.
@@ -358,69 +347,7 @@ def deserialize_cc_safe(data: bytes):
     if not _openfhe_available:
         raise RuntimeError("OpenFHE library is not available")
 
-    process_id = os.getpid()
-    data_hash = hash(data)
-
-    with _context_lock:
-        # Check if we already have this context for this process
-        if process_id in _process_contexts:
-            if data_hash in _process_contexts[process_id]:
-                return _process_contexts[process_id][data_hash]
-        else:
-            _process_contexts[process_id] = {}
-
-        # In parallel execution, avoid ReleaseAllContexts() entirely to prevent
-        # destroying contexts from other processes/threads
-        # Only call it if we're not in a parallel environment and have no cached contexts
-        # if (len(_process_contexts[process_id]) == 0 and
-        #     not os.environ.get('PYTEST_XDIST_WORKER') and
-        #     not os.environ.get('PARALLEL_EXECUTION')):
-        #     fhe.ReleaseAllContexts()
-
-        # Deserialize the context
-        context = _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
-
-        # Cache the context for this process
-        _process_contexts[process_id][data_hash] = context
-
-        return context
-
-
-def cleanup_process_contexts(process_id=None):
-    """Clean up cached contexts for a specific process or all processes.
-
-    Args:
-        process_id: Process ID to clean up. If None, cleans up current process.
-    """
-    if process_id is None:
-        process_id = os.getpid()
-
-    with _context_lock:
-        if process_id in _process_contexts:
-            del _process_contexts[process_id]
-
-
-def deserialize_cc(data: bytes):
-    """Deserializes a CryptoContext from raw bytes.
-
-    Important:
-        This function now ALWAYS uses the process-safe deserialization to prevent
-        context destruction during parallel test execution. OpenFHE maintains a
-        global registry of contexts, and calling ReleaseAllContexts() can destroy
-        contexts that other tests/processes are using.
-
-        For safety, this function now delegates to deserialize_cc_safe() which
-        uses process-local context management without destructive cleanup.
-
-    Args:
-        data (bytes): The raw byte representation of the CryptoContext.
-
-    Returns:
-        The deserialized CryptoContext object.
-    """
-    # ALWAYS use the safe version to prevent context destruction
-    # This prevents "Context was destroyed during parallel execution" errors
-    return deserialize_cc_safe(data)
+    return _deserialize_from_bytes(data, fhe.DeserializeCryptoContext)
 
 
 def deserialize_public_key(data: bytes):
