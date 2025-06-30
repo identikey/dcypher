@@ -81,9 +81,9 @@ build-openfhe-python: build-openfhe
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building OpenFHE Python bindings..."
-    export CMAKE_PREFIX_PATH="$(pwd)/openfhe-local:${CMAKE_PREFIX_PATH:-}"
-    export LD_LIBRARY_PATH="$(pwd)/openfhe-local/lib:${LD_LIBRARY_PATH:-}"
-    export DYLD_LIBRARY_PATH="$(pwd)/openfhe-local/lib:${DYLD_LIBRARY_PATH:-}"
+    export CMAKE_PREFIX_PATH="$(pwd)/build:${CMAKE_PREFIX_PATH:-}"
+    export LD_LIBRARY_PATH="$(pwd)/build/lib:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="$(pwd)/build/lib:${DYLD_LIBRARY_PATH:-}"
     cd vendor/openfhe-python
     uv run python setup.py build_ext --inplace
     cd ../..
