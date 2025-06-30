@@ -10,6 +10,9 @@ zig-out
 .vscode/
 .coverage*
 /build/
+liboqs-local/
+openfhe-local/
+
 
 # OpenHands/AllHands cache
 /tmp/dcypher_cache

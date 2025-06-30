@@ -961,6 +961,7 @@ class TestErrorHandling:
         with pytest.raises(Exception):
             client.generate_re_encryption_key("fake_bob_pk_hex")
 
+    @pytest.mark.crypto
     def test_context_compatibility_across_multiple_deserializations(
         self, shared_crypto_context
     ):

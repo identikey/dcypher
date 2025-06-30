@@ -60,7 +60,7 @@ class TestCryptoContextDeserialization:
         self, serialized_context_bytes
     ):
         """Test that multiple deserializations with process-safe caching.
-        
+
         Note: With our process-safe implementation, identical context data
         returns the same cached instance to prevent OpenFHE registry conflicts.
         """
@@ -93,7 +93,7 @@ class TestCryptoContextDeserialization:
         # Both should work without errors
         alice_keys = pre.generate_keys(alice_cc)
         bob_keys = pre.generate_keys(bob_cc)
-        
+
         assert alice_keys is not None
         assert bob_keys is not None
 
@@ -150,6 +150,7 @@ class TestCryptoContextDeserialization:
         context_manager.reset()
 
 
+@pytest.mark.crypto
 class TestDocumentedLimitations:
     """Document the fundamental limitations and their solutions."""
 
@@ -172,7 +173,7 @@ class TestDocumentedLimitations:
         # Both should work without errors
         keys1 = pre.generate_keys(cc1)
         keys2 = pre.generate_keys(cc2)
-        
+
         assert keys1 is not None
         assert keys2 is not None
 
@@ -204,6 +205,7 @@ class TestDocumentedLimitations:
         context_manager.reset()
 
 
+@pytest.mark.crypto
 class TestContextSingletonIntegration:
     """Test the context singleton integration with our system."""
 

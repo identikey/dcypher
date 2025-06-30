@@ -29,8 +29,27 @@ except ImportError:
         CryptoContextManager = None
 
 
+def pytest_configure(config):
+    """Configure pytest to handle crypto tests specially."""
+    # Register the crypto marker if not already done
+    config.addinivalue_line(
+        "markers", "crypto: Crypto context tests that need sequential execution"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Modify test collection to handle crypto tests specially."""
+    # Note: The original xdist_group approach didn't work as expected for forcing
+    # sequential execution. However, the crypto tests now pass in parallel due to
+    # other fixes (process-safe deserialization and proper context management).
+    #
+    # The tests marked with @pytest.mark.crypto are protected from context resets
+    # by the reset_context_singleton fixture, which is sufficient for stability.
+    pass
+
+
 @pytest.fixture(autouse=True)
-def reset_context_singleton():
+def reset_context_singleton(request):
     """Automatically reset the context singleton before each test.
 
     This fixture ensures proper test isolation when running tests in parallel.
@@ -38,17 +57,27 @@ def reset_context_singleton():
 
     This prevents "Cannot modify context after initialization" errors by
     ensuring each test starts with a fresh singleton state.
+
+    Note: For crypto tests, we skip the reset to avoid invalidating contexts
+    during OpenFHE registry operations.
     """
     if CryptoContextManager is not None:
-        # Reset all process instances before test
-        CryptoContextManager.reset_all_instances()
+        # Check if this is a crypto test
+        is_crypto_test = request.node.get_closest_marker("crypto") is not None
+
+        if not is_crypto_test:
+            # Reset all process instances before test (but not for crypto tests)
+            CryptoContextManager.reset_all_instances()
 
     yield
 
-    # Clean up after test (optional)
+    # Clean up after test (optional, but skip for crypto tests)
     if CryptoContextManager is not None:
         try:
-            CryptoContextManager.reset_all_instances()
+            is_crypto_test = request.node.get_closest_marker("crypto") is not None
+
+            if not is_crypto_test:
+                CryptoContextManager.reset_all_instances()
         except Exception:
             # Ignore cleanup errors - the important part is the fresh start
             pass
