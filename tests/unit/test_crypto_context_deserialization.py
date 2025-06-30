@@ -1,249 +1,135 @@
 """
-Tests for OpenFHE CryptoContext deserialization behavior and context singleton solutions.
+Tests for OpenFHE CryptoContext deserialization behavior.
 
 This file documents critical OpenFHE behaviors that affect proxy re-encryption
-in distributed systems, and demonstrates how the context singleton pattern
-can resolve these limitations.
+in distributed systems.
 """
 
 import pytest
 from lib import pre
-from src.crypto.context_manager import CryptoContextManager
+from src.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
 
 
 @pytest.fixture
-def base_crypto_context():
+def crypto_params():
+    """Provides default crypto parameters for creating a context."""
+    return {
+        "scheme": "BFV",
+        "plaintext_modulus": 65537,
+        "multiplicative_depth": 2,
+        "scaling_mod_size": 50,
+        "batch_size": 8,
+    }
+
+
+@pytest.fixture
+def base_crypto_context(crypto_params):
     """Create a base crypto context for testing serialization behavior."""
-    cc = pre.create_crypto_context()
-    pre.generate_keys(cc)  # Initialize the context
-    return cc
+    with CryptoContextManager(**crypto_params) as manager:
+        yield manager.get_context()
 
 
 @pytest.fixture
-def serialized_context_bytes(base_crypto_context):
-    """Provide serialized context bytes for deserialization tests."""
-    return pre.serialize_to_bytes(base_crypto_context)
+def serialized_context(crypto_params):
+    """Provide serialized context for deserialization tests."""
+    with CryptoContextManager(**crypto_params) as manager:
+        pre.generate_keys(manager.get_context())  # Initialize the context
+        yield manager.serialize_context()
 
 
 class TestCryptoContextDeserialization:
     """Test crypto context serialization and deserialization behavior."""
 
-    def test_context_serialization_roundtrip_works(self, base_crypto_context):
+    @pytest.mark.skipif(not OPENFHE_AVAILABLE, reason="OpenFHE not available")
+    def test_context_serialization_roundtrip_works(self, crypto_params):
         """Test that basic context serialization/deserialization works."""
-        # Serialize the context
-        cc_bytes = pre.serialize_to_bytes(base_crypto_context)
+        with CryptoContextManager(**crypto_params) as manager:
+            cc = manager.get_context()
+            pre.generate_keys(cc)
+            serialized_data = manager.serialize_context()
 
-        # Deserialize it
-        deserialized_cc = pre.deserialize_cc(cc_bytes)
+            # Deserialize into a new manager
+            with CryptoContextManager(serialized_data=serialized_data) as new_manager:
+                deserialized_cc = new_manager.get_context()
 
-        # Verify the deserialized context is functional
-        slot_count = pre.get_slot_count(deserialized_cc)
-        assert slot_count > 0
+                # Verify the deserialized context is functional
+                slot_count = pre.get_slot_count(deserialized_cc)
+                assert slot_count > 0
 
-        # Test key generation works
-        keys = pre.generate_keys(deserialized_cc)
-        assert keys.publicKey is not None
-        assert keys.secretKey is not None
+                # Test key generation works
+                keys = pre.generate_keys(deserialized_cc)
+                assert keys.publicKey is not None
+                assert keys.secretKey is not None
 
-        # Test encryption/decryption works
-        test_data = b"test data"
-        coeffs = pre.bytes_to_coefficients(test_data, slot_count)
-        ciphertext = pre.encrypt(deserialized_cc, keys.publicKey, coeffs)
-        decrypted_coeffs = pre.decrypt(
-            deserialized_cc, keys.secretKey, ciphertext, len(coeffs)
-        )
-        decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
+                # Test encryption/decryption works
+                test_data = b"test data"
+                coeffs = pre.bytes_to_coefficients(test_data, slot_count)
+                ciphertext = pre.encrypt(deserialized_cc, keys.publicKey, coeffs)
+                decrypted_coeffs = pre.decrypt(
+                    deserialized_cc, keys.secretKey, ciphertext, len(coeffs)
+                )
+                decrypted_data = pre.coefficients_to_bytes(
+                    decrypted_coeffs, len(test_data)
+                )
 
-        assert decrypted_data == test_data
+                assert decrypted_data == test_data
 
-    def test_multiple_deserializations_create_different_instances(
-        self, serialized_context_bytes
-    ):
-        """Test that multiple deserializations with process-safe caching.
+    @pytest.mark.skipif(not OPENFHE_AVAILABLE, reason="OpenFHE not available")
+    def test_re_encryption_workflow_with_context_manager(self, crypto_params):
+        """Test the full PRE workflow using a single context manager."""
+        with CryptoContextManager(**crypto_params) as manager:
+            shared_cc = manager.get_context()
 
-        Note: With our process-safe implementation, identical context data
-        returns the same cached instance to prevent OpenFHE registry conflicts.
-        """
-        cc1 = pre.deserialize_cc(serialized_context_bytes)
-        cc2 = pre.deserialize_cc(serialized_context_bytes)
+            # Generate keys for Alice and Bob using the same context instance
+            alice_keys = pre.generate_keys(shared_cc)
+            bob_keys = pre.generate_keys(shared_cc)
 
-        # With process-safe caching, identical data returns the same instance
-        assert cc1 is cc2
+            # Generate re-encryption key - this should work because all objects
+            # were created with the same context instance
+            re_key = pre.generate_re_encryption_key(
+                shared_cc, alice_keys.secretKey, bob_keys.publicKey
+            )
+            assert re_key is not None
 
-        # Both should be functional
-        assert pre.get_slot_count(cc1) == pre.get_slot_count(cc2)
+            # Test full workflow
+            test_data = b"test data for pre workflow"
+            slot_count = pre.get_slot_count(shared_cc)
+            coeffs = pre.bytes_to_coefficients(test_data, slot_count)
 
-    def test_same_context_instance_required_for_operations_limitation(
-        self, serialized_context_bytes
-    ):
-        """Test that our process-safe implementation resolves context instance issues.
+            # Encrypt with Alice's key
+            alice_ciphertext = pre.encrypt(shared_cc, alice_keys.publicKey, coeffs)
 
-        Previously, this test documented a critical limitation where OpenFHE required
-        the same context instance for all operations. Our new process-safe caching
-        implementation resolves this by ensuring identical context data returns
-        the same instance.
-        """
-        # Create contexts from the same bytes - should return same instance
-        alice_cc = pre.deserialize_cc(serialized_context_bytes)
-        bob_cc = pre.deserialize_cc(serialized_context_bytes)
+            # Re-encrypt for Bob
+            bob_ciphertexts = pre.re_encrypt(shared_cc, re_key, alice_ciphertext)
 
-        # With process-safe caching, these should be the same instance
-        assert alice_cc is bob_cc
+            # Decrypt with Bob's key
+            decrypted_coeffs = pre.decrypt(
+                shared_cc, bob_keys.secretKey, bob_ciphertexts, len(coeffs)
+            )
+            decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
 
-        # Both should work without errors
-        alice_keys = pre.generate_keys(alice_cc)
-        bob_keys = pre.generate_keys(bob_cc)
+            assert decrypted_data == test_data
 
-        assert alice_keys is not None
-        assert bob_keys is not None
-
-    def test_context_singleton_resolves_instance_requirement(self, base_crypto_context):
-        """Test that the context singleton pattern resolves the instance requirement."""
-        # Reset the singleton to start fresh
-        CryptoContextManager.reset_all_instances()
-        context_manager = CryptoContextManager()
-
-        # Set the context in the singleton
-        context_manager._context = base_crypto_context
-        context_manager._context_params = {
-            "scheme": "BFV",
-            "plaintext_modulus": 65537,
-            "multiplicative_depth": 2,
-            "scaling_mod_size": 50,
-            "batch_size": 8,
-        }
-
-        # All operations use the SAME context instance from the singleton
-        shared_cc = context_manager.get_context()
-
-        # Generate keys for Alice and Bob using the same context instance
-        alice_keys = pre.generate_keys(shared_cc)
-        bob_keys = pre.generate_keys(shared_cc)
-
-        # Generate re-encryption key - this should work because all objects
-        # were created with the same context instance
-        re_key = pre.generate_re_encryption_key(
-            shared_cc, alice_keys.secretKey, bob_keys.publicKey
-        )
-
-        # Test full workflow
-        test_data = b"test data for singleton pattern"
-        slot_count = pre.get_slot_count(shared_cc)
-        coeffs = pre.bytes_to_coefficients(test_data, slot_count)
-
-        # Encrypt with Alice's key
-        alice_ciphertext = pre.encrypt(shared_cc, alice_keys.publicKey, coeffs)
-
-        # Re-encrypt for Bob
-        bob_ciphertexts = pre.re_encrypt(shared_cc, re_key, alice_ciphertext)
-
-        # Decrypt with Bob's key
-        decrypted_coeffs = pre.decrypt(
-            shared_cc, bob_keys.secretKey, bob_ciphertexts, len(coeffs)
-        )
-        decrypted_data = pre.coefficients_to_bytes(decrypted_coeffs, len(test_data))
-
-        assert decrypted_data == test_data
-        print("✅ Context singleton pattern enables full PRE workflow!")
-
-        # Clean up
-        context_manager.reset()
-
-
-@pytest.mark.crypto
-class TestDocumentedLimitations:
-    """Document the fundamental limitations and their solutions."""
-
-    def test_limitation_context_instance_binding_documented(
-        self, serialized_context_bytes
-    ):
-        """Document: Process-safe caching resolves context instance binding issues.
-
-        Previously, this test documented a limitation where crypto objects were
-        bound to their creating context instance. Our process-safe implementation
-        with caching resolves this by ensuring consistent context instances.
-        """
-        # Create contexts from the same bytes - should return same cached instance
-        cc1 = pre.deserialize_cc(serialized_context_bytes)
-        cc2 = pre.deserialize_cc(serialized_context_bytes)
-
-        # Should be the same instance due to caching
-        assert cc1 is cc2
-
-        # Both should work without errors
-        keys1 = pre.generate_keys(cc1)
-        keys2 = pre.generate_keys(cc2)
-
-        assert keys1 is not None
-        assert keys2 is not None
-
-    def test_solution_context_singleton_pattern(self, base_crypto_context):
-        """Demonstrate: Context singleton pattern resolves the limitation."""
-        # Reset the singleton
-        CryptoContextManager.reset_all_instances()
-        context_manager = CryptoContextManager()
-
-        # Initialize with the base context
-        context_manager._context = base_crypto_context
-
-        # All operations use the same context instance
-        shared_cc = context_manager.get_context()
-
-        # Multiple key generations work because they use the same context
-        keys1 = pre.generate_keys(shared_cc)
-        keys2 = pre.generate_keys(shared_cc)
-
-        # Re-encryption key generation works
-        re_key = pre.generate_re_encryption_key(
-            shared_cc, keys1.secretKey, keys2.publicKey
-        )
-
-        assert re_key is not None
-        print("✅ Context singleton pattern resolves OpenFHE limitations!")
-
-        # Clean up
-        context_manager.reset()
-
-
-@pytest.mark.crypto
-class TestContextSingletonIntegration:
-    """Test the context singleton integration with our system."""
-
-    def test_singleton_serialization_deserialization_workflow(
-        self, base_crypto_context
-    ):
-        """Test the complete singleton serialization/deserialization workflow."""
-        # Reset singleton
-        CryptoContextManager.reset_all_instances()
-        server_context_manager = CryptoContextManager()
-
-        # Server initializes context
-        server_context_manager._context = base_crypto_context
-
-        # Server serializes context for clients
-        serialized_context = server_context_manager.serialize_context()
-
-        # Client gets context from server
-        CryptoContextManager.reset_all_instances()  # Simulate different client process
-        client_context_manager = CryptoContextManager()
+    @pytest.mark.skipif(not OPENFHE_AVAILABLE, reason="OpenFHE not available")
+    def test_client_server_serialization_workflow(self, crypto_params):
+        """Test the client-server serialization/deserialization workflow."""
+        # Server initializes context and serializes it
+        with CryptoContextManager(**crypto_params) as server_manager:
+            pre.generate_keys(server_manager.get_context())
+            serialized_context = server_manager.serialize_context()
 
         # Client deserializes the server's context
-        client_cc = client_context_manager.deserialize_context_safe(serialized_context)
+        with CryptoContextManager(serialized_data=serialized_context) as client_manager:
+            client_cc = client_manager.get_context()
 
-        # Verify client context works
-        keys = pre.generate_keys(client_cc)
-        assert keys.publicKey is not None
-        assert keys.secretKey is not None
+            # Verify client context works
+            keys = pre.generate_keys(client_cc)
+            assert keys.publicKey is not None
+            assert keys.secretKey is not None
 
-        # Verify serialization roundtrip
-        client_serialized = client_context_manager.serialize_context()
-        assert client_serialized == serialized_context
-
-        print("✅ Context singleton supports client-server serialization workflow!")
-
-        # Clean up
-        server_context_manager.reset()
-        client_context_manager.reset()
+            # Verify serialization roundtrip
+            client_serialized = client_manager.serialize_context()
+            assert client_serialized == serialized_context
 
 
 if __name__ == "__main__":

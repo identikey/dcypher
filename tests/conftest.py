@@ -48,41 +48,6 @@ def pytest_collection_modifyitems(config, items):
     pass
 
 
-@pytest.fixture(autouse=True)
-def reset_context_singleton(request):
-    """Automatically reset the context singleton before each test.
-
-    This fixture ensures proper test isolation when running tests in parallel.
-    The autouse=True means it runs automatically for every test.
-
-    This prevents "Cannot modify context after initialization" errors by
-    ensuring each test starts with a fresh singleton state.
-
-    Note: For crypto tests, we skip the reset to avoid invalidating contexts
-    during OpenFHE registry operations.
-    """
-    if CryptoContextManager is not None:
-        # Check if this is a crypto test
-        is_crypto_test = request.node.get_closest_marker("crypto") is not None
-
-        if not is_crypto_test:
-            # Reset all process instances before test (but not for crypto tests)
-            CryptoContextManager.reset_all_instances()
-
-    yield
-
-    # Clean up after test (optional, but skip for crypto tests)
-    if CryptoContextManager is not None:
-        try:
-            is_crypto_test = request.node.get_closest_marker("crypto") is not None
-
-            if not is_crypto_test:
-                CryptoContextManager.reset_all_instances()
-        except Exception:
-            # Ignore cleanup errors - the important part is the fresh start
-            pass
-
-
 @pytest.fixture(scope="function")
 def free_port():
     """Finds and returns a free port on the host."""

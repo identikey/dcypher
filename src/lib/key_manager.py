@@ -37,25 +37,21 @@ import logging
 import secrets
 import threading
 from lib import pre
+import base64
 
 try:
     from crypto.context_manager import (
         CryptoContextManager,
-        get_context_manager,
         OPENFHE_AVAILABLE,
     )
 except ImportError:
     # Fallback for when running from CLI or different contexts
-    import sys
-    import os
-
     # Add the parent directory to the path to find crypto module
     parent_dir = os.path.dirname(os.path.dirname(__file__))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
     from crypto.context_manager import (
         CryptoContextManager,
-        get_context_manager,
         OPENFHE_AVAILABLE,
     )
 
@@ -829,6 +825,7 @@ class KeyManager:
             context_bytes: Pre-serialized crypto context bytes
             context_source: Source description for the context
             api_url: API URL to fetch crypto context from (if context_bytes not provided)
+            _test_context: A pre-initialized CryptoContextManager instance for testing.
 
         Returns:
             Tuple of (mnemonic_phrase, identity_file_path)
@@ -865,108 +862,50 @@ class KeyManager:
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
         # 3. Generate PRE keys using the crypto context and store context in identity
-        # Use direct PRE module calls to avoid singleton race conditions
-        if _test_context is not None:
-            # For unit tests: use pre-deserialized context directly
-            cc = _test_context
-        elif api_url is not None:
-            # ARCHITECTURAL FIX: Break circular import dependency
-            # For client-side operations with API, the caller should provide the context
-            # This improves separation of concerns and avoids circular imports
-            raise ValueError(
-                "When api_url is provided, please fetch the context externally and pass it via context_bytes parameter. "
-                "This avoids circular imports and improves architectural separation."
-            )
-        else:
-            # For production without API: deserialize the context bytes directly
-            if context_bytes is None:
-                raise ValueError(
-                    "context_bytes cannot be None when no api_url is provided"
-                )
-            # Use direct PRE deserialization to avoid shared singleton
-            cc = pre.deserialize_cc_safe(context_bytes)
+        pre_keys_data = {}
+        crypto_context_data = {}
 
-        # Generate PRE keys using the context
-        # CRITICAL: Handle context destruction during parallel test execution
+        context_manager = None
         try:
-            keys = pre.generate_keys(cc)
-        except RuntimeError as e:
-            if "Cannot find context for the given pointer" in str(e):
-                # Context was destroyed by another process calling fhe.ReleaseAllContexts()
-                # This can happen during parallel test execution
-                # Try recovery strategies
+            if _test_context:
+                context_manager = _test_context
+            elif context_bytes:
+                context_manager = CryptoContextManager(
+                    serialized_data=base64.b64encode(context_bytes).decode("ascii"),
+                    deserialize_safe=True,
+                )
 
-                if context_bytes is not None:
-                    print(
-                        f"⚠️ Context destroyed during parallel execution, attempting recovery..."
-                    )
+            if context_manager:
+                with context_manager as manager:
+                    cc = manager.get_context()
+                    keys = pre.generate_keys(cc)
+                    pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+                    sk_bytes = pre.serialize_to_bytes(keys.secretKey)
 
-                    # Strategy 1: Try direct PRE context creation
-                    try:
-                        # Import PRE module directly and deserialize without singleton
-                        cc_direct = pre.deserialize_cc_safe(context_bytes)
-                        keys = pre.generate_keys(cc_direct)
-                        print(
-                            "✅ Context recovery successful via direct PRE deserialization"
-                        )
-                        # Update our cc reference for subsequent operations
-                        cc = cc_direct
-                    except Exception as e2:
-                        # Strategy 2: Create a completely fresh context (last resort)
-                        print(
-                            f"⚠️ Direct recovery also failed, creating fresh context as last resort..."
-                        )
-                        try:
-                            cc_fresh = pre.create_crypto_context()
-                            # Initialize the fresh context
-                            pre.generate_keys(cc_fresh)
-                            # Now generate the actual keys we need
-                            keys = pre.generate_keys(cc_fresh)
-                            print(
-                                "✅ Context recovery successful via fresh context creation"
-                            )
-                            # Update our cc reference for subsequent operations
-                            cc = cc_fresh
-                        except Exception as e3:
-                            # All recovery strategies failed
-                            raise RuntimeError(
-                                f"Context was destroyed during parallel execution and all recovery strategies failed:\n"
-                                f"  Original error: {e}\n"
-                                f"  Direct deserialization: {e2}\n"
-                                f"  Fresh context: {e3}"
-                            ) from e
-                else:
-                    # No context bytes available for recovery
-                    raise RuntimeError(
-                        f"Context was destroyed during parallel execution and cannot be recovered: {e}. "
-                        f"To make this more robust, provide context_bytes parameter."
-                    ) from e
-            else:
-                # Different error, re-raise
-                raise
-        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
-        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+                    pre_keys_data = {
+                        "pk_hex": pk_bytes.hex(),
+                        "sk_hex": sk_bytes.hex(),
+                    }
 
-        pre_keys_data = {
-            "pk_hex": pk_bytes.hex(),
-            "sk_hex": sk_bytes.hex(),
-        }
-
-        # Store the crypto context in the identity file for future use
-        # Handle case where we use _test_context without context_bytes
-        if context_bytes is not None:
-            crypto_context_data = {
-                "context_bytes_hex": context_bytes.hex(),
-                "context_source": context_source or "unknown",
-                "context_size": len(context_bytes),
-            }
-        else:
-            # For test contexts where we don't have the raw bytes
-            crypto_context_data = {
-                "context_bytes_hex": "",  # Empty for test contexts
-                "context_source": context_source or "test_context",
-                "context_size": 0,
-            }
+                    # Store the crypto context in the identity file for future use
+                    if context_bytes:
+                        crypto_context_data = {
+                            "context_bytes_hex": context_bytes.hex(),
+                            "context_source": context_source or "unknown",
+                            "context_size": len(context_bytes),
+                        }
+                    else:
+                        # For test contexts where we don't have the raw bytes
+                        serialized_context = manager.serialize_context()
+                        context_bytes = serialized_context.encode("ascii")
+                        crypto_context_data = {
+                            "context_bytes_hex": context_bytes.hex(),
+                            "context_source": context_source or "test_context",
+                            "context_size": len(context_bytes),
+                        }
+        finally:
+            # The 'with' statement handles cleanup, so no explicit cleanup is needed here.
+            pass
 
         # 4. Construct the identity data structure correctly
         identity_data = {
@@ -1012,9 +951,11 @@ class KeyManager:
             # Use the provided context object directly (preferred)
             cc = cc_object
         elif cc_bytes is not None:
-            # Deserialize the context from the provided bytes using direct PRE module
-            # This avoids the shared singleton and prevents race conditions
-            cc = pre.deserialize_cc_safe(cc_bytes)
+            # Deserialize the context from the provided bytes using the context manager
+            with CryptoContextManager(
+                serialized_data=cc_bytes.decode("ascii"), deserialize_safe=True
+            ) as manager:
+                cc = manager.get_context()
         else:
             raise ValueError("Either cc_bytes or cc_object must be provided")
 
