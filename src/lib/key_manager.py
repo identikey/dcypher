@@ -953,7 +953,8 @@ class KeyManager:
         elif cc_bytes is not None:
             # Deserialize the context from the provided bytes using the context manager
             with CryptoContextManager(
-                serialized_data=cc_bytes.decode("ascii"), deserialize_safe=True
+                serialized_data=base64.b64encode(cc_bytes).decode("ascii"),
+                deserialize_safe=True,
             ) as manager:
                 cc = manager.get_context()
         else:
