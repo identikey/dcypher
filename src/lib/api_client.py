@@ -1,3 +1,7 @@
+"""
+DCypher API Client - Handles all API communications with the DCypher server
+"""
+
 import requests
 import json
 import tempfile
@@ -10,6 +14,7 @@ import ecdsa
 import oqs
 import base64
 from crypto.context_manager import get_client_context_manager
+import time
 
 
 class DCypherAPIError(Exception):
@@ -45,15 +50,20 @@ class DCypherClient:
         identity_path: Optional[str] = None,
     ):
         """
-        Initialize the DCypher API client.
+        Initialize DCypher API client.
 
         Args:
-            api_url: Base URL for the DCypher API
-            identity_path: Path to identity file (optional for operations that don't require auth)
+            api_url: Base URL of the DCypher API server
+            identity_path: Optional path to identity file for authentication
         """
         self.api_url = api_url.rstrip("/")
         self.keys_path = identity_path
-        self._auth_keys = None
+        self._cached_keys = None
+        self._cached_keys_timestamp = None
+        self._keys_cache_ttl = 60  # Cache keys for 60 seconds
+        # Private crypto context for this client instance to avoid race conditions
+        self._private_context = None
+        self._private_context_serialized = None
 
     @contextmanager
     def signing_keys(self):
@@ -191,8 +201,9 @@ class DCypherClient:
 
     def _load_auth_keys(self) -> Dict[str, Any]:
         """Load authentication keys from the configured path."""
-        if self._auth_keys is not None:
-            return self._auth_keys
+        if self._cached_keys is not None and self._cached_keys_timestamp is not None:
+            if time.time() - self._cached_keys_timestamp < self._keys_cache_ttl:
+                return self._cached_keys
 
         if not self.keys_path:
             raise AuthenticationError("No authentication keys configured")
@@ -203,8 +214,9 @@ class DCypherClient:
 
             # Use KeyManager's unified loader to support both auth_keys and identity files
             assert self.keys_path is not None
-            self._auth_keys = KeyManager.load_keys_unified(Path(self.keys_path))
-            return self._auth_keys
+            self._cached_keys = KeyManager.load_keys_unified(Path(self.keys_path))
+            self._cached_keys_timestamp = time.time()
+            return self._cached_keys
         except Exception as e:
             raise AuthenticationError(f"Failed to load authentication keys: {e}")
 
@@ -993,49 +1005,42 @@ class DCypherClient:
         """
         Get a properly initialized crypto context object ready for operations.
 
-        This is a higher-level method that:
-        1. Fetches the raw context bytes from the server
-        2. Sets up the singleton context manager for consistency
-        3. Returns a ready-to-use context object
-
-        Use this instead of manually calling get_crypto_context_bytes() + singleton setup.
-        Use get_crypto_context_bytes() only when you need the raw bytes (e.g., saving to file).
+        This method maintains a private crypto context for this client instance
+        to avoid race conditions in parallel test execution.
 
         Returns:
             Initialized crypto context object compatible with server operations
         """
-        try:
-            from src.crypto.context_manager import get_client_context_manager
-        except ImportError:
-            # Handle CLI context where src module isn't in path
-            from crypto.context_manager import get_client_context_manager
-
-        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
-        context_manager = get_client_context_manager()
-
         # Get server's crypto context bytes
         cc_bytes = self.get_crypto_context_bytes()
         serialized_context = base64.b64encode(cc_bytes).decode("ascii")
 
-        # CRITICAL: Ensure we have a context that matches the server's context
-        # This ensures that client operations use the exact same context as the server
+        # Check if we already have the correct context cached
+        if (
+            self._private_context is not None
+            and self._private_context_serialized == serialized_context
+        ):
+            return self._private_context
 
-        current_context = context_manager.get_context()
-        if current_context is None:
-            # No context exists, initialize with server's context
-            cc = context_manager.deserialize_context(serialized_context)
-        else:
-            # We have a context, check if it matches the server's
-            current_serialized = context_manager._serialized_context
-            if current_serialized != serialized_context:
-                # Context is different from server's, we need to update it
-                # But we need to be careful about ReleaseAllContexts() destroying other contexts
-                cc = context_manager.deserialize_context(serialized_context)
-            else:
-                # Context matches server's, reuse it
-                cc = current_context
+        # Need to create or update the private context
+        try:
+            from src.crypto.context_manager import CryptoClientContextManager
+        except ImportError:
+            # Handle CLI context where src module isn't in path
+            from crypto.context_manager import CryptoClientContextManager
 
-        return cc
+        # Create a new private context manager instance (not the singleton)
+        private_manager = object.__new__(CryptoClientContextManager)
+        private_manager._context = None
+        private_manager._serialized_context = None
+        private_manager._context_params = None
+        private_manager._initialized = False
+
+        # Deserialize the server's context into our private manager
+        self._private_context = private_manager.deserialize_context(serialized_context)
+        self._private_context_serialized = serialized_context
+
+        return self._private_context
 
     @classmethod
     def create_test_account(
