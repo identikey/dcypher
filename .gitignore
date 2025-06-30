@@ -2,14 +2,14 @@
 __pycache__
 *.pyc
 *.egg-info
-/include
+.zig-cache
+zig-out
 /block_store
 /chunk_store
 .pytest_cache
-openfhe-local
-liboqs-local
 .vscode/
 .coverage*
+/build/
 
 # OpenHands/AllHands cache
 /tmp/dcypher_cache

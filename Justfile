@@ -5,31 +5,31 @@ default:
     @just --list
 
 # Build the Docker image for Intel processor
-docker-build:
+docker-build-intel:
     docker build build --platform linux/amd64 -t dcypher --load .
 
 # Build the development Docker image
-docker-build-dev:
+docker-build-intel-dev:
     docker buildx build --platform linux/amd64 -f dockerfile.dev -t dcypher-dev --load .
 
 # Run the Docker container
-docker-run:
+docker-run-intel:
     docker run --rm dcypher
 
 # Start development environment with volume mounting
-dev-up:
+dev-up-intel:
     docker-compose -f docker-compose.dev.yml up -d
 
 # Stop development environment
-dev-down:
+dev-down-intel:
     docker-compose -f docker-compose.dev.yml down
 
 # Open an interactive bash shell in the development container
-dev-shell:
+dev-shell-intel:
     docker-compose -f docker-compose.dev.yml exec dcypher-dev bash
 
 # Run tests in development container
-dev-test:
+dev-test-intel:
     docker-compose -f docker-compose.dev.yml exec dcypher-dev uv run pytest tests/ -v
 
 # Run CLI in development container
@@ -67,14 +67,14 @@ build-openfhe:
     mkdir -p build
     cd build
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../openfhe-local" \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../build" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_UNITTESTS=OFF \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_BENCHMARKS=OFF
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
-    echo "OpenFHE installed to: $(pwd)/../../../openfhe-local"
+    echo "OpenFHE installed to: $(pwd)/../../../build"
 
 # Build OpenFHE Python bindings using local C++ library
 build-openfhe-python: build-openfhe
@@ -99,14 +99,14 @@ build-liboqs:
     mkdir -p build
     cd build
     cmake .. \
-        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../liboqs-local" \
+        -DCMAKE_INSTALL_PREFIX="$(pwd)/../../../build" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=ON \
         -DOQS_BUILD_ONLY_LIB=ON \
         -DOQS_MINIMAL_BUILD=OFF
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
-    echo "liboqs installed to: $(pwd)/../../../liboqs-local"
+    echo "liboqs installed to: $(pwd)/../../../build"
 
 # Build both OpenFHE C++ and Python bindings
 build-all: build-openfhe-python build-liboqs
@@ -148,11 +148,14 @@ test-until-break:
         sleep 1
     done
 
+# Build OpenHands (All Hands AI) development environment
+doit-build:
+    docker build -t dcypher-allhands -f dockerfile.allhands .
+
 # Start OpenHands (All Hands AI) development environment
 doit:
-    docker pull docker.all-hands.dev/all-hands-ai/runtime:0.47-nikolaik
     docker run -it --rm --pull=always \
-        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.47-nikolaik \
+        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-allhands \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
         -e SANDBOX_USER_ID=$(id -u) \
         -e LOG_ALL_EVENTS=true \
@@ -164,4 +167,4 @@ doit:
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
         --name openhands-app \
-        docker.all-hands.dev/all-hands-ai/openhands:0.47
+        docker.all-hands.dev/all-hands-ai/openhands:0.46
