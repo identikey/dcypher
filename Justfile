@@ -127,13 +127,32 @@ test:
     set -euo pipefail
     export LD_LIBRARY_PATH="/workspace/openfhe-local/lib:/workspace/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
     export PYTHONPATH="/workspace/src:${PYTHONPATH:-}"
-    uv run pytest -n auto --dist worksteal tests/
+    echo "🧪 Running DCypher test suite..."
+    # echo "📋 Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
+    uv run pytest -n auto --dist worksteal ./tests/
+
+# Run tests repeatedly until they break or user cancels
+test-until-break:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔄 Running tests repeatedly until failure or cancellation (Ctrl+C to stop)..."
+    run_count=0
+    while true; do
+        run_count=$((run_count + 1))
+        echo "📋 Test run #${run_count}..."
+        if ! just test; then
+            echo "❌ Tests failed on run #${run_count}!"
+            exit 1
+        fi
+        echo "✅ Test run #${run_count} passed"
+        sleep 1
+    done
 
 # Start OpenHands (All Hands AI) development environment
 doit:
-    docker pull docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik
+    docker pull docker.all-hands.dev/all-hands-ai/runtime:0.47-nikolaik
     docker run -it --rm --pull=always \
-        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik \
+        -e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.47-nikolaik \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
         -e SANDBOX_USER_ID=$(id -u) \
         -e LOG_ALL_EVENTS=true \
@@ -145,4 +164,4 @@ doit:
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
         --name openhands-app \
-        docker.all-hands.dev/all-hands-ai/openhands:0.46
+        docker.all-hands.dev/all-hands-ai/openhands:0.47

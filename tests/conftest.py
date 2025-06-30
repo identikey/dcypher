@@ -18,6 +18,41 @@ from main import (
 from app_state import state
 from config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
 
+# Global fixture for context manager test isolation
+try:
+    from src.crypto.context_manager import CryptoContextManager
+except ImportError:
+    # Handle cases where src module isn't available
+    try:
+        from crypto.context_manager import CryptoContextManager
+    except ImportError:
+        CryptoContextManager = None
+
+
+@pytest.fixture(autouse=True)
+def reset_context_singleton():
+    """Automatically reset the context singleton before each test.
+
+    This fixture ensures proper test isolation when running tests in parallel.
+    The autouse=True means it runs automatically for every test.
+
+    This prevents "Cannot modify context after initialization" errors by
+    ensuring each test starts with a fresh singleton state.
+    """
+    if CryptoContextManager is not None:
+        # Reset all process instances before test
+        CryptoContextManager.reset_all_instances()
+
+    yield
+
+    # Clean up after test (optional)
+    if CryptoContextManager is not None:
+        try:
+            CryptoContextManager.reset_all_instances()
+        except Exception:
+            # Ignore cleanup errors - the important part is the fresh start
+            pass
+
 
 @pytest.fixture(scope="function")
 def free_port():

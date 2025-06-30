@@ -12,6 +12,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "pytest",
+    "pytest-cov",
     "pytest-xdist",
     "pytest-asyncio",
     "requests",
@@ -21,12 +22,12 @@ dependencies = [
     "pandas",
     "openfhe",
     "ecdsa>=0.19.1",
-    "liboqs-python>=0.13.0",
     "python-multipart>=0.0.20",
     "bip-utils>=2.9.3",
     "cryptography>=45.0.4",
     "psutil>=7.0.0",
     "textual[syntax]>=3.5.0",
+    "liboqs-python>=0.13.0",
 ]
 
 [tool.ruff]
@@ -51,18 +52,41 @@ skip-magic-trailing-comma = false
 line-ending = "lf"
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = ["tests"]
-norecursedirs = ["openfhe-python"]
+norecursedirs = ["vendor", "openfhe-python"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
 addopts = [
     "--import-mode=importlib",
     "--ignore=setup.py",
     "--ignore=src/dcypher/dcypher_front",
     "--ignore=src/dcypher/dcypher_back",
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=50",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "tui: marks tests as TUI tests",
+    "crypto: Crypto context tests that need sequential execution",
+    "live_server: Tests that require a live server",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
     # Ignore deprecation warnings from websockets library in FastAPI/Starlette
     "ignore:websockets.server.WebSocketServerProtocol is deprecated.*:DeprecationWarning",
+    "ignore::pytest.PytestReturnNotNoneWarning",
+    "ignore::DeprecationWarning:openfhe.*",
+    "ignore::DeprecationWarning:tests.*",
 ]
 
 [tool.uv.sources]
@@ -71,8 +95,4 @@ openfhe-python = { path = "./openfhe-python" }
 openfhe = { path = "vendor/openfhe-python", editable = true }
 
 [dependency-groups]
-dev = [
-    "httpx>=0.28.1",
-    "setuptools>=80.9.0",
-    "textual-dev>=1.7.0",
-]
+dev = ["httpx>=0.28.1", "setuptools>=80.9.0", "textual-dev>=1.7.0"]

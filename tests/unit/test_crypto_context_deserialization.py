@@ -59,40 +59,48 @@ class TestCryptoContextDeserialization:
     def test_multiple_deserializations_create_different_instances(
         self, serialized_context_bytes
     ):
-        """Test that multiple deserializations create different context instances."""
+        """Test that multiple deserializations with process-safe caching.
+        
+        Note: With our process-safe implementation, identical context data
+        returns the same cached instance to prevent OpenFHE registry conflicts.
+        """
         cc1 = pre.deserialize_cc(serialized_context_bytes)
         cc2 = pre.deserialize_cc(serialized_context_bytes)
 
-        # They should be different object instances
-        assert cc1 is not cc2
+        # With process-safe caching, identical data returns the same instance
+        assert cc1 is cc2
 
-        # But both should be functional
+        # Both should be functional
         assert pre.get_slot_count(cc1) == pre.get_slot_count(cc2)
 
     def test_same_context_instance_required_for_operations_limitation(
         self, serialized_context_bytes
     ):
-        """Test that OpenFHE requires the same context instance for all operations.
+        """Test that our process-safe implementation resolves context instance issues.
 
-        This test documents the critical limitation that affects our proxy re-encryption system.
-        This test is expected to fail and documents the limitation.
+        Previously, this test documented a critical limitation where OpenFHE required
+        the same context instance for all operations. Our new process-safe caching
+        implementation resolves this by ensuring identical context data returns
+        the same instance.
         """
-        # Create two different context instances from the same bytes
+        # Create contexts from the same bytes - should return same instance
         alice_cc = pre.deserialize_cc(serialized_context_bytes)
         bob_cc = pre.deserialize_cc(serialized_context_bytes)
 
-        # Try to generate keys with different context instances
-        # This should fail with "Cannot find context for the given pointer"
-        with pytest.raises(
-            RuntimeError, match="Cannot find context for the given pointer"
-        ):
-            alice_keys = pre.generate_keys(alice_cc)
-            bob_keys = pre.generate_keys(bob_cc)
+        # With process-safe caching, these should be the same instance
+        assert alice_cc is bob_cc
+
+        # Both should work without errors
+        alice_keys = pre.generate_keys(alice_cc)
+        bob_keys = pre.generate_keys(bob_cc)
+        
+        assert alice_keys is not None
+        assert bob_keys is not None
 
     def test_context_singleton_resolves_instance_requirement(self, base_crypto_context):
         """Test that the context singleton pattern resolves the instance requirement."""
         # Reset the singleton to start fresh
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         context_manager = CryptoContextManager()
 
         # Set the context in the singleton
@@ -148,24 +156,30 @@ class TestDocumentedLimitations:
     def test_limitation_context_instance_binding_documented(
         self, serialized_context_bytes
     ):
-        """Document: All crypto objects are bound to their creating context instance.
+        """Document: Process-safe caching resolves context instance binding issues.
 
-        This test documents the limitation and is expected to fail.
+        Previously, this test documented a limitation where crypto objects were
+        bound to their creating context instance. Our process-safe implementation
+        with caching resolves this by ensuring consistent context instances.
         """
-        # Try to create multiple context instances - this should fail
-        with pytest.raises(
-            RuntimeError, match="Cannot find context for the given pointer"
-        ):
-            cc1 = pre.deserialize_cc(serialized_context_bytes)
-            cc2 = pre.deserialize_cc(serialized_context_bytes)
+        # Create contexts from the same bytes - should return same cached instance
+        cc1 = pre.deserialize_cc(serialized_context_bytes)
+        cc2 = pre.deserialize_cc(serialized_context_bytes)
 
-            keys1 = pre.generate_keys(cc1)
-            keys2 = pre.generate_keys(cc2)
+        # Should be the same instance due to caching
+        assert cc1 is cc2
+
+        # Both should work without errors
+        keys1 = pre.generate_keys(cc1)
+        keys2 = pre.generate_keys(cc2)
+        
+        assert keys1 is not None
+        assert keys2 is not None
 
     def test_solution_context_singleton_pattern(self, base_crypto_context):
         """Demonstrate: Context singleton pattern resolves the limitation."""
         # Reset the singleton
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         context_manager = CryptoContextManager()
 
         # Initialize with the base context
@@ -198,7 +212,7 @@ class TestContextSingletonIntegration:
     ):
         """Test the complete singleton serialization/deserialization workflow."""
         # Reset singleton
-        CryptoContextManager._instance = None
+        CryptoContextManager.reset_all_instances()
         server_context_manager = CryptoContextManager()
 
         # Server initializes context
@@ -208,11 +222,11 @@ class TestContextSingletonIntegration:
         serialized_context = server_context_manager.serialize_context()
 
         # Client gets context from server
-        CryptoContextManager._instance = None  # Simulate different client process
+        CryptoContextManager.reset_all_instances()  # Simulate different client process
         client_context_manager = CryptoContextManager()
 
         # Client deserializes the server's context
-        client_cc = client_context_manager.deserialize_context(serialized_context)
+        client_cc = client_context_manager.deserialize_context_safe(serialized_context)
 
         # Verify client context works
         keys = pre.generate_keys(client_cc)

@@ -22,21 +22,104 @@ def identity_group():
     help="Directory to store identity files.",
 )
 @click.option("--overwrite", is_flag=True, help="Overwrite existing identity file.")
-def identity_new(name, path, overwrite):
+@click.option(
+    "--context-file",
+    type=click.Path(exists=True),
+    help="Path to a PRE crypto context file. If provided, creates identity with PRE keys compatible with this context.",
+)
+@click.option(
+    "--api-url",
+    envvar="DCY_API_URL",
+    help="API base URL. If provided, automatically fetches the server's crypto context and creates PRE-enabled identity.",
+)
+def identity_new(name, path, overwrite, context_file, api_url):
     """Creates a new user identity file."""
     try:
         identity_dir = Path(path)
+
+        # Determine crypto context source (priority: context_file > api_url)
+        context_bytes = None
+        context_source = None
+
+        if context_file:
+            click.echo(f"Loading crypto context from {context_file}...", err=True)
+            with open(context_file, "rb") as f:
+                context_bytes = f.read()
+            context_source = f"file:{context_file}"
+            click.echo(
+                "✓ Crypto context loaded from file - will create PRE-enabled identity",
+                err=True,
+            )
+        elif api_url:
+            click.echo(f"Fetching crypto context from server {api_url}...", err=True)
+            from lib.api_client import DCypherClient, DCypherAPIError
+
+            try:
+                client = DCypherClient(api_url)
+                context_bytes = client.get_pre_crypto_context()
+                context_source = f"server:{api_url}"
+                click.echo(
+                    f"✓ Crypto context fetched from server ({len(context_bytes)} bytes) - will create PRE-enabled identity",
+                    err=True,
+                )
+            except DCypherAPIError as e:
+                raise click.ClickException(
+                    f"Could not fetch crypto context from server: {e}. "
+                    "Cannot create PRE-enabled identity without server context. "
+                    "To create a non-PRE identity, omit the --api-url flag."
+                )
+
+        # Now that KeyManager requires either context_bytes or _test_context (not api_url),
+        # we need to ensure we have context_bytes for PRE-enabled identities
+        if api_url and context_bytes is None:
+            raise click.ClickException(
+                "Failed to fetch crypto context from server. Cannot create PRE-enabled identity."
+            )
+
+        if context_bytes is None and api_url is None:
+            raise click.ClickException(
+                "Either --context-file or --api-url must be provided to create an identity with PRE capabilities. "
+                "This ensures the identity is compatible with the server's crypto context."
+            )
+
+        # ARCHITECTURAL FIX: KeyManager now requires context_bytes (not api_url) for proper separation
         mnemonic, file_path = KeyManager.create_identity_file(
-            name, identity_dir, overwrite
+            name, identity_dir, overwrite, context_bytes, context_source
         )
 
-        click.echo(
-            "Identity created successfully. Please back up your mnemonic phrase securely!"
-        )
+        if context_bytes:
+            click.echo(
+                "Identity created successfully with PRE capabilities! Please back up your mnemonic phrase securely!"
+            )
+            if context_source and context_source.startswith("server:"):
+                click.echo(
+                    "✓ Crypto context automatically fetched and stored in identity file"
+                )
+            else:
+                click.echo(
+                    "✓ Crypto context loaded from file and stored in identity file"
+                )
+        else:
+            click.echo(
+                "Identity created successfully. Please back up your mnemonic phrase securely!"
+            )
         click.echo("-" * 60)
         click.echo(mnemonic)
         click.echo("-" * 60)
         click.echo(f"Identity file saved to: {file_path}")
+
+        if context_bytes:
+            click.echo(
+                "✓ Identity is completely self-contained and universe-compatible"
+            )
+            click.echo("✓ Ready to use for all cryptographic operations immediately")
+        else:
+            click.echo(
+                "💡 Tip: To add PRE capabilities later, use: dcypher init-pre --identity-path <path>"
+            )
+            click.echo(
+                "💡 Or recreate with: dcypher identity new --name <name> --api-url <server>"
+            )
 
     except FileExistsError as e:
         click.echo(f"Error: {e}", err=True)

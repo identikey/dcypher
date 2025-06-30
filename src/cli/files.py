@@ -32,10 +32,13 @@ def upload(identity_path, file_path, api_url):
         # Initialize API client
         client = DCypherClient(api_url, identity_path=identity_path)
 
-        # Get server's crypto context
-        click.echo("Getting server crypto context...", err=True)
-        cc_bytes = client.get_pre_crypto_context()
-        cc = pre.deserialize_cc(cc_bytes)
+        # CRITICAL FIX: Use the same context management approach as when PRE keys were generated
+        # Since this file imports DCypherClient, we should use its context management
+        # to ensure compatibility with the PRE keys stored in the identity file
+        click.echo(
+            "Getting crypto context (same approach as key generation)...", err=True
+        )
+        cc = client.get_crypto_context_object()
 
         # Load identity data to get keys
         click.echo("Loading keys from identity file...", err=True)
@@ -173,9 +176,7 @@ def upload(identity_path, file_path, api_url):
     default="https://api.dcypher.io",
     help="API base URL.",
 )
-def download(
-    pk_path, identity_path, file_hash, output_path, compressed, api_url
-):
+def download(pk_path, identity_path, file_hash, output_path, compressed, api_url):
     """Downloads a file from the remote storage API with integrity verification."""
     click.echo(f"Starting download for file hash: {file_hash}...", err=True)
 
@@ -267,9 +268,7 @@ def download(
     default="http://127.0.0.1:8000",
     help="API base URL.",
 )
-def download_chunks(
-    pk_path, identity_path, file_hash, output_path, api_url
-):
+def download_chunks(pk_path, identity_path, file_hash, output_path, api_url):
     """Downloads all chunks for a file as a single concatenated gzip file."""
     click.echo(
         f"Starting download for concatenated chunks of file hash: {file_hash}...",

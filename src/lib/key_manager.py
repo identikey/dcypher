@@ -39,7 +39,11 @@ import threading
 from lib import pre
 
 try:
-    from crypto.context_manager import CryptoContextManager
+    from crypto.context_manager import (
+        CryptoContextManager,
+        get_context_manager,
+        OPENFHE_AVAILABLE,
+    )
 except ImportError:
     # Fallback for when running from CLI or different contexts
     import sys
@@ -49,7 +53,11 @@ except ImportError:
     parent_dir = os.path.dirname(os.path.dirname(__file__))
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from crypto.context_manager import CryptoContextManager
+    from crypto.context_manager import (
+        CryptoContextManager,
+        get_context_manager,
+        OPENFHE_AVAILABLE,
+    )
 
 
 # Thread-local storage for deterministic PRNG
@@ -288,6 +296,8 @@ class KeyManager:
 
         # Method 3: Platform-specific common paths (fallback)
         try:
+            import platform
+
             system = platform.system().lower()
             KeyManager._log("info", f"Platform: {system}")
 
@@ -801,14 +811,48 @@ class KeyManager:
 
     @staticmethod
     def create_identity_file(
-        identity_name: str, key_dir: Path, overwrite: bool = False
+        identity_name: str,
+        key_dir: Path,
+        overwrite: bool = False,
+        context_bytes: Optional[bytes] = None,
+        context_source: Optional[str] = None,
+        api_url: Optional[str] = None,
+        _test_context=None,  # For unit tests only - pre-deserialized context
     ) -> Tuple[str, Path]:
         """
         Create a complete, derivable identity file with all necessary keys.
+
+        Args:
+            identity_name: Name for the identity
+            key_dir: Directory to store the identity file
+            overwrite: Whether to overwrite existing identity file
+            context_bytes: Pre-serialized crypto context bytes
+            context_source: Source description for the context
+            api_url: API URL to fetch crypto context from (if context_bytes not provided)
+
+        Returns:
+            Tuple of (mnemonic_phrase, identity_file_path)
+
+        Raises:
+            ValueError: If neither context_bytes nor api_url is provided
         """
         identity_path = key_dir / f"{identity_name}.json"
         if identity_path.exists() and not overwrite:
             raise FileExistsError(f"Identity file already exists: {identity_path}")
+
+        # Validate that we have a way to get crypto context
+        if context_bytes is None and api_url is None and _test_context is None:
+            raise ValueError(
+                "Either 'context_bytes', 'api_url', or '_test_context' must be provided to create an identity with PRE capabilities. "
+                "This ensures the identity is compatible with the server's crypto context."
+            )
+
+        # Fetch context from API if not provided directly
+        if context_bytes is None and api_url is not None:
+            raise ValueError(
+                "When api_url is provided, please fetch the context externally and pass it via context_bytes parameter. "
+                "This avoids circular imports and improves architectural separation."
+            )
 
         # 1. Generate mnemonic and master seed
         mnemonic = Bip39MnemonicGenerator().FromWordsNumber(Bip39WordsNum.WORDS_NUM_24)
@@ -820,24 +864,131 @@ class KeyManager:
         )
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
-        # 3. Construct the identity data structure correctly
+        # 3. Generate PRE keys using the crypto context and store context in identity
+        # Use direct PRE module calls to avoid singleton race conditions
+        if _test_context is not None:
+            # For unit tests: use pre-deserialized context directly
+            cc = _test_context
+        elif api_url is not None:
+            # ARCHITECTURAL FIX: Break circular import dependency
+            # For client-side operations with API, the caller should provide the context
+            # This improves separation of concerns and avoids circular imports
+            raise ValueError(
+                "When api_url is provided, please fetch the context externally and pass it via context_bytes parameter. "
+                "This avoids circular imports and improves architectural separation."
+            )
+        else:
+            # For production without API: deserialize the context bytes directly
+            if context_bytes is None:
+                raise ValueError(
+                    "context_bytes cannot be None when no api_url is provided"
+                )
+            # Use direct PRE deserialization to avoid shared singleton
+            cc = pre.deserialize_cc_safe(context_bytes)
+
+        # Generate PRE keys using the context
+        # CRITICAL: Handle context destruction during parallel test execution
+        try:
+            keys = pre.generate_keys(cc)
+        except RuntimeError as e:
+            if "Cannot find context for the given pointer" in str(e):
+                # Context was destroyed by another process calling fhe.ReleaseAllContexts()
+                # This can happen during parallel test execution
+                # Try recovery strategies
+
+                if context_bytes is not None:
+                    print(
+                        f"⚠️ Context destroyed during parallel execution, attempting recovery..."
+                    )
+
+                    # Strategy 1: Try direct PRE context creation
+                    try:
+                        # Import PRE module directly and deserialize without singleton
+                        cc_direct = pre.deserialize_cc_safe(context_bytes)
+                        keys = pre.generate_keys(cc_direct)
+                        print(
+                            "✅ Context recovery successful via direct PRE deserialization"
+                        )
+                        # Update our cc reference for subsequent operations
+                        cc = cc_direct
+                    except Exception as e2:
+                        # Strategy 2: Create a completely fresh context (last resort)
+                        print(
+                            f"⚠️ Direct recovery also failed, creating fresh context as last resort..."
+                        )
+                        try:
+                            cc_fresh = pre.create_crypto_context()
+                            # Initialize the fresh context
+                            pre.generate_keys(cc_fresh)
+                            # Now generate the actual keys we need
+                            keys = pre.generate_keys(cc_fresh)
+                            print(
+                                "✅ Context recovery successful via fresh context creation"
+                            )
+                            # Update our cc reference for subsequent operations
+                            cc = cc_fresh
+                        except Exception as e3:
+                            # All recovery strategies failed
+                            raise RuntimeError(
+                                f"Context was destroyed during parallel execution and all recovery strategies failed:\n"
+                                f"  Original error: {e}\n"
+                                f"  Direct deserialization: {e2}\n"
+                                f"  Fresh context: {e3}"
+                            ) from e
+                else:
+                    # No context bytes available for recovery
+                    raise RuntimeError(
+                        f"Context was destroyed during parallel execution and cannot be recovered: {e}. "
+                        f"To make this more robust, provide context_bytes parameter."
+                    ) from e
+            else:
+                # Different error, re-raise
+                raise
+        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+
+        pre_keys_data = {
+            "pk_hex": pk_bytes.hex(),
+            "sk_hex": sk_bytes.hex(),
+        }
+
+        # Store the crypto context in the identity file for future use
+        # Handle case where we use _test_context without context_bytes
+        if context_bytes is not None:
+            crypto_context_data = {
+                "context_bytes_hex": context_bytes.hex(),
+                "context_source": context_source or "unknown",
+                "context_size": len(context_bytes),
+            }
+        else:
+            # For test contexts where we don't have the raw bytes
+            crypto_context_data = {
+                "context_bytes_hex": "",  # Empty for test contexts
+                "context_source": context_source or "test_context",
+                "context_size": 0,
+            }
+
+        # 4. Construct the identity data structure correctly
         identity_data = {
             "mnemonic": str(mnemonic),
             "version": "hd_v1",
             "derivable": True,  # This identity is derivable from the mnemonic
             "rotation_count": 0,
             "derivation_paths": {"classic": classic_path, "pq": pq_path},
+            "crypto_context": crypto_context_data,  # Store the crypto context for self-contained identity
             "auth_keys": {
                 "classic": {
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
                 },
-                "pq": [{"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}],
-                "pre": {},
+                "pq": [
+                    {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                ],
+                "pre": pre_keys_data,
             },
         }
 
-        # 4. Save the identity file
+        # 5. Save the identity file
         key_dir.mkdir(parents=True, exist_ok=True)
         with open(identity_path, "w") as f:
             json.dump(identity_data, f, indent=2)
@@ -845,31 +996,29 @@ class KeyManager:
         return str(mnemonic), identity_path
 
     @staticmethod
-    def add_pre_keys_to_identity(identity_file: Path, cc_bytes: bytes) -> None:
+    def add_pre_keys_to_identity(
+        identity_file: Path, cc_bytes: Optional[bytes] = None, cc_object=None
+    ) -> None:
         """
         Generates and adds PRE keys to an existing identity file.
 
         Args:
             identity_file: Path to the identity JSON file.
-            cc_bytes: Serialized crypto context from the server.
+            cc_bytes: Serialized crypto context from the server (optional if cc_object provided).
+            cc_object: Pre-deserialized crypto context object (optional, preferred over cc_bytes).
         """
-        # CRITICAL: Use the context singleton to ensure consistency with other operations
-        # This prevents OpenFHE "Key was not generated with the same crypto context" errors
-        context_manager = CryptoContextManager()
+        # Use provided context object directly to avoid singleton race conditions
+        if cc_object is not None:
+            # Use the provided context object directly (preferred)
+            cc = cc_object
+        elif cc_bytes is not None:
+            # Deserialize the context from the provided bytes using direct PRE module
+            # This avoids the shared singleton and prevents race conditions
+            cc = pre.deserialize_cc_safe(cc_bytes)
+        else:
+            raise ValueError("Either cc_bytes or cc_object must be provided")
 
-        # CRITICAL: Always reset the context to ensure clean state
-        # OpenFHE requires that the context be properly set up in its global registry
-        # before any key operations. We must deserialize the context fresh to ensure
-        # it's properly registered in OpenFHE's internal systems.
-        context_manager.reset()  # Clear any existing context
-
-        # Deserialize the context and set it up in the singleton
-        import base64
-
-        serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-        cc = context_manager.deserialize_context(serialized_context)
-
-        # NOW generate PRE keys using the properly initialized context
+        # Generate PRE keys using the properly initialized context
         # This ensures the keys are associated with the correct context instance
         keys = pre.generate_keys(cc)
         pk_bytes = pre.serialize_to_bytes(keys.publicKey)

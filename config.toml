@@ -62,21 +62,7 @@ enable_auto_lint = true
 
 # Install additional dependencies when the runtime is built
 runtime_extra_deps = """
-# Install uv package manager
-pip install uv
-
-# Install Just task runner
-curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
-
-# Install system dependencies that might be needed
-apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    pkg-config \
-    libssl-dev \
-    git \
-    curl \
-    wget
+/bin/bash /workspace/scripts/install_just_usrlocalbin.sh
 """
 
 # Environment variables for the runtime
