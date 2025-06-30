@@ -69,6 +69,20 @@ def identity_new(name, path, overwrite, context_file, api_url):
                     "To create a non-PRE identity, omit the --api-url flag."
                 )
 
+        # Now that KeyManager requires either context_bytes or _test_context (not api_url),
+        # we need to ensure we have context_bytes for PRE-enabled identities
+        if api_url and context_bytes is None:
+            raise click.ClickException(
+                "Failed to fetch crypto context from server. Cannot create PRE-enabled identity."
+            )
+
+        if context_bytes is None and api_url is None:
+            raise click.ClickException(
+                "Either --context-file or --api-url must be provided to create an identity with PRE capabilities. "
+                "This ensures the identity is compatible with the server's crypto context."
+            )
+
+        # ARCHITECTURAL FIX: KeyManager now requires context_bytes (not api_url) for proper separation
         mnemonic, file_path = KeyManager.create_identity_file(
             name, identity_dir, overwrite, context_bytes, context_source
         )

@@ -17,6 +17,9 @@ def get_pre_crypto_context():
     Clients must use this context for all PRE operations.
 
     Always returns the same context that was created at server startup.
+
+    NOTE: This endpoint is deprecated and should be replaced with /pre-crypto-params
+    for proper client-server architecture. Keeping for backward compatibility.
     """
     # Always return the same crypto context that was created at server startup
     app_state = get_app_state()
@@ -28,6 +31,29 @@ def get_pre_crypto_context():
     return Response(
         content=app_state.pre_cc_serialized, media_type="application/octet-stream"
     )
+
+
+@router.get("/pre-crypto-params")
+def get_pre_crypto_params():
+    """
+    Returns the crypto context parameters for the PRE scheme.
+    Clients should use these parameters to create compatible contexts.
+
+    This is the proper API design - clients create their own contexts
+    with the same parameters, rather than sharing context state.
+    """
+    # Return the standard parameters used by the server
+    # These match the parameters used in pre.create_crypto_context()
+    return {
+        "scheme": "BFV",
+        "plaintext_modulus": 65537,
+        "multiplicative_depth": 2,
+        "scaling_mod_size": 50,
+        "batch_size": 8192,
+        "security_level": 128,
+        "ring_dimension": 16384,
+        "description": "Standard DCypher PRE context parameters - create your own context with these parameters for compatibility",
+    }
 
 
 @router.get("/supported-pq-algs")

@@ -61,10 +61,21 @@ def temp_dir():
 
 
 @pytest.fixture
-def alice_identity(temp_dir):
-    """Create Alice's identity (PRE keys will be added by tests using server context)."""
-    # Create identity file without PRE keys initially
-    mnemonic, identity_file = KeyManager.create_identity_file("alice", temp_dir)
+def alice_identity(temp_dir, api_base_url):
+    """Create Alice's identity with PRE keys using server context."""
+    # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
+    from src.lib.api_client import DCypherClient
+
+    temp_client = DCypherClient(api_base_url)
+    cc_bytes = temp_client.get_pre_crypto_context()
+
+    # Create identity file with PRE keys using fetched context bytes
+    mnemonic, identity_file = KeyManager.create_identity_file(
+        "alice",
+        temp_dir,
+        context_bytes=cc_bytes,
+        context_source=f"server:{api_base_url}",
+    )
 
     return {
         "mnemonic": mnemonic,
@@ -74,10 +85,18 @@ def alice_identity(temp_dir):
 
 
 @pytest.fixture
-def bob_identity(temp_dir):
-    """Create Bob's identity (PRE keys will be added by tests using server context)."""
-    # Create identity file without PRE keys initially
-    mnemonic, identity_file = KeyManager.create_identity_file("bob", temp_dir)
+def bob_identity(temp_dir, api_base_url):
+    """Create Bob's identity with PRE keys using server context."""
+    # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
+    from src.lib.api_client import DCypherClient
+
+    temp_client = DCypherClient(api_base_url)
+    cc_bytes = temp_client.get_pre_crypto_context()
+
+    # Create identity file with PRE keys using fetched context bytes
+    mnemonic, identity_file = KeyManager.create_identity_file(
+        "bob", temp_dir, context_bytes=cc_bytes, context_source=f"server:{api_base_url}"
+    )
 
     return {
         "mnemonic": mnemonic,
@@ -108,7 +127,7 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     import gzip
     import base64
     import json
-    from crypto.context_manager import CryptoContextManager
+    from crypto.context_manager import get_client_context_manager
     from src.lib import pre, idk_message
 
     print("🔧 Setting up Alice and Bob's accounts with live server using CLI...")
@@ -123,6 +142,8 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
         "Alice",
         "--path",
         str(temp_dir),
+        "--api-url",
+        api_base_url,
     ]
 
     result = subprocess.run(alice_identity_cmd, capture_output=True, text=True)
@@ -140,6 +161,8 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
         "Bob",
         "--path",
         str(temp_dir),
+        "--api-url",
+        api_base_url,
     ]
 
     result = subprocess.run(bob_identity_cmd, capture_output=True, text=True)
@@ -307,15 +330,15 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === CRITICAL VERIFICATION ===
     # Read the downloaded file and decrypt the IDK message (like the working CLI test)
-    # Reset singleton to start fresh
-    CryptoContextManager.reset_all_instances()
-    context_manager = CryptoContextManager()
+    # ARCHITECTURAL FIX: Use client context manager - never interfere with server's context
+    # The server's context must remain stable throughout the test
+    client_context_manager = get_client_context_manager()
 
     # Get server's crypto context
     bob_client = DCypherClient(api_base_url, identity_path=str(bob_identity_file))
-    cc_bytes = bob_client.get_pre_crypto_context()
-    serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-    cc = context_manager.deserialize_context(serialized_context)
+    # CRITICAL FIX: Use get_crypto_context_object() to avoid calling fhe.ReleaseAllContexts()
+    # which would destroy contexts in parallel test execution
+    cc = bob_client.get_crypto_context_object()
 
     # Get Bob's PRE secret key from his identity
     with open(bob_identity_file, "r") as f:

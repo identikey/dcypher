@@ -45,7 +45,7 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # --- 1. Create Identity and Setup ---
-    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir)])
+    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir), "--api-url", api_base_url])
     identity_file = test_dir / "TestUser.json"
     assert identity_file.exists()
 

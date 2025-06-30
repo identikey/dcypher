@@ -7,9 +7,12 @@ import pytest
 
 import openfhe as fhe
 
-pytestmark = pytest.mark.skipif(
-    fhe.get_native_int() == 32, reason="Doesn't work for NATIVE_INT=32"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        fhe.get_native_int() == 32, reason="Doesn't work for NATIVE_INT=32"
+    ),
+    pytest.mark.crypto,  # CRITICAL: This test calls fhe.ReleaseAllContexts() which destroys contexts used by other tests
+]
 
 LOGGER = logging.getLogger("test_serial_cc")
 

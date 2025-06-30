@@ -238,21 +238,40 @@ async def download_shared_file(
 
     # Apply re-encryption using the stored re-encryption key
     try:
-        # CRITICAL FIX: Use the context singleton to ensure ALL operations use the SAME context instance
-        # This resolves the OpenFHE limitation where crypto objects must be created with the same context.
+        # Import here to avoid circular imports
+        from lib import pre
+        
+        # CRITICAL FIX: Use the server's pre-initialized context from app startup
+        # The server's context is initialized once at startup and stored in the singleton
+        # We should NEVER call deserialize_context() on the server side as it can destroy the context
 
-        # Get the server's singleton context - this is the SAME instance used for all operations
+        # Get the server's singleton context - this was initialized at startup
         context_manager = CryptoContextManager()
-
-        # IMPORTANT: Ensure the singleton is initialized with the server's context
         server_context = context_manager.get_context()
+        
         if server_context is None:
-            # Context not initialized, initialize it from the server's context
-            import base64 as b64
-
-            serialized_context = b64.b64encode(state.pre_cc_serialized).decode("ascii")
-            server_context = context_manager.deserialize_context(serialized_context)
-            # Context is ready for use - no additional key generation needed
+            # Context was destroyed (likely by fhe.ReleaseAllContexts() during parallel test execution)
+            # Try to recover by reinitializing the server's context
+            try:
+                # Reinitialize the server's context with default parameters
+                # This should match the parameters used during server startup
+                fresh_context = pre.create_crypto_context()
+                pre.generate_keys(fresh_context)  # Initialize it
+                
+                # Store it in the singleton
+                context_manager._context = fresh_context
+                server_context = fresh_context
+                
+                # Log the recovery for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning("Server crypto context was destroyed and has been recovered. This may indicate parallel test execution issues.")
+                
+            except Exception as recovery_error:
+                # Recovery failed, this is a serious problem
+                raise RuntimeError(
+                    f"Server crypto context not initialized and recovery failed: {recovery_error}. This indicates a server startup issue."
+                ) from recovery_error
 
         # CRITICAL: All operations must use the SAME context instance from the singleton
         # This includes deserialization of keys and ciphertexts

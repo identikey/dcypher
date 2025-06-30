@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
 from .auth import sign_message_with_keys
-from .key_manager import KeyManager
 from lib import pre
 import ecdsa
 import oqs
 import base64
+from crypto.context_manager import get_client_context_manager
 
 
 class DCypherAPIError(Exception):
@@ -55,68 +55,6 @@ class DCypherClient:
         self.keys_path = identity_path
         self._auth_keys = None
 
-    @classmethod
-    def create_test_account(
-        cls,
-        api_url: str,
-        temp_dir: Path,
-        additional_pq_algs: Optional[List[str]] = None,
-    ) -> Tuple["DCypherClient", str]:
-        """
-        Factory method to create a test account with generated keys.
-
-        This is the preferred method for tests - it handles all key generation,
-        file management, and account creation automatically.
-
-        Args:
-            api_url: Base URL for the DCypher API
-            temp_dir: Directory to store temporary identity files
-            additional_pq_algs: Additional PQ algorithms beyond ML-DSA
-
-        Returns:
-            tuple: (DCypherClient instance, classic_public_key_hex)
-        """
-        # Create identity file
-        mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_account", temp_dir
-        )
-
-        # Add additional PQ algorithms if specified
-        if additional_pq_algs:
-            # Load the identity file
-            with open(identity_file, "r") as f:
-                identity_data = json.load(f)
-
-            # Generate additional PQ keys
-            for alg in additional_pq_algs:
-                pq_pk, pq_sk = KeyManager.generate_pq_keypair(alg)
-                identity_data["auth_keys"]["pq"].append(
-                    {"alg": alg, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
-                )
-
-            # Save the updated identity file
-            with open(identity_file, "w") as f:
-                json.dump(identity_data, f, indent=2)
-
-        # Load identity to get public key
-        keys_data = KeyManager.load_identity_file(identity_file)
-        pk_classic_hex = KeyManager.get_classic_public_key(keys_data["classic_sk"])
-
-        # Create API client with identity file
-        client = cls(api_url, identity_path=str(identity_file))
-
-        # Load the keys to get PQ key info for account creation
-        if not client.keys_path:
-            raise ValueError("No keys path configured for client")
-
-        keys_data = KeyManager.load_keys_unified(Path(client.keys_path))
-        pq_keys = [
-            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
-        ]
-        client.create_account(pk_classic_hex, pq_keys)
-
-        return client, pk_classic_hex
-
     @contextmanager
     def signing_keys(self):
         """
@@ -136,6 +74,9 @@ class DCypherClient:
         """
         if not self.keys_path:
             raise AuthenticationError("No authentication keys configured")
+
+        # Import here to avoid circular import
+        from lib.key_manager import KeyManager
 
         # Use KeyManager's unified signing context
         assert self.keys_path is not None
@@ -257,6 +198,9 @@ class DCypherClient:
             raise AuthenticationError("No authentication keys configured")
 
         try:
+            # Import here to avoid circular import
+            from lib.key_manager import KeyManager
+
             # Use KeyManager's unified loader to support both auth_keys and identity files
             assert self.keys_path is not None
             self._auth_keys = KeyManager.load_keys_unified(Path(self.keys_path))
@@ -335,11 +279,14 @@ class DCypherClient:
         if not self.keys_path or not Path(self.keys_path).exists():
             raise AuthenticationError("Identity file not configured or does not exist.")
 
-        # 1. Get crypto context from server
-        cc_bytes = self.get_crypto_context_bytes()
+        # Import here to avoid circular import
+        from lib.key_manager import KeyManager
 
-        # 2. Add PRE keys to identity file
-        KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_bytes)
+        # 1. Get crypto context object from server (avoids local deserialization)
+        cc_object = self.get_crypto_context_object()
+
+        # 2. Add PRE keys to identity file using the context object
+        KeyManager.add_pre_keys_to_identity(Path(self.keys_path), cc_object=cc_object)
 
     def get_classic_public_key(self) -> str:
         """
@@ -348,6 +295,9 @@ class DCypherClient:
         Returns:
             Hex-encoded uncompressed SECP256k1 public key
         """
+        # Import here to avoid circular import
+        from lib.key_manager import KeyManager
+
         auth_keys = self._load_auth_keys()
         return KeyManager.get_classic_public_key(auth_keys["classic_sk"])
 
@@ -1009,23 +959,22 @@ class DCypherClient:
         # CRITICAL FIX: Check if context singleton is already initialized
         # If so, use it directly to maintain context consistency (important for tests)
         try:
-            from src.crypto.context_manager import CryptoContextManager
+            from src.crypto.context_manager import get_client_context_manager
         except ImportError:
             # Handle CLI context where src module isn't in path
-            from crypto.context_manager import CryptoContextManager
+            from crypto.context_manager import get_client_context_manager
 
-        context_manager = CryptoContextManager()
+        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
+        context_manager = get_client_context_manager()
         existing_context = context_manager.get_context()
 
         if existing_context is not None:
             # Use the existing context (maintains consistency for tests)
             cc = existing_context
         else:
-            # Get the server's crypto context and initialize singleton
-            cc_bytes = self.get_crypto_context_bytes()
-            context_manager.reset()  # Reset to clean state
-            serialized_context = base64.b64encode(cc_bytes).decode("ascii")
-            cc = context_manager.deserialize_context(serialized_context)
+            # CRITICAL FIX: Get the context object directly from server to avoid deserialization
+            # This prevents calling fhe.ReleaseAllContexts() which would destroy the server's context
+            cc = self.get_crypto_context_object()
             # Context is ready for use - no additional key generation needed
 
         # Deserialize Alice's secret key and Bob's public key
@@ -1056,19 +1005,21 @@ class DCypherClient:
             Initialized crypto context object compatible with server operations
         """
         try:
-            from src.crypto.context_manager import CryptoContextManager
+            from src.crypto.context_manager import get_client_context_manager
         except ImportError:
             # Handle CLI context where src module isn't in path
-            from crypto.context_manager import CryptoContextManager
+            from crypto.context_manager import get_client_context_manager
 
-        context_manager = CryptoContextManager()
+        # ARCHITECTURAL FIX: Always use client context manager since api_client is client-side
+        context_manager = get_client_context_manager()
 
         # Get server's crypto context bytes
         cc_bytes = self.get_crypto_context_bytes()
         serialized_context = base64.b64encode(cc_bytes).decode("ascii")
 
-        # CRITICAL: Only reset if we don't have a context or if it's different from server's
-        # This ensures consistency across multiple operations in the same workflow
+        # CRITICAL: Ensure we have a context that matches the server's context
+        # This ensures that client operations use the exact same context as the server
+
         current_context = context_manager.get_context()
         if current_context is None:
             # No context exists, initialize with server's context
@@ -1077,11 +1028,82 @@ class DCypherClient:
             # We have a context, check if it matches the server's
             current_serialized = context_manager._serialized_context
             if current_serialized != serialized_context:
-                # Context is different from server's, update it
-                context_manager.reset()
+                # Context is different from server's, we need to update it
+                # But we need to be careful about ReleaseAllContexts() destroying other contexts
                 cc = context_manager.deserialize_context(serialized_context)
             else:
                 # Context matches server's, reuse it
                 cc = current_context
 
         return cc
+
+    @classmethod
+    def create_test_account(
+        cls,
+        api_url: str,
+        temp_dir: Path,
+        additional_pq_algs: Optional[List[str]] = None,
+    ) -> Tuple["DCypherClient", str]:
+        """
+        Creates a test account with complete identity file.
+        Uses KeyManager for streamlined key generation and identity creation.
+
+        Args:
+            api_url: API server URL
+            temp_dir: Temporary directory for identity files
+            additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+        Returns:
+            tuple: (DCypherClient, classic_public_key_hex)
+        """
+        import base64
+        from lib.key_manager import KeyManager
+
+        # Get context bytes from server for PRE capabilities
+        cc_bytes = requests.get(f"{api_url}/pre-crypto-context").content
+
+        # ARCHITECTURAL FIX: Now that KeyManager doesn't accept api_url (to avoid circular imports),
+        # we fetch the context bytes and pass them directly. This improves separation of concerns.
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_account",
+            temp_dir,
+            context_bytes=cc_bytes,
+            context_source=f"server:{api_url}",
+            # Note: api_url parameter removed to break circular import
+        )
+
+        # Add additional PQ algorithms if specified
+        if additional_pq_algs:
+            # Load the identity file
+            with open(identity_file, "r") as f:
+                identity_data = json.load(f)
+
+            # Generate additional PQ keys
+            for alg in additional_pq_algs:
+                pq_pk, pq_sk = KeyManager.generate_pq_keypair(alg)
+                identity_data["auth_keys"]["pq"].append(
+                    {"alg": alg, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                )
+
+            # Save the updated identity file
+            with open(identity_file, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
+        # Load identity to get public key
+        keys_data = KeyManager.load_identity_file(identity_file)
+        pk_classic_hex = KeyManager.get_classic_public_key(keys_data["classic_sk"])
+
+        # Create API client with identity file
+        client = cls(api_url, identity_path=str(identity_file))
+
+        # Load the keys to get PQ key info for account creation
+        if not client.keys_path:
+            raise ValueError("No keys path configured for client")
+
+        keys_data = KeyManager.load_keys_unified(Path(client.keys_path))
+        pq_keys = [
+            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
+        ]
+        client.create_account(pk_classic_hex, pq_keys)
+
+        return client, pk_classic_hex

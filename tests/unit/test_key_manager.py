@@ -13,6 +13,28 @@ from .util.util import get_enabled_sigs, get_sigs_with_ctx_support
 import secrets
 
 
+def _generate_mock_context_object():
+    """Generate a valid crypto context object for testing purposes."""
+    # Create a real crypto context object for testing
+    # This ensures unit tests work with valid crypto context data
+    from src.lib import pre
+
+    cc = pre.create_crypto_context()
+    # Initialize the context by generating keys once
+    pre.generate_keys(cc)
+    return cc
+
+
+def _generate_mock_context_bytes():
+    """Generate valid crypto context bytes for testing purposes."""
+    # Create a real crypto context and serialize it for testing
+    # This ensures unit tests work with valid crypto context data
+    from src.lib import pre
+
+    cc = pre.create_crypto_context()
+    return pre.serialize_to_bytes(cc)
+
+
 def test_generate_classic_keypair():
     """Test classic key pair generation."""
     sk, pk_hex = KeyManager.generate_classic_keypair()
@@ -181,9 +203,9 @@ def test_identity_file_deterministic():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an identity file
+        # Create an identity file using _test_context to avoid parallel execution issues
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, _test_context=_generate_mock_context_object()
         )
 
         # Verify the file was created
@@ -224,9 +246,9 @@ def test_load_identity_file():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an identity file
+        # Create an identity file using _test_context to avoid parallel execution issues
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, _test_context=_generate_mock_context_object()
         )
 
         # Load the identity file
@@ -282,9 +304,9 @@ def test_load_keys_unified_with_identity():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create identity file
+        # Create identity file using _test_context to avoid parallel execution issues
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, _test_context=_generate_mock_context_object()
         )
 
         # Load using unified loader
@@ -316,9 +338,9 @@ def test_signing_context_with_identity():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create identity file
+        # Create identity file using _test_context to avoid parallel execution issues
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, _test_context=_generate_mock_context_object()
         )
 
         # Test signing context with identity file
@@ -386,7 +408,9 @@ class TestKeyDerivationAndRotation:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             mnemonic, identity_file = KeyManager.create_identity_file(
-                "rotation_test", temp_path
+                "rotation_test",
+                temp_path,
+                _test_context=_generate_mock_context_object(),
             )
             yield identity_file
 
@@ -450,9 +474,9 @@ class TestSecureBackup:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
-            # Create an identity
+            # Create an identity using _test_context to avoid parallel execution issues
             mnemonic, identity_file = KeyManager.create_identity_file(
-                "backup_test", temp_path
+                "backup_test", temp_path, _test_context=_generate_mock_context_object()
             )
 
             # Create a backup
@@ -490,9 +514,11 @@ def test_create_identity_file_is_deterministic():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # 1. Create an identity file
+        # 1. Create an identity file using _test_context to avoid parallel execution issues
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "deterministic_test", temp_path
+            "deterministic_test",
+            temp_path,
+            _test_context=_generate_mock_context_object(),
         )
 
         with open(identity_file, "r") as f:

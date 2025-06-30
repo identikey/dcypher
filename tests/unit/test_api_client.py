@@ -1,7 +1,7 @@
 import pytest
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, patch, mock_open, MagicMock
 import requests
 import tempfile
 
@@ -14,6 +14,17 @@ from src.lib.api_client import (
 )
 from src.lib.key_manager import KeyManager
 from src.config import ML_DSA_ALG
+import secrets
+
+
+def _generate_mock_context_bytes():
+    """Generate valid crypto context bytes for testing purposes."""
+    # Create a real crypto context and serialize it for testing
+    # This ensures unit tests work with valid crypto context data
+    from src.lib import pre
+
+    cc = pre.create_crypto_context()
+    return pre.serialize_to_bytes(cc)
 
 
 class TestDCypherClient:
@@ -421,8 +432,7 @@ def test_dcypher_client_with_auth_keys():
 
         # Create client with auth_keys
         client = DCypherClient(
-            api_url="http://test.example.com",
-            identity_path=str(auth_keys_file)
+            api_url="http://test.example.com", identity_path=str(auth_keys_file)
         )
 
         # Verify client can load keys
@@ -444,7 +454,7 @@ def test_dcypher_client_with_identity():
 
         # Create identity file
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Create client with identity file
@@ -471,7 +481,7 @@ def test_dcypher_client_identity_precedence():
         # Create both auth_keys and identity files
         pk_hex_auth, auth_keys_file = KeyManager.create_auth_keys_bundle(temp_path)
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path
+            "test_identity", temp_path, context_bytes=_generate_mock_context_bytes()
         )
 
         # Create client with both paths - identity should take precedence
@@ -502,27 +512,48 @@ def test_dcypher_client_no_keys_configured():
         client.get_classic_public_key()
 
 
-def test_dcypher_client_create_test_account_with_identity():
+@patch("requests.get")
+def test_dcypher_client_create_test_account_with_identity(mock_requests_get):
     """Test DCypherClient.create_test_account with identity system."""
     import tempfile
     from pathlib import Path
+    from unittest.mock import patch, MagicMock
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Should not actually try to create account (no API server)
-        # But should create identity file and client properly
-        try:
+        # Mock the crypto context fetch to avoid server connection
+        mock_context_bytes = _generate_mock_context_bytes()
+
+        # Mock the requests.get call that fetches crypto context
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = mock_context_bytes
+        mock_response.raise_for_status.return_value = None
+        mock_requests_get.return_value = mock_response
+
+        # Also create a real context object for the new API
+        from src.lib import pre
+
+        mock_context_object = pre.create_crypto_context()
+        pre.generate_keys(mock_context_object)  # Initialize it
+
+        # Mock account creation to avoid the final API call
+        with patch.object(DCypherClient, "create_account") as mock_create_account:
+            mock_create_account.return_value = {
+                "message": "Account created successfully"
+            }
+
+            # This should now work without any network calls
             client, pk_hex = DCypherClient.create_test_account(
                 "http://localhost:8000", temp_path
             )
-        except Exception as e:
-            # Expected to fail at API call, but client setup should work
-            if "Failed to get nonce" not in str(
-                e
-            ) and "Failed to create account" not in str(e):
-                # If it fails for a different reason, re-raise
-                raise
+
+        # Verify the requests.get was called correctly
+        assert mock_requests_get.call_count >= 1, (
+            "Should have called requests.get at least once"
+        )
+        mock_requests_get.assert_any_call("http://localhost:8000/pre-crypto-context")
 
         # Verify identity file was created
         identity_files = list(temp_path.glob("*.json"))
@@ -530,13 +561,15 @@ def test_dcypher_client_create_test_account_with_identity():
 
         # Verify client can load the identity
         identity_file = identity_files[0]
-        client = DCypherClient(
-            "http://localhost:8000", identity_path=str(identity_file)
-        )
+        assert client.keys_path == str(identity_file)
 
         with client.signing_keys() as keys:
             assert "classic_sk" in keys
             assert "pq_sigs" in keys
+
+        # Verify public key was returned
+        assert isinstance(pk_hex, str)
+        assert len(pk_hex) > 0
 
 
 def test_dcypher_client_backward_compatibility():
@@ -548,8 +581,7 @@ def test_dcypher_client_backward_compatibility():
 
         # Create client using legacy parameter name
         client = DCypherClient(
-            api_url="http://test.example.com",
-            identity_path=str(auth_keys_file)
+            api_url="http://test.example.com", identity_path=str(auth_keys_file)
         )
 
         # Should work exactly as before
