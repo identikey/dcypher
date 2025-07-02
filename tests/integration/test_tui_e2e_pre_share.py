@@ -89,6 +89,7 @@ from tests.helpers.tui_test_helpers import (
     manual_trigger_action,
     create_share_via_tui_robust,
     create_share_direct_action,
+    DownloadOperationComplete,
 )
 
 
@@ -469,6 +470,14 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
 
         if not download_success:
             assert False, "Failed to download shared file"
+
+        # ✅ FIXED: Wait for download operation to complete before checking file existence
+        print("   ⏳ Waiting for download operation to complete...")
+        download_complete = DownloadOperationComplete(timeout=60.0)
+        if not await download_complete.wait_until(pilot):
+            assert False, "Download operation did not complete within timeout"
+
+        print("   ✅ Download operation completed")
 
         # Wait for file to be downloaded
         file_downloaded = FileExists(bob_download_file, timeout=30.0)

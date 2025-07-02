@@ -267,6 +267,46 @@ class UploadOperationComplete(WaitCondition):
             return False
 
 
+class DownloadOperationComplete(WaitCondition):
+    """Wait for download operation to complete and results to be displayed"""
+
+    def __init__(self, timeout: float = 60.0):
+        super().__init__(timeout)
+
+    async def check(self, pilot: Any) -> bool:
+        try:
+            # Check if sharing screen has operation_results that indicate download completion
+            sharing_screen = pilot.app.query_one("#sharing")
+            if hasattr(sharing_screen, "operation_results"):
+                results = sharing_screen.operation_results
+                if results:
+                    # Check for download success indicators
+                    if "✓" in results and "downloaded" in results.lower():
+                        return True
+                    if "✓" in results and "decrypted" in results.lower():
+                        return True
+                    if "downloaded and decrypted successfully" in results.lower():
+                        return True
+
+            # Also check for notifications
+            notifications = getattr(pilot.app, "_notifications", [])
+            if notifications:
+                latest_notification = notifications[-1] if notifications else None
+                if (
+                    latest_notification
+                    and (
+                        "downloaded" in str(latest_notification).lower()
+                        or "decrypted" in str(latest_notification).lower()
+                    )
+                    and "successfully" in str(latest_notification).lower()
+                ):
+                    return True
+
+            return False
+        except Exception:
+            return False
+
+
 # =============================================================================
 # TUI INTERACTION HELPERS WITH CONDITIONAL WAITING
 # =============================================================================
