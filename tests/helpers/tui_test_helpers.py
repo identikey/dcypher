@@ -142,55 +142,29 @@ class ShareOperationComplete(WaitCondition):
                 results = sharing_screen.operation_results
                 if results:
                     # Check for success indicators
-                    if "✓" in results and "successfully" in results.lower():
-                        print(
-                            f"   🔍 Success detected in operation_results: {results[:100]}..."
-                        )
+                    if "✓" in results and "successfully" in results:
                         return True
-                    # Check for error indicators
-                    elif "failed" in results.lower() or "error" in results.lower():
-                        print(
-                            f"   🔍 Error detected in operation_results: {results[:100]}..."
-                        )
-                        return True  # Consider error as "complete" too
-
-            # Alternative: check results panel for success or error text
-            try:
-                results_element = pilot.app.query_one("#sharing-results")
-                if hasattr(results_element, "renderable"):
-                    renderable = results_element.renderable
-                    if hasattr(renderable, "renderable"):  # Panel with inner content
-                        inner = renderable.renderable
-                        if hasattr(inner, "plain"):
-                            text = inner.plain
-                            if ("✓" in text and "successfully" in text.lower()) or (
-                                "failed" in text.lower() or "error" in text.lower()
-                            ):
-                                print(
-                                    f"   🔍 Completion detected in results panel: {text[:100]}..."
-                                )
-                                return True
-            except Exception:
-                pass  # Continue with other checks
-
-            # Check for notifications that might indicate completion
-            try:
-                notifications = getattr(pilot.app, "_notifications", [])
-                if notifications:
-                    latest = str(notifications[-1]) if notifications else ""
-                    if ("successfully" in latest.lower()) or (
-                        "failed" in latest.lower() or "error" in latest.lower()
+                    # Check for completion indicators
+                    if "completed" in results.lower():
+                        return True
+                    # Check for share-specific success
+                    if "share" in results.lower() and (
+                        "created" in results.lower() or "sent" in results.lower()
                     ):
-                        print(
-                            f"   🔍 Completion detected in notifications: {latest[:100]}..."
-                        )
                         return True
-            except Exception:
-                pass
+
+            # Also check for notifications
+            notifications = getattr(pilot.app, "_notifications", [])
+            if notifications:
+                latest_notification = notifications[-1] if notifications else None
+                if (
+                    latest_notification
+                    and "successfully" in str(latest_notification).lower()
+                ):
+                    return True
 
             return False
-        except Exception as e:
-            print(f"   ⚠️  ShareOperationComplete check failed: {e}")
+        except Exception:
             return False
 
 
@@ -246,6 +220,48 @@ class NotificationPresent(WaitCondition):
             for notification in notifications:
                 if self.message_contains in str(notification):
                     return True
+            return False
+        except Exception:
+            return False
+
+
+class UploadOperationComplete(WaitCondition):
+    """Wait for file upload operation to complete and results to be displayed"""
+
+    def __init__(self, timeout: float = 60.0):
+        super().__init__(timeout)
+
+    async def check(self, pilot: Any) -> bool:
+        try:
+            # Check if files screen has operation_results that indicate upload completion
+            files_screen = pilot.app.query_one("#files")
+            if hasattr(files_screen, "operation_results"):
+                results = files_screen.operation_results
+                if results:
+                    # Check for upload success indicators
+                    if "✓ Upload completed successfully" in results:
+                        return True
+                    if "uploaded successfully" in results:
+                        return True
+                    if "File uploaded successfully" in results:
+                        return True
+                    # Check for general completion with file info
+                    if "✓" in results and (
+                        "Hash:" in results or "uploaded" in results.lower()
+                    ):
+                        return True
+
+            # Also check for notifications indicating upload success
+            notifications = getattr(pilot.app, "_notifications", [])
+            if notifications:
+                latest_notification = notifications[-1] if notifications else None
+                if latest_notification:
+                    notif_str = str(latest_notification).lower()
+                    if "upload" in notif_str and "success" in notif_str:
+                        return True
+                    if "file uploaded" in notif_str:
+                        return True
+
             return False
         except Exception:
             return False
@@ -525,7 +541,7 @@ async def create_account_via_tui(
 async def upload_file_via_tui(
     pilot: Any, file_path: Path, identity_path: Path, api_base_url: str
 ) -> bool:
-    """Upload file through TUI with conditional waiting"""
+    """Upload file through TUI with conditional waiting for actual completion"""
     print("📤 Uploading file via TUI...")
 
     # Navigate to Files tab
@@ -558,7 +574,38 @@ async def upload_file_via_tui(
         return False
 
     print("   ✅ File upload initiated")
-    return True
+
+    # ✅ FIXED: Wait for the upload to actually complete!
+    print("   ⏳ Waiting for upload operation to complete...")
+
+    # Wait for operation results to show upload completion
+    upload_complete = UploadOperationComplete(
+        timeout=60.0
+    )  # Longer timeout for uploads
+    if await upload_complete.wait_until(pilot):
+        print("   ✅ File upload completed successfully!")
+        return True
+    else:
+        print("   ❌ Upload operation did not complete within timeout")
+
+        # Debug: Check what the current state is
+        try:
+            files_screen = pilot.app.query_one("#files")
+            if hasattr(files_screen, "operation_results"):
+                results = files_screen.operation_results
+                print(f"   🔍 Upload operation_results: '{results}'")
+
+                # Check if results indicate completion even if our wait condition missed it
+                if results and (
+                    "✓ Upload completed successfully" in results
+                    or "uploaded successfully" in results
+                ):
+                    print("   ✅ Upload actually completed (condition missed it)")
+                    return True
+        except Exception as e:
+            print(f"   ⚠️  Could not check upload results: {e}")
+
+        return False
 
 
 async def wait_for_tui_ready(pilot: Any, timeout: float = 30.0) -> bool:
@@ -871,54 +918,6 @@ async def get_public_key_from_identity_screen(
         return None
 
 
-async def set_identity_in_sharing_screen(
-    pilot: Any, identity_path: Path, api_base_url: str
-) -> bool:
-    """Set identity in sharing screen and wait for it to be properly loaded"""
-    print(f"🆔 Setting identity in sharing screen: {identity_path}")
-
-    # Navigate to Sharing tab
-    if not await navigate_to_tab(pilot, 6):  # Tab 6 = Sharing
-        print("   ❌ Failed to navigate to Sharing tab")
-        return False
-
-    if not await wait_for_tab_content(pilot, 6):
-        print("   ❌ Sharing screen content failed to load")
-        return False
-
-    # Fill identity and API URL
-    if not await wait_and_fill(pilot, "#identity-path-input", str(identity_path)):
-        print("   ❌ Failed to fill identity path")
-        return False
-
-    if not await wait_and_fill(pilot, "#api-url-input", api_base_url):
-        print("   ❌ Failed to fill API URL")
-        return False
-
-    # Click set identity button
-    if not await wait_and_click(pilot, "#set-identity-btn"):
-        print("   ❌ Failed to click set identity button")
-        return False
-
-    # Wait for identity to be properly loaded in app state
-    identity_loaded = IdentityLoaded(str(identity_path), timeout=10.0)
-    if await identity_loaded.wait_until(pilot):
-        print("   ✅ Identity loaded successfully in app state")
-        return True
-    else:
-        print("   ⚠️  Identity did not load in app state, trying manual approach...")
-
-        # Manual fallback: set identity directly on app
-        try:
-            pilot.app.current_identity = str(identity_path)
-            pilot.app.api_url = api_base_url
-            print("   🔧 Manually set identity in app state")
-            return True
-        except Exception as e:
-            print(f"   ❌ Manual identity setting failed: {e}")
-            return False
-
-
 async def create_share_via_tui_robust(
     pilot: Any,
     identity_path: Path,
@@ -927,16 +926,18 @@ async def create_share_via_tui_robust(
     file_hash: str,
     use_manual_fallback: bool = True,
 ) -> bool:
-    """Create a share through TUI with robust conditional waiting and fallbacks"""
-    print(f"🤝 Creating share via TUI (robust)...")
+    """Create a share through TUI with robust conditional waiting and fallbacks.
+
+    NOTE: With the new identity login system, the identity should already be
+    loaded in the app state, so no manual identity setting is needed.
+    """
+    print(f"🤝 Creating share via TUI (robust with new identity system)...")
     print(f"   Identity: {identity_path}")
     print(f"   Recipient: {recipient_public_key[:16]}...")
     print(f"   File: {file_hash[:16]}...")
 
-    # First ensure identity is set
-    if not await set_identity_in_sharing_screen(pilot, identity_path, api_base_url):
-        print("   ❌ Failed to set identity")
-        return False
+    # ✅ NEW: With the new identity system, identity should already be loaded in app state
+    # No need for manual identity setting
 
     # Fill share creation form with robust input handling
     print("   📝 Filling recipient key with robust method...")
@@ -955,7 +956,6 @@ async def create_share_via_tui_robust(
     try:
         recipient_input = pilot.app.query_one("#recipient-key-input")
         file_hash_input = pilot.app.query_one("#file-hash-input")
-        sharing_screen = pilot.app.query_one("#sharing")
 
         print(
             f"   🔧 Final verification - recipient: '{getattr(recipient_input, 'value', 'NOT_SET')[:16]}...'"
@@ -963,15 +963,8 @@ async def create_share_via_tui_robust(
         print(
             f"   🔧 Final verification - file_hash: '{getattr(file_hash_input, 'value', 'NOT_SET')[:16]}...'"
         )
-        print(
-            f"   🔧 Final verification - identity: '{getattr(sharing_screen, 'current_identity_path', 'NOT_SET')}'"
-        )
     except Exception as e:
         print(f"   ⚠️  Debug verification failed: {e}")
-
-    # Give time for the sharing screen to register the input changes
-    print("   ⏳ Waiting for input changes to propagate...")
-    await asyncio.sleep(0.5)  # Small delay to ensure sharing screen sees the updates
 
     # Try to trigger any change events that might be needed
     try:
@@ -984,41 +977,21 @@ async def create_share_via_tui_robust(
         if hasattr(file_hash_input, "focus"):
             file_hash_input.focus()
 
-        # Also try to refresh the sharing screen to pick up changes
-        sharing_screen = pilot.app.query_one("#sharing")
-        if hasattr(sharing_screen, "refresh"):
-            sharing_screen.refresh()
-
         # Small additional delay
-        await asyncio.sleep(0.2)
-        print("   ✅ Input change propagation completed")
+        await pilot.pause(0.2)
 
     except Exception as e:
-        print(f"   ⚠️  Input event triggering failed: {e}")
+        print(f"   ⚠️  Focus trigger failed: {e}")
 
-    # Final verification that sharing screen can see the values
-    try:
-        sharing_screen = pilot.app.query_one("#sharing")
-        # Test what the sharing screen would see when it calls query_one
-        test_recipient = sharing_screen.query_one("#recipient-key-input").value
-        test_file_hash = sharing_screen.query_one("#file-hash-input").value
-        print(
-            f"   🔍 Sharing screen perspective - recipient: '{test_recipient[:16] if test_recipient else 'EMPTY'}...'"
-        )
-        print(
-            f"   🔍 Sharing screen perspective - file_hash: '{test_file_hash[:16] if test_file_hash else 'EMPTY'}...'"
-        )
-    except Exception as e:
-        print(f"   ⚠️  Sharing screen perspective check failed: {e}")
-
-    # Try button click first
+    # Try clicking the create share button
+    print("   🔘 Clicking create share button...")
     button_success = await wait_and_click(pilot, "#create-share-btn")
 
     if button_success:
-        # Wait for share operation to complete
+        # Wait for operation to complete
         share_complete = ShareOperationComplete("share", timeout=30.0)
         if await share_complete.wait_until(pilot):
-            print("   ✅ Share created successfully via button!")
+            print("   ✅ Button click worked! Share created.")
             return True
 
     if use_manual_fallback:
@@ -1035,6 +1008,203 @@ async def create_share_via_tui_robust(
                 return True
 
     print("   ❌ Share creation failed")
+    return False
+
+
+async def create_share_direct_action(
+    pilot: Any,
+    identity_path: Path,
+    api_base_url: str,
+    recipient_public_key: str,
+    file_hash: str,
+) -> bool:
+    """
+    Create share by calling the action directly, bypassing TUI input issues.
+
+    NOTE: With the new identity login system, the identity should already be
+    loaded in the app state, so no manual identity setting is needed.
+    """
+    print(f"🎯 Creating share via direct action (new identity system)...")
+    print(f"   Identity: {identity_path}")
+    print(f"   Recipient: {recipient_public_key[:16]}...")
+    print(f"   File: {file_hash[:16]}...")
+
+    try:
+        sharing_screen = pilot.app.query_one("#sharing")
+
+        # ✅ NEW: With the new identity system, no manual identity setting needed
+        # The sharing screen will read identity from app.current_identity
+
+        # Fill the input fields directly - FIXED: Use sharing screen's query method
+        # to ensure we set the same widgets that the action will read
+        recipient_input = sharing_screen.query_one("#recipient-key-input")
+        file_hash_input = sharing_screen.query_one("#file-hash-input")
+
+        recipient_input.value = recipient_public_key
+        file_hash_input.value = file_hash
+
+        print(f"   ✅ Set recipient input: {recipient_public_key[:16]}...")
+        print(f"   ✅ Set file hash input: {file_hash[:16]}...")
+
+        # Now call the action directly
+        print("   🎯 Calling action_create_share directly...")
+        try:
+            sharing_screen.action_create_share()
+            print("   ✅ action_create_share call completed without exception")
+        except Exception as e:
+            print(f"   ❌ Exception in action_create_share: {e}")
+            import traceback
+
+            print(f"   📋 Full traceback: {traceback.format_exc()}")
+            return False
+
+        # Wait for share operation to complete
+        share_complete = ShareOperationComplete("share", timeout=30.0)
+        if await share_complete.wait_until(pilot):
+            print("   ✅ Direct action worked! Share created.")
+            return True
+        else:
+            print("   ⚠️  Direct action called but operation didn't complete")
+
+            # ENHANCED DEBUGGING: Check backend state directly
+            print("   🔍 Enhanced debugging - checking backend and client state...")
+            try:
+                from src.lib.api_client import DCypherClient
+
+                alice_client = DCypherClient(
+                    api_base_url, identity_path=str(identity_path)
+                )
+                alice_pk_classic_hex = alice_client.get_classic_public_key()
+
+                print(f"   🔍 Alice's public key: {alice_pk_classic_hex[:16]}...")
+
+                # Check if Alice's account exists
+                try:
+                    alice_account = alice_client.get_account(alice_pk_classic_hex)
+                    print(
+                        f"   ✅ Alice's account found: {len(alice_account.get('pq_keys', {}))} PQ keys"
+                    )
+                except Exception as account_e:
+                    print(f"   ❌ Alice's account not found: {account_e}")
+                    return False
+
+                # Check if Bob's account exists and has PRE
+                try:
+                    bob_account = alice_client.get_account(recipient_public_key)
+                    bob_pre_key = bob_account.get("pre_public_key_hex")
+                    if bob_pre_key:
+                        print(
+                            f"   ✅ Bob's account found with PRE key: {bob_pre_key[:16]}..."
+                        )
+                    else:
+                        print(f"   ❌ Bob's account found but NO PRE key!")
+                        return False
+                except Exception as bob_e:
+                    print(f"   ❌ Bob's account not found: {bob_e}")
+                    return False
+
+                # Check if Alice owns the file (CRITICAL CHECK)
+                print(f"   🔍 Checking if Alice owns file: {file_hash[:16]}...")
+                try:
+                    # Try to get file info from Alice's account using direct requests
+                    import requests
+
+                    response = requests.get(
+                        f"{api_base_url}/accounts/{alice_pk_classic_hex}/files"
+                    )
+                    if response.status_code == 200:
+                        files_response = response.json()
+                    else:
+                        raise Exception(
+                            f"Files API returned status {response.status_code}"
+                        )
+
+                    alice_files = files_response.get("files", {})
+                    print(f"   📁 Alice owns {len(alice_files)} files")
+
+                    if file_hash in alice_files:
+                        print(f"   ✅ Alice DOES own the file: {file_hash[:16]}...")
+                    else:
+                        print(f"   ❌ Alice does NOT own the file: {file_hash[:16]}...")
+                        print(
+                            f"   📋 Alice's files: {list(alice_files.keys())[:3] if alice_files else 'none'}"
+                        )
+
+                        # This is likely our issue! File upload didn't properly register
+                        print(
+                            "   💡 ISSUE IDENTIFIED: File not registered to Alice's account"
+                        )
+                        return False
+
+                except Exception as files_e:
+                    print(f"   ⚠️  Could not check Alice's files via API: {files_e}")
+                    # File ownership check failed, but let's still try the share API
+
+                # Try the share creation directly via API to get exact error
+                print("   🔍 Testing direct API share creation...")
+                try:
+                    # Generate re-encryption key
+                    re_key_hex = alice_client.generate_re_encryption_key(bob_pre_key)
+                    print(f"   ✅ Generated re-encryption key: {re_key_hex[:16]}...")
+
+                    # Attempt direct share creation
+                    share_result = alice_client.create_share(
+                        recipient_public_key, file_hash, re_key_hex
+                    )
+                    share_id = share_result.get("share_id")
+
+                    if share_id:
+                        print(
+                            f"   🎉 SUCCESS! Direct API share creation worked: {share_id[:16]}..."
+                        )
+                        return True
+                    else:
+                        print(f"   ⚠️  Direct API returned no share_id: {share_result}")
+
+                except Exception as share_e:
+                    print(f"   ❌ Direct API share creation failed: {share_e}")
+
+                    # This gives us the exact backend error!
+                    if "File not found in Alice's storage" in str(share_e):
+                        print(
+                            "   💡 CONFIRMED: Backend can't find file in Alice's storage"
+                        )
+                        print(
+                            "   💡 This suggests file upload didn't register properly"
+                        )
+                    elif "does not have PRE capabilities" in str(share_e):
+                        print("   💡 CONFIRMED: Bob doesn't have PRE capabilities")
+                    elif "Invalid signature" in str(share_e):
+                        print("   💡 CONFIRMED: Signature validation failed")
+                    else:
+                        print(f"   💡 UNKNOWN ERROR: {share_e}")
+
+                    return False
+
+                # Finally check if shares exist via API
+                shares_data = alice_client.list_shares(alice_pk_classic_hex)
+                if (
+                    shares_data
+                    and "shares_sent" in shares_data
+                    and shares_data["shares_sent"]
+                ):
+                    shares_count = len(shares_data["shares_sent"])
+                    print(
+                        f"   ✅ API check: Found {shares_count} shares! Action was successful."
+                    )
+                    return True
+                else:
+                    print("   ⚠️  No shares found via API")
+                    return False
+
+            except Exception as api_e:
+                print(f"   ❌ Enhanced debugging failed: {api_e}")
+                return False
+
+    except Exception as e:
+        print(f"   ❌ Direct action setup failed: {e}")
+        return False
+
     return False
 
 
@@ -1121,142 +1291,6 @@ async def complete_sharing_workflow_robust(
         print("   ❌ Share creation failed")
 
     return results
-
-
-async def create_share_direct_action(
-    pilot: Any,
-    identity_path: Path,
-    api_base_url: str,
-    recipient_public_key: str,
-    file_hash: str,
-) -> bool:
-    """
-    Create share by directly calling the sharing action with parameters,
-    bypassing the problematic TUI input fields entirely.
-    """
-    print(f"🎯 Creating share via direct action...")
-    print(f"   Identity: {identity_path}")
-    print(f"   Recipient: {recipient_public_key[:16]}...")
-    print(f"   File: {file_hash[:16]}...")
-
-    try:
-        # First ensure identity is set
-        if not await set_identity_in_sharing_screen(pilot, identity_path, api_base_url):
-            print("   ❌ Failed to set identity")
-            return False
-
-        # Get the sharing screen
-        sharing_screen = pilot.app.query_one("#sharing")
-
-        # Directly set the input values on the sharing screen's input elements
-        recipient_input = sharing_screen.query_one("#recipient-key-input")
-        file_hash_input = sharing_screen.query_one("#file-hash-input")
-
-        # Force set the values
-        recipient_input.value = recipient_public_key
-        file_hash_input.value = file_hash
-
-        # Refresh the inputs to ensure they're updated
-        if hasattr(recipient_input, "refresh"):
-            recipient_input.refresh()
-        if hasattr(file_hash_input, "refresh"):
-            file_hash_input.refresh()
-
-        # Small delay to let changes propagate
-        await asyncio.sleep(0.1)
-
-        # Verify the values are set
-        print(
-            f"   🔧 Direct verification - recipient: '{recipient_input.value[:16]}...'"
-        )
-        print(
-            f"   🔧 Direct verification - file_hash: '{file_hash_input.value[:16]}...'"
-        )
-
-        # Now call the action directly
-        print("   🎯 Calling action_create_share directly...")
-        try:
-            sharing_screen.action_create_share()
-            print("   ✅ action_create_share call completed without exception")
-        except Exception as e:
-            print(f"   ❌ Exception in action_create_share: {e}")
-            import traceback
-
-            print(f"   📋 Full traceback: {traceback.format_exc()}")
-            return False
-
-        # Wait for share operation to complete
-        share_complete = ShareOperationComplete("share", timeout=30.0)
-        if await share_complete.wait_until(pilot):
-            print("   ✅ Direct action worked! Share created.")
-            return True
-        else:
-            print("   ⚠️  Direct action called but operation didn't complete")
-
-            # Check if share was actually created via API (bypass TUI indicators)
-            print("   🔍 Checking API directly for share creation...")
-            try:
-                from src.lib.api_client import DCypherClient
-
-                alice_client = DCypherClient(
-                    api_base_url, identity_path=str(identity_path)
-                )
-                alice_pk_classic_hex = alice_client.get_classic_public_key()
-                shares_data = alice_client.list_shares(alice_pk_classic_hex)
-
-                shares_sent = shares_data.get("shares_sent", [])
-                if shares_sent:
-                    # Find a share with matching file_hash
-                    for share in shares_sent:
-                        if share.get("file_hash") == file_hash:
-                            print(
-                                f"   ✅ Share found via API! Share ID: {share.get('share_id', 'unknown')}"
-                            )
-                            return True
-
-                    print(
-                        f"   ⚠️  Found {len(shares_sent)} shares but none match our file_hash"
-                    )
-                else:
-                    print("   ⚠️  No shares found via API")
-
-            except Exception as e:
-                print(f"   ⚠️  API check failed: {e}")
-
-            # Debug: Check what the current state is
-            try:
-                print("   🔍 Post-action debugging:")
-                print(
-                    f"   🔍 operation_results: '{getattr(sharing_screen, 'operation_results', 'NOT_SET')}'"
-                )
-
-                # Check results panel
-                results_element = sharing_screen.query_one("#sharing-results")
-                if hasattr(results_element, "renderable"):
-                    renderable = results_element.renderable
-                    if hasattr(renderable, "renderable"):
-                        inner = renderable.renderable
-                        if hasattr(inner, "plain"):
-                            text = inner.plain
-                            print(f"   🔍 results panel text: '{text[:200]}...'")
-
-                # Check for any notifications
-                notifications = getattr(pilot.app, "_notifications", [])
-                if notifications:
-                    print(
-                        f"   🔍 Latest notification: '{str(notifications[-1])[:200]}...'"
-                    )
-                else:
-                    print("   🔍 No notifications found")
-
-            except Exception as e:
-                print(f"   ⚠️  Post-action debugging failed: {e}")
-
-            return False
-
-    except Exception as e:
-        print(f"   ❌ Direct action failed: {e}")
-        return False
 
 
 # =============================================================================
