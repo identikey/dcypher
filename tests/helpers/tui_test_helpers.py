@@ -307,6 +307,44 @@ class DownloadOperationComplete(WaitCondition):
             return False
 
 
+class AccountCreationComplete(WaitCondition):
+    """Wait for account creation operation to complete and results to be displayed"""
+
+    def __init__(self, timeout: float = 60.0):
+        super().__init__(timeout)
+
+    async def check(self, pilot: Any) -> bool:
+        try:
+            # Check if accounts screen has operation_results that indicate account creation completion
+            accounts_screen = pilot.app.query_one("#accounts")
+            if hasattr(accounts_screen, "operation_results"):
+                results = accounts_screen.operation_results
+                if results:
+                    # Check for the exact pattern the accounts screen sets
+                    if "✓ Account created successfully!" in results:
+                        return True
+                    # Also check for generic success patterns
+                    if "✓" in results and "account created" in results.lower():
+                        return True
+                    if "✓" in results and "successfully" in results.lower():
+                        return True
+
+            # Also check for notifications with account creation messages
+            notifications = getattr(pilot.app, "_notifications", [])
+            if notifications:
+                latest_notification = notifications[-1] if notifications else None
+                if latest_notification:
+                    notif_str = str(latest_notification).lower()
+                    if "account created successfully" in notif_str:
+                        return True
+                    if "account" in notif_str and "successfully" in notif_str:
+                        return True
+
+            return False
+        except Exception:
+            return False
+
+
 # =============================================================================
 # TUI INTERACTION HELPERS WITH CONDITIONAL WAITING
 # =============================================================================
@@ -433,9 +471,41 @@ async def wait_and_fill_robust(
 
 
 async def navigate_to_tab(pilot: Any, tab_number: int, timeout: float = 30.0) -> bool:
-    """Navigate to a specific tab by number (1-6)"""
-    tab_id = f"#--content-tab-tab-{tab_number}"
-    return await wait_and_click(pilot, tab_id, timeout)
+    """Navigate to a specific tab by number (1-6) using the TUI's keyboard bindings"""
+    try:
+        # The TUI app has keyboard bindings for number keys 1-6 to switch tabs
+        # This is more reliable than trying to click specific tab elements
+        await pilot.press(str(tab_number))
+        await pilot.pause(0.2)  # Small pause to allow tab switch
+
+        # Verify the tab switch worked by checking if the content exists
+        tab_content_map = {
+            1: "#dashboard",
+            2: "#identity",
+            3: "#crypto",
+            4: "#accounts",
+            5: "#files",
+            6: "#sharing",
+        }
+
+        if tab_number in tab_content_map:
+            content_selector = tab_content_map[tab_number]
+            content_ready = ElementExists(content_selector, timeout=5.0)
+            return await content_ready.wait_until(pilot)
+
+        return True  # Assume success for other tab numbers
+
+    except Exception as e:
+        print(f"   ❌ Tab navigation failed: {e}")
+
+        # Fallback: try the old approach with clicking tab elements
+        try:
+            # Try TabbedContent's generated tab IDs (tab-1, tab-2, etc.)
+            tab_id = f"#tab-{tab_number}"
+            return await wait_and_click(pilot, tab_id, timeout)
+        except Exception as e2:
+            print(f"   ❌ Fallback tab navigation also failed: {e2}")
+            return False
 
 
 async def manual_trigger_action(
@@ -569,13 +639,63 @@ async def create_account_via_tui(
         print("   ❌ Failed to set identity")
         return False
 
-    # Create account
-    if not await wait_and_click(pilot, "#create-account-btn"):
-        print("   ❌ Failed to create account")
-        return False
+    # Create account - try button click first
+    button_success = await wait_and_click(pilot, "#create-account-btn")
+
+    if button_success:
+        print("   ✅ Account creation button clicked successfully")
+    else:
+        print("   ⚠️  Account creation button click failed")
 
     print("   ✅ Account creation initiated")
-    return True
+
+    # ✅ FIXED: Wait for the account creation to actually complete!
+    print("   ⏳ Waiting for account creation to complete...")
+
+    # Wait for operation results to show account creation completion
+    account_complete = AccountCreationComplete(
+        timeout=60.0
+    )  # Longer timeout for account creation
+    if await account_complete.wait_until(pilot):
+        print("   ✅ Account creation completed successfully!")
+        return True
+
+    # If button click didn't work, try manual trigger fallback
+    if not button_success:
+        print("   🔧 Button click failed, trying manual trigger...")
+        manual_success = await manual_trigger_action(
+            pilot, "#accounts", "action_create_account"
+        )
+
+        if manual_success:
+            print("   ✅ Manual trigger called action_create_account")
+            # Wait again for completion after manual trigger
+            if await account_complete.wait_until(pilot):
+                print("   ✅ Manual trigger worked! Account created.")
+                return True
+        else:
+            print("   ❌ Manual trigger also failed")
+
+    print("   ❌ Account creation did not complete within timeout")
+
+    # Debug: Check what the current state is
+    try:
+        accounts_screen = pilot.app.query_one("#accounts")
+        if hasattr(accounts_screen, "operation_results"):
+            results = accounts_screen.operation_results
+            print(f"   🔍 Account operation_results: '{results}'")
+
+            # Check if results indicate completion even if our wait condition missed it
+            if results and (
+                "✓ Account created successfully" in results
+                or "account created" in results.lower()
+            ):
+                print("   ✅ Account actually completed (condition missed it)")
+                return True
+    except Exception as e:
+        print(f"   ⚠️  Could not check account results: {e}")
+
+    return False
 
 
 async def upload_file_via_tui(
@@ -796,7 +916,10 @@ def validate_identity_file(identity_path: Path) -> bool:
 
 def get_recommended_viewport_size() -> tuple[int, int]:
     """Get recommended viewport size for TUI testing to avoid OutOfBounds errors"""
-    return (420, 315)  # Modern terminal size that works well
+    # FIXED: Use smaller viewport size that works reliably with wait_for_tui_ready()
+    # Large sizes like (420, 315) cause TUI initialization to hang
+    # Testing shows (140, 50) works consistently across all test scenarios
+    return (140, 50)  # Proven working size from successful tests
 
 
 async def setup_fresh_tui_app(api_base_url: str) -> DCypherTUI:

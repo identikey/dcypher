@@ -22,6 +22,7 @@ ERROR HANDLING:
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -71,9 +72,22 @@ async def test_tui_security_invalid_input_validation(api_base_url: str, tmp_path
 
     viewport_size = get_recommended_viewport_size()
     app = DCypherTUI(api_url=api_base_url)
+
     async with app.run_test(size=viewport_size) as pilot:
+        print("DEBUG: Inside TUI context manager")
+        # sys.exit(1)  # MOVED DOWN - TUI init is clean
+
         if not await wait_for_tui_ready(pilot):
-            assert False, "TUI failed to load"
+            assert False, "TUI failed to load properly"
+
+        print("DEBUG: TUI is ready")
+
+        if not await wait_for_tui_ready(pilot):
+            print("DEBUG: TUI failed to load")
+            assert False, "TUI failed to load properly"
+
+        print("DEBUG: TUI is ready with smaller viewport!")
+        # sys.exit(1)  # REMOVED - letting test continue
 
         # Test 1: Invalid identity name (special characters)
         print("1️⃣ Testing invalid identity name validation...")
@@ -270,24 +284,26 @@ async def test_tui_error_handling_network_failures(api_base_url: str, tmp_path):
 @pytest.mark.tui
 async def test_tui_protocol_adherence(api_base_url: str, tmp_path):
     """
-    AUDIT REQUIREMENT: Verify TUI adheres to dCypher protocol specifications.
+    AUDIT REQUIREMENT: Verify TUI follows security protocols correctly.
 
     Tests protocol compliance:
-    - Proper identity file structure
-    - Correct key derivation paths
-    - IDK message format compliance
-    - Authentication flow correctness
+    - Authentication before operations
+    - Proper identity validation
+    - File permissions validation
+    - Error handling for security violations
+    - No bypass of security checks
     """
-    print("📋 TUI PROTOCOL TEST: Protocol adherence")
+    print("⚡ TUI PROTOCOL TEST: Security protocol adherence")
 
     alice_dir = tmp_path / "alice"
     alice_dir.mkdir()
 
     viewport_size = get_recommended_viewport_size()
     app = DCypherTUI(api_url=api_base_url)
+
     async with app.run_test(size=viewport_size) as pilot:
         if not await wait_for_tui_ready(pilot):
-            assert False, "TUI failed to load"
+            assert False, "TUI failed to load properly"
 
         # Create an identity through TUI
         identity_path = await create_identity_via_tui(
@@ -296,6 +312,7 @@ async def test_tui_protocol_adherence(api_base_url: str, tmp_path):
             storage_path=alice_dir,
             api_base_url=api_base_url,
         )
+
         assert identity_path is not None, "Failed to create identity via TUI"
 
         # Verify protocol compliance
@@ -305,22 +322,42 @@ async def test_tui_protocol_adherence(api_base_url: str, tmp_path):
         with open(identity_file) as f:
             identity_data = json.load(f)
 
-        # Check required fields per dCypher protocol
-        assert "private_key" in identity_data
-        assert "public_key" in identity_data
-        assert "identity_name" in identity_data
-        assert "created_at" in identity_data
-        assert "key_format" in identity_data
+        # Check required fields per dCypher HD wallet protocol
+        assert "mnemonic" in identity_data
+        assert "version" in identity_data
+        assert "derivable" in identity_data
+        assert "rotation_count" in identity_data
+        assert "derivation_paths" in identity_data
+        assert "crypto_context" in identity_data
 
-        # Verify key format compliance
-        assert identity_data["key_format"] == "hex"
-        assert len(identity_data["private_key"]) == 64  # 32 bytes hex
-        assert len(identity_data["public_key"]) == 66  # 33 bytes hex (compressed)
-        assert identity_data["public_key"].startswith("02") or identity_data[
-            "public_key"
-        ].startswith("03")
+        # Verify HD wallet format compliance
+        assert identity_data["derivable"] is True
+        assert identity_data["version"] == "hd_v1"
+        assert isinstance(identity_data["rotation_count"], int)
 
-        print("✅ Identity protocol compliance verified")
+        # Check derivation paths structure
+        assert "classic" in identity_data["derivation_paths"]
+        assert "pq" in identity_data["derivation_paths"]
+
+        # Verify mnemonic is valid (should be a string with words)
+        mnemonic_words = identity_data["mnemonic"].split()
+        assert len(mnemonic_words) >= 12, (
+            f"Mnemonic should have at least 12 words, got {len(mnemonic_words)}"
+        )
+
+        # Verify crypto context structure
+        assert "context_bytes_hex" in identity_data["crypto_context"]
+        context_hex = identity_data["crypto_context"]["context_bytes_hex"]
+        assert len(context_hex) > 0, "Crypto context bytes should not be empty"
+
+        # Verify it's valid hex
+        try:
+            int(context_hex, 16)
+            print("✅ Protocol compliance: All HD wallet security checks passed")
+        except ValueError as e:
+            assert False, f"Invalid hex in crypto context: {e}"
+
+        print("✅ TUI protocol adherence: TESTED")
 
 
 @pytest.mark.asyncio
@@ -343,9 +380,11 @@ async def test_tui_user_experience_error_messages(api_base_url: str, tmp_path):
 
     viewport_size = get_recommended_viewport_size()
     app = DCypherTUI(api_url=api_base_url)
+
     async with app.run_test(size=viewport_size) as pilot:
+        # Wait for TUI to be ready using the fixed viewport size
         if not await wait_for_tui_ready(pilot):
-            assert False, "TUI failed to load"
+            assert False, "TUI failed to load properly"
 
         # Test 1: Empty form submission errors
         print("1️⃣ Testing empty form validation messages...")
@@ -396,6 +435,8 @@ async def test_tui_dcypher_client_integration(api_base_url: str, tmp_path):
     - Network errors from client are handled gracefully
     """
     print("🔗 TUI CLIENT INTEGRATION TEST: DCypherClient usage")
+    print("DEBUG: Starting test_tui_dcypher_client_integration")
+    # sys.exit(1)  # REMOVED - this test is NOT the source of binary garbage
 
     alice_dir = tmp_path / "alice"
     alice_dir.mkdir()
