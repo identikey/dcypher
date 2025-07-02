@@ -421,6 +421,222 @@ class TestDCypherClient:
         assert payload["nonce"] == "test_nonce"
         assert payload["classic_signature"] == "classic_sig_hex"
 
+    @patch("src.lib.api_client.DCypherClient.get_classic_public_key")
+    @patch("src.lib.api_client.DCypherClient.get_nonce")
+    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("requests.post")
+    def test_create_share_success(self, mock_post, mock_sign, mock_nonce, mock_get_pk):
+        """Test successful share creation"""
+        # Setup mocks
+        mock_get_pk.return_value = "alice_pk_hex"
+        mock_nonce.return_value = "test_nonce"
+        mock_sign.return_value = {
+            "classic_signature": "classic_sig_hex",
+            "pq_signatures": [{"signature": "pq_sig_hex", "alg": "ML-DSA-87"}],
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "message": "Share created successfully",
+            "share_id": "test_share_id_12345",
+        }
+        mock_post.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000", "/path/to/keys.json")
+
+        result = client.create_share(
+            bob_public_key="bob_pk_hex",
+            file_hash="test_file_hash",
+            re_encryption_key_hex="re_key_hex",
+        )
+
+        # Verify the result
+        assert result == {
+            "message": "Share created successfully",
+            "share_id": "test_share_id_12345",
+        }
+
+        # Verify API calls
+        mock_get_pk.assert_called_once()
+        mock_nonce.assert_called_once()
+        mock_sign.assert_called_once_with(
+            "SHARE:alice_pk_hex:bob_pk_hex:test_file_hash:test_nonce"
+        )
+
+        # Verify the HTTP request
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "http://localhost:8000/reencryption/share"
+        form_data = call_args[1]["data"]
+        assert form_data["alice_public_key"] == "alice_pk_hex"
+        assert form_data["bob_public_key"] == "bob_pk_hex"
+        assert form_data["file_hash"] == "test_file_hash"
+        assert form_data["re_encryption_key_hex"] == "re_key_hex"
+        assert form_data["nonce"] == "test_nonce"
+        assert form_data["classic_signature"] == "classic_sig_hex"
+        import json
+
+        pq_sigs = json.loads(form_data["pq_signatures"])
+        assert len(pq_sigs) == 1
+        assert pq_sigs[0]["signature"] == "pq_sig_hex"
+        assert pq_sigs[0]["alg"] == "ML-DSA-87"
+
+    @patch("requests.get")
+    def test_list_shares_success(self, mock_get):
+        """Test successful shares listing"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "public_key": "test_pk",
+            "shares_sent": [
+                {
+                    "share_id": "share_1",
+                    "to": "bob_pk",
+                    "file_hash": "file_hash_1",
+                    "created_at": 1234567890,
+                }
+            ],
+            "shares_received": [
+                {
+                    "share_id": "share_2",
+                    "from": "alice_pk",
+                    "file_hash": "file_hash_2",
+                    "created_at": 1234567891,
+                }
+            ],
+        }
+        mock_get.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
+        result = client.list_shares("test_pk")
+
+        # Verify the result
+        assert result["public_key"] == "test_pk"
+        assert len(result["shares_sent"]) == 1
+        assert len(result["shares_received"]) == 1
+        assert result["shares_sent"][0]["share_id"] == "share_1"
+        assert result["shares_sent"][0]["to"] == "bob_pk"
+        assert result["shares_received"][0]["share_id"] == "share_2"
+        assert result["shares_received"][0]["from"] == "alice_pk"
+
+        mock_get.assert_called_once_with(
+            "http://localhost:8000/reencryption/shares/test_pk"
+        )
+
+    @patch("requests.get")
+    def test_list_shares_empty(self, mock_get):
+        """Test listing shares when no shares exist"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = {
+            "public_key": "test_pk",
+            "shares_sent": [],
+            "shares_received": [],
+        }
+        mock_get.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
+        result = client.list_shares("test_pk")
+
+        # Verify the result shows empty lists
+        assert result["public_key"] == "test_pk"
+        assert result["shares_sent"] == []
+        assert result["shares_received"] == []
+
+        mock_get.assert_called_once_with(
+            "http://localhost:8000/reencryption/shares/test_pk"
+        )
+
+    @patch("requests.get")
+    def test_list_shares_failure(self, mock_get):
+        """Test list shares failure"""
+        mock_get.side_effect = requests.exceptions.RequestException("Connection error")
+
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
+
+        with pytest.raises(DCypherAPIError, match="Failed to list shares"):
+            client.list_shares("test_pk")
+
+    @patch("src.lib.api_client.DCypherClient.get_classic_public_key")
+    @patch("src.lib.api_client.DCypherClient.get_nonce")
+    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("requests.post")
+    def test_create_share_failure(self, mock_post, mock_sign, mock_nonce, mock_get_pk):
+        """Test share creation failure"""
+        # Setup mocks
+        mock_get_pk.return_value = "alice_pk_hex"
+        mock_nonce.return_value = "test_nonce"
+        mock_sign.return_value = {
+            "classic_signature": "classic_sig_hex",
+            "pq_signatures": [{"signature": "pq_sig_hex", "alg": "ML-DSA-87"}],
+        }
+        mock_post.side_effect = requests.exceptions.RequestException("Connection error")
+
+        client = DCypherClient("http://localhost:8000", "/path/to/keys.json")
+
+        with pytest.raises(DCypherAPIError, match="Failed to create share"):
+            client.create_share(
+                bob_public_key="bob_pk_hex",
+                file_hash="test_file_hash",
+                re_encryption_key_hex="re_key_hex",
+            )
+
+    @patch("src.lib.api_client.DCypherClient.get_classic_public_key")
+    @patch("src.lib.api_client.DCypherClient.get_nonce")
+    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("requests.post")
+    def test_download_shared_file_success(
+        self, mock_post, mock_sign, mock_nonce, mock_get_pk
+    ):
+        """Test successful shared file download"""
+        # Setup mocks
+        mock_get_pk.return_value = "bob_pk_hex"
+        mock_nonce.return_value = "test_nonce"
+        mock_sign.return_value = {
+            "classic_signature": "classic_sig_hex",
+            "pq_signatures": [{"signature": "pq_sig_hex", "alg": "ML-DSA-87"}],
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/gzip"}
+        mock_response.content = b"re_encrypted_file_content"
+        mock_post.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000", "/path/to/keys.json")
+
+        result = client.download_shared_file("test_share_id")
+
+        # Verify the result
+        assert result == b"re_encrypted_file_content"
+
+        # Verify API calls
+        mock_get_pk.assert_called_once()
+        mock_nonce.assert_called_once()
+        mock_sign.assert_called_once_with(
+            "DOWNLOAD-SHARED:bob_pk_hex:test_share_id:test_nonce"
+        )
+
+        # Verify the HTTP request
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert (
+            call_args[0][0]
+            == "http://localhost:8000/reencryption/download/test_share_id"
+        )
+        form_data = call_args[1]["data"]
+        assert form_data["bob_public_key"] == "bob_pk_hex"
+        assert form_data["nonce"] == "test_nonce"
+        assert form_data["classic_signature"] == "classic_sig_hex"
+        import json
+
+        pq_sigs = json.loads(form_data["pq_signatures"])
+        assert len(pq_sigs) == 1
+        assert pq_sigs[0]["signature"] == "pq_sig_hex"
+        assert pq_sigs[0]["alg"] == "ML-DSA-87"
+
 
 def test_dcypher_client_with_auth_keys():
     """Test DCypherClient with traditional auth_keys file."""

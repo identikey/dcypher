@@ -28,3 +28,5 @@ rekey.json
 ciphertext.idk
 idk_signing.pub
 idk_signing.sec
+liboqs-local/
+openfhe-local/

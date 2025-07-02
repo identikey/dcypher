@@ -20,6 +20,40 @@ try:
 except ImportError:
     sharing_available = False
 
+    class DCypherAPIError(Exception):
+        pass
+
+    class DCypherClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_account(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def generate_re_encryption_key(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def create_share(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def list_shares(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def download_shared_file(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def revoke_share(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def get_classic_public_key(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def get_pre_crypto_context(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
+        def initialize_pre_for_identity(self, *args, **kwargs):
+            raise DCypherAPIError("Sharing libraries not available")
+
 
 class SharingScreen(Widget):
     """
@@ -28,10 +62,18 @@ class SharingScreen(Widget):
     """
 
     # Reactive state
-    current_identity_path = reactive(None)
-    api_url = reactive("http://127.0.0.1:8000")
     shares_data = reactive([])
     operation_results = reactive("")
+
+    @property
+    def current_identity_path(self) -> str | None:
+        """Get current identity from global app state"""
+        return getattr(self.app, "current_identity", None)
+
+    @property
+    def api_url(self) -> str:
+        """Get API URL from global app state"""
+        return getattr(self.app, "api_url", "http://127.0.0.1:8000")
 
     def compose(self):
         """Compose the sharing management interface"""
@@ -184,8 +226,11 @@ class SharingScreen(Widget):
             self.notify(f"Identity file not found: {identity_path}", severity="error")
             return
 
-        self.current_identity_path = identity_path
-        self.api_url = api_url
+        # Set identity in global app state
+        if hasattr(self.app, "current_identity"):
+            self.app.current_identity = identity_path
+        if hasattr(self.app, "api_url"):
+            self.app.api_url = api_url
         self.update_status_display()
         self.notify(f"Identity set: {Path(identity_path).name}", severity="information")
 
@@ -239,7 +284,12 @@ class SharingScreen(Widget):
 
     def action_create_share(self) -> None:
         """Create a new share (equivalent to CLI create-share)"""
+        print(
+            f"🔧 SHARE DEBUG: action_create_share called, current_identity_path={self.current_identity_path}"
+        )
+
         if not self.current_identity_path:
+            print(f"🔧 SHARE DEBUG: No identity path, exiting early")
             self.notify("Load an identity first", severity="warning")
             return
 
@@ -248,8 +298,10 @@ class SharingScreen(Widget):
 
         recipient = recipient_input.value
         file_hash = file_hash_input.value
+        print(f"🔧 SHARE DEBUG: recipient='{recipient}', file_hash='{file_hash}'")
 
         if not recipient or not file_hash:
+            print(f"🔧 SHARE DEBUG: Missing recipient or file_hash, exiting")
             self.notify("Enter recipient key and file hash", severity="warning")
             return
 
@@ -325,9 +377,9 @@ class SharingScreen(Widget):
                     share.get("file_hash", "N/A")[:16] + "..."
                     if len(share.get("file_hash", "")) > 16
                     else share.get("file_hash", "N/A"),
-                    share.get("bob_public_key", "N/A")[:16] + "..."
-                    if len(share.get("bob_public_key", "")) > 16
-                    else share.get("bob_public_key", "N/A"),
+                    share.get("to", "N/A")[:16] + "..."
+                    if len(share.get("to", "")) > 16
+                    else share.get("to", "N/A"),
                     share.get("created_at", "Unknown"),
                     "Active",
                     "Sent",
@@ -342,9 +394,9 @@ class SharingScreen(Widget):
                     share.get("file_hash", "N/A")[:16] + "..."
                     if len(share.get("file_hash", "")) > 16
                     else share.get("file_hash", "N/A"),
-                    share.get("alice_public_key", "N/A")[:16] + "..."
-                    if len(share.get("alice_public_key", "")) > 16
-                    else share.get("alice_public_key", "N/A"),
+                    share.get("from", "N/A")[:16] + "..."
+                    if len(share.get("from", "")) > 16
+                    else share.get("from", "N/A"),
                     share.get("created_at", "Unknown"),
                     "Active",
                     "Received",

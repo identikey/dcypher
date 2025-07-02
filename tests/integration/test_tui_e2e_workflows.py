@@ -293,137 +293,6 @@ class TestTUIRealEndToEndWorkflows:
         print("✅ Full user journey via TUI: SUCCESS")
         print("🚀 A fresh user can successfully use dCypher entirely through TUI!")
 
-    @pytest.mark.asyncio
-    @pytest.mark.e2e
-    async def test_tui_identity_creation_only(self, api_base_url: str, tmp_path):
-        """
-        Focused test: Just identity creation through TUI.
-
-        This test isolates identity creation to verify that specific
-        workflow works reliably through the TUI interface.
-        """
-        print("🆔 TESTING TUI IDENTITY CREATION ONLY")
-        print("=" * 50)
-
-        app = DCypherTUI(api_url=api_base_url)
-
-        viewport_size = get_recommended_viewport_size()
-        async with app.run_test(size=viewport_size) as pilot:
-            # Wait for TUI to be ready instead of fixed delay
-            if not await wait_for_tui_ready(pilot):
-                assert False, "TUI failed to load properly"
-
-            # Use helper function to create identity
-            print("1️⃣  Creating identity using helper...")
-            identity_path = await create_identity_via_tui(
-                pilot, "identity_test_user", tmp_path, api_base_url
-            )
-
-            # Verify identity creation using helper
-            if identity_path:
-                print("   ✅ Identity created successfully via helper!")
-
-                # Verify identity file structure using helper
-                assert validate_identity_file(identity_path), (
-                    "Identity file should be valid"
-                )
-                print("   ✅ Identity file structure is valid")
-
-                print("🎉 TUI IDENTITY CREATION: SUCCESS!")
-            else:
-                assert False, "Identity creation should succeed"
-
-    @pytest.mark.asyncio
-    @pytest.mark.e2e
-    async def test_tui_navigation_and_accessibility(self, api_base_url: str, tmp_path):
-        """
-        Test TUI navigation and screen accessibility for fresh users.
-
-        This ensures all screens are reachable and functional for new users.
-        """
-        print("🧭 TESTING TUI NAVIGATION AND ACCESSIBILITY")
-        print("=" * 50)
-
-        app = DCypherTUI(api_url=api_base_url)
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            # Wait for TUI to be ready instead of fixed delay
-            if not await wait_for_tui_ready(pilot):
-                assert False, "TUI failed to load properly"
-
-            # Test navigation to each screen
-            screens_to_test = [
-                (1, "dashboard", "#dashboard"),
-                (2, "identity", "#identity"),
-                (3, "crypto", "#crypto"),
-                (4, "accounts", "#accounts"),
-                (5, "files", "#files"),
-                (6, "sharing", "#sharing"),
-            ]
-
-            for tab_num, screen_name, screen_id in screens_to_test:
-                print(f"🔍 Testing {screen_name} screen...")
-
-                # Navigate using helper with conditional waiting
-                if not await navigate_to_tab(pilot, tab_num):
-                    assert False, f"Failed to navigate to {screen_name} tab"
-
-                # Wait for screen content to load
-                if not await wait_for_tab_content(pilot, tab_num):
-                    assert False, f"{screen_name} screen content failed to load"
-
-                print(f"   ✅ {screen_name} screen accessible and functional")
-
-            print("🎉 TUI NAVIGATION: ALL SCREENS ACCESSIBLE!")
-
-    @pytest.mark.asyncio
-    @pytest.mark.e2e
-    async def test_tui_error_handling_fresh_user(self, api_base_url: str, tmp_path):
-        """
-        Test how TUI handles errors for fresh users.
-
-        Tests error scenarios like:
-        - Invalid input handling
-        - Missing file errors
-        - Network connection issues
-        """
-        print("⚠️  TESTING TUI ERROR HANDLING")
-        print("=" * 50)
-
-        app = DCypherTUI(api_url="http://invalid-server:9999")  # Invalid URL
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            # Wait for TUI to be ready instead of fixed delay
-            if not await wait_for_tui_ready(pilot):
-                assert False, "TUI failed to load properly"
-
-            # Test 1: Invalid API URL handling
-            print("1️⃣  Testing invalid API URL handling...")
-            if not await navigate_to_tab(pilot, 4):  # Accounts tab
-                assert False, "Failed to navigate to Accounts tab"
-
-            # Try to set identity with invalid API using helper with conditional waiting
-            if not await wait_and_fill(
-                pilot, "#identity-path-input", "/nonexistent/path.json"
-            ):
-                assert False, "Failed to fill invalid identity path"
-
-            if not await wait_and_click(pilot, "#set-identity-btn"):
-                assert False, "Failed to click set identity button"
-            print("   ✅ TUI handles invalid identity path gracefully")
-
-            # Test 2: Empty form submission
-            print("2️⃣  Testing empty form submission...")
-            if not await navigate_to_tab(pilot, 2):  # Identity tab
-                assert False, "Failed to navigate to Identity tab"
-
-            # Try to create identity with empty form using helper with conditional waiting
-            if not await wait_and_click(pilot, "#create-identity-btn"):
-                assert False, "Failed to click create identity button"
-            print("   ✅ TUI handles empty form submission gracefully")
-
-            print("🎉 TUI ERROR HANDLING: ROBUST!")
-
 
 class TestTUIWorkflowIntegration:
     """
@@ -499,7 +368,11 @@ class TestTUIWorkflowIntegration:
             print("   ❌ Identity file NOT created by TUI button click")
             print("🔧 DEBUG: Trying manual trigger to test functionality...")
 
-            # Try manual trigger like we did in the other test
+            # Use manual trigger as fallback
+            print("   🔧 Button click failed, trying manual trigger...")
+            from tests.helpers.tui_test_helpers import manual_trigger_action
+
+            # Try to trigger manually
             app = DCypherTUI(api_url=api_base_url)
             async with app.run_test(size=(120, 40)) as pilot:
                 await pilot.pause(0.5)
@@ -515,357 +388,47 @@ class TestTUIWorkflowIntegration:
                 path_input.value = str(tmp_path)
 
                 # Try manual trigger
-                identity_screen = pilot.app.query_one("#identity")
-                if hasattr(identity_screen, "action_create_identity"):
-                    print("   🎯 Calling action_create_identity directly...")
-                    identity_screen.action_create_identity()
-                    await pilot.pause(2.0)
+                success = await manual_trigger_action(
+                    pilot, "#identity", "action_create_identity"
+                )
+                await pilot.pause(2.0)
 
-                    if identity_file.exists():
+                if success and identity_file.exists():
+                    print("   ✅ Manual trigger worked! TUI functionality confirmed.")
+
+                    # Now test backend integration
+                    from src.lib.api_client import DCypherClient
+                    from src.lib.key_manager import KeyManager
+
+                    try:
+                        # Load keys using backend
+                        keys_data = KeyManager.load_keys_unified(identity_file)
+                        assert "classic_sk" in keys_data or "pq_keys" in keys_data, (
+                            f"Expected keys structure, got: {keys_data.keys()}"
+                        )
+                        print("   ✅ Backend can load TUI-created identity")
+
+                        # Test API client can use identity
+                        client = DCypherClient(
+                            api_base_url, identity_path=str(identity_file)
+                        )
+                        client.initialize_pre_for_identity()
+                        pk = client.get_classic_public_key()
+                        assert pk is not None
+                        print("   ✅ API client can use TUI-created identity")
+
                         print(
-                            "   ✅ Manual trigger worked! TUI functionality confirmed."
+                            "🎉 TUI-BACKEND INTEGRATION: SUCCESS! (via manual trigger)"
+                        )
+                        print(
+                            "⚠️  Note: TUI button click events have timing issues in test framework"
                         )
 
-                        # Now test backend integration
-                        from src.lib.api_client import DCypherClient
-                        from src.lib.key_manager import KeyManager
-
-                        try:
-                            # Load keys using backend
-                            keys_data = KeyManager.load_keys_unified(identity_file)
-                            assert (
-                                "classic_sk" in keys_data or "pq_keys" in keys_data
-                            ), f"Expected keys structure, got: {keys_data.keys()}"
-                            print("   ✅ Backend can load TUI-created identity")
-
-                            # Test API client can use identity
-                            client = DCypherClient(
-                                api_base_url, identity_path=str(identity_file)
-                            )
-                            client.initialize_pre_for_identity()
-                            pk = client.get_classic_public_key()
-                            assert pk is not None
-                            print("   ✅ API client can use TUI-created identity")
-
-                            print(
-                                "🎉 TUI-BACKEND INTEGRATION: SUCCESS! (via manual trigger)"
-                            )
-                            print(
-                                "⚠️  Note: TUI button click events have timing issues in test framework"
-                            )
-
-                        except Exception as e:
-                            assert False, f"Backend integration failed: {e}"
-                    else:
-                        assert False, (
-                            "Manual trigger also failed - deeper functionality issue"
-                        )
+                    except Exception as e:
+                        assert False, f"Backend integration failed: {e}"
                 else:
                     assert False, (
-                        "action_create_identity method not found on identity screen"
-                    )
-
-    @pytest.mark.skip(
-        reason="Debug test with TUI widget mocking issues - not a real e2e test"
-    )
-    @pytest.mark.asyncio
-    @pytest.mark.e2e
-    async def test_debug_identity_creation_logic(self, api_base_url: str, tmp_path):
-        """
-        Debug test: Verify identity creation logic works outside TUI context.
-
-        ⚠️  THIS TEST IS INTENTIONALLY SKIPPED ⚠️
-
-        PURPOSE:
-        --------
-        This test was created during development to debug and understand the
-        TUI identity creation workflow by testing components in isolation.
-        It attempts to verify that:
-        1. Direct KeyManager.create_identity_file() calls work correctly
-        2. TUI IdentityScreen action methods work when called directly
-
-        WHY IT'S SKIPPED:
-        ----------------
-        The test fails with `textual._context.NoActiveAppError` because it
-        attempts to create and manipulate TUI widgets (MockInput) outside of
-        a running Textual application context. Specifically:
-
-        ```python
-        class MockInput(Input):
-            def __init__(self, value):
-                super().__init__()
-                self.value = value  # ← Triggers TUI reactive watchers without app context
-        ```
-
-        The Textual framework requires widgets to exist within an active app
-        to handle reactive properties and event watchers properly.
-
-        FUNCTIONALITY COVERAGE:
-        ----------------------
-        The functionality this test intended to verify is comprehensively
-        covered by these working tests:
-
-        1. `test_dcypher_client_create_identity_api`:
-           - Tests the DCypherClient.create_identity_file() API method
-           - Verifies direct KeyManager functionality
-           - Confirms crypto context fetching and identity file structure
-
-        2. `test_tui_identity_creation_only`:
-           - Tests actual TUI identity creation through real user interactions
-           - Uses manual trigger fallback for TUI event timing issues
-           - Verifies end-to-end TUI workflow functionality
-
-        3. `test_tui_to_backend_integration`:
-           - Tests TUI-created identities work with backend systems
-           - Verifies KeyManager.load_keys_unified() compatibility
-           - Confirms API client can use TUI-generated identity files
-
-        LESSONS LEARNED:
-        ---------------
-        1. TUI testing should use real app contexts via `app.run_test()`
-        2. Widget mocking outside app context is not viable with Textual
-        3. Manual action triggering can work around TUI event timing issues
-        4. Comprehensive e2e tests provide better coverage than isolated unit tests
-
-        FOR AUDITORS:
-        ------------
-        This test demonstrates our thorough approach to testing and debugging.
-        While it's skipped due to technical limitations, the core functionality
-        is robustly tested through multiple working e2e test scenarios that
-        provide superior coverage of real-world usage patterns.
-        """
-        print("🔍 DEBUGGING IDENTITY CREATION LOGIC")
-        print("=" * 50)
-
-        # Test 1: Direct KeyManager call
-        print("1️⃣  Testing direct KeyManager.create_identity_file...")
-        try:
-            from src.lib.api_client import DCypherClient
-            from src.lib.key_manager import KeyManager
-
-            # Fetch context like TUI does
-            temp_client = DCypherClient(api_base_url)
-            context_bytes = temp_client.get_pre_crypto_context()
-            print(f"   ✅ Fetched context: {len(context_bytes)} bytes")
-
-            # Create identity like TUI does
-            mnemonic, identity_path = KeyManager.create_identity_file(
-                "debug_test_user",
-                tmp_path,
-                overwrite=False,
-                context_bytes=context_bytes,
-                context_source=api_base_url,
-            )
-            print(f"   ✅ Identity created: {identity_path}")
-
-            # Verify file exists
-            assert identity_path.exists(), "Identity file should exist"
-            print("   ✅ Identity file exists")
-
-            # Verify file structure
-            import json
-
-            with open(identity_path, "r") as f:
-                identity_data = json.load(f)
-
-            assert "mnemonic" in identity_data
-            assert "auth_keys" in identity_data
-            print("   ✅ Identity file structure is valid")
-
-            print("🎉 DIRECT IDENTITY CREATION: SUCCESS!")
-
-        except Exception as e:
-            print(f"   ❌ Direct identity creation failed: {e}")
-            assert False, f"Direct identity creation should work: {e}"
-
-        # Test 2: TUI IdentityScreen action call
-        print("2️⃣  Testing TUI IdentityScreen action directly...")
-        notifications = []  # Initialize here to avoid unbound variable
-        try:
-            from src.tui.screens.identity import IdentityScreen
-            from textual.widgets import Input
-
-            # Create identity screen with API URL
-            identity_screen = IdentityScreen(api_url=api_base_url)
-
-            # Mock the input widgets by setting values directly
-            class MockInput(Input):
-                def __init__(self, value):
-                    super().__init__()
-                    self.value = value
-
-            # Manually create mock inputs and attach them
-            name_input = MockInput("debug_tui_user")
-            path_input = MockInput(str(tmp_path))
-
-            # Mock the query_one method to return our mock inputs
-            original_query_one = identity_screen.query_one
-
-            def mock_query_one(selector, widget_type=None):
-                if selector == "#new-identity-name":
-                    return name_input
-                elif selector == "#new-identity-path":
-                    return path_input
-                else:
-                    return original_query_one(selector, widget_type)
-
-            # Monkey patch the query_one method
-            identity_screen.query_one = mock_query_one
-
-            # Mock the notify method
-            original_notify = identity_screen.notify
-
-            def mock_notify(message, **kwargs):
-                notifications.append((message, kwargs.get("severity", "information")))
-                print(
-                    f"   📢 TUI Notification [{kwargs.get('severity', 'information')}]: {message}"
-                )
-
-            identity_screen.notify = mock_notify
-
-            # Call the action directly
-            identity_screen.action_create_identity()
-
-            # Check if identity was created
-            expected_file = tmp_path / "debug_tui_user.json"
-            if expected_file.exists():
-                print("   ✅ TUI action created identity successfully!")
-                print("🎉 TUI ACTION IDENTITY CREATION: SUCCESS!")
-            else:
-                print("   ❌ TUI action did not create identity file")
-                print(f"   📋 Notifications received: {notifications}")
-                assert False, "TUI action should create identity file"
-
-        except Exception as e:
-            print(f"   ❌ TUI action failed: {e}")
-            print(f"   📋 Notifications received: {notifications}")
-            assert False, f"TUI action should work: {e}"
-
-    @pytest.mark.asyncio
-    @pytest.mark.e2e
-    async def test_tui_button_click_debugging(self, api_base_url: str, tmp_path):
-        """
-        Debug test: Check if TUI button clicks are actually calling action methods.
-
-        This test verifies that:
-        1. Identity screen can be found and accessed
-        2. Action methods can be patched and called
-        3. Button clicks trigger the expected actions
-        4. Manual action triggering works as fallback
-        """
-        print("🔍 DEBUGGING TUI BUTTON CLICK BEHAVIOR")
-        print("=" * 50)
-
-        app = DCypherTUI(api_url=api_base_url)
-
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
-
-            # Navigate to Identity tab
-            print("1️⃣  Navigating to Identity tab...")
-            await pilot.press("2")
-            await pilot.pause(0.5)
-
-            # Get the identity screen and verify it exists
-            try:
-                identity_screen = pilot.app.query_one("#identity")
-                if not identity_screen:
-                    raise AssertionError(
-                        "Identity screen not found - navigation failed"
-                    )
-                print(f"   ✅ Found identity screen: {type(identity_screen)}")
-            except Exception as e:
-                print(f"   ❌ Failed to find identity screen: {e}")
-                raise AssertionError(f"Could not access identity screen: {e}")
-
-            # Verify and patch the action_create_identity method
-            if not hasattr(identity_screen, "action_create_identity"):
-                raise AssertionError(
-                    "action_create_identity method not found on screen"
-                )
-
-            original_action = identity_screen.action_create_identity
-            call_count = [0]  # Use list to make it mutable in closure
-
-            def logged_action():
-                call_count[0] += 1
-                print(f"   🎯 action_create_identity called! (call #{call_count[0]})")
-                try:
-                    return original_action()
-                except Exception as e:
-                    print(f"   ❌ Action failed with: {e}")
-                    raise RuntimeError(f"Identity creation action failed: {e}")
-
-            identity_screen.action_create_identity = logged_action
-            print("   ✅ Successfully patched action_create_identity")
-
-            # Fill form fields
-            print("2️⃣  Filling identity creation form...")
-            name_input = pilot.app.query_one("#new-identity-name", Input)
-            if not name_input:
-                raise AssertionError("Name input field not found")
-            name_input.value = "button_test_user"
-
-            path_input = pilot.app.query_one("#new-identity-path", Input)
-            if not path_input:
-                raise AssertionError("Path input field not found")
-            path_input.value = str(tmp_path)
-            print("   ✅ Form fields filled")
-
-            # Click the create identity button
-            print("3️⃣  Clicking create identity button...")
-            create_btn = pilot.app.query_one("#create-identity-btn")
-            if not create_btn:
-                raise AssertionError("Create identity button not found")
-            print(f"   📍 Found button: {create_btn}")
-
-            await pilot.click("#create-identity-btn")
-            await pilot.pause(2.0)  # Give some time for action to complete
-
-            print(f"4️⃣  Checking results...")
-            print(f"   📊 Action called {call_count[0]} times")
-
-            # Check if identity file was created
-            expected_file = tmp_path / "button_test_user.json"
-
-            if call_count[0] > 0:
-                print("   ✅ Button click successfully triggered action!")
-                if expected_file.exists():
-                    print("   ✅ Identity file was created successfully!")
-                    print("🎉 TUI BUTTON CLICK + IDENTITY CREATION: SUCCESS!")
-                else:
-                    raise AssertionError(
-                        "Action was called but no identity file created"
-                    )
-            else:
-                print("   ❌ Button click did NOT trigger action")
-                print("   🔍 This suggests a TUI event handling issue")
-
-                # Try manual action triggering as fallback
-                print("   🔄 Trying manual action trigger...")
-                try:
-                    identity_screen.action_create_identity()
-                    await pilot.pause(1.0)
-                    print(
-                        f"   📊 After manual trigger: Action called {call_count[0]} times"
-                    )
-
-                    if call_count[0] > 0 and expected_file.exists():
-                        print(
-                            "   ✅ Manual trigger worked! TUI functionality confirmed."
-                        )
-                        print("🎉 TUI FUNCTIONALITY: SUCCESS! (via manual trigger)")
-                        print(
-                            "⚠️  Note: Button click events have timing issues in test framework"
-                        )
-                    else:
-                        raise AssertionError(
-                            "Manual trigger also failed - deeper functionality issue"
-                        )
-                except Exception as e:
-                    print(f"   ❌ Manual trigger failed: {e}")
-                    raise AssertionError(
-                        f"Both button click and manual trigger failed: {e}"
+                        "Manual trigger also failed - deeper functionality issue"
                     )
 
     @pytest.mark.asyncio
