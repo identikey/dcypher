@@ -6,10 +6,6 @@
 - The python version is the original / proof of concept code
 - We are currently writing the zig proxy code, which is a re-encryption proxy service implemented in Zig, providing both CLI tools and HTTP API for proxy re-encryption operations.
 
-# Docker
-
-When building the docker image, use the following command:
-`just docker-build`
 
 # Slash Commands
 
@@ -17,8 +13,6 @@ When building the docker image, use the following command:
 /commit: commit your code as you go
 /unit-tests: write comprehensive unit tests for the feature
 
+# Documentation
+Whenever something in zig isn't working or is unclear, refer to the documentation: https://ziglang.org/documentation/0.14.1/
 
-
-
-
-Use `just docker-build`

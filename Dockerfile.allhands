@@ -24,4 +24,4 @@ LABEL maintainer="duke@identikey.io" \
 EXPOSE 3000
 
 # Default command
-# CMD ["/bin/bash"]
+CMD ["/bin/bash"]
