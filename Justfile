@@ -137,23 +137,31 @@ test-until-break:
     set -euo pipefail
     echo "🔄 Running tests repeatedly until failure or cancellation (Ctrl+C to stop)..."
     run_count=0
+    total_time=0
     while true; do
         run_count=$((run_count + 1))
         echo "📋 Test run #${run_count}..."
+        start_time=$(date +%s)
         if ! just test; then
-            echo "❌ Tests failed on run #${run_count}!"
+            end_time=$(date +%s)
+            duration=$((end_time - start_time))
+            echo "❌ Tests failed on run #${run_count} after ${duration}s!"
             exit 1
         fi
-        echo "✅ Test run #${run_count} passed"
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        total_time=$((total_time + duration))
+        avg_time=$((total_time / run_count))
+        echo "✅ Test run #${run_count} passed in ${duration}s (avg: ${avg_time}s)"
         sleep 1
     done
 
 # Build OpenHands (All Hands AI) development environment
 doit-build:
-    docker build -t dcypher-allhands -f Dockerfile.allhands .
+    docker build -t dcypher-allhands -f dockerfile.allhands .
 
 # Start OpenHands (All Hands AI) development environment
-doit: doit-build
+doit:
     docker run -it --rm --pull=always \
         -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-allhands \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
