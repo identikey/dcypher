@@ -13,7 +13,8 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 
-from lib.key_manager import KeyManager
+from src.lib.key_manager import KeyManager
+from src.lib.api_client import DCypherClient
 
 
 class IdentityScreen(Widget):
@@ -25,7 +26,7 @@ class IdentityScreen(Widget):
     # Reactive state
     current_identity_path = reactive(None)
     identity_info = reactive(None)
-    
+
     def __init__(self, api_url=None, **kwargs):
         super().__init__(**kwargs)
         self.api_url = api_url
@@ -207,18 +208,23 @@ class IdentityScreen(Widget):
         path = path_input.value or str(Path.home() / ".dcypher")
 
         try:
-            # Check if we have an API URL to fetch crypto context
+            # Check if we have an API URL configured
             if not self.api_url:
                 self.notify(
                     "No API URL configured. Cannot create identity without server context.",
-                    severity="error"
+                    severity="error",
                 )
                 return
-            
-            # Use KeyManager to create identity with server context
+
+            # Use DCypherClient to create identity - it handles crypto context internally
+            self.notify(
+                "Creating identity with server context...", severity="information"
+            )
+
+            client = DCypherClient(self.api_url)
             identity_dir = Path(path)
-            mnemonic, file_path = KeyManager.create_identity_file(
-                name, identity_dir, False, api_url=self.api_url
+            mnemonic, file_path = client.create_identity_file(
+                name, identity_dir, overwrite=False
             )
 
             self.notify(
@@ -229,7 +235,7 @@ class IdentityScreen(Widget):
             )
 
             # Load the newly created identity
-            self.load_identity_file(file_path)
+            self.load_identity_file(str(file_path))
 
             # Clear inputs
             name_input.value = ""

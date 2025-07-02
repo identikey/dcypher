@@ -79,6 +79,7 @@ markers = [
     "tui: marks tests as TUI tests",
     "crypto: Crypto context tests that need sequential execution",
     "live_server: Tests that require a live server",
+    "e2e: marks tests as end-to-end workflow tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -112,7 +112,7 @@ class DCypherTUI(App[None]):
                         yield Button("Help", id="help-btn")
 
                 # Identity Management - Use proper IdentityScreen
-                yield IdentityScreen(id="identity", api_url=getattr(self, 'api_url', None))
+                yield IdentityScreen(id="identity", api_url=self.api_url)
 
                 # Crypto Operations - Use proper CryptoScreen
                 yield CryptoScreen(id="crypto")
@@ -232,6 +232,61 @@ class DCypherTUI(App[None]):
             tabs.active = actual_tab_id
         except Exception as e:
             self.log.warning(f"Could not switch to tab {tab_id}: {e}")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """
+        Global button event handler that delegates to appropriate child widgets.
+
+        This ensures button events from child widgets (like IdentityScreen)
+        are properly handled even when embedded in TabbedContent.
+        """
+        button_id = event.button.id
+
+        # Let the event bubble up to child widgets first
+        # by not stopping propagation immediately
+
+        # Get the current active tab to determine which widget should handle the event
+        try:
+            tabs = self.query_one(TabbedContent)
+            active_tab = tabs.active
+
+            # Map tab IDs to our screen widgets
+            if active_tab == "tab-2":  # Identity tab
+                try:
+                    identity_screen = self.query_one("#identity", IdentityScreen)
+                    # The child widget should have already handled the event
+                    # This is just a fallback to ensure events are processed
+                    if hasattr(identity_screen, "on_button_pressed"):
+                        # Let the child handle it directly if it hasn't already
+                        pass
+                except Exception as e:
+                    self.log.warning(f"Could not delegate to identity screen: {e}")
+
+            # Handle dashboard buttons directly (since they're part of main app)
+            elif button_id in [
+                "load-identity-btn",
+                "generate-keys-btn",
+                "system-info-btn",
+                "help-btn",
+            ]:
+                self.handle_dashboard_button(button_id)
+
+        except Exception as e:
+            self.log.warning(f"Error in global button handler: {e}")
+
+    def handle_dashboard_button(self, button_id: str) -> None:
+        """Handle dashboard-specific button presses"""
+        if button_id == "load-identity-btn":
+            # TODO: Implement dashboard identity loading
+            pass
+        elif button_id == "generate-keys-btn":
+            # TODO: Implement key generation from dashboard
+            pass
+        elif button_id == "system-info-btn":
+            # TODO: Show system information
+            pass
+        elif button_id == "help-btn":
+            self.action_show_help()
 
 
 def run_tui(identity_path=None, api_url=None):

@@ -1011,6 +1011,56 @@ class DCypherClient:
 
         return self._private_context
 
+    def create_identity_file(
+        self,
+        identity_name: str,
+        key_dir: Path,
+        overwrite: bool = False,
+    ) -> Tuple[str, Path]:
+        """
+        Create a complete identity file with crypto context from this API server.
+
+        This method handles:
+        1. Fetching crypto context from the API server
+        2. Creating the identity file with proper PRE keys
+        3. Ensuring compatibility with this server's crypto parameters
+
+        Args:
+            identity_name: Name for the identity
+            key_dir: Directory to store the identity file
+            overwrite: Whether to overwrite existing identity file
+
+        Returns:
+            Tuple of (mnemonic_phrase, identity_file_path)
+
+        Raises:
+            DCypherAPIError: If unable to fetch crypto context from server
+            FileExistsError: If identity already exists and overwrite=False
+        """
+        try:
+            # Fetch crypto context from this API server
+            context_bytes = self.get_crypto_context_bytes()
+
+            # Import here to avoid circular import
+            from lib.key_manager import KeyManager
+
+            # Create identity file with server's crypto context
+            mnemonic, file_path = KeyManager.create_identity_file(
+                identity_name,
+                key_dir,
+                overwrite=overwrite,
+                context_bytes=context_bytes,
+                context_source=self.api_url,
+            )
+
+            return mnemonic, file_path
+
+        except DCypherAPIError:
+            # Re-raise API errors as-is
+            raise
+        except Exception as e:
+            raise DCypherAPIError(f"Failed to create identity file: {e}")
+
     @classmethod
     def create_test_account(
         cls,
