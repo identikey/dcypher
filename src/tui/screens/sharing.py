@@ -454,13 +454,64 @@ class SharingScreen(Widget):
             )
             shared_content = client.download_shared_file(share_id)
 
-            # Save the content
-            with open(output_path, "wb") as f:
-                f.write(shared_content)
+            self.notify("Decrypting shared file...", severity="information")
 
-            self.operation_results = f"✓ Shared file downloaded successfully!\n  Output: {output_path}\n  Size: {len(shared_content):,} bytes\n  Note: This is a re-encrypted version"
+            # Get Bob's crypto context and PRE secret key for decryption
+            import gzip
+            import json
+            from lib import idk_message, pre
+
+            # Get crypto context from client
+            cc = client.get_crypto_context_object()
+
+            # Load Bob's PRE secret key from identity
+            with open(self.current_identity_path, "r") as f:
+                identity_data = json.load(f)
+
+            if (
+                "auth_keys" not in identity_data
+                or "pre" not in identity_data["auth_keys"]
+                or not identity_data["auth_keys"]["pre"]
+            ):
+                self.notify("PRE keys not found in identity file", severity="error")
+                return
+
+            bob_pre_sk_hex = identity_data["auth_keys"]["pre"]["sk_hex"]
+            bob_pre_sk_bytes = bytes.fromhex(bob_pre_sk_hex)
+            bob_sk_enc = pre.deserialize_secret_key(bob_pre_sk_bytes)
+
+            # Decompress the downloaded content (it's gzipped)
+            try:
+                decompressed_data = gzip.decompress(shared_content)
+                shared_file_str = decompressed_data.decode("utf-8")
+                self.notify(
+                    "Successfully decompressed shared file", severity="information"
+                )
+            except Exception:
+                # Try as raw text if decompression fails
+                shared_file_str = shared_content.decode("utf-8")
+                self.notify(
+                    "File was not compressed, processing as raw text",
+                    severity="information",
+                )
+
+            # Decrypt the IDK message using Bob's PRE secret key
+            decrypted_content = idk_message.decrypt_idk_message(
+                cc=cc,
+                sk=bob_sk_enc,
+                message_str=shared_file_str,
+            )
+
+            # Save the decrypted plaintext content
+            with open(output_path, "wb") as f:
+                f.write(decrypted_content)
+
+            self.operation_results = f"✓ Shared file downloaded and decrypted successfully!\n  Output: {output_path}\n  Size: {len(decrypted_content):,} bytes\n  Decrypted plaintext content ready"
             self.update_results_display()
-            self.notify("Shared file downloaded successfully", severity="information")
+            self.notify(
+                "Shared file downloaded and decrypted successfully",
+                severity="information",
+            )
 
         except DCypherAPIError as e:
             self.notify(f"Failed to download shared file: {e}", severity="error")
