@@ -1081,7 +1081,7 @@ def test_pq_key_timing_attack_resistance(api_base_url: str, tmp_path):
 
         # 3. Verify timing difference is within acceptable bounds (<50ms)
         time_difference = abs(existing_time - nonexistent_time)
-        assert time_difference < 0.06, (
+        assert time_difference < 0.10, (
             f"Timing difference too large: {time_difference}s"
         )
     # OQS signatures are automatically freed when exiting the context

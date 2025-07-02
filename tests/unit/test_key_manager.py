@@ -7,32 +7,30 @@ import ecdsa
 import oqs
 import json
 from src.lib.key_manager import KeyManager, SecureBytes, SecureKeyHandle
+from src.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
 from bip_utils import Bip39SeedGenerator, Bip39MnemonicGenerator, Bip39WordsNum
 from src.config import ML_DSA_ALG
 from .util.util import get_enabled_sigs, get_sigs_with_ctx_support
 import secrets
 
 
-def _generate_mock_context_object():
-    """Generate a valid crypto context object for testing purposes."""
-    # Create a real crypto context object for testing
-    # This ensures unit tests work with valid crypto context data
-    from src.lib import pre
+@pytest.fixture
+def crypto_context_manager():
+    """Provides an initialized CryptoContextManager for tests."""
+    if not OPENFHE_AVAILABLE:
+        pytest.skip("OpenFHE not available")
+    with CryptoContextManager(
+        scheme="BFV",
+        plaintext_modulus=65537,
+        multiplicative_depth=2,
+        scaling_mod_size=50,
+        batch_size=8,
+    ) as manager:
+        # Initialize with keys to make it fully functional
+        from src.lib import pre
 
-    cc = pre.create_crypto_context()
-    # Initialize the context by generating keys once
-    pre.generate_keys(cc)
-    return cc
-
-
-def _generate_mock_context_bytes():
-    """Generate valid crypto context bytes for testing purposes."""
-    # Create a real crypto context and serialize it for testing
-    # This ensures unit tests work with valid crypto context data
-    from src.lib import pre
-
-    cc = pre.create_crypto_context()
-    return pre.serialize_to_bytes(cc)
+        pre.generate_keys(manager.get_context())
+        yield manager
 
 
 def test_generate_classic_keypair():
@@ -198,14 +196,14 @@ def test_algorithm_availability():
     )
 
 
-def test_identity_file_deterministic():
+def test_identity_file_deterministic(crypto_context_manager):
     """Test that identity file creation always uses seeded key generation."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an identity file using _test_context to avoid parallel execution issues
+        # Create an identity file using the context manager fixture
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path, _test_context=_generate_mock_context_object()
+            "test_identity", temp_path, _test_context=crypto_context_manager
         )
 
         # Verify the file was created
@@ -241,14 +239,14 @@ def test_identity_file_deterministic():
         assert auth_keys["pq"][0]["pk_hex"] is not None
 
 
-def test_load_identity_file():
+def test_load_identity_file(crypto_context_manager):
     """Test loading an identity file and converting to auth_keys format."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create an identity file using _test_context to avoid parallel execution issues
+        # Create an identity file using the context manager fixture
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path, _test_context=_generate_mock_context_object()
+            "test_identity", temp_path, _test_context=crypto_context_manager
         )
 
         # Load the identity file
@@ -299,14 +297,14 @@ def test_load_keys_unified_with_auth_keys():
         assert "pq_keys" in auth_keys
 
 
-def test_load_keys_unified_with_identity():
+def test_load_keys_unified_with_identity(crypto_context_manager):
     """Test unified loader with identity file."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create identity file using _test_context to avoid parallel execution issues
+        # Create identity file using the context manager fixture
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path, _test_context=_generate_mock_context_object()
+            "test_identity", temp_path, _test_context=crypto_context_manager
         )
 
         # Load using unified loader
@@ -333,14 +331,14 @@ def test_load_keys_unified_invalid_file():
             KeyManager.load_keys_unified(invalid_file)
 
 
-def test_signing_context_with_identity():
+def test_signing_context_with_identity(crypto_context_manager):
     """Test signing context with identity file."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create identity file using _test_context to avoid parallel execution issues
+        # Create identity file using the context manager fixture
         mnemonic, identity_file = KeyManager.create_identity_file(
-            "test_identity", temp_path, _test_context=_generate_mock_context_object()
+            "test_identity", temp_path, _test_context=crypto_context_manager
         )
 
         # Test signing context with identity file
@@ -403,14 +401,14 @@ class TestKeyDerivationAndRotation:
     """Tests for deterministic derivation and key rotation."""
 
     @pytest.fixture
-    def test_identity(self):
+    def test_identity(self, crypto_context_manager):
         """Create a test identity for rotation tests."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             mnemonic, identity_file = KeyManager.create_identity_file(
                 "rotation_test",
                 temp_path,
-                _test_context=_generate_mock_context_object(),
+                _test_context=crypto_context_manager,
             )
             yield identity_file
 
@@ -469,14 +467,14 @@ class TestKeyDerivationAndRotation:
 class TestSecureBackup:
     """Tests for the secure backup functionality."""
 
-    def test_secure_backup_creation(self):
+    def test_secure_backup_creation(self, crypto_context_manager):
         """Test that a secure, encrypted backup is created."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
-            # Create an identity using _test_context to avoid parallel execution issues
+            # Create an identity using the context manager fixture
             mnemonic, identity_file = KeyManager.create_identity_file(
-                "backup_test", temp_path, _test_context=_generate_mock_context_object()
+                "backup_test", temp_path, _test_context=crypto_context_manager
             )
 
             # Create a backup
@@ -506,7 +504,7 @@ class TestSecureBackup:
 
 
 @pytest.mark.skip(reason="Test disabled temporarily")
-def test_create_identity_file_is_deterministic():
+def test_create_identity_file_is_deterministic(crypto_context_manager):
     """
     Tests that creating an identity file results in a deterministic set of keys
     that can be reproduced from the mnemonic.
@@ -514,11 +512,11 @@ def test_create_identity_file_is_deterministic():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # 1. Create an identity file using _test_context to avoid parallel execution issues
+        # 1. Create an identity file using the context manager fixture
         mnemonic, identity_file = KeyManager.create_identity_file(
             "deterministic_test",
             temp_path,
-            _test_context=_generate_mock_context_object(),
+            _test_context=crypto_context_manager,
         )
 
         with open(identity_file, "r") as f:

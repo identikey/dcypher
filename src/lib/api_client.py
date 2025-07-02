@@ -1004,9 +1004,9 @@ class DCypherClient:
         ):
             return self._private_context
 
-        # Use direct PRE module deserialization to avoid singleton issues
+        # Use direct PRE module deserialization
         # This creates a private context without relying on shared state
-        self._private_context = pre.deserialize_cc_safe(cc_bytes)
+        self._private_context = pre.deserialize_cc(cc_bytes)
         self._private_context_serialized = serialized_context
 
         return self._private_context

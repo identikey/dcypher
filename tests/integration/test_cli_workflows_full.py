@@ -260,6 +260,7 @@ def test_cli_sharing_commands(cli_test_env, api_base_url):
     )
 
 
+@pytest.mark.crypto
 def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     """
     Tests the complete CLI re-encryption workflow against a live API server.

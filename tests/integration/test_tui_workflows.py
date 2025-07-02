@@ -374,6 +374,7 @@ class TestTUIIntegration:
             # Verify API URL is properly set
             assert app.api_url == api_base_url
 
+    @pytest.mark.crypto
     @pytest.mark.asyncio
     async def test_complete_tui_reencryption_workflow(
         self, api_base_url: str, tmp_path
