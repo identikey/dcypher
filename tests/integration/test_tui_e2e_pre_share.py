@@ -68,302 +68,21 @@ from textual.pilot import Pilot, WaitForScreenTimeout
 from textual.widgets import Button, Input, Label, TabPane
 
 from src.tui.app import DCypherTUI
+from tests.helpers.tui_test_helpers import (
+    get_recommended_viewport_size,
+    navigate_to_tab,
+    wait_and_click,
+    wait_and_fill,
+    create_test_file,
+    ElementExists,
+    ElementHittable,
+    wait_for_tui_ready,
+    wait_for_tab_content,
+)
 
 # =============================================================================
-# CONDITIONAL WAITING HELPERS (inspired by XCUITest and Selenium patterns)
+# ALICE-BOB SHARING TEST (using consolidated helpers)
 # =============================================================================
-
-
-class WaitCondition:
-    """Base class for wait conditions - inspired by XCUITest patterns"""
-
-    def __init__(self, timeout: float = 30.0):
-        self.timeout = timeout
-
-    async def check(self, pilot: Pilot) -> bool:
-        """Override in subclasses to implement specific condition check"""
-        raise NotImplementedError
-
-    async def wait_until(self, pilot: Pilot) -> bool:
-        """Wait until condition is met or timeout occurs"""
-        start_time = time.time()
-        while time.time() - start_time < self.timeout:
-            try:
-                if await self.check(pilot):
-                    return True
-            except Exception:
-                # Continue waiting if check fails
-                pass
-            await asyncio.sleep(0.1)  # Small delay between checks
-        return False
-
-
-class ElementExists(WaitCondition):
-    """Wait for element to exist - like XCUITest waitForExistence"""
-
-    def __init__(self, selector: str, timeout: float = 30.0):
-        super().__init__(timeout)
-        self.selector = selector
-
-    async def check(self, pilot: Pilot) -> bool:
-        try:
-            element = pilot.app.query_one(self.selector)
-            return element is not None
-        except Exception:
-            return False
-
-
-class ElementHittable(WaitCondition):
-    """Wait for element to be interactable - like XCUITest waitForElementToBecomeHittable"""
-
-    def __init__(self, selector: str, timeout: float = 30.0):
-        super().__init__(timeout)
-        self.selector = selector
-
-    async def check(self, pilot: Pilot) -> bool:
-        try:
-            element = pilot.app.query_one(self.selector)
-            return element is not None and not element.disabled and element.display
-        except Exception:
-            return False
-
-
-class TextPresent(WaitCondition):
-    """Wait for specific text to appear in element - like Selenium text_to_be_present_in_element"""
-
-    def __init__(self, selector: str, text: str, timeout: float = 30.0):
-        super().__init__(timeout)
-        self.selector = selector
-        self.text = text
-
-    async def check(self, pilot: Pilot) -> bool:
-        try:
-            element = pilot.app.query_one(self.selector)
-            if hasattr(element, "renderable"):
-                return self.text in str(element.renderable)
-            elif hasattr(element, "label"):
-                return self.text in str(element.label)
-            elif hasattr(element, "value"):
-                return self.text in str(element.value)
-            return False
-        except Exception:
-            return False
-
-
-class ScreenVisible(WaitCondition):
-    """Wait for specific screen to be active"""
-
-    def __init__(self, screen_name: str, timeout: float = 30.0):
-        super().__init__(timeout)
-        self.screen_name = screen_name
-
-    async def check(self, pilot: Pilot) -> bool:
-        try:
-            current_screen = pilot.app.screen
-            return current_screen.__class__.__name__ == self.screen_name
-        except Exception:
-            return False
-
-
-class TabActive(WaitCondition):
-    """Wait for specific tab to be active"""
-
-    def __init__(self, tab_id: str, timeout: float = 30.0):
-        super().__init__(timeout)
-        self.tab_id = tab_id
-
-    async def check(self, pilot: Pilot) -> bool:
-        try:
-            tabs = pilot.app.query("#main-tabs")
-            if tabs:
-                active_tab = tabs.first().active
-                return active_tab == self.tab_id
-            return False
-        except Exception:
-            return False
-
-
-# =============================================================================
-# ENHANCED HELPER FUNCTIONS WITH CONDITIONAL WAITING
-# =============================================================================
-
-
-async def wait_and_click(pilot: Pilot, selector: str, timeout: float = 30.0) -> bool:
-    """Wait for element to be clickable, then click it"""
-    condition = ElementHittable(selector, timeout)
-    if await condition.wait_until(pilot):
-        try:
-            # Try to scroll element into view first
-            element = pilot.app.query_one(selector)
-            if hasattr(element, "scroll_visible"):
-                element.scroll_visible()
-            await pilot.pause(0.2)
-
-            await pilot.click(selector)
-            await pilot.pause(0.5)  # Brief pause after click
-            return True
-        except Exception as e:
-            print(f"⚠️  Click failed for {selector}: {e}")
-            # Try alternative approach - send key events if it's a button
-            try:
-                element = pilot.app.query_one(selector)
-                if hasattr(element, "focus"):
-                    element.focus()
-                    await pilot.pause(0.2)
-                    await pilot.press("enter")
-                    await pilot.pause(0.5)
-                    return True
-            except Exception as e2:
-                print(f"⚠️  Alternative click failed for {selector}: {e2}")
-    return False
-
-
-async def wait_and_fill(
-    pilot: Pilot, selector: str, text: str, timeout: float = 30.0
-) -> bool:
-    """Wait for input field to be available, then fill it"""
-    condition = ElementHittable(selector, timeout)
-    if await condition.wait_until(pilot):
-        input_field = pilot.app.query_one(selector)
-        input_field.value = text
-        await pilot.pause(0.5)
-        return True
-    return False
-
-
-async def wait_for_success_message(
-    pilot: Pilot, message_text: str, timeout: float = 30.0
-) -> bool:
-    """Wait for success message to appear"""
-    # Try multiple possible selectors for success messages
-    selectors = ["#status", ".success", "#message", "#notification"]
-
-    for selector in selectors:
-        condition = TextPresent(selector, message_text, timeout)
-        if await condition.wait_until(pilot):
-            return True
-    return False
-
-
-async def wait_for_tab_transition(
-    pilot: Pilot, target_tab: str, timeout: float = 30.0
-) -> bool:
-    """Wait for tab to become active after clicking"""
-    condition = TabActive(target_tab, timeout)
-    return await condition.wait_until(pilot)
-
-
-async def create_test_user_identity(pilot: Pilot, name: str, email: str) -> bool:
-    """Create identity for a test user with conditional waiting"""
-
-    # Navigate to Identity tab (tab-2) and wait for it to be active
-    if not await wait_and_click(pilot, "#--content-tab-tab-2"):
-        return False
-
-    # Wait a moment for tab content to load
-    await pilot.pause(0.5)
-
-    # Wait for and fill identity form - need to check actual input field selectors
-    # For now, let's just check if the create identity button exists
-    if not await wait_and_click(pilot, "#create-identity-btn"):
-        return False
-
-    # Wait for success confirmation (this would need actual success message selector)
-    # For now, just return True if we got this far
-    await pilot.pause(1.0)
-    return True
-
-
-async def create_test_user_account(pilot: Pilot, username: str, password: str) -> bool:
-    """Create account for a test user with conditional waiting"""
-
-    # Navigate to Accounts tab (tab-4)
-    if not await wait_and_click(pilot, "#--content-tab-tab-4"):
-        return False
-
-    # Wait for tab content to load
-    await pilot.pause(0.5)
-
-    # Click create account button
-    if not await wait_and_click(pilot, "#create-account-btn"):
-        return False
-
-    await pilot.pause(1.0)
-    return True
-
-
-async def initialize_test_user_pre(pilot: Pilot) -> bool:
-    """Initialize PRE capabilities for test user with conditional waiting"""
-
-    # Navigate to Sharing tab (tab-6) where PRE initialization is
-    if not await wait_and_click(pilot, "#--content-tab-tab-6"):
-        return False
-
-    # Wait for tab content to load
-    await pilot.pause(0.5)
-
-    # Click initialize PRE button
-    if not await wait_and_click(pilot, "#init-pre-btn", timeout=60.0):
-        return False
-
-    await pilot.pause(1.0)
-    return True
-
-
-async def upload_test_file(pilot: Pilot, file_path: str, file_content: str) -> bool:
-    """Upload a test file with conditional waiting"""
-
-    # Navigate to Files tab (tab-5)
-    if not await wait_and_click(pilot, "#--content-tab-tab-5"):
-        return False
-
-    # Wait for tab content to load
-    await pilot.pause(0.5)
-
-    # Click upload file button
-    if not await wait_and_click(pilot, "#upload-file-btn", timeout=45.0):
-        return False
-
-    await pilot.pause(1.0)
-    return True
-
-
-async def share_file_with_user(pilot: Pilot, file_name: str, recipient: str) -> bool:
-    """Share file with another user with conditional waiting"""
-
-    # Navigate to Sharing tab (tab-6)
-    if not await wait_and_click(pilot, "#--content-tab-tab-6"):
-        return False
-
-    # Wait for tab content to load
-    await pilot.pause(0.5)
-
-    # Click create share button
-    if not await wait_and_click(pilot, "#create-share-btn", timeout=45.0):
-        return False
-
-    await pilot.pause(1.0)
-    return True
-
-
-async def download_shared_file(
-    pilot: Pilot, file_name: str, download_path: str
-) -> bool:
-    """Download shared file with conditional waiting"""
-
-    # Navigate to Sharing tab (tab-6)
-    if not await wait_and_click(pilot, "#--content-tab-tab-6"):
-        return False
-
-    # Wait for tab content to load
-    await pilot.pause(0.5)
-
-    # Click download shared button
-    if not await wait_and_click(pilot, "#download-shared-btn", timeout=45.0):
-        return False
-
-    await pilot.pause(1.0)
-    return True
 
 
 # =============================================================================
@@ -415,49 +134,86 @@ async def test_alice_bob_complete_sharing_workflow():
         alice_file = Path(temp_dir) / "alice_document.txt"
         bob_file = Path(temp_dir) / "bob_downloaded.txt"
 
-        # Write Alice's test content
-        alice_file.write_text(test_content)
+        # Write Alice's test content using helper
+        create_test_file(alice_file, test_content)
 
         # PHASE 1: Alice's workflow with proper viewport size
         app = DCypherTUI()
-        async with app.run_test(
-            size=(120, 40)
-        ) as pilot:  # 🔧 KEY FIX: Proper viewport size
+        viewport_size = get_recommended_viewport_size()
+        async with app.run_test(size=viewport_size) as pilot:
             print("🚀 Phase 1: Alice's workflow")
-            await pilot.pause(1.0)  # Let app load
+
+            # Wait for TUI to be ready instead of fixed delay
+            if not await wait_for_tui_ready(pilot):
+                assert False, "TUI failed to load properly"
 
             # Step 1: Navigate to identity tab and verify elements exist
             print("🔑 Alice navigating to identity...")
-            await pilot.click("#--content-tab-tab-2")  # Identity tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 2):  # Identity tab
+                assert False, "Failed to navigate to Identity tab"
 
-            # Verify identity elements exist (but don't fill forms without backend)
-            identity_btn = pilot.app.query_one("#create-identity-btn")
-            print(f"   ✅ Found identity button: {identity_btn}")
+            # Wait for identity content to load and verify elements exist
+            if not await wait_for_tab_content(pilot, 2):
+                assert False, "Identity screen content failed to load"
+
+            # Verify identity button exists using conditional waiting
+            identity_exists = ElementExists("#create-identity-btn")
+            if await identity_exists.wait_until(pilot):
+                identity_btn = pilot.app.query_one("#create-identity-btn")
+                print(f"   ✅ Found identity button: {identity_btn}")
+            else:
+                assert False, "Create identity button not found"
 
             # Step 2: Navigate to accounts tab
             print("👤 Alice navigating to accounts...")
-            await pilot.click("#--content-tab-tab-4")  # Accounts tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 4):  # Accounts tab
+                assert False, "Failed to navigate to Accounts tab"
 
-            account_btn = pilot.app.query_one("#create-account-btn")
-            print(f"   ✅ Found account button: {account_btn}")
+            # Wait for accounts content to load
+            if not await wait_for_tab_content(pilot, 4):
+                assert False, "Accounts screen content failed to load"
+
+            # Verify account button exists using conditional waiting
+            account_exists = ElementExists("#create-account-btn")
+            if await account_exists.wait_until(pilot):
+                account_btn = pilot.app.query_one("#create-account-btn")
+                print(f"   ✅ Found account button: {account_btn}")
+            else:
+                assert False, "Create account button not found"
 
             # Step 3: Navigate to sharing tab for PRE
             print("🔐 Alice checking PRE capabilities...")
-            await pilot.click("#--content-tab-tab-6")  # Sharing tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 6):  # Sharing tab
+                assert False, "Failed to navigate to Sharing tab"
 
-            pre_btn = pilot.app.query_one("#init-pre-btn")
-            print(f"   ✅ Found PRE init button: {pre_btn}")
+            # Wait for sharing content to load
+            if not await wait_for_tab_content(pilot, 6):
+                assert False, "Sharing screen content failed to load"
+
+            # Verify PRE button exists using conditional waiting
+            pre_exists = ElementExists("#init-pre-btn")
+            if await pre_exists.wait_until(pilot):
+                pre_btn = pilot.app.query_one("#init-pre-btn")
+                print(f"   ✅ Found PRE init button: {pre_btn}")
+            else:
+                assert False, "PRE init button not found"
 
             # Step 4: Navigate to files tab
             print("📤 Alice checking file upload...")
-            await pilot.click("#--content-tab-tab-5")  # Files tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 5):  # Files tab
+                assert False, "Failed to navigate to Files tab"
 
-            upload_btn = pilot.app.query_one("#upload-file-btn")
-            print(f"   ✅ Found upload button: {upload_btn}")
+            # Wait for files content to load
+            if not await wait_for_tab_content(pilot, 5):
+                assert False, "Files screen content failed to load"
+
+            # Verify upload button exists using conditional waiting
+            upload_exists = ElementExists("#upload-file-btn")
+            if await upload_exists.wait_until(pilot):
+                upload_btn = pilot.app.query_one("#upload-file-btn")
+                print(f"   ✅ Found upload button: {upload_btn}")
+            else:
+                assert False, "Upload file button not found"
 
         print("✅ Phase 1 (Alice workflow navigation) completed successfully!")
         print("💡 This demonstrates that conditional waiting works with:")
@@ -504,8 +260,10 @@ async def test_discover_available_elements():
 
     app = DCypherTUI()
     async with app.run_test() as pilot:
-        # Let the app fully load
-        await pilot.pause(2.0)
+        # Wait for TUI to be ready instead of fixed delay
+        if not await wait_for_tui_ready(pilot):
+            print("❌ TUI failed to load properly")
+            return
 
         print("\n🔍 Discovering available elements...")
 
@@ -575,8 +333,9 @@ async def test_conditional_waiting_helpers():
 
     app = DCypherTUI()
     async with app.run_test() as pilot:
-        # Let the app fully load
-        await pilot.pause(1.0)
+        # Wait for TUI to be ready instead of fixed delay
+        if not await wait_for_tui_ready(pilot):
+            assert False, "TUI failed to load properly"
 
         # Test ElementExists condition
         main_exists = ElementExists("#main-container")
@@ -591,8 +350,9 @@ async def test_conditional_waiting_helpers():
             "Should be able to click identity tab"
         )
 
-        # Wait a moment for tab transition
-        await pilot.pause(0.5)
+        # Wait for tab content to load instead of fixed delay
+        if not await wait_for_tab_content(pilot, 2):
+            assert False, "Identity tab content failed to load"
 
         # Test that we can find a button in the identity screen
         create_identity_exists = ElementExists("#create-identity-btn")
@@ -609,8 +369,9 @@ async def test_individual_user_operations():
 
     app = DCypherTUI()
     async with app.run_test() as pilot:
-        # Let the app fully load
-        await pilot.pause(1.0)
+        # Wait for TUI to be ready instead of fixed delay
+        if not await wait_for_tui_ready(pilot):
+            assert False, "TUI failed to load properly"
 
         print("Testing basic tab navigation...")
 
@@ -618,25 +379,33 @@ async def test_individual_user_operations():
         print("📋 Testing identity tab...")
         result = await wait_and_click(pilot, "#--content-tab-tab-2")
         assert result, "Should be able to navigate to identity tab"
-        await pilot.pause(0.5)
+        # Wait for content to load instead of fixed delay
+        if not await wait_for_tab_content(pilot, 2):
+            assert False, "Identity tab content failed to load"
 
         # Test accounts tab navigation
         print("👤 Testing accounts tab...")
         result = await wait_and_click(pilot, "#--content-tab-tab-4")
         assert result, "Should be able to navigate to accounts tab"
-        await pilot.pause(0.5)
+        # Wait for content to load instead of fixed delay
+        if not await wait_for_tab_content(pilot, 4):
+            assert False, "Accounts tab content failed to load"
 
         # Test files tab navigation
         print("📁 Testing files tab...")
         result = await wait_and_click(pilot, "#--content-tab-tab-5")
         assert result, "Should be able to navigate to files tab"
-        await pilot.pause(0.5)
+        # Wait for content to load instead of fixed delay
+        if not await wait_for_tab_content(pilot, 5):
+            assert False, "Files tab content failed to load"
 
         # Test sharing tab navigation
         print("🤝 Testing sharing tab...")
         result = await wait_and_click(pilot, "#--content-tab-tab-6")
         assert result, "Should be able to navigate to sharing tab"
-        await pilot.pause(0.5)
+        # Wait for content to load instead of fixed delay
+        if not await wait_for_tab_content(pilot, 6):
+            assert False, "Sharing tab content failed to load"
 
         print("✅ All basic navigation operations work correctly")
 
@@ -651,8 +420,10 @@ async def test_viewport_size_and_navigation():
         # Check the actual size
         print(f"📏 Terminal size: {pilot.app.size}")
 
-        # Let the app fully load
-        await pilot.pause(1.0)
+        # Wait for TUI to be ready instead of fixed delay
+        if not await wait_for_tui_ready(pilot):
+            print("❌ TUI failed to load properly")
+            return
 
         print("🔍 Discovering elements with proper viewport...")
 
@@ -679,9 +450,7 @@ async def test_viewport_size_and_navigation():
             for i, button in enumerate(buttons[:10]):  # Show first 10
                 try:
                     region = button.region
-                    print(
-                        f"  Button {i}: #{button.id} at {region} - visible: {button.is_scrollable_visible}"
-                    )
+                    print(f"  Button {i}: #{button.id} at {region}")
                 except Exception as e:
                     print(f"  Button {i}: #{button.id} - error getting position: {e}")
         except Exception as e:
@@ -704,12 +473,15 @@ async def test_viewport_size_and_navigation():
                 tab_element = pilot.app.query_one(tab_id)
                 print(f"    Tab element found: {tab_element}")
                 print(f"    Tab region: {tab_element.region}")
-                print(f"    Tab visible: {tab_element.is_scrollable_visible}")
 
-                # Try clicking
-                await pilot.click(tab_id)
-                await pilot.pause(0.5)
-                print(f"    ✅ Successfully clicked {tab_name} tab")
+                # Try clicking using helper with conditional waiting
+                if await wait_and_click(pilot, tab_id):
+                    print(f"    ✅ Successfully clicked {tab_name} tab")
+                    # Wait for content to load
+                    if not await wait_for_tab_content(pilot, tab_num):
+                        print(f"    ⚠️  {tab_name} tab content failed to load")
+                else:
+                    print(f"    ❌ Failed to click {tab_name} tab")
 
             except Exception as e:
                 print(f"    ❌ Failed to click {tab_name} tab: {e}")
@@ -771,16 +543,20 @@ async def test_basic_workflow_simplified():
     async with app.run_test(size=(120, 40)) as pilot:
         print("🚀 Testing simplified workflow with conditional waiting...")
 
-        # Let app load
-        await pilot.pause(1.0)
+        # Wait for TUI to be ready instead of fixed delay
+        if not await wait_for_tui_ready(pilot):
+            assert False, "TUI failed to load properly"
 
         # Test 1: Navigate to Identity tab and check for button
         print("📋 Phase 1: Identity tab navigation...")
         try:
-            await pilot.click("#--content-tab-tab-2")  # Identity tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 2):  # Identity tab
+                assert False, "Failed to navigate to Identity tab"
 
-            # Check if create identity button exists (don't click it yet)
+            # Wait for content to load and check if create identity button exists
+            if not await wait_for_tab_content(pilot, 2):
+                assert False, "Identity tab content failed to load"
+
             identity_btn = pilot.app.query_one("#create-identity-btn")
             print(f"   ✅ Found create identity button: {identity_btn}")
 
@@ -790,10 +566,13 @@ async def test_basic_workflow_simplified():
         # Test 2: Navigate to Accounts tab
         print("👤 Phase 2: Accounts tab navigation...")
         try:
-            await pilot.click("#--content-tab-tab-4")  # Accounts tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 4):  # Accounts tab
+                assert False, "Failed to navigate to Accounts tab"
 
-            # Check if create account button exists
+            # Wait for content to load and check if create account button exists
+            if not await wait_for_tab_content(pilot, 4):
+                assert False, "Accounts tab content failed to load"
+
             account_btn = pilot.app.query_one("#create-account-btn")
             print(f"   ✅ Found create account button: {account_btn}")
 
@@ -803,10 +582,13 @@ async def test_basic_workflow_simplified():
         # Test 3: Navigate to Files tab
         print("📁 Phase 3: Files tab navigation...")
         try:
-            await pilot.click("#--content-tab-tab-5")  # Files tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 5):  # Files tab
+                assert False, "Failed to navigate to Files tab"
 
-            # Check if upload button exists
+            # Wait for content to load and check if upload button exists
+            if not await wait_for_tab_content(pilot, 5):
+                assert False, "Files tab content failed to load"
+
             upload_btn = pilot.app.query_one("#upload-file-btn")
             print(f"   ✅ Found upload file button: {upload_btn}")
 
@@ -816,10 +598,13 @@ async def test_basic_workflow_simplified():
         # Test 4: Navigate to Sharing tab
         print("🤝 Phase 4: Sharing tab navigation...")
         try:
-            await pilot.click("#--content-tab-tab-6")  # Sharing tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 6):  # Sharing tab
+                assert False, "Failed to navigate to Sharing tab"
 
-            # Check if share buttons exist
+            # Wait for content to load and check if share buttons exist
+            if not await wait_for_tab_content(pilot, 6):
+                assert False, "Sharing tab content failed to load"
+
             init_pre_btn = pilot.app.query_one("#init-pre-btn")
             create_share_btn = pilot.app.query_one("#create-share-btn")
             print(f"   ✅ Found PRE init button: {init_pre_btn}")

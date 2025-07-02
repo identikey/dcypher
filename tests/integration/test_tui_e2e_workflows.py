@@ -88,6 +88,22 @@ from textual.pilot import Pilot
 from textual.widgets import Input
 
 from src.tui.app import DCypherTUI
+from tests.helpers.tui_test_helpers import (
+    create_identity_via_tui,
+    create_test_file,
+    validate_identity_file,
+    get_recommended_viewport_size,
+    manual_trigger_action,
+    navigate_to_tab,
+    wait_and_click,
+    wait_and_fill,
+    complete_fresh_user_workflow,
+    wait_for_tui_ready,
+    wait_for_tab_content,
+    ElementExists,
+    ElementHittable,
+    FileExists,
+)
 
 
 class TestTUIRealEndToEndWorkflows:
@@ -125,7 +141,9 @@ class TestTUIRealEndToEndWorkflows:
         app = DCypherTUI(api_url=api_base_url)
 
         async with app.run_test(size=(140, 50)) as pilot:
-            await pilot.pause(1.0)  # Let TUI fully load
+            # Wait for TUI to be ready instead of fixed delay
+            if not await wait_for_tui_ready(pilot):
+                assert False, "TUI failed to load properly"
 
             # Verify fresh start
             assert app.current_identity is None or app.current_identity == ""
@@ -133,42 +151,37 @@ class TestTUIRealEndToEndWorkflows:
 
             # === STEP 2: Navigate to Identity tab ===
             print("2️⃣  Navigating to Identity tab...")
-            await pilot.press("2")  # Identity tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 2):  # Identity tab
+                assert False, "Failed to navigate to Identity tab"
 
-            # Verify we're on identity screen
-            identity_screen = pilot.app.query_one("#identity")
-            assert identity_screen is not None
+            # Wait for identity screen content to load
+            if not await wait_for_tab_content(pilot, 2):
+                assert False, "Identity screen content failed to load"
             print("   ✅ Successfully navigated to Identity screen")
 
             # === STEP 3: Fill identity creation form ===
             print("3️⃣  Filling identity creation form...")
 
-            # Fill identity name input
-            name_input = pilot.app.query_one("#new-identity-name", Input)
-            name_input.value = "fresh_e2e_user"
-            await pilot.pause(0.2)
+            # Fill identity name input using helper with conditional waiting
+            if not await wait_and_fill(pilot, "#new-identity-name", "fresh_e2e_user"):
+                assert False, "Failed to fill identity name"
             print("   ✅ Entered identity name: fresh_e2e_user")
 
-            # Fill storage path input
-            path_input = pilot.app.query_one("#new-identity-path", Input)
-            path_input.value = str(tmp_path)
-            await pilot.pause(0.2)
+            # Fill storage path input using helper with conditional waiting
+            if not await wait_and_fill(pilot, "#new-identity-path", str(tmp_path)):
+                assert False, "Failed to fill storage path"
             print(f"   ✅ Entered storage path: {tmp_path}")
 
             # === STEP 4: Create identity via TUI ===
             print("4️⃣  Creating identity via TUI...")
-            await pilot.click("#create-identity-btn")
-            await pilot.pause(10.0)  # Increased pause - TUI events have timing delays
-
-            # Give additional time for file system operations and event propagation
-            await pilot.pause(
-                5.0
-            )  # Extra pause for TUI event propagation and file creation
-
-            # Check if identity was created
             expected_identity_file = tmp_path / "fresh_e2e_user.json"
-            if expected_identity_file.exists():
+
+            if not await wait_and_click(pilot, "#create-identity-btn"):
+                assert False, "Failed to click create identity button"
+
+            # Wait for identity file to be created instead of fixed delays
+            file_created = FileExists(expected_identity_file, timeout=30.0)
+            if await file_created.wait_until(pilot):
                 print("   ✅ Identity created successfully via TUI!")
                 identity_path = str(expected_identity_file)
             else:
@@ -177,48 +190,48 @@ class TestTUIRealEndToEndWorkflows:
 
             # === STEP 5: Navigate to Accounts tab ===
             print("5️⃣  Navigating to Accounts tab...")
-            await pilot.press("4")  # Accounts tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 4):  # Accounts tab
+                assert False, "Failed to navigate to Accounts tab"
 
-            accounts_screen = pilot.app.query_one("#accounts")
-            assert accounts_screen is not None
+            # Wait for accounts screen content to load
+            if not await wait_for_tab_content(pilot, 4):
+                assert False, "Accounts screen content failed to load"
             print("   ✅ Successfully navigated to Accounts screen")
 
             # === STEP 6: Set identity in accounts screen ===
             print("6️⃣  Setting identity in accounts screen...")
 
-            # Fill identity path input
-            identity_input = pilot.app.query_one("#identity-path-input", Input)
-            identity_input.value = identity_path
-            await pilot.pause(0.2)
+            # Fill identity path input using helper with conditional waiting
+            if not await wait_and_fill(pilot, "#identity-path-input", identity_path):
+                assert False, "Failed to fill identity path"
             print(f"   ✅ Entered identity path: {identity_path}")
 
-            # Fill API URL input
-            api_input = pilot.app.query_one("#api-url-input", Input)
-            api_input.value = api_base_url
-            await pilot.pause(0.2)
+            # Fill API URL input using helper with conditional waiting
+            if not await wait_and_fill(pilot, "#api-url-input", api_base_url):
+                assert False, "Failed to fill API URL"
             print(f"   ✅ Set API URL: {api_base_url}")
 
             # === STEP 7: Load identity and create account ===
             print("7️⃣  Loading identity and creating account...")
 
-            # Click "Set Identity" button
-            await pilot.click("#set-identity-btn")
-            await pilot.pause(1.0)
+            # Click "Set Identity" button using helper with conditional waiting
+            if not await wait_and_click(pilot, "#set-identity-btn"):
+                assert False, "Failed to click set identity button"
             print("   ✅ Identity set in accounts screen")
 
-            # Click "Create Account" button
-            await pilot.click("#create-account-btn")
-            await pilot.pause(3.0)  # Account creation takes time
+            # Click "Create Account" button using helper with conditional waiting
+            if not await wait_and_click(pilot, "#create-account-btn"):
+                assert False, "Failed to click create account button"
             print("   ✅ Account creation initiated via TUI")
 
             # === STEP 8: Navigate to Files tab ===
             print("8️⃣  Navigating to Files tab...")
-            await pilot.press("5")  # Files tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 5):  # Files tab
+                assert False, "Failed to navigate to Files tab"
 
-            files_screen = pilot.app.query_one("#files")
-            assert files_screen is not None
+            # Wait for files screen content to load
+            if not await wait_for_tab_content(pilot, 5):
+                assert False, "Files screen content failed to load"
             print("   ✅ Successfully navigated to Files screen")
 
             # === STEP 9: Upload file via TUI ===
@@ -232,26 +245,25 @@ class TestTUIRealEndToEndWorkflows:
             test_file.write_bytes(test_content)
             print(f"   📄 Created test file: {test_file}")
 
-            # Set identity in files screen
-            files_identity_input = pilot.app.query_one("#identity-path-input", Input)
-            files_identity_input.value = identity_path
+            # Set identity in files screen using helper with conditional waiting
+            if not await wait_and_fill(pilot, "#identity-path-input", identity_path):
+                assert False, "Failed to fill identity path in files screen"
 
-            files_api_input = pilot.app.query_one("#api-url-input", Input)
-            files_api_input.value = api_base_url
+            if not await wait_and_fill(pilot, "#api-url-input", api_base_url):
+                assert False, "Failed to fill API URL in files screen"
 
-            await pilot.click("#set-identity-btn")
-            await pilot.pause(1.0)
+            if not await wait_and_click(pilot, "#set-identity-btn"):
+                assert False, "Failed to click set identity button in files screen"
             print("   ✅ Identity set in files screen")
 
-            # Set file path
-            file_path_input = pilot.app.query_one("#file-path-input", Input)
-            file_path_input.value = str(test_file)
-            await pilot.pause(0.2)
+            # Set file path using helper with conditional waiting
+            if not await wait_and_fill(pilot, "#file-path-input", str(test_file)):
+                assert False, "Failed to fill file path"
             print(f"   ✅ Entered file path: {test_file}")
 
-            # Upload the file
-            await pilot.click("#upload-file-btn")
-            await pilot.pause(5.0)  # File upload takes time
+            # Upload the file using helper with conditional waiting
+            if not await wait_and_click(pilot, "#upload-file-btn"):
+                assert False, "Failed to click upload file button"
             print("   ✅ File upload initiated via TUI")
 
         # === STEP 10: Verify complete workflow ===
@@ -295,132 +307,31 @@ class TestTUIRealEndToEndWorkflows:
 
         app = DCypherTUI(api_url=api_base_url)
 
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+        viewport_size = get_recommended_viewport_size()
+        async with app.run_test(size=viewport_size) as pilot:
+            # Wait for TUI to be ready instead of fixed delay
+            if not await wait_for_tui_ready(pilot):
+                assert False, "TUI failed to load properly"
 
-            # Navigate to Identity tab
-            print("1️⃣  Navigating to Identity tab...")
-            await pilot.press("2")
-            await pilot.pause(0.5)
+            # Use helper function to create identity
+            print("1️⃣  Creating identity using helper...")
+            identity_path = await create_identity_via_tui(
+                pilot, "identity_test_user", tmp_path, api_base_url
+            )
 
-            # Fill identity form
-            print("2️⃣  Filling identity creation form...")
-            name_input = pilot.app.query_one("#new-identity-name", Input)
-            name_input.value = "identity_test_user"
-            await pilot.pause(0.2)
+            # Verify identity creation using helper
+            if identity_path:
+                print("   ✅ Identity created successfully via helper!")
 
-            path_input = pilot.app.query_one("#new-identity-path", Input)
-            path_input.value = str(tmp_path)
-            await pilot.pause(0.2)
-
-            # Create identity
-            print("3️⃣  Creating identity...")
-            await pilot.click("#create-identity-btn")
-            await pilot.pause(10.0)  # Increased pause - TUI events have timing delays
-
-            # Give additional time for file system operations and event propagation
-            await pilot.pause(
-                5.0
-            )  # Extra pause for TUI event propagation and file creation
-
-            # Debug: Check what files exist in tmp_path
-            print(f"🔍 DEBUG: Files in {tmp_path}:")
-            try:
-                import os
-
-                files = list(os.listdir(tmp_path))
-                print(f"   📁 Files found: {files}")
-            except Exception as e:
-                print(f"   ❌ Error listing files: {e}")
-
-            # Debug: Check if button click actually worked by monitoring the identity screen
-            try:
-                identity_screen = pilot.app.query_one("#identity")
-                print(f"   🎯 Identity screen found: {type(identity_screen)}")
-
-                # Check if the screen has any error state or current identity
-                if hasattr(identity_screen, "current_identity_path"):
-                    print(
-                        f"   📍 Current identity path: {identity_screen.current_identity_path}"
-                    )
-                if hasattr(identity_screen, "identity_info"):
-                    print(f"   📊 Identity info: {identity_screen.identity_info}")
-
-            except Exception as e:
-                print(f"   ❌ Error checking identity screen: {e}")
-
-            # Verify identity creation
-            expected_file = tmp_path / "identity_test_user.json"
-            print(f"🔍 Looking for identity file: {expected_file}")
-            print(f"   📁 File exists: {expected_file.exists()}")
-
-            if expected_file.exists():
-                print("   ✅ Identity created successfully via TUI!")
-
-                # Verify identity file structure
-                with open(expected_file, "r") as f:
-                    identity_data = json.load(f)
-
-                assert "mnemonic" in identity_data
-                assert "auth_keys" in identity_data
+                # Verify identity file structure using helper
+                assert validate_identity_file(identity_path), (
+                    "Identity file should be valid"
+                )
                 print("   ✅ Identity file structure is valid")
 
                 print("🎉 TUI IDENTITY CREATION: SUCCESS!")
             else:
-                print("   ❌ Identity file was NOT created by button click")
-                print(f"   📂 Contents of {tmp_path}: {list(tmp_path.glob('*'))}")
-
-                # Try to manually trigger the action to see if there's an exception
-                print("🔧 DEBUG: Trying to manually trigger identity creation...")
-                try:
-                    identity_screen = pilot.app.query_one("#identity")
-                    if hasattr(identity_screen, "action_create_identity"):
-                        print("   🎯 Calling action_create_identity directly...")
-                        identity_screen.action_create_identity()
-                        await pilot.pause(2.0)
-
-                        # Check again
-                        if expected_file.exists():
-                            print(
-                                "   ✅ Manual trigger worked! TUI event handling was the issue."
-                            )
-                            print(
-                                "   ✅ Identity creation functionality is working correctly."
-                            )
-
-                            # Verify identity file structure
-                            with open(expected_file, "r") as f:
-                                identity_data = json.load(f)
-
-                            assert "mnemonic" in identity_data
-                            assert "auth_keys" in identity_data
-                            print("   ✅ Identity file structure is valid")
-
-                            print(
-                                "🎉 TUI IDENTITY CREATION: SUCCESS! (via manual trigger)"
-                            )
-                            print(
-                                "⚠️  Note: TUI button click events have timing issues in test framework"
-                            )
-                            # Test passes - functionality works even if button click event has issues
-                        else:
-                            print(
-                                "   ❌ Manual trigger also failed - there's a deeper issue"
-                            )
-                            assert False, (
-                                f"Identity creation failed even with manual trigger. Expected: {expected_file}"
-                            )
-                    else:
-                        print("   ❌ action_create_identity method not found")
-                        assert False, (
-                            "action_create_identity method not found on identity screen"
-                        )
-                except Exception as e:
-                    print(f"   ❌ Manual trigger failed with exception: {e}")
-                    import traceback
-
-                    traceback.print_exc()
-                    assert False, f"Manual trigger failed with exception: {e}"
+                assert False, "Identity creation should succeed"
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
@@ -436,34 +347,32 @@ class TestTUIRealEndToEndWorkflows:
         app = DCypherTUI(api_url=api_base_url)
 
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+            # Wait for TUI to be ready instead of fixed delay
+            if not await wait_for_tui_ready(pilot):
+                assert False, "TUI failed to load properly"
 
             # Test navigation to each screen
             screens_to_test = [
-                ("1", "dashboard", "#dashboard"),
-                ("2", "identity", "#identity"),
-                ("3", "crypto", "#crypto"),
-                ("4", "accounts", "#accounts"),
-                ("5", "files", "#files"),
-                ("6", "sharing", "#sharing"),
+                (1, "dashboard", "#dashboard"),
+                (2, "identity", "#identity"),
+                (3, "crypto", "#crypto"),
+                (4, "accounts", "#accounts"),
+                (5, "files", "#files"),
+                (6, "sharing", "#sharing"),
             ]
 
-            for key, screen_name, screen_id in screens_to_test:
+            for tab_num, screen_name, screen_id in screens_to_test:
                 print(f"🔍 Testing {screen_name} screen...")
 
-                # Navigate via keyboard
-                await pilot.press(key)
-                await pilot.pause(0.3)
+                # Navigate using helper with conditional waiting
+                if not await navigate_to_tab(pilot, tab_num):
+                    assert False, f"Failed to navigate to {screen_name} tab"
 
-                # Verify screen exists and is displayed
-                try:
-                    screen_widget = pilot.app.query_one(screen_id)
-                    assert screen_widget is not None
-                    assert screen_widget.display
-                    print(f"   ✅ {screen_name} screen accessible and functional")
-                except Exception as e:
-                    print(f"   ❌ {screen_name} screen issue: {e}")
-                    assert False, f"{screen_name} screen should be accessible"
+                # Wait for screen content to load
+                if not await wait_for_tab_content(pilot, tab_num):
+                    assert False, f"{screen_name} screen content failed to load"
+
+                print(f"   ✅ {screen_name} screen accessible and functional")
 
             print("🎉 TUI NAVIGATION: ALL SCREENS ACCESSIBLE!")
 
@@ -484,30 +393,33 @@ class TestTUIRealEndToEndWorkflows:
         app = DCypherTUI(api_url="http://invalid-server:9999")  # Invalid URL
 
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+            # Wait for TUI to be ready instead of fixed delay
+            if not await wait_for_tui_ready(pilot):
+                assert False, "TUI failed to load properly"
 
             # Test 1: Invalid API URL handling
             print("1️⃣  Testing invalid API URL handling...")
-            await pilot.press("4")  # Accounts tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 4):  # Accounts tab
+                assert False, "Failed to navigate to Accounts tab"
 
-            # Try to set identity with invalid API
-            identity_input = pilot.app.query_one("#identity-path-input", Input)
-            identity_input.value = "/nonexistent/path.json"
-            await pilot.pause(0.2)
+            # Try to set identity with invalid API using helper with conditional waiting
+            if not await wait_and_fill(
+                pilot, "#identity-path-input", "/nonexistent/path.json"
+            ):
+                assert False, "Failed to fill invalid identity path"
 
-            await pilot.click("#set-identity-btn")
-            await pilot.pause(1.0)
+            if not await wait_and_click(pilot, "#set-identity-btn"):
+                assert False, "Failed to click set identity button"
             print("   ✅ TUI handles invalid identity path gracefully")
 
             # Test 2: Empty form submission
             print("2️⃣  Testing empty form submission...")
-            await pilot.press("2")  # Identity tab
-            await pilot.pause(0.5)
+            if not await navigate_to_tab(pilot, 2):  # Identity tab
+                assert False, "Failed to navigate to Identity tab"
 
-            # Try to create identity with empty form
-            await pilot.click("#create-identity-btn")
-            await pilot.pause(1.0)
+            # Try to create identity with empty form using helper with conditional waiting
+            if not await wait_and_click(pilot, "#create-identity-btn"):
+                assert False, "Failed to click create identity button"
             print("   ✅ TUI handles empty form submission gracefully")
 
             print("🎉 TUI ERROR HANDLING: ROBUST!")
