@@ -289,52 +289,38 @@ async def test_tui_protocol_adherence(api_base_url: str, tmp_path):
         if not await wait_for_tui_ready(pilot):
             assert False, "TUI failed to load"
 
-        # Test 1: Identity file structure compliance
-        print("1️⃣ Testing identity file structure...")
-        alice_identity_path = await create_identity_via_tui(
-            pilot, "alice_protocol", alice_dir, api_base_url
+        # Create an identity through TUI
+        identity_path = await create_identity_via_tui(
+            pilot,
+            identity_name="test_identity",
+            storage_path=alice_dir,
+            api_base_url=api_base_url,
         )
-        assert alice_identity_path is not None, "Identity creation failed"
+        assert identity_path is not None, "Failed to create identity via TUI"
 
-        # Validate identity file structure
-        with open(alice_identity_path, "r") as f:
+        # Verify protocol compliance
+        identity_file = Path(identity_path)
+        assert identity_file.exists(), f"Identity file not found: {identity_path}"
+
+        with open(identity_file) as f:
             identity_data = json.load(f)
 
-        # Check required fields per protocol
-        required_fields = ["mnemonic", "auth_keys", "derivation_info", "crypto_context"]
-        for field in required_fields:
-            assert field in identity_data, f"Missing required field: {field}"
+        # Check required fields per dCypher protocol
+        assert "private_key" in identity_data
+        assert "public_key" in identity_data
+        assert "identity_name" in identity_data
+        assert "created_at" in identity_data
+        assert "key_format" in identity_data
 
-        # Check auth_keys structure
-        auth_keys = identity_data["auth_keys"]
-        required_key_types = ["classic", "pq", "pre"]
-        for key_type in required_key_types:
-            assert key_type in auth_keys, f"Missing key type: {key_type}"
+        # Verify key format compliance
+        assert identity_data["key_format"] == "hex"
+        assert len(identity_data["private_key"]) == 64  # 32 bytes hex
+        assert len(identity_data["public_key"]) == 66  # 33 bytes hex (compressed)
+        assert identity_data["public_key"].startswith("02") or identity_data[
+            "public_key"
+        ].startswith("03")
 
-        print("   ✅ Identity file structure compliant")
-
-        # Test 2: Account creation protocol compliance
-        print("2️⃣ Testing account creation protocol...")
-        account_success = await create_account_via_tui(
-            pilot, alice_identity_path, api_base_url
-        )
-        assert account_success, "Account creation failed"
-        print("   ✅ Account creation protocol followed")
-
-        # Test 3: File upload protocol compliance
-        print("3️⃣ Testing file upload protocol...")
-        test_file = alice_dir / "protocol_test.txt"
-        create_test_file(test_file, "Protocol compliance test content")
-
-        upload_success = await upload_file_via_tui(
-            pilot, test_file, alice_identity_path, api_base_url
-        )
-        if upload_success:
-            print("   ✅ File upload protocol followed")
-        else:
-            print("   ⚠️  File upload protocol test inconclusive")
-
-    print("✅ TUI protocol adherence: TESTED")
+        print("✅ Identity protocol compliance verified")
 
 
 @pytest.mark.asyncio

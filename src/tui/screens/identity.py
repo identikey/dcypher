@@ -29,7 +29,16 @@ class IdentityScreen(Widget):
 
     def __init__(self, api_url=None, **kwargs):
         super().__init__(**kwargs)
-        self.api_url = api_url
+        # Don't store api_url as instance variable - get it from parent app when needed
+        pass
+
+    @property
+    def api_url(self):
+        """Get API URL from parent app"""
+        try:
+            return getattr(self.app, "api_url", None)
+        except AttributeError:
+            return None
 
     def compose(self):
         """Compose the identity management interface"""
@@ -287,7 +296,7 @@ class IdentityScreen(Widget):
             # Update app state
             app = self.app
             if hasattr(app, "current_identity"):
-                app.current_identity = str(identity_path)
+                setattr(app, "current_identity", str(identity_path))
 
         except Exception as e:
             self.notify(f"Failed to load identity: {e}", severity="error")
