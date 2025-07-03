@@ -12,6 +12,9 @@ from textual.screen import Screen
 from typing import Optional, Dict, Any
 from pathlib import Path
 import json
+import time
+from datetime import datetime, timedelta
+from rich.text import Text
 
 from .theme import CYBERPUNK_THEME, get_cyberpunk_theme
 from .widgets.ascii_art import ASCIIBanner
@@ -28,6 +31,57 @@ from .screens.sharing import SharingScreen
 from src.lib.api_client import DCypherClient
 
 
+class DCypherHeader(Static):
+    """Custom header widget that displays title, uptime information, and clock"""
+
+    DEFAULT_CSS = """
+    DCypherHeader {
+        dock: top;
+        width: 100%;
+        background: $accent;
+        color: $text;
+        text-align: center;
+        height: 1;
+        content-align: center middle;
+    }
+    """
+
+    def __init__(self, app_instance, **kwargs):
+        super().__init__(**kwargs)
+        self.app_instance = app_instance
+
+    def on_mount(self):
+        """Update the header every second"""
+        self.set_interval(1.0, self.update_header)
+        self.update_header()
+
+    def update_header(self):
+        """Update the header content with current uptime and time"""
+        # Get current time
+        current_time = datetime.now().strftime("%H:%M:%S")
+
+        # Get uptime info
+        local_uptime = self.app_instance.get_uptime_string()
+        server_uptime = self.app_instance.get_server_uptime_string()
+
+        # Build header text
+        header_text = Text()
+        header_text.append(f"{self.app_instance.TITLE} | ", style="bold")
+        header_text.append("Client: ", style="dim")
+        header_text.append(local_uptime, style="green")
+
+        if server_uptime:
+            header_text.append(" | Server: ", style="dim")
+            header_text.append(server_uptime, style="cyan")
+        else:
+            header_text.append(" | Server: ", style="dim")
+            header_text.append("disconnected", style="red")
+
+        header_text.append(f" | {current_time}", style="bold")
+
+        self.update(header_text)
+
+
 class DCypherTUI(App[None]):
     """
     dCypher Terminal User Interface
@@ -36,8 +90,8 @@ class DCypherTUI(App[None]):
     Influences: btop, cipherpunk aesthetics, art deco, @repligate
     """
 
-    TITLE = "dCypher - Quantum-Resistant Encryption TUI"
-    SUB_TITLE = "REPLICANT TERMINAL v2.1.0"
+    TITLE = "v0.0.1 dCypher Terminal: PQ-Lattice FHE System"
+    SUB_TITLE = "REPLICANT TERMINAL v0.0.1"
     CSS = CYBERPUNK_THEME
 
     BINDINGS = [
@@ -81,6 +135,32 @@ class DCypherTUI(App[None]):
         # Initialize process monitoring widgets
         self.cpu_divider: Optional[ProcessCPUDivider] = None
         self.memory_divider: Optional[ProcessCPU15MinDivider] = None
+
+        # Track application start time for uptime calculation
+        self.start_time = time.time()
+
+        # Track server uptime
+        self.server_uptime: Optional[str] = None
+
+    def get_uptime_string(self) -> str:
+        """Calculate and format application uptime"""
+        uptime_seconds = int(time.time() - self.start_time)
+
+        # Convert to hours, minutes, seconds
+        hours = uptime_seconds // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        seconds = uptime_seconds % 60
+
+        if hours > 0:
+            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
+        elif minutes > 0:
+            return f"{minutes:02d}m {seconds:02d}s"
+        else:
+            return f"{seconds:02d}s"
+
+    def get_server_uptime_string(self) -> Optional[str]:
+        """Get formatted server uptime string"""
+        return self.server_uptime
 
     @property
     def api_client(self) -> Optional[DCypherClient]:
@@ -174,7 +254,7 @@ class DCypherTUI(App[None]):
 
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
-        yield Header(show_clock=True)
+        yield DCypherHeader(self)
 
         # CPU usage divider - positioned under header
         self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
@@ -220,8 +300,6 @@ class DCypherTUI(App[None]):
 
     def on_mount(self) -> None:
         """Initialize the application"""
-        # Note: title and sub_title are set via class attributes TITLE and SUB_TITLE
-
         # Start background tasks
         self.set_interval(1.0, self.update_system_status)
         self.set_interval(5.0, self.check_api_connection)
@@ -242,17 +320,49 @@ class DCypherTUI(App[None]):
             self.memory_divider.update_memory_usage()
 
     def check_api_connection(self) -> None:
-        """Check API connection status"""
+        """Check API connection status and get server uptime"""
         # This will be called every 5 seconds to check API connectivity
         try:
             if self._api_client:
                 # Try to get nonce to check connection
                 self._api_client.get_nonce()
                 self.connection_status = "connected"
+
+                # Try to get server uptime
+                self.fetch_server_uptime()
             else:
                 self.connection_status = "disconnected"
+                self.server_uptime = None
         except Exception:
             self.connection_status = "disconnected"
+            self.server_uptime = None
+
+    def fetch_server_uptime(self) -> None:
+        """Fetch server uptime from the API"""
+        try:
+            if self._api_client:
+                # Try to get server status/uptime
+                # This is a placeholder - you'll need to implement the actual API call
+                # based on your server's uptime endpoint
+                # For now, we'll just set a placeholder value when connected
+                self.server_uptime = "connected"
+        except Exception:
+            # If server uptime endpoint doesn't exist or fails, just set to None
+            self.server_uptime = None
+
+    def format_uptime_seconds(self, uptime_seconds: int) -> str:
+        """Format uptime seconds into readable string"""
+        # Convert to hours, minutes, seconds
+        hours = uptime_seconds // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        seconds = uptime_seconds % 60
+
+        if hours > 0:
+            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
+        elif minutes > 0:
+            return f"{minutes:02d}m {seconds:02d}s"
+        else:
+            return f"{seconds:02d}s"
 
     def action_toggle_dark(self) -> None:
         """Toggle dark mode"""
