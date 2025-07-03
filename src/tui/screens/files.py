@@ -21,6 +21,7 @@ from textual.widget import Widget
 from textual.reactive import reactive
 from rich.panel import Panel
 from rich.text import Text
+from typing import Optional
 
 # Import file operation modules
 try:
@@ -41,12 +42,28 @@ class FilesScreen(Widget):
     Supports: upload, download, download-chunks
     """
 
-    # Reactive state
-    current_identity_path = reactive(None)
-    api_url = reactive("http://127.0.0.1:8000")
+    # Reactive state - removed local identity/api state, now using centralized app state
     files_data = reactive([])
     operation_results = reactive("")
     upload_progress = reactive(0.0)
+
+    @property
+    def current_identity_path(self):
+        """Get current identity path from app state"""
+        return getattr(self.app, "current_identity_path", None)
+
+    @property
+    def api_url(self):
+        """Get API URL from app state"""
+        return getattr(self.app, "api_url", "http://127.0.0.1:8000")
+
+    @property
+    def api_client(self):
+        """Get API client from app"""
+        get_client_method = getattr(self.app, "get_or_create_api_client", None)
+        if get_client_method and callable(get_client_method):
+            return get_client_method()
+        return None
 
     def compose(self):
         """Compose the file management interface"""
@@ -164,7 +181,7 @@ class FilesScreen(Widget):
 
         results_widget.update(content)
 
-    def update_file_info_display(self, file_path: str = None) -> None:
+    def update_file_info_display(self, file_path: Optional[str] = None) -> None:
         """Update file info display"""
         info_widget = self.query_one("#file-info-display", Static)
 
@@ -229,8 +246,9 @@ class FilesScreen(Widget):
             self.notify(f"Identity file not found: {identity_path}", severity="error")
             return
 
-        self.current_identity_path = identity_path
-        self.api_url = api_url
+        # Update app state using setattr for type safety
+        setattr(self.app, "current_identity_path", identity_path)
+        setattr(self.app, "api_url", api_url)
         self.update_status_display()
         self.notify(f"Identity set: {Path(identity_path).name}", severity="information")
 

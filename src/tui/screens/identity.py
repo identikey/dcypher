@@ -12,6 +12,7 @@ from textual.screen import ModalScreen
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
+from typing import Dict, Any
 
 from src.lib.key_manager import KeyManager
 from src.lib.api_client import DCypherClient
@@ -23,22 +24,31 @@ class IdentityScreen(Widget):
     Supports: new, migrate, info, rotate, backup operations
     """
 
-    # Reactive state
-    current_identity_path = reactive(None)
-    identity_info = reactive(None)
-
-    def __init__(self, api_url=None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Don't store api_url as instance variable - get it from parent app when needed
-        pass
+
+    @property
+    def current_identity_path(self):
+        """Get current identity path from app state"""
+        return getattr(self.app, "current_identity_path", None)
+
+    @property
+    def identity_info(self):
+        """Get identity info from app state"""
+        return getattr(self.app, "identity_info", None)
 
     @property
     def api_url(self):
-        """Get API URL from parent app"""
-        try:
-            return getattr(self.app, "api_url", None)
-        except AttributeError:
-            return None
+        """Get API URL from app state"""
+        return getattr(self.app, "api_url", "http://127.0.0.1:8000")
+
+    @property
+    def api_client(self):
+        """Get API client from app"""
+        get_client_method = getattr(self.app, "get_or_create_api_client", None)
+        if get_client_method and callable(get_client_method):
+            return get_client_method()
+        return None
 
     def compose(self):
         """Compose the identity management interface"""
@@ -217,10 +227,11 @@ class IdentityScreen(Widget):
         path = path_input.value or str(Path.home() / ".dcypher")
 
         try:
-            # Check if we have an API URL configured
-            if not self.api_url:
+            # Use the centralized API client
+            client = self.api_client
+            if not client:
                 self.notify(
-                    "No API URL configured. Cannot create identity without server context.",
+                    "API client not initialized. Cannot create identity.",
                     severity="error",
                 )
                 return
@@ -230,9 +241,9 @@ class IdentityScreen(Widget):
                 "Creating identity with server context...", severity="information"
             )
 
-            client = DCypherClient(self.api_url)
             identity_dir = Path(path)
-            mnemonic, file_path = client.create_identity_file(
+            # Type checker doesn't know client is DCypherClient, but we checked it's not None
+            mnemonic, file_path = client.create_identity_file(  # type: ignore
                 name, identity_dir, overwrite=False
             )
 
@@ -243,8 +254,8 @@ class IdentityScreen(Widget):
                 "Please backup your mnemonic phrase securely!", severity="warning"
             )
 
-            # Load the newly created identity
-            self.load_identity_file(str(file_path))
+            # Update app state with new identity - use direct assignment to trigger reactive watchers
+            self.app.current_identity_path = str(file_path)  # type: ignore
 
             # Clear inputs
             name_input.value = ""
@@ -279,24 +290,12 @@ class IdentityScreen(Widget):
                 self.notify(f"Identity file not found: {file_path}", severity="error")
                 return
 
-            # Load identity data
-            import json
-
-            with open(identity_path, "r") as f:
-                identity_data = json.load(f)
-
-            self.current_identity_path = str(identity_path)
-            self.identity_info = identity_data
+            # Update app state with loaded identity - use direct assignment to trigger reactive watchers
+            self.app.current_identity_path = str(identity_path)  # type: ignore
 
             self.notify(
                 f"Identity loaded: {identity_path.name}", severity="information"
             )
-            self.update_identity_display()
-
-            # Update app state
-            app = self.app
-            if hasattr(app, "current_identity"):
-                setattr(app, "current_identity", str(identity_path))
 
         except Exception as e:
             self.notify(f"Failed to load identity: {e}", severity="error")
@@ -312,12 +311,12 @@ class IdentityScreen(Widget):
             self.load_identity_file(identity_path)
 
 
-class IdentityDetailsModal(ModalScreen):
+class IdentityDetailsModal(ModalScreen[None]):
     """
     Modal screen for showing detailed identity information
     """
 
-    def __init__(self, identity_data: dict, **kwargs):
+    def __init__(self, identity_data: Dict[str, Any], **kwargs):
         super().__init__(**kwargs)
         self.identity_data = identity_data
 

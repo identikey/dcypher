@@ -57,23 +57,32 @@ except ImportError:
 
 class SharingScreen(Widget):
     """
-    Sharing management screen with CLI feature parity
-    Supports: init-pre, create-share, list-shares, download-shared, revoke-share, get-pre-context
+    Sharing and collaboration screen with CLI feature parity
+    Supports: init-pre, create-share, list-shares, download-shared, revoke-share
     """
 
-    # Reactive state
+    # Reactive state - removed local identity/api state, now using centralized app state
     shares_data = reactive([])
     operation_results = reactive("")
+    share_progress = reactive(0.0)
 
     @property
-    def current_identity_path(self) -> str | None:
-        """Get current identity from global app state"""
-        return getattr(self.app, "current_identity", None)
+    def current_identity_path(self):
+        """Get current identity path from app state"""
+        return getattr(self.app, "current_identity_path", None)
 
     @property
-    def api_url(self) -> str:
-        """Get API URL from global app state"""
+    def api_url(self):
+        """Get API URL from app state"""
         return getattr(self.app, "api_url", "http://127.0.0.1:8000")
+
+    @property
+    def api_client(self):
+        """Get API client from app"""
+        get_client_method = getattr(self.app, "get_or_create_api_client", None)
+        if get_client_method and callable(get_client_method):
+            return get_client_method()
+        return None
 
     def compose(self):
         """Compose the sharing management interface"""
@@ -226,11 +235,9 @@ class SharingScreen(Widget):
             self.notify(f"Identity file not found: {identity_path}", severity="error")
             return
 
-        # Set identity in global app state
-        if hasattr(self.app, "current_identity"):
-            self.app.current_identity = identity_path
-        if hasattr(self.app, "api_url"):
-            self.app.api_url = api_url
+        # Set identity in global app state using setattr for type safety
+        setattr(self.app, "current_identity_path", identity_path)
+        setattr(self.app, "api_url", api_url)
         self.update_status_display()
         self.notify(f"Identity set: {Path(identity_path).name}", severity="information")
 

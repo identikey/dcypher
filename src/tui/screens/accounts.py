@@ -14,12 +14,15 @@ from rich.text import Text
 
 # Import API client and related modules
 try:
-    from lib.api_client import DCypherClient, DCypherAPIError
-    from lib.key_manager import KeyManager
+    from src.lib.api_client import DCypherClient, DCypherAPIError, ResourceNotFoundError
+    from src.lib.key_manager import KeyManager
 
     api_available = True
 except ImportError:
     api_available = False
+    # Define placeholder exceptions to avoid NameError
+    DCypherAPIError = Exception
+    ResourceNotFoundError = Exception
 
 
 class AccountsScreen(Widget):
@@ -29,10 +32,31 @@ class AccountsScreen(Widget):
     """
 
     # Reactive state
-    current_identity_path = reactive(None)
-    api_url = reactive("http://127.0.0.1:8000")
     accounts_data = reactive([])
     operation_results = reactive("")
+
+    @property
+    def current_identity_path(self):
+        """Get current identity path from app state"""
+        return getattr(self.app, "current_identity_path", None)
+
+    @property
+    def identity_info(self):
+        """Get identity info from app state"""
+        return getattr(self.app, "identity_info", None)
+
+    @property
+    def api_url(self):
+        """Get API URL from app state"""
+        return getattr(self.app, "api_url", "http://127.0.0.1:8000")
+
+    @property
+    def api_client(self):
+        """Get API client from app"""
+        get_client_method = getattr(self.app, "get_or_create_api_client", None)
+        if get_client_method and callable(get_client_method):
+            return get_client_method()
+        return None
 
     def compose(self):
         """Compose the accounts management interface"""
@@ -115,10 +139,14 @@ class AccountsScreen(Widget):
         identity_widget = self.query_one("#current-identity-status", Static)
 
         # Connection status
+        connection_status = getattr(self.app, "connection_status", "disconnected")
         connection_content = Panel(
-            Text(f"API URL: {self.api_url}\nStatus: Not tested", style="yellow"),
+            Text(
+                f"API URL: {self.api_url}\nStatus: {connection_status}",
+                style="yellow" if connection_status == "disconnected" else "green",
+            ),
             title="[bold]Connection[/bold]",
-            border_style="yellow",
+            border_style="yellow" if connection_status == "disconnected" else "green",
         )
         connection_widget.update(connection_content)
 
@@ -199,8 +227,9 @@ class AccountsScreen(Widget):
             self.notify(f"Identity file not found: {identity_path}", severity="error")
             return
 
-        self.current_identity_path = identity_path
-        self.api_url = api_url
+        # Update app state instead of instance attributes
+        setattr(self.app, "current_identity_path", identity_path)
+        setattr(self.app, "api_url", api_url)
         self.update_status_display()
         self.notify(f"Identity set: {Path(identity_path).name}", severity="information")
 
@@ -209,29 +238,45 @@ class AccountsScreen(Widget):
         try:
             self.notify("Loading accounts...", severity="information")
 
-            client = DCypherClient(self.api_url)
-            accounts = client.list_accounts()
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
 
-            # Update table
+            accounts = client.list_accounts()  # type: ignore
+
+            # Clear and update table
             table = self.query_one("#accounts-table", DataTable)
             table.clear()
 
             if not accounts:
-                self.operation_results = "No accounts found on server"
+                self.operation_results = "No accounts found"
             else:
-                for account in accounts:
-                    table.add_row(
-                        account[:16] + "..." if len(account) > 16 else account,
-                        "Unknown",  # Created date not provided by API
-                        "Unknown",  # PQ keys count
-                        "Unknown",  # PRE status
-                        "Unknown",  # Files count
-                    )
+                for account_pk in accounts:
+                    # Get detailed account info
+                    try:
+                        account_info = client.get_account(account_pk)  # type: ignore
+                        created = account_info.get("created_at", "Unknown")
+                        pq_keys_count = len(account_info.get("pq_keys", []))
+                        pre_status = (
+                            "Enabled"
+                            if account_info.get("pre_public_key")
+                            else "Disabled"
+                        )
+                        files_count = len(account_info.get("files", []))
 
-                self.operation_results = (
-                    f"✓ Found {len(accounts)} account(s):\n"
-                    + "\n".join([f"  - {acc[:20]}..." for acc in accounts[:5]])
-                )
+                        table.add_row(
+                            account_pk[:20] + "...",
+                            created,
+                            str(pq_keys_count),
+                            pre_status,
+                            str(files_count),
+                        )
+                    except Exception:
+                        table.add_row(account_pk[:20] + "...", "Error", "?", "?", "?")
+
+                self.operation_results = f"✓ Found {len(accounts)} account(s)"
 
             self.update_results_display()
             self.notify(f"Listed {len(accounts)} accounts", severity="information")
@@ -250,21 +295,26 @@ class AccountsScreen(Widget):
         try:
             self.notify("Creating account...", severity="information")
 
-            # Initialize API client with identity file
-            client = DCypherClient(
-                self.api_url, identity_path=self.current_identity_path
-            )
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
 
             # Load keys to get PQ key info for account creation
+            if not api_available:
+                self.notify("API dependencies not available", severity="error")
+                return
+
             keys_data = KeyManager.load_keys_unified(Path(self.current_identity_path))
 
-            pk_classic_hex = client.get_classic_public_key()
+            pk_classic_hex = client.get_classic_public_key()  # type: ignore
             pq_keys = [
                 {"pk_hex": key["pk_hex"], "alg": key["alg"]}
                 for key in keys_data["pq_keys"]
             ]
 
-            result = client.create_account(pk_classic_hex, pq_keys)
+            result = client.create_account(pk_classic_hex, pq_keys)  # type: ignore
 
             self.operation_results = f"✓ Account created successfully!\n  Account ID: {pk_classic_hex[:20]}...\n  PQ Keys: {len(pq_keys)}"
             self.update_results_display()
@@ -290,30 +340,32 @@ class AccountsScreen(Widget):
         try:
             self.notify("Getting account details...", severity="information")
 
-            client = DCypherClient(self.api_url)
-            account = client.get_account(public_key)
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
+
+            account_info = client.get_account(public_key)  # type: ignore
 
             # Format account details
-            details = []
-            details.append(f"Public Key: {account.get('public_key', 'N/A')}")
-            details.append(f"Created: {account.get('created_at', 'N/A')}")
+            result_lines = [
+                f"✓ Account Details:",
+                f"  Public Key: {public_key[:40]}...",
+                f"  Created: {account_info.get('created_at', 'Unknown')}",
+                f"  PRE Key: {'Yes' if account_info.get('pre_public_key') else 'No'}",
+                f"  PQ Keys ({len(account_info.get('pq_keys', []))}):",
+            ]
 
-            if "pq_keys" in account:
-                details.append(f"Post-Quantum Keys: {len(account['pq_keys'])}")
-                for i, pq_key in enumerate(account["pq_keys"][:3]):  # Show first 3
-                    details.append(f"  {i + 1}. {pq_key.get('alg', 'N/A')}")
+            for i, pq_key in enumerate(account_info.get("pq_keys", [])):
+                result_lines.append(f"    {i + 1}. {pq_key.get('alg', 'Unknown')}")
 
-            if "pre_public_key_hex" in account and account["pre_public_key_hex"]:
-                details.append(
-                    f"PRE: Enabled ({account['pre_public_key_hex'][:16]}...)"
-                )
-            else:
-                details.append("PRE: Not initialized")
-
-            self.operation_results = "✓ Account Details:\n" + "\n".join(details)
+            self.operation_results = "\n".join(result_lines)
             self.update_results_display()
             self.notify("Account details retrieved", severity="information")
 
+        except ResourceNotFoundError:
+            self.notify(f"Account not found: {public_key[:20]}...", severity="error")
         except DCypherAPIError as e:
             self.notify(f"Failed to get account: {e}", severity="error")
         except Exception as e:
@@ -324,20 +376,22 @@ class AccountsScreen(Widget):
         try:
             self.notify("Getting supported algorithms...", severity="information")
 
-            client = DCypherClient(self.api_url)
-            algorithms = client.get_supported_algorithms()
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
 
-            self.operation_results = (
-                "✓ Supported post-quantum signature algorithms:\n"
-                + "\n".join([f"  - {alg}" for alg in algorithms])
+            algorithms = client.get_supported_algorithms()  # type: ignore
+
+            self.operation_results = f"✓ Supported PQ Algorithms:\n" + "\n".join(
+                f"  - {alg}" for alg in algorithms
             )
             self.update_results_display()
-            self.notify(
-                f"Found {len(algorithms)} supported algorithms", severity="information"
-            )
+            self.notify("Loaded supported algorithms", severity="information")
 
         except DCypherAPIError as e:
-            self.notify(f"Failed to get supported algorithms: {e}", severity="error")
+            self.notify(f"Failed to get algorithms: {e}", severity="error")
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
@@ -351,37 +405,38 @@ class AccountsScreen(Widget):
             algorithm_select = self.query_one("#pq-algorithm-select", Select)
             algorithm = algorithm_select.value
 
-            if not algorithm:
+            if not algorithm or algorithm == Select.BLANK:
                 self.notify("Select an algorithm", severity="warning")
                 return
 
-            self.notify(f"Adding {algorithm} key to account...", severity="information")
-
-            # Initialize API client with identity file
-            client = DCypherClient(
-                self.api_url, identity_path=self.current_identity_path
+            self.notify(
+                f"Adding {algorithm} keys to account...", severity="information"
             )
-            pk_classic_hex = client.get_classic_public_key()
 
-            # Generate new key for the specified algorithm
-            import oqs
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
 
-            sig = oqs.Signature(algorithm)
-            sk = sig.generate_keypair()
-            pk_hex = sig.public_key.hex()
+            pk_classic_hex = client.get_classic_public_key()  # type: ignore
 
-            new_keys = [{"pk_hex": pk_hex, "alg": algorithm}]
-            result = client.add_pq_keys(pk_classic_hex, new_keys)
+            # Generate new PQ keypair for the selected algorithm
+            from src.lib.key_manager import KeyManager
 
-            self.operation_results = f"✓ Successfully added {algorithm} key to account!\n  Key: {pk_hex[:16]}...\n  ⚠️  Key added to server but not saved locally"
+            pq_pk, pq_sk = KeyManager.generate_pq_keypair(str(algorithm))
+            new_keys = [{"pk_hex": pq_pk.hex(), "alg": str(algorithm)}]
+
+            result = client.add_pq_keys(pk_classic_hex, new_keys)  # type: ignore
+
+            self.operation_results = f"✓ Successfully added {algorithm} keys to account!\n  Note: Keys added to server but not saved locally"
             self.update_results_display()
-            self.notify("PQ key added successfully", severity="information")
+            self.notify("PQ keys added successfully", severity="information")
 
-            # Clean up OQS object
-            sig.free()
-
-        except Exception as e:
+        except DCypherAPIError as e:
             self.notify(f"Failed to add PQ keys: {e}", severity="error")
+        except Exception as e:
+            self.notify(f"Error: {e}", severity="error")
 
     def action_remove_pq_keys(self) -> None:
         """Remove PQ keys from account (equivalent to CLI remove-pq-keys)"""
@@ -401,13 +456,15 @@ class AccountsScreen(Widget):
                 f"Removing {algorithm} keys from account...", severity="information"
             )
 
-            # Initialize API client with identity file
-            client = DCypherClient(
-                self.api_url, identity_path=self.current_identity_path
-            )
-            pk_classic_hex = client.get_classic_public_key()
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
 
-            result = client.remove_pq_keys(pk_classic_hex, [algorithm])
+            pk_classic_hex = client.get_classic_public_key()  # type: ignore
+
+            result = client.remove_pq_keys(pk_classic_hex, [algorithm])  # type: ignore
 
             self.operation_results = f"✓ Successfully removed {algorithm} keys from account!\n  Note: Keys removed from server but still in local identity file"
             self.update_results_display()
@@ -427,12 +484,14 @@ class AccountsScreen(Widget):
         try:
             self.notify("Loading account files...", severity="information")
 
-            # Initialize API client with identity file
-            client = DCypherClient(
-                self.api_url, identity_path=self.current_identity_path
-            )
-            pk_classic_hex = client.get_classic_public_key()
-            files = client.list_files(pk_classic_hex)
+            # Get API client
+            client = self.api_client
+            if not client:
+                self.notify("API client not initialized", severity="error")
+                return
+
+            pk_classic_hex = client.get_classic_public_key()  # type: ignore
+            files = client.list_files(pk_classic_hex)  # type: ignore
 
             if not files:
                 self.operation_results = "No files found for this account"

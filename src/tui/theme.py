@@ -63,6 +63,8 @@ Header {
     color: $text-primary;
     border: solid $border-primary;
     text-style: bold;
+    height: 3;  /* Ensure header is tall enough for title + subtitle */
+    min-height: 3;
 }
 
 Header .header--title {
@@ -81,6 +83,90 @@ Footer {
     color: $text-secondary;
     border: solid $border-primary;
     text-style: bold;
+    height: 3;  /* Ensure footer is tall enough for keybindings */
+    min-height: 3;
+}
+
+/* Process monitoring dividers */
+#cpu-divider {
+    height: 5;
+    min-height: 5;
+    background: $bg-dark;
+    color: $accent;
+    text-style: bold;
+    margin: 0;
+    padding: 0;
+}
+
+#cpu-divider > Vertical {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#cpu-sparkline {
+    height: 5;
+    min-height: 5;
+    background: $bg-dark;
+    padding: 0;
+}
+
+#cpu-sparkline > .sparkline--max-color {
+    color: $accent;
+}
+
+#cpu-sparkline > .sparkline--min-color {
+    color: $accent 30%;
+}
+
+#cpu-sparkline-1min {
+    height: 1fr;
+    min-height: 4;
+    max-height: 4;
+    background: $bg-dark;
+    padding: 0;
+    margin: 0;
+    border: none;
+    outline: none;
+}
+
+#cpu-sparkline-1min > .sparkline--max-color {
+    color: $accent;
+}
+
+#cpu-sparkline-1min > .sparkline--min-color {
+    color: $accent 30%;
+}
+
+#cpu-sparkline-5min {
+    height: 1fr;
+    min-height: 4;
+    max-height: 4;
+    background: $bg-dark;
+    padding: 0;
+    margin: 0;
+    border: none;
+    outline: none;
+}
+
+#cpu-sparkline-5min > .sparkline--max-color {
+    color: $primary;
+}
+
+#cpu-sparkline-5min > .sparkline--min-color {
+    color: $primary 30%;
+}
+
+#memory-divider {
+    height: auto;
+    min-height: 3;
+    max-height: 5;
+    background: $bg-dark;
+    color: $warning;
+    text-style: bold;
+    margin: 0;
+    padding: 0;
+    border: double $warning;
 }
 
 /* ASCII Banner styling */

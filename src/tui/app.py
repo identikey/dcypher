@@ -9,16 +9,23 @@ from textual.widgets import Header, Footer, Static, TabbedContent, Tabs, Button
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
+from typing import Optional, Dict, Any
+from pathlib import Path
+import json
 
 from .theme import CYBERPUNK_THEME, get_cyberpunk_theme
 from .widgets.ascii_art import ASCIIBanner
 from .widgets.system_monitor import SystemMonitor
+from .widgets.process_monitor import ProcessCPUDivider, ProcessMemoryDivider
 from .screens.dashboard import DashboardScreen
 from .screens.identity import IdentityScreen
 from .screens.crypto import CryptoScreen
 from .screens.accounts import AccountsScreen
 from .screens.files import FilesScreen
 from .screens.sharing import SharingScreen
+
+# Import API client
+from src.lib.api_client import DCypherClient
 
 
 class DCypherTUI(App[None]):
@@ -55,17 +62,110 @@ class DCypherTUI(App[None]):
     ]
 
     # Reactive properties for app state
-    current_identity: reactive[str | None] = reactive(None)
+    current_identity_path: reactive[Optional[str]] = reactive(None)
+    identity_info: reactive[Optional[Dict[str, Any]]] = reactive(None)
     api_url: reactive[str] = reactive("http://127.0.0.1:8000")
     connection_status: reactive[str] = reactive("disconnected")
     transparent_background: reactive[bool] = reactive(False)
 
+    # Centralized API client
+    _api_client: Optional[DCypherClient] = None
+
     def __init__(self, identity_path=None, api_url=None):
         super().__init__()
         if identity_path:
-            self.current_identity = identity_path
+            self.current_identity_path = identity_path
         if api_url:
             self.api_url = api_url
+
+        # Initialize process monitoring widgets
+        self.cpu_divider: Optional[ProcessCPUDivider] = None
+        self.memory_divider: Optional[ProcessMemoryDivider] = None
+
+    @property
+    def api_client(self) -> Optional[DCypherClient]:
+        """Get the current API client instance"""
+        return self._api_client
+
+    def get_or_create_api_client(self) -> DCypherClient:
+        """Get existing API client or create a new one"""
+        if self._api_client is None:
+            self._api_client = DCypherClient(
+                self.api_url, identity_path=self.current_identity_path
+            )
+        return self._api_client
+
+    def watch_current_identity_path(
+        self, old_path: Optional[str], new_path: Optional[str]
+    ) -> None:
+        """React to identity path changes"""
+        if new_path != old_path:
+            # Update API client with new identity
+            if self._api_client:
+                self._api_client.keys_path = new_path
+            else:
+                self._api_client = DCypherClient(self.api_url, identity_path=new_path)
+
+            # Load identity info
+            if new_path:
+                self.load_identity_info(new_path)
+            else:
+                self.identity_info = None
+
+            # Notify all screens about identity change
+            self.broadcast_identity_change()
+
+    def watch_api_url(self, old_url: str, new_url: str) -> None:
+        """React to API URL changes"""
+        if new_url != old_url:
+            # Create new API client with updated URL
+            self._api_client = DCypherClient(
+                new_url, identity_path=self.current_identity_path
+            )
+            # Check connection
+            self.check_api_connection()
+
+    def load_identity_info(self, identity_path: str) -> None:
+        """Load identity information from file"""
+        try:
+            path = Path(identity_path)
+            if path.exists():
+                with open(path, "r") as f:
+                    self.identity_info = json.load(f)
+            else:
+                self.identity_info = None
+                self.notify(
+                    f"Identity file not found: {identity_path}", severity="error"
+                )
+        except Exception as e:
+            self.identity_info = None
+            self.notify(f"Failed to load identity: {e}", severity="error")
+
+    def broadcast_identity_change(self) -> None:
+        """Notify all screens about identity change"""
+        # Update dashboard screen
+        try:
+            dashboard = self.query_one("#dashboard", DashboardScreen)
+            dashboard.update_identity_status(
+                {
+                    "loaded": self.current_identity_path is not None,
+                    "path": self.current_identity_path,
+                    "info": self.identity_info,
+                }
+            )
+        except Exception:
+            pass
+
+        # Update other screens' status displays
+        for screen_id in ["#accounts", "#files", "#sharing"]:
+            try:
+                screen = self.query_one(screen_id)
+                # Call update_status_display if it exists on the screen
+                update_method = getattr(screen, "update_status_display", None)
+                if update_method and callable(update_method):
+                    update_method()
+            except Exception:
+                pass
 
     def watch_transparent_background(self, transparent: bool) -> None:
         """Update CSS when transparency mode changes"""
@@ -75,6 +175,10 @@ class DCypherTUI(App[None]):
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
         yield Header(show_clock=True)
+
+        # CPU usage divider - positioned under header
+        self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
+        yield self.cpu_divider
 
         with Container(id="main-container"):
             # ASCII Banner
@@ -93,8 +197,8 @@ class DCypherTUI(App[None]):
                 # Dashboard - Use proper DashboardScreen
                 yield DashboardScreen(id="dashboard")
 
-                # Identity Management - Use proper IdentityScreen
-                yield IdentityScreen(id="identity", api_url=self.api_url)
+                # Identity Management - Use proper IdentityScreen with API URL
+                yield IdentityScreen(id="identity")
 
                 # Crypto Operations - Use proper CryptoScreen
                 yield CryptoScreen(id="crypto")
@@ -108,6 +212,10 @@ class DCypherTUI(App[None]):
                 # Sharing & Collaboration - Use proper SharingScreen
                 yield SharingScreen(id="sharing")
 
+        # Memory usage divider - positioned above footer
+        self.memory_divider = ProcessMemoryDivider(id="memory-divider")
+        yield self.memory_divider
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -118,17 +226,31 @@ class DCypherTUI(App[None]):
         self.set_interval(1.0, self.update_system_status)
         self.set_interval(5.0, self.check_api_connection)
 
+        # Load identity if provided at startup
+        if self.current_identity_path:
+            self.load_identity_info(self.current_identity_path)
+            self.broadcast_identity_change()
+
     def update_system_status(self) -> None:
         """Update system status information"""
         # This will be called every second to update real-time data
-        pass
+
+        # Update process monitoring widgets
+        if self.cpu_divider:
+            self.cpu_divider.update_cpu_usage()
+        if self.memory_divider:
+            self.memory_divider.update_memory_usage()
 
     def check_api_connection(self) -> None:
         """Check API connection status"""
         # This will be called every 5 seconds to check API connectivity
         try:
-            # TODO: Implement actual API ping
-            self.connection_status = "connected"
+            if self._api_client:
+                # Try to get nonce to check connection
+                self._api_client.get_nonce()
+                self.connection_status = "connected"
+            else:
+                self.connection_status = "disconnected"
         except Exception:
             self.connection_status = "disconnected"
 
