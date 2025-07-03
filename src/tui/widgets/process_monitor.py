@@ -84,25 +84,38 @@ class ProcessCPUDivider(Widget):
         # Create content with both time periods
         content = Text()
 
-        # 1-minute sparkline (top half)
+        # Calculate available width dynamically
+        # Get console width and subtract space for labels and margins
+        try:
+            console_width = self.app.size.width if hasattr(self.app, "size") else 120
+            # Subtract space for "1min: " (6 chars) and some margin
+            available_width = max(console_width - 12, 40)  # Minimum 40 chars
+        except:
+            available_width = 100  # Fallback
+
+        # 1-minute sparkline (top half) - 60 data points across full width
         content.append("1min: ", style="bold cyan")
         if len(self.cpu_history) > 0:
-            sparkline_1min = self._create_ascii_chart(list(self.cpu_history), width=100)
+            sparkline_1min = self._create_ascii_chart(
+                list(self.cpu_history), 60, available_width
+            )
             content.append(sparkline_1min, style="cyan")
         else:
-            content.append("▁" * 50 + " (collecting...)", style="dim cyan")
+            content.append("▁" * available_width + " (collecting...)", style="dim cyan")
 
         content.append("\n")
 
-        # 5-minute sparkline (bottom half)
+        # 5-minute sparkline (bottom half) - 300 data points across full width
         content.append("5min: ", style="bold green")
         if len(self.cpu_history_5min) > 0:
             sparkline_5min = self._create_ascii_chart(
-                list(self.cpu_history_5min), width=100
+                list(self.cpu_history_5min), 300, available_width
             )
             content.append(sparkline_5min, style="green")
         else:
-            content.append("▁" * 50 + " (collecting...)", style="dim green")
+            content.append(
+                "▁" * available_width + " (collecting...)", style="dim green"
+            )
 
         return Panel(
             content,
@@ -112,23 +125,36 @@ class ProcessCPUDivider(Widget):
             expand=True,
         )
 
-    def _create_ascii_chart(self, data: List[float], width: int = 50) -> str:
-        """Create a simple ASCII sparkline chart"""
+    def _create_ascii_chart(
+        self, data: List[float], num_data_points: int, total_width: int
+    ) -> str:
+        """Create ASCII sparkline chart with num_data_points spread across total_width"""
         if not data:
-            return "─" * width
+            return "▁" * total_width
 
         # Normalize data to chart height (use max 8 levels)
         max_val = max(max(data), 1.0)  # Avoid division by zero
         levels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 
-        chart = ""
-        for value in data[-width:]:  # Take last 'width' values
-            level_idx = min(int((value / max_val) * len(levels)), len(levels) - 1)
-            chart += levels[level_idx]
+        # Calculate how many characters each data point should occupy
+        chars_per_point = total_width // num_data_points
+        remainder = total_width % num_data_points
 
-        # Pad with empty chars if needed
-        while len(chart) < width:
-            chart = "▁" + chart
+        chart = ""
+        for i in range(num_data_points):
+            if i < len(data):
+                value = data[i]
+                level_idx = min(int((value / max_val) * len(levels)), len(levels) - 1)
+                bar_char = levels[level_idx]
+            else:
+                bar_char = "▁"  # Empty data shows as minimum level
+
+            # Add the bar character repeated for its width
+            width_for_this_point = chars_per_point
+            if i < remainder:  # Distribute the remainder across the first few points
+                width_for_this_point += 1
+
+            chart += bar_char * width_for_this_point
 
         return chart
 
