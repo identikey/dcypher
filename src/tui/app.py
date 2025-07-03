@@ -16,7 +16,7 @@ import json
 from .theme import CYBERPUNK_THEME, get_cyberpunk_theme
 from .widgets.ascii_art import ASCIIBanner
 from .widgets.system_monitor import SystemMonitor
-from .widgets.process_monitor import ProcessCPUDivider, ProcessMemoryDivider
+from .widgets.process_monitor import ProcessCPUDivider, ProcessCPU15MinDivider
 from .screens.dashboard import DashboardScreen
 from .screens.identity import IdentityScreen
 from .screens.crypto import CryptoScreen
@@ -80,7 +80,7 @@ class DCypherTUI(App[None]):
 
         # Initialize process monitoring widgets
         self.cpu_divider: Optional[ProcessCPUDivider] = None
-        self.memory_divider: Optional[ProcessMemoryDivider] = None
+        self.memory_divider: Optional[ProcessCPU15MinDivider] = None
 
     @property
     def api_client(self) -> Optional[DCypherClient]:
@@ -213,7 +213,7 @@ class DCypherTUI(App[None]):
                 yield SharingScreen(id="sharing")
 
         # Memory usage divider - positioned above footer
-        self.memory_divider = ProcessMemoryDivider(id="memory-divider")
+        self.memory_divider = ProcessCPU15MinDivider(id="memory-divider")
         yield self.memory_divider
 
         yield Footer()

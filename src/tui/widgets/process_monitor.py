@@ -145,7 +145,7 @@ class ProcessCPUDivider(Widget):
 
         return Panel(
             content,
-            title=f"[bold cyan]◢dCYPHER CPU: {self.cpu_percent:.1f}% ({len(self.children_processes)} children)◣[/bold cyan]",
+            title=f"[bold cyan]◢dCYPHER CPU: {self.cpu_percent:.2f}% ({len(self.children_processes)} children)◣[/bold cyan]",
             border_style="cyan",
             box=box.DOUBLE,
             expand=False,
@@ -166,10 +166,23 @@ class ProcessCPUDivider(Widget):
             chart_text.append(" " * total_width, style="dim")
             return chart_text
 
-        # Normalize data to chart height (use max 8 levels)
-        max_val = max(max(data), 1.0)  # Avoid division by zero
-        levels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+        # Use adaptive scaling for better sensitivity to small changes
+        min_val = min(data)
+        max_val = max(data)
+        data_range = max_val - min_val
 
+        # If the range is very small (less than 1% for CPU), use a more sensitive approach
+        if data_range < 1.0:
+            # For very small ranges, amplify the differences
+            # Use the range itself as the scale, with a minimum scale of 0.1%
+            scale_range = max(data_range, 0.1)
+            use_relative_scaling = True
+        else:
+            # For larger ranges, use traditional max scaling
+            scale_range = max_val
+            use_relative_scaling = False
+
+        levels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
         data_to_use = list(reversed(data)) if reverse else data
 
         # Sample data to fit available width
@@ -179,12 +192,23 @@ class ProcessCPUDivider(Widget):
                 idx = int(i * step)
                 if idx < len(data_to_use):
                     value = data_to_use[idx]
-                    level_idx = min(
-                        int((value / max_val) * len(levels)), len(levels) - 1
-                    )
-                    char = levels[level_idx] if value > 0 else " "
 
-                    # Apply color gradient based on CPU value
+                    if use_relative_scaling:
+                        # Scale relative to the range for better sensitivity
+                        if scale_range > 0:
+                            normalized_value = (value - min_val) / scale_range
+                        else:
+                            normalized_value = 0
+                    else:
+                        # Traditional scaling
+                        normalized_value = value / scale_range if scale_range > 0 else 0
+
+                    level_idx = min(
+                        int(normalized_value * len(levels)), len(levels) - 1
+                    )
+                    char = levels[level_idx] if normalized_value > 0 else " "
+
+                    # Apply color gradient based on original CPU value
                     color_style = self._get_cpu_color_style(value)
                     chart_text.append(char, style=color_style)
                 else:
@@ -385,6 +409,243 @@ class ProcessMemoryDivider(Widget):
             expand=False,
             height=3,  # Fixed height: 1 line of content + 2 for borders
         )
+
+
+class ProcessCPU15MinDivider(Widget):
+    """
+    Memory usage divider widget - displays only 15-minute horizontal memory history chart
+    Simplified version for memory section position
+    """
+
+    # CSS to remove spacing
+    DEFAULT_CSS = """
+    ProcessCPU15MinDivider {
+        margin: 0;
+        padding: 0;
+        min-height: 3;
+        max-height: 3;
+        height: 3;
+    }
+    """
+
+    memory_percent: reactive[float] = reactive(0.0)
+    memory_mb: reactive[float] = reactive(0.0)
+    memory_history_15min: reactive[Any] = reactive(list)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.max_history_15min = (
+            900  # Keep 900 data points (15 minutes at 1 sec intervals)
+        )
+        self.memory_history_15min = deque(maxlen=self.max_history_15min)
+        self.process = None
+        self.children_processes = []
+
+        if PSUTIL_AVAILABLE:
+            try:
+                self.process = psutil.Process(os.getpid())  # type: ignore
+
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
+                pass
+
+    def compose(self):
+        """Compose the memory divider with 15-minute display only"""
+        return []
+
+    def render(self):
+        """Render only 15-minute memory data"""
+        if not PSUTIL_AVAILABLE:
+            return Panel(
+                Text("psutil not available - Memory monitoring disabled", style="red"),
+                title="[red]◢MEMORY MONITOR◣[/red]",
+                border_style="red",
+                box=box.DOUBLE,
+                expand=True,
+            )
+
+        # Create content with only 15-minute period
+        content = Text()
+
+        # Calculate available width dynamically
+        try:
+            console_width = self.app.size.width if hasattr(self.app, "size") else 120
+            # Subtract space for "15min: " (7 chars) and some margin
+            available_width = max(console_width - 11, 40)  # Minimum 40 chars
+        except:
+            available_width = 100  # Fallback
+
+        # 15-minute sparkline only
+        content.append("15min: ", style="bold yellow")
+        if len(self.memory_history_15min) > 0:
+            sparkline_15min = self._create_ascii_chart(
+                list(self.memory_history_15min), 900, available_width
+            )
+            content.append(sparkline_15min)  # Already has color styling
+        else:
+            content.append(
+                " " * available_width + " (collecting...)", style="dim yellow"
+            )
+
+        return Panel(
+            content,
+            title=f"[bold yellow]◢dCYPHER MEMORY 15min: {self.memory_mb:.2f}MB ({self.memory_percent:.3f}%) ({len(self.children_processes)} children)◣[/bold yellow]",
+            border_style="yellow",
+            box=box.DOUBLE,
+            expand=False,
+            height=3,  # Fixed height: 1 line of content + 2 for borders
+        )
+
+    def _create_ascii_chart(
+        self,
+        data: List[float],
+        num_data_points: int,
+        total_width: int,
+        reverse: bool = False,
+    ) -> Text:
+        """Create ASCII sparkline chart with color gradient based on memory values"""
+        chart_text = Text()
+
+        if not data:
+            chart_text.append(" " * total_width, style="dim")
+            return chart_text
+
+        # Use adaptive scaling for better sensitivity to small changes
+        min_val = min(data)
+        max_val = max(data)
+        data_range = max_val - min_val
+
+        # If the range is very small (less than 0.1%), use a more sensitive approach
+        if data_range < 0.1:
+            # For very small ranges, amplify the differences
+            # Use the range itself as the scale, with a minimum scale of 0.01%
+            scale_range = max(data_range, 0.01)
+            use_relative_scaling = True
+        else:
+            # For larger ranges, use traditional max scaling
+            scale_range = max_val
+            use_relative_scaling = False
+
+        levels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+        data_to_use = list(reversed(data)) if reverse else data
+
+        # Sample data to fit available width
+        if len(data_to_use) > 0:
+            step = len(data_to_use) / total_width
+            for i in range(total_width):
+                idx = int(i * step)
+                if idx < len(data_to_use):
+                    value = data_to_use[idx]
+
+                    if use_relative_scaling:
+                        # Scale relative to the range for better sensitivity
+                        if scale_range > 0:
+                            normalized_value = (value - min_val) / scale_range
+                        else:
+                            normalized_value = 0
+                    else:
+                        # Traditional scaling
+                        normalized_value = value / scale_range if scale_range > 0 else 0
+
+                    level_idx = min(
+                        int(normalized_value * len(levels)), len(levels) - 1
+                    )
+                    char = levels[level_idx] if normalized_value > 0 else " "
+
+                    # Apply color gradient based on original memory value
+                    color_style = self._get_memory_color_style(value)
+                    chart_text.append(char, style=color_style)
+                else:
+                    chart_text.append(" ", style="dim")
+        else:
+            chart_text.append(" " * total_width, style="dim")
+
+        return chart_text
+
+    def _get_memory_color_style(self, memory_value: float) -> str:
+        """Get color style based on memory percentage value"""
+        if memory_value <= 0:
+            return "dim"
+        elif memory_value < 20:
+            return "bright_green"
+        elif memory_value < 40:
+            return "green"
+        elif memory_value < 60:
+            return "yellow"
+        elif memory_value < 80:
+            return "bright_yellow"
+        elif memory_value < 95:
+            return "red"
+        else:
+            return "bright_red bold"
+
+    def update_memory_usage(self) -> None:
+        """Update memory usage metrics for dCypher process and children"""
+        if not PSUTIL_AVAILABLE or not self.process:
+            return
+
+        try:
+            # Get main process memory usage
+            main_memory = self.process.memory_info()
+            total_memory_bytes = main_memory.rss
+
+            # Get children processes memory usage
+            children_memory_bytes = 0
+            self.children_processes = []
+
+            try:
+                children = self.process.children(recursive=True)
+                for child in children:
+                    try:
+                        child_memory = child.memory_info()
+                        children_memory_bytes += child_memory.rss
+                        self.children_processes.append(
+                            {
+                                "pid": child.pid,
+                                "name": child.name(),
+                                "memory_mb": child_memory.rss / (1024 * 1024),
+                            }
+                        )
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
+                        continue
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
+                pass
+
+            # Total memory usage
+            total_memory_mb = (total_memory_bytes + children_memory_bytes) / (
+                1024 * 1024
+            )
+            self.memory_mb = total_memory_mb
+
+            # Calculate percentage of system memory
+            try:
+                system_memory = psutil.virtual_memory()  # type: ignore
+                self.memory_percent = (
+                    (total_memory_bytes + children_memory_bytes)
+                    / system_memory.total
+                    * 100
+                )
+            except:
+                self.memory_percent = 0.0
+
+            # Store memory percentage in history for sparkline
+            self.memory_history_15min.append(self.memory_percent)
+
+            # Refresh the display to show updated data
+            self.refresh()
+
+        except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
+            self.memory_mb = 0.0
+            self.memory_percent = 0.0
+            self.memory_history_15min.append(0.0)
+            self.refresh()
+
+    def watch_memory_history_15min(self):
+        """Update the display when memory history changes"""
+        self.refresh()
+
+    def watch_memory_percent(self):
+        """Update the display when memory percentage changes"""
+        self.refresh()
 
 
 class ProcessMonitorWidget(Widget):
