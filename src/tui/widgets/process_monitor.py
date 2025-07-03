@@ -36,6 +36,17 @@ class ProcessCPUDivider(Widget):
     Positioned under the header as a visual divider
     """
 
+    # CSS to remove spacing
+    DEFAULT_CSS = """
+    ProcessCPUDivider {
+        margin: 0;
+        padding: 0;
+        min-height: 5;
+        max-height: 5;
+        height: 5;
+    }
+    """
+
     cpu_percent: reactive[float] = reactive(0.0)
     # Note: actual type is deque, but reactive typing doesn't support deque well
     cpu_history: reactive[Any] = reactive(list)
@@ -137,7 +148,8 @@ class ProcessCPUDivider(Widget):
             title=f"[bold cyan]◢dCYPHER CPU: {self.cpu_percent:.1f}% ({len(self.children_processes)} children)◣[/bold cyan]",
             border_style="cyan",
             box=box.DOUBLE,
-            expand=True,
+            expand=False,
+            height=5,  # Fixed height: 3 lines of content + 2 for borders
         )
 
     def _create_ascii_chart(
@@ -258,6 +270,17 @@ class ProcessMemoryDivider(Widget):
     Positioned above the footer as a visual divider
     """
 
+    # CSS to remove spacing
+    DEFAULT_CSS = """
+    ProcessMemoryDivider {
+        margin: 0;
+        padding: 0;
+        min-height: 3;
+        max-height: 3;
+        height: 3;
+    }
+    """
+
     memory_mb: reactive[float] = reactive(0.0)
     memory_percent: reactive[float] = reactive(0.0)
 
@@ -359,7 +382,8 @@ class ProcessMemoryDivider(Widget):
             title="[bold yellow]◢dCYPHER MEMORY USAGE◣[/bold yellow]",
             border_style="yellow",
             box=box.DOUBLE,
-            expand=True,
+            expand=False,
+            height=3,  # Fixed height: 1 line of content + 2 for borders
         )
 
 

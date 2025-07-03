@@ -57,6 +57,12 @@ App {
     color: $text-primary;
 }
 
+/* Remove default widget spacing */
+Widget {
+    margin: 0;
+    padding: 0;
+}
+
 /* Header styling - @repligate inspired */
 Header {
     background: $bg-medium;
@@ -89,13 +95,15 @@ Footer {
 
 /* Process monitoring dividers */
 #cpu-divider {
-    height: 10;
-    min-height: 10;
+    height: 5;
+    min-height: 5;
+    max-height: 5;
     background: $bg-dark;
     color: $accent;
     text-style: bold;
     margin: 0;
     padding: 0;
+    border: none;
 }
 
 #cpu-divider > Vertical {
@@ -158,15 +166,15 @@ Footer {
 }
 
 #memory-divider {
-    height: auto;
+    height: 3;
     min-height: 3;
-    max-height: 5;
+    max-height: 3;
     background: $bg-dark;
     color: $warning;
     text-style: bold;
     margin: 0;
     padding: 0;
-    border: double $warning;
+    border: none;
 }
 
 /* ASCII Banner styling */
@@ -183,7 +191,7 @@ ASCIIBanner {
 #main-container {
     background: $bg-medium;
     border: solid $border-primary;
-    margin: 1;
+    margin: 0;
     padding: 1;
 }
 
