@@ -89,8 +89,8 @@ Footer {
 
 /* Process monitoring dividers */
 #cpu-divider {
-    height: 5;
-    min-height: 5;
+    height: 10;
+    min-height: 10;
     background: $bg-dark;
     color: $accent;
     text-style: bold;

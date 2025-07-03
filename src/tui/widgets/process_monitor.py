@@ -39,6 +39,7 @@ class ProcessCPUDivider(Widget):
     # Note: actual type is deque, but reactive typing doesn't support deque well
     cpu_history: reactive[Any] = reactive(list)
     cpu_history_5min: reactive[Any] = reactive(list)
+    cpu_history_15min: reactive[Any] = reactive(list)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -46,8 +47,12 @@ class ProcessCPUDivider(Widget):
         self.max_history_5min = (
             300  # Keep 300 data points (5 minutes at 1 sec intervals)
         )
+        self.max_history_15min = (
+            900  # Keep 900 data points (15 minutes at 1 sec intervals)
+        )
         self.cpu_history = deque(maxlen=self.max_history)
         self.cpu_history_5min = deque(maxlen=self.max_history_5min)
+        self.cpu_history_15min = deque(maxlen=self.max_history_15min)
         self.process = None
         self.children_processes = []
 
@@ -83,25 +88,25 @@ class ProcessCPUDivider(Widget):
         # Get console width and subtract space for labels and margins
         try:
             console_width = self.app.size.width if hasattr(self.app, "size") else 120
-            # Subtract space for "1min: " (6 chars) and some margin
-            available_width = max(console_width - 12, 40)  # Minimum 40 chars
+            # Subtract space for "15min: " (7 chars) and some margin
+            available_width = max(console_width - 11, 40)  # Minimum 40 chars
         except:
             available_width = 100  # Fallback
 
         # 1-minute sparkline (top half) - 60 data points across full width
-        content.append("1min: ", style="bold cyan")
+        content.append("1min:  ", style="bold cyan")
         if len(self.cpu_history) > 0:
             sparkline_1min = self._create_ascii_chart(
                 list(self.cpu_history), 60, available_width
             )
             content.append(sparkline_1min, style="cyan")
         else:
-            content.append("▁" * available_width + " (collecting...)", style="dim cyan")
+            content.append(" " * available_width + " (collecting...)", style="dim cyan")
 
         content.append("\n")
 
         # 5-minute sparkline (bottom half) - 300 data points across full width, reversed
-        content.append("5min: ", style="bold green")
+        content.append("5min:  ", style="bold green")
         if len(self.cpu_history_5min) > 0:
             sparkline_5min = self._create_ascii_chart(
                 list(self.cpu_history_5min), 300, available_width, reverse=True
@@ -109,7 +114,21 @@ class ProcessCPUDivider(Widget):
             content.append(sparkline_5min, style="green")
         else:
             content.append(
-                "▁" * available_width + " (collecting...)", style="dim green"
+                " " * available_width + " (collecting...)", style="dim green"
+            )
+
+        content.append("\n")
+
+        # 15-minute sparkline (bottom) - 900 data points across full width, normal direction
+        content.append("15min: ", style="bold yellow")
+        if len(self.cpu_history_15min) > 0:
+            sparkline_15min = self._create_ascii_chart(
+                list(self.cpu_history_15min), 900, available_width
+            )
+            content.append(sparkline_15min, style="yellow")
+        else:
+            content.append(
+                " " * available_width + " (collecting...)", style="dim yellow"
             )
 
         return Panel(
@@ -135,45 +154,25 @@ class ProcessCPUDivider(Widget):
         max_val = max(max(data), 1.0)  # Avoid division by zero
         levels = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 
-        # Calculate how many characters each data point should occupy
-        chars_per_point = total_width // num_data_points
-        remainder = total_width % num_data_points
-
-        chart = ""
         data_to_use = list(reversed(data)) if reverse else data
 
-        for i in range(num_data_points):
-            if i < len(data_to_use):
-                value = data_to_use[i]
-                level_idx = min(int((value / max_val) * len(levels)), len(levels) - 1)
-                bar_char = levels[level_idx]
-            else:
-                bar_char = " "  # Empty space instead of minimum level bar
-
-            # Add the bar character repeated for its width
-            width_for_this_point = chars_per_point
-            if i < remainder:  # Distribute the remainder across the first few points
-                width_for_this_point += 1
-
-            chart += bar_char * width_for_this_point
-
-        # For reversed charts, if we don't have enough data to fill the width,
-        # right-align the chart so it starts from the right side
-        if reverse and len(data_to_use) < num_data_points:
-            # Calculate how much actual data we have
-            actual_data_chars = 0
-            for i in range(len(data_to_use)):
-                width_for_this_point = chars_per_point
-                if i < remainder:
-                    width_for_this_point += 1
-                actual_data_chars += width_for_this_point
-
-            # Split the chart into data part and empty part
-            data_part = chart[:actual_data_chars]
-            empty_part = chart[actual_data_chars:]
-
-            # Right-align by putting empty space first, then data
-            chart = empty_part + data_part
+        # Always use sampling approach for all sparklines - looks cooler!
+        # Sample data to fit available width
+        if len(data_to_use) > 0:
+            step = len(data_to_use) / total_width
+            chart = ""
+            for i in range(total_width):
+                idx = int(i * step)
+                if idx < len(data_to_use):
+                    value = data_to_use[idx]
+                    level_idx = min(
+                        int((value / max_val) * len(levels)), len(levels) - 1
+                    )
+                    chart += levels[level_idx] if value > 0 else " "
+                else:
+                    chart += " "
+        else:
+            chart = " " * total_width
 
         return chart
 
@@ -209,6 +208,7 @@ class ProcessCPUDivider(Widget):
             self.cpu_percent = total_cpu
             self.cpu_history.append(total_cpu)
             self.cpu_history_5min.append(total_cpu)
+            self.cpu_history_15min.append(total_cpu)
 
             # Refresh the display to show updated data
             self.refresh()
@@ -217,6 +217,7 @@ class ProcessCPUDivider(Widget):
             self.cpu_percent = 0.0
             self.cpu_history.append(0.0)
             self.cpu_history_5min.append(0.0)
+            self.cpu_history_15min.append(0.0)
             self.refresh()
 
     def watch_cpu_history(self):
