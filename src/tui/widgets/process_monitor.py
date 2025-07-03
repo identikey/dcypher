@@ -57,11 +57,6 @@ class ProcessCPUDivider(Widget):
                 # Initial CPU measurement (first call returns 0.0)
                 self.process.cpu_percent()
 
-                # Add some initial data points for immediate display
-                for _ in range(10):
-                    self.cpu_history.append(0.0)
-                    self.cpu_history_5min.append(0.0)
-
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
@@ -105,11 +100,11 @@ class ProcessCPUDivider(Widget):
 
         content.append("\n")
 
-        # 5-minute sparkline (bottom half) - 300 data points across full width
+        # 5-minute sparkline (bottom half) - 300 data points across full width, reversed
         content.append("5min: ", style="bold green")
         if len(self.cpu_history_5min) > 0:
             sparkline_5min = self._create_ascii_chart(
-                list(self.cpu_history_5min), 300, available_width
+                list(self.cpu_history_5min), 300, available_width, reverse=True
             )
             content.append(sparkline_5min, style="green")
         else:
@@ -126,11 +121,15 @@ class ProcessCPUDivider(Widget):
         )
 
     def _create_ascii_chart(
-        self, data: List[float], num_data_points: int, total_width: int
+        self,
+        data: List[float],
+        num_data_points: int,
+        total_width: int,
+        reverse: bool = False,
     ) -> str:
         """Create ASCII sparkline chart with num_data_points spread across total_width"""
         if not data:
-            return "▁" * total_width
+            return " " * total_width  # Empty space instead of minimum bars
 
         # Normalize data to chart height (use max 8 levels)
         max_val = max(max(data), 1.0)  # Avoid division by zero
@@ -141,13 +140,15 @@ class ProcessCPUDivider(Widget):
         remainder = total_width % num_data_points
 
         chart = ""
+        data_to_use = list(reversed(data)) if reverse else data
+
         for i in range(num_data_points):
-            if i < len(data):
-                value = data[i]
+            if i < len(data_to_use):
+                value = data_to_use[i]
                 level_idx = min(int((value / max_val) * len(levels)), len(levels) - 1)
                 bar_char = levels[level_idx]
             else:
-                bar_char = "▁"  # Empty data shows as minimum level
+                bar_char = " "  # Empty space instead of minimum level bar
 
             # Add the bar character repeated for its width
             width_for_this_point = chars_per_point
@@ -155,6 +156,24 @@ class ProcessCPUDivider(Widget):
                 width_for_this_point += 1
 
             chart += bar_char * width_for_this_point
+
+        # For reversed charts, if we don't have enough data to fill the width,
+        # right-align the chart so it starts from the right side
+        if reverse and len(data_to_use) < num_data_points:
+            # Calculate how much actual data we have
+            actual_data_chars = 0
+            for i in range(len(data_to_use)):
+                width_for_this_point = chars_per_point
+                if i < remainder:
+                    width_for_this_point += 1
+                actual_data_chars += width_for_this_point
+
+            # Split the chart into data part and empty part
+            data_part = chart[:actual_data_chars]
+            empty_part = chart[actual_data_chars:]
+
+            # Right-align by putting empty space first, then data
+            chart = empty_part + data_part
 
         return chart
 
