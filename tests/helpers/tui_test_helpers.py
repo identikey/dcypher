@@ -1456,4 +1456,66 @@ async def complete_sharing_workflow_robust(
     return results
 
 
+async def wait_for_notification(
+    pilot: Any,
+    message_contains: str,
+    timeout: float = 30.0,
+    severity: Optional[str] = None,
+) -> bool:
+    """
+    Wait for a notification containing specific text to appear.
+
+    Args:
+        pilot: The test pilot instance
+        message_contains: Text that should be in the notification
+        timeout: Maximum time to wait for the notification
+        severity: Optional severity level to match (e.g., "error", "warning", "info")
+
+    Returns:
+        True if notification found, False if timeout
+    """
+    condition = NotificationPresent(message_contains, timeout)
+    return await condition.wait_until(pilot)
+
+
+async def wait_for_screen_change(
+    pilot: Any, expected_screen_selector: str, timeout: float = 30.0
+) -> bool:
+    """
+    Wait for screen/tab change to complete.
+
+    Args:
+        pilot: The test pilot instance
+        expected_screen_selector: CSS selector for the expected screen
+        timeout: Maximum time to wait
+
+    Returns:
+        True if screen changed, False if timeout
+    """
+    condition = ElementExists(expected_screen_selector, timeout)
+    return await condition.wait_until(pilot)
+
+
+async def wait_for_screen_change(pilot, screen_id, timeout=5):
+    """Wait for a specific screen to become active"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        # Check if the screen with the given ID is active
+        screen = pilot.app.query_one(f"#{screen_id}")
+        if screen and screen.visible:
+            return True
+        await pilot.pause(0.1)
+    return False
+
+
+def run_cli_command(args):
+    """Run a CLI command using python -m instead of dcypher command"""
+    import subprocess
+    import sys
+
+    cmd = [sys.executable, "-m", "src.cli"] + args
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result
+
+
 # =============================================================================

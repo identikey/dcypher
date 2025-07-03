@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich.columns import Columns
+from typing import Dict, Any, Optional, Literal
 
 from ..widgets.system_monitor import SystemMonitor, CryptoMonitor
 
@@ -27,26 +28,34 @@ class DashboardScreen(Widget):
     active_files = reactive(0)
     active_shares = reactive(0)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._system_info: Dict[str, Any] = {}
+
     def compose(self):
-        """Compose the dashboard layout"""
+        """Compose the dashboard interface"""
         with Container(id="dashboard-container"):
-            # Top row - System monitors
-            with Horizontal(id="monitors-row"):
-                yield SystemMonitor(id="system-monitor")
-                yield CryptoMonitor(id="crypto-monitor")
+            yield Static("◢ DASHBOARD ◣", classes="title")
 
-            # Middle row - Status panels
+            # Status panels row
             with Horizontal(id="status-row"):
-                yield Static("Loading identity status...", id="identity-status")
-                yield Static("Checking API connection...", id="api-status")
-                yield Static("Loading file status...", id="files-status")
+                yield Static("System Status", id="system-status")
+                yield Static("Identity: Not loaded", id="identity-status")
+                yield Static("Network: Disconnected", id="network-status")
+                yield Static("Storage: 0 files", id="storage-status")
 
-            # Bottom row - Quick actions
+            # Quick actions
             with Horizontal(id="actions-row"):
                 yield Button("Load Identity", id="load-identity-btn", variant="primary")
                 yield Button("Upload File", id="upload-file-btn")
                 yield Button("Create Share", id="create-share-btn")
                 yield Button("View Logs", id="view-logs-btn")
+
+            # Quick stats
+            yield QuickStats(id="quick-stats")
+
+            # Recent activity
+            yield Static("Recent Activity", id="activity-log")
 
     def on_mount(self) -> None:
         """Initialize dashboard when mounted"""
@@ -55,77 +64,41 @@ class DashboardScreen(Widget):
 
     def update_status(self) -> None:
         """Update status panels"""
-        self.update_identity_status()
+        # Call status update methods with empty dict if no data
+        self.update_identity_status({})
         self.update_api_status()
         self.update_files_status()
 
-    def update_identity_status(self) -> None:
-        """Update identity status panel"""
-        identity_panel = self.query_one("#identity-status", Static)
+    def update_identity_status(
+        self, status_info: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Update identity status from external source"""
+        if status_info is None:
+            status_info = {}
+        if status_info.get("loaded", False):
+            self.identity_loaded = True
 
+        # Update the status display
+        identity_widget = self.query_one("#identity-status", Static)
         if self.identity_loaded:
-            content = Text()
-            content.append("IDENTITY STATUS\n", style="bold green")
-            content.append("✓ Loaded\n", style="green")
-            content.append("Keys: 3/3\n", style="dim")
-            content.append("Type: Quantum-Safe", style="dim")
+            identity_widget.update("✅ Identity loaded")
         else:
-            content = Text()
-            content.append("IDENTITY STATUS\n", style="bold yellow")
-            content.append("⚠ Not Loaded\n", style="yellow")
-            content.append("Load identity file\n", style="dim")
-            content.append("to begin operations", style="dim")
-
-        panel = Panel(
-            content,
-            border_style="green" if self.identity_loaded else "yellow",
-            title="[bold]◢IDENTITY◣[/bold]",
-            title_align="center",
-        )
-        identity_panel.update(panel)
+            identity_widget.update("❌ No identity loaded")
 
     def update_api_status(self) -> None:
-        """Update API connection status panel"""
-        api_panel = self.query_one("#api-status", Static)
-
+        """Update API connection status"""
+        network_widget = self.query_one("#network-status", Static)
         if self.api_connected:
-            content = Text()
-            content.append("API CONNECTION\n", style="bold green")
-            content.append("✓ Connected\n", style="green")
-            content.append("Latency: 45ms\n", style="dim")
-            content.append("Server: Online", style="dim")
+            network_widget.update("Network: Connected")
         else:
-            content = Text()
-            content.append("API CONNECTION\n", style="bold red")
-            content.append("✗ Disconnected\n", style="red")
-            content.append("Check network\n", style="dim")
-            content.append("or server status", style="dim")
-
-        panel = Panel(
-            content,
-            border_style="green" if self.api_connected else "red",
-            title="[bold]◢API◣[/bold]",
-            title_align="center",
-        )
-        api_panel.update(panel)
+            network_widget.update("Network: Disconnected")
 
     def update_files_status(self) -> None:
-        """Update files and shares status panel"""
-        files_panel = self.query_one("#files-status", Static)
-
-        content = Text()
-        content.append("FILES & SHARES\n", style="bold cyan")
-        content.append(f"Files: {self.active_files}\n", style="cyan")
-        content.append(f"Shares: {self.active_shares}\n", style="cyan")
-        content.append("Storage: 2.3GB", style="dim")
-
-        panel = Panel(
-            content,
-            border_style="cyan",
-            title="[bold]◢DATA◣[/bold]",
-            title_align="center",
+        """Update files and shares status"""
+        storage_widget = self.query_one("#storage-status", Static)
+        storage_widget.update(
+            f"Storage: {self.active_files} files, {self.active_shares} shares"
         )
-        files_panel.update(panel)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses"""
@@ -166,6 +139,45 @@ class DashboardScreen(Widget):
         """View logs action"""
         # TODO: Implement logs viewer
         self.notify("Opening logs viewer", severity="information")
+
+    def update_system_status(self, status_info: Dict[str, Any]) -> None:
+        """Update system status with CPU, memory, disk info"""
+        # Store the status info for display
+        if not hasattr(self, "_system_info"):
+            self._system_info = {}
+        self._system_info = status_info
+        self.update_status()
+
+    def update_network_status(self, status_info: Dict[str, Any]) -> None:
+        """Update network/API connection status"""
+        self.api_connected = status_info.get("api_connected", False)
+        self.update_status()
+
+    def update_storage_status(self, status_info: Dict[str, Any]) -> None:
+        """Update storage/files status"""
+        self.active_files = status_info.get("files_count", 0)
+        self.active_shares = status_info.get("shares_active", 0)
+        self.update_status()
+
+    def add_activity(self, message: str, status: str = "info") -> None:
+        """Add an activity to the recent activity log"""
+        # For now, just notify
+        severity: Literal["information", "warning", "error"] = "information"
+        if status == "error":
+            severity = "error"
+        elif status == "warning":
+            severity = "warning"
+        self.notify(f"Activity: {message}", severity=severity)
+
+    def show_error(self, message: str, critical: bool = False) -> None:
+        """Show an error message"""
+        severity = "error" if critical else "warning"
+        self.notify(message, severity=severity)
+
+    def check_api_connection(self) -> Dict[str, Any]:
+        """Check API connection and return status"""
+        # TODO: Implement actual API check
+        return {"connected": self.api_connected, "version": "1.0.0"}
 
 
 class QuickStats(Widget):

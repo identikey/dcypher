@@ -8,6 +8,8 @@ import threading
 import uvicorn
 from fastapi.testclient import TestClient
 import shutil
+import pytest_asyncio
+import uuid
 
 # Add the project root to the Python path to allow imports from `src`
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -17,6 +19,12 @@ from main import (
 )
 from app_state import state
 from config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
+
+# Import TUI app after path is set up
+try:
+    from src.tui.app import DCypherTUI
+except ImportError:
+    from tui.app import DCypherTUI
 
 # Global fixture for context manager test isolation
 try:
@@ -148,3 +156,67 @@ def cli_test_env(tmp_path, request):
         return result
 
     return run_command, tmp_path
+
+
+@pytest.fixture
+def api_client_factory(api_base_url, tmp_path):
+    """
+    Factory fixture that creates test API clients with identities.
+    Returns a function that when called creates a new client/identity pair.
+    """
+    from lib.api_client import DCypherClient
+    from pathlib import Path
+    import uuid
+
+    # Counter to ensure unique names even if UUID somehow collides
+    counter = 0
+
+    def _create_client(additional_pq_algs=None):
+        """
+        Create a test client with identity and optionally create an account.
+
+        Args:
+            additional_pq_algs: List of additional PQ algorithms beyond ML-DSA
+
+        Returns:
+            tuple: (client, public_key_hex)
+        """
+        nonlocal counter
+        counter += 1
+
+        # Create a unique identity for this client using UUID and counter
+        unique_suffix = f"{uuid.uuid4().hex[:8]}_{counter}"
+
+        # Create unique subdirectory for this client's identity
+        client_dir = tmp_path / f"client_{unique_suffix}"
+        client_dir.mkdir()
+
+        # Since create_test_account uses hardcoded "test_account" name,
+        # we need to ensure each client gets its own directory
+        client, public_key = DCypherClient.create_test_account(
+            api_base_url, client_dir, additional_pq_algs=additional_pq_algs
+        )
+
+        return client, public_key
+
+    return _create_client
+
+
+@pytest.fixture
+def temp_identity_dir(tmp_path):
+    """
+    Provides a temporary directory for storing identity files during tests.
+    """
+    identity_dir = tmp_path / "identities"
+    identity_dir.mkdir(exist_ok=True)
+    return identity_dir
+
+
+@pytest_asyncio.fixture
+async def tui_app():
+    """Create a TUI app instance for testing."""
+    app = DCypherTUI()
+
+    # Use larger viewport to prevent OutOfBounds errors
+    async with app.run_test(size=(160, 60)) as pilot:
+        yield pilot

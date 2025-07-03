@@ -42,10 +42,23 @@ class TestDashboardScreen:
             dashboard = pilot.app.query_one(DashboardScreen)
             assert dashboard is not None
 
-            # Check for key components
+            # Check for key components that actually exist
             assert pilot.app.query("#dashboard-container")
-            assert pilot.app.query("#system-monitor")
-            assert pilot.app.query("#crypto-monitor")
+            assert pilot.app.query("#status-row")
+            assert pilot.app.query("#actions-row")
+            assert pilot.app.query("#quick-stats")
+
+            # Check status elements
+            assert pilot.app.query("#system-status")
+            assert pilot.app.query("#identity-status")
+            assert pilot.app.query("#network-status")
+            assert pilot.app.query("#storage-status")
+
+            # Check buttons
+            assert pilot.app.query("#load-identity-btn")
+            assert pilot.app.query("#upload-file-btn")
+            assert pilot.app.query("#create-share-btn")
+            assert pilot.app.query("#view-logs-btn")
 
     def test_dashboard_status_updates(self):
         """Test dashboard status panel updates"""

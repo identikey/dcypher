@@ -217,6 +217,7 @@ def add_pq_keys(public_key: str, request: AddPqKeysRequest):
                     "public_key": old_pk,
                     "alg": new_sig.alg,
                     "retired_at": time.time(),
+                    "reason": "replaced",
                 }
             )
         account_pq_keys[new_sig.alg] = new_sig.public_key
@@ -299,6 +300,7 @@ def remove_pq_keys(public_key: str, request: RemovePqKeysRequest):
                 "public_key": removed_pk,
                 "alg": alg_to_remove,
                 "retired_at": time.time(),
+                "reason": "removed",
             }
         )
     state.used_nonces.add(request.nonce)

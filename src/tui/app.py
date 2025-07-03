@@ -90,26 +90,8 @@ class DCypherTUI(App[None]):
                 "Sharing",
                 id="main-tabs",
             ):
-                # Dashboard content as a proper container with widgets
-                with Container(id="dashboard"):
-                    with Horizontal(id="monitors-row"):
-                        yield SystemMonitor(id="system-monitor")
-                        # yield CryptoMonitor(id="crypto-monitor")  # Comment out for now
-
-                    with Horizontal(id="status-row"):
-                        yield Static(
-                            "🔍 Loading identity status...", id="identity-status"
-                        )
-                        yield Static("🌐 Checking API connection...", id="api-status")
-                        yield Static("📁 Loading file status...", id="files-status")
-
-                    with Horizontal(id="actions-row"):
-                        yield Button(
-                            "Load Identity", id="load-identity-btn", variant="primary"
-                        )
-                        yield Button("Generate Keys", id="generate-keys-btn")
-                        yield Button("System Info", id="system-info-btn")
-                        yield Button("Help", id="help-btn")
+                # Dashboard - Use proper DashboardScreen
+                yield DashboardScreen(id="dashboard")
 
                 # Identity Management - Use proper IdentityScreen
                 yield IdentityScreen(id="identity", api_url=self.api_url)

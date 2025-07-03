@@ -70,6 +70,7 @@ class AccountsScreen(Widget):
 
                     yield Label("Get Account Info")
                     yield Input(id="account-pubkey-input")
+                    yield Input(placeholder="Enter public key", id="public-key-input")
                     yield Button("Get Account", id="get-account-btn")
 
                 # PQ key management
@@ -455,42 +456,24 @@ class AccountsScreen(Widget):
             self.notify(f"Error: {e}", severity="error")
 
     def action_get_graveyard(self) -> None:
-        """Get retired keys for account (equivalent to CLI get-graveyard)"""
-        if not self.current_identity_path:
-            self.notify("Load an identity first", severity="warning")
-            return
+        """Get graveyard (retired keys) for an account"""
+        # TODO: Implement graveyard display
+        self.notify("Graveyard feature coming soon", severity="information")
 
-        try:
-            self.notify("Loading retired keys...", severity="information")
-
-            # Initialize API client with identity file
-            client = DCypherClient(
-                self.api_url, identity_path=self.current_identity_path
-            )
-            pk_classic_hex = client.get_classic_public_key()
-            graveyard = client.get_account_graveyard(pk_classic_hex)
-
-            if not graveyard:
-                self.operation_results = "No retired keys found"
-            else:
-                retired_list = []
-                for key_info in graveyard:
-                    alg = key_info.get("alg", "N/A")
-                    public_key = key_info.get("public_key", "N/A")
-                    retired_list.append(f"  - {alg}: {public_key[:20]}...")
-
-                self.operation_results = (
-                    f"✓ Found {len(graveyard)} retired key(s):\n"
-                    + "\n".join(retired_list)
-                )
-
-            self.update_results_display()
-            self.notify(f"Found {len(graveyard)} retired keys", severity="information")
-
-        except DCypherAPIError as e:
-            self.notify(f"Failed to get graveyard: {e}", severity="error")
-        except Exception as e:
-            self.notify(f"Error: {e}", severity="error")
+    def display_graveyard(self, graveyard_data: list) -> None:
+        """Display graveyard data in the results area"""
+        if not graveyard_data:
+            self.operation_results = "No retired keys in graveyard"
+        else:
+            result_text = f"Graveyard - {len(graveyard_data)} retired keys:\n\n"
+            for entry in graveyard_data:
+                result_text += f"Algorithm: {entry.get('alg', 'Unknown')}\n"
+                result_text += f"Public Key: {entry.get('public_key', '')[:32]}...\n"
+                result_text += f"Retired: {entry.get('retired_at', 'Unknown')}\n"
+                result_text += f"Reason: {entry.get('reason', 'Unknown')}\n"
+                result_text += "-" * 40 + "\n"
+            self.operation_results = result_text
+        self.update_results_display()
 
     def watch_operation_results(self, results: str) -> None:
         """Update display when results change"""

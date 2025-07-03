@@ -240,8 +240,8 @@ def add_pq_keys(identity_path, algorithms, api_url):
             for alg in alg_list:
                 click.echo(f"Generating new {alg} key pair...", err=True)
                 sig = oqs.Signature(alg)
-                sk = sig.generate_keypair()
-                pk_hex = sig.public_key.hex()
+                pk = sig.generate_keypair()  # This returns the public key
+                pk_hex = pk.hex()
 
                 new_keys.append({"pk_hex": pk_hex, "alg": alg})
                 oqs_objects.append(sig)
