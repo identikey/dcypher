@@ -26,6 +26,7 @@ except ImportError:
     psutil = None  # type: ignore
     _psutil_available = False
 
+
 PSUTIL_AVAILABLE = _psutil_available
 
 
@@ -62,7 +63,7 @@ class ProcessCPUDivider(Widget):
                 # Initial CPU measurement (first call returns 0.0)
                 self.process.cpu_percent()
 
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
                 pass
 
     def compose(self):
@@ -99,7 +100,7 @@ class ProcessCPUDivider(Widget):
             sparkline_1min = self._create_ascii_chart(
                 list(self.cpu_history), 60, available_width
             )
-            content.append(sparkline_1min, style="cyan")
+            content.append(sparkline_1min)  # Already has color styling
         else:
             content.append(" " * available_width + " (collecting...)", style="dim cyan")
 
@@ -111,7 +112,7 @@ class ProcessCPUDivider(Widget):
             sparkline_5min = self._create_ascii_chart(
                 list(self.cpu_history_5min), 300, available_width, reverse=True
             )
-            content.append(sparkline_5min, style="green")
+            content.append(sparkline_5min)  # Already has color styling
         else:
             content.append(
                 " " * available_width + " (collecting...)", style="dim green"
@@ -125,7 +126,7 @@ class ProcessCPUDivider(Widget):
             sparkline_15min = self._create_ascii_chart(
                 list(self.cpu_history_15min), 900, available_width
             )
-            content.append(sparkline_15min, style="yellow")
+            content.append(sparkline_15min)  # Already has color styling
         else:
             content.append(
                 " " * available_width + " (collecting...)", style="dim yellow"
@@ -145,10 +146,13 @@ class ProcessCPUDivider(Widget):
         num_data_points: int,
         total_width: int,
         reverse: bool = False,
-    ) -> str:
-        """Create ASCII sparkline chart with num_data_points spread across total_width"""
+    ) -> Text:
+        """Create ASCII sparkline chart with color gradient based on CPU values"""
+        chart_text = Text()
+
         if not data:
-            return " " * total_width  # Empty space instead of minimum bars
+            chart_text.append(" " * total_width, style="dim")
+            return chart_text
 
         # Normalize data to chart height (use max 8 levels)
         max_val = max(max(data), 1.0)  # Avoid division by zero
@@ -156,11 +160,9 @@ class ProcessCPUDivider(Widget):
 
         data_to_use = list(reversed(data)) if reverse else data
 
-        # Always use sampling approach for all sparklines - looks cooler!
         # Sample data to fit available width
         if len(data_to_use) > 0:
             step = len(data_to_use) / total_width
-            chart = ""
             for i in range(total_width):
                 idx = int(i * step)
                 if idx < len(data_to_use):
@@ -168,13 +170,34 @@ class ProcessCPUDivider(Widget):
                     level_idx = min(
                         int((value / max_val) * len(levels)), len(levels) - 1
                     )
-                    chart += levels[level_idx] if value > 0 else " "
-                else:
-                    chart += " "
-        else:
-            chart = " " * total_width
+                    char = levels[level_idx] if value > 0 else " "
 
-        return chart
+                    # Apply color gradient based on CPU value
+                    color_style = self._get_cpu_color_style(value)
+                    chart_text.append(char, style=color_style)
+                else:
+                    chart_text.append(" ", style="dim")
+        else:
+            chart_text.append(" " * total_width, style="dim")
+
+        return chart_text
+
+    def _get_cpu_color_style(self, cpu_value: float) -> str:
+        """Get color style based on CPU percentage value"""
+        if cpu_value <= 0:
+            return "dim"
+        elif cpu_value < 20:
+            return "bright_green"
+        elif cpu_value < 40:
+            return "green"
+        elif cpu_value < 60:
+            return "yellow"
+        elif cpu_value < 80:
+            return "bright_yellow"
+        elif cpu_value < 95:
+            return "red"
+        else:
+            return "bright_red bold"
 
     def update_cpu_usage(self) -> None:
         """Update CPU usage metrics for dCypher process and children"""
@@ -198,9 +221,9 @@ class ProcessCPUDivider(Widget):
                         self.children_processes.append(
                             {"pid": child.pid, "name": child.name(), "cpu": child_cpu}
                         )
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
                         continue
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
                 pass
 
             # Total CPU usage
@@ -213,7 +236,7 @@ class ProcessCPUDivider(Widget):
             # Refresh the display to show updated data
             self.refresh()
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
             self.cpu_percent = 0.0
             self.cpu_history.append(0.0)
             self.cpu_history_5min.append(0.0)
@@ -245,8 +268,8 @@ class ProcessMemoryDivider(Widget):
 
         if PSUTIL_AVAILABLE:
             try:
-                self.process = psutil.Process(os.getpid())
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                self.process = psutil.Process(os.getpid())  # type: ignore
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
                 pass
 
     def update_memory_usage(self) -> None:
@@ -276,9 +299,9 @@ class ProcessMemoryDivider(Widget):
                                 "memory_mb": child_memory.rss / (1024 * 1024),
                             }
                         )
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
                         continue
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
                 pass
 
             # Total memory usage
@@ -289,7 +312,7 @@ class ProcessMemoryDivider(Widget):
 
             # Calculate percentage of system memory
             try:
-                system_memory = psutil.virtual_memory()
+                system_memory = psutil.virtual_memory()  # type: ignore
                 self.memory_percent = (
                     (total_memory_bytes + children_memory_bytes)
                     / system_memory.total
@@ -301,7 +324,7 @@ class ProcessMemoryDivider(Widget):
             # Trigger refresh to update display
             self.refresh()
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore
             self.memory_mb = 0.0
             self.memory_percent = 0.0
             self.refresh()
