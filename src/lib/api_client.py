@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
 from .auth import sign_message_with_keys
-from lib import pre
+from src.lib import pre
 import ecdsa
 import oqs
 import base64
@@ -85,7 +85,7 @@ class DCypherClient:
             raise AuthenticationError("No authentication keys configured")
 
         # Import here to avoid circular import
-        from lib.key_manager import KeyManager
+        from src.lib.key_manager import KeyManager
 
         # Use KeyManager's unified signing context
         assert self.keys_path is not None
@@ -209,7 +209,7 @@ class DCypherClient:
 
         try:
             # Import here to avoid circular import
-            from lib.key_manager import KeyManager
+            from src.lib.key_manager import KeyManager
 
             # Use KeyManager's unified loader to support both auth_keys and identity files
             assert self.keys_path is not None
@@ -291,7 +291,7 @@ class DCypherClient:
             raise AuthenticationError("Identity file not configured or does not exist.")
 
         # Import here to avoid circular import
-        from lib.key_manager import KeyManager
+        from src.lib.key_manager import KeyManager
 
         # 1. Get crypto context object from server (avoids local deserialization)
         cc_object = self.get_crypto_context_object()
@@ -307,7 +307,7 @@ class DCypherClient:
             Hex-encoded uncompressed SECP256k1 public key
         """
         # Import here to avoid circular import
-        from lib.key_manager import KeyManager
+        from src.lib.key_manager import KeyManager
 
         auth_keys = self._load_auth_keys()
         return KeyManager.get_classic_public_key(auth_keys["classic_sk"])
@@ -1042,7 +1042,7 @@ class DCypherClient:
             context_bytes = self.get_crypto_context_bytes()
 
             # Import here to avoid circular import
-            from lib.key_manager import KeyManager
+            from src.lib.key_manager import KeyManager
 
             # Create identity file with server's crypto context
             mnemonic, file_path = KeyManager.create_identity_file(
@@ -1081,7 +1081,7 @@ class DCypherClient:
             tuple: (DCypherClient, classic_public_key_hex)
         """
         import base64
-        from lib.key_manager import KeyManager
+        from src.lib.key_manager import KeyManager
 
         # Get context bytes from server for PRE capabilities
         cc_bytes = requests.get(f"{api_url}/pre-crypto-context").content

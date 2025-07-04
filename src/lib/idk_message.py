@@ -11,8 +11,8 @@ import base64
 import hashlib
 import binascii
 from typing import List, Dict, Any, Tuple, Optional
-from lib.auth import sign_message, verify_signature
-from lib import pre
+from src.lib.auth import sign_message, verify_signature
+from src.lib import pre
 import ecdsa
 
 # Constants from the specification

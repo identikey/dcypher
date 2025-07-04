@@ -16,8 +16,8 @@ from main import (
 )
 from config import ML_DSA_ALG
 from app_state import state
-from lib.pq_auth import generate_pq_keys
-from lib import pre
+from src.lib.pq_auth import generate_pq_keys
+from src.lib import pre
 from fastapi.testclient import TestClient
 import click
 import hashlib
@@ -294,7 +294,7 @@ def test_large_file_workflow(cli_test_env):
     # We need to load the cc to get the slot count, so we'll do it manually here
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
-    from lib import pre
+    from src.lib import pre
 
     cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
     slot_count = pre.get_slot_count(cc)

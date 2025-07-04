@@ -12,7 +12,7 @@ import ecdsa
 import oqs
 import requests
 from config import ML_DSA_ALG
-from lib.pq_auth import generate_pq_keys
+from src.lib.pq_auth import generate_pq_keys
 import hashlib
 
 

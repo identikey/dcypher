@@ -1,7 +1,7 @@
 from typing import Any
 import threading
 from fastapi import HTTPException
-from lib import pre
+from src.lib import pre
 
 
 class ServerState:
@@ -26,7 +26,7 @@ class ServerState:
 
         # CRITICAL: Initialize the server's context singleton for consistency
         # This ensures all server operations use the same context instance
-        from crypto.context_manager import CryptoContextManager
+        from .crypto.context_manager import CryptoContextManager
         import base64
 
         context_manager = CryptoContextManager()

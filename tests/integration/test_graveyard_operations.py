@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 import subprocess
 from unittest.mock import patch, MagicMock
-from lib.api_client import DCypherClient
+from src.lib.api_client import DCypherClient
 from src.tui.app import DCypherTUI
 from src.tui.screens.accounts import AccountsScreen
 import sys

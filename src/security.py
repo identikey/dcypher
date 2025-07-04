@@ -2,7 +2,9 @@ import time
 import hmac
 import hashlib
 
-from config import SERVER_SECRET
+from . import config
+
+SERVER_SECRET = config.SERVER_SECRET
 
 
 def generate_nonce() -> str:

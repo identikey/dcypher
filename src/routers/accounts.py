@@ -1,11 +1,11 @@
 import time
 from fastapi import APIRouter, HTTPException
-from app_state import state
-from models import CreateAccountRequest, AddPqKeysRequest, RemovePqKeysRequest
-from lib.auth import verify_signature
-from lib.pq_auth import verify_pq_signature, SUPPORTED_SIG_ALGS
-from security import verify_nonce
-from config import ML_DSA_ALG
+from ..app_state import state
+from ..models import CreateAccountRequest, AddPqKeysRequest, RemovePqKeysRequest
+from src.lib.auth import verify_signature
+from src.lib.pq_auth import verify_pq_signature, SUPPORTED_SIG_ALGS
+from ..security import verify_nonce
+from ..config import ML_DSA_ALG
 
 
 router = APIRouter()

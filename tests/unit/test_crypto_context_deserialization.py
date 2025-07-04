@@ -6,7 +6,7 @@ in distributed systems.
 """
 
 import pytest
-from lib import pre
+from src.lib import pre
 from src.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
 
 

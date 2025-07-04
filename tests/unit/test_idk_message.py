@@ -12,9 +12,9 @@ import ecdsa
 import hashlib
 import base64
 import binascii
-from lib import pre
-from lib import idk_message
-from lib.idk_message import MerkleTree
+from src.lib import pre
+from src.lib import idk_message
+from src.lib.idk_message import MerkleTree
 
 
 @pytest.fixture

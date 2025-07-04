@@ -16,8 +16,8 @@ from main import (
 )
 from config import ML_DSA_ALG
 from app_state import state
-from lib.pq_auth import generate_pq_keys
-from lib import pre
+from src.lib.pq_auth import generate_pq_keys
+from src.lib import pre
 from fastapi.testclient import TestClient
 import click
 import hashlib

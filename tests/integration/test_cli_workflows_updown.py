@@ -16,8 +16,8 @@ from main import (
 )
 from config import ML_DSA_ALG
 from app_state import state
-from lib.pq_auth import generate_pq_keys
-from lib import pre
+from src.lib.pq_auth import generate_pq_keys
+from src.lib import pre
 from fastapi.testclient import TestClient
 import click
 import hashlib
@@ -45,7 +45,18 @@ def test_cli_upload_download_workflow(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # --- 1. Create Identity and Setup ---
-    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "TestUser",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     identity_file = test_dir / "TestUser.json"
     assert identity_file.exists()
 

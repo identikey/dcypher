@@ -1,5 +1,5 @@
 import click
-from lib.api_client import DCypherClient, DCypherAPIError
+from src.lib.api_client import DCypherClient, DCypherAPIError
 
 
 @click.command("get-pre-context")

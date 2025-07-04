@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 
-from crypto.context_manager import CryptoContextManager
+from ..crypto.context_manager import CryptoContextManager
 
 router = APIRouter(prefix="/crypto", tags=["crypto"])
 

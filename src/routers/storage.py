@@ -8,19 +8,19 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Background
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List
 
-from lib.auth import verify_signature
-from lib.pq_auth import verify_pq_signature
-from lib import idk_message
-from security import verify_nonce
-from models import (
+from src.lib.auth import verify_signature
+from src.lib.pq_auth import verify_pq_signature
+from src.lib import idk_message
+from ..security import verify_nonce
+from ..models import (
     PqSignature,
     DownloadFileRequest,
     DownloadChunkRequest,
     DownloadConcatenatedRequest,
     RegisterFileRequest,
 )
-from app_state import state
-import config
+from ..app_state import state
+from .. import config
 
 router = APIRouter()
 

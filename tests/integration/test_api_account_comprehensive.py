@@ -12,7 +12,7 @@ import requests
 from unittest import mock
 from main import app
 from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
+from src.lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
 from security import SERVER_SECRET
 
@@ -105,7 +105,7 @@ def test_concurrent_account_creation(api_base_url: str):
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    from src.lib.pq_auth import generate_pq_keys
 
     def create_single_account(thread_id):
         """Create a single account in a thread using the API client"""

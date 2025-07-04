@@ -4,8 +4,8 @@ import base64
 import ecdsa
 import sys
 from pathlib import Path
-from lib import pre
-from lib.key_manager import KeyManager
+from src.lib import pre
+from src.lib.key_manager import KeyManager
 
 
 @click.command("gen-cc")
@@ -104,7 +104,7 @@ def encrypt(cc_path, pk_path, signing_key_path, data, input_file, output):
         raise click.UsageError("Provide either --data or --input-file, not both.")
 
     # Dynamic import to avoid circular dependency if idk_message needs cli elements
-    from lib import idk_message
+    from src.lib import idk_message
 
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
@@ -161,7 +161,7 @@ def encrypt(cc_path, pk_path, signing_key_path, data, input_file, output):
 )
 def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     """Parses, verifies, and decrypts a spec-compliant IDK message."""
-    from lib import idk_message
+    from src.lib import idk_message
 
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:

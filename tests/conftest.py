@@ -164,7 +164,7 @@ def api_client_factory(api_base_url, tmp_path):
     Factory fixture that creates test API clients with identities.
     Returns a function that when called creates a new client/identity pair.
     """
-    from lib.api_client import DCypherClient
+    from src.lib.api_client import DCypherClient
     from pathlib import Path
     import uuid
 

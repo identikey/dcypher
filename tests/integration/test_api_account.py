@@ -12,7 +12,7 @@ from main import (
     app,
 )
 from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
+from src.lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
 from security import SERVER_SECRET
 

@@ -11,7 +11,7 @@ from main import (
     app,
 )
 from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
+from src.lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
 
 from tests.integration.test_api import (
@@ -51,7 +51,7 @@ def test_add_and_remove_pq_keys(api_base_url: str):
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    from src.lib.pq_auth import generate_pq_keys
 
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
@@ -469,7 +469,7 @@ def test_rotate_mandatory_pq_key_succeeds(api_base_url: str):
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    from src.lib.pq_auth import generate_pq_keys
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)

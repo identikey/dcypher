@@ -2,7 +2,7 @@ import click
 import json
 import sys
 from pathlib import Path
-from lib.key_manager import KeyManager
+from src.lib.key_manager import KeyManager
 from bip_utils import Bip39MnemonicGenerator, Bip39WordsNum
 from typing import List, Dict, Any
 
@@ -52,7 +52,7 @@ def identity_new(name, path, overwrite, context_file, api_url):
             )
         elif api_url:
             click.echo(f"Fetching crypto context from server {api_url}...", err=True)
-            from lib.api_client import DCypherClient, DCypherAPIError
+            from src.lib.api_client import DCypherClient, DCypherAPIError
 
             try:
                 client = DCypherClient(api_url)

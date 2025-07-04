@@ -14,7 +14,7 @@ from rich.text import Text
 
 # Import sharing operation modules
 try:
-    from lib.api_client import DCypherClient, DCypherAPIError
+    from src.lib.api_client import DCypherClient, DCypherAPIError
 
     sharing_available = True
 except ImportError:
@@ -466,7 +466,7 @@ class SharingScreen(Widget):
             # Get Bob's crypto context and PRE secret key for decryption
             import gzip
             import json
-            from lib import idk_message, pre
+            from src.lib import idk_message, pre
 
             # Get crypto context from client
             cc = client.get_crypto_context_object()

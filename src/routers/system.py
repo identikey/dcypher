@@ -2,10 +2,10 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 import base64
 
-from lib.pq_auth import SUPPORTED_SIG_ALGS
-from security import generate_nonce
-from app_state import get_app_state
-from crypto.context_manager import CryptoContextManager
+from src.lib.pq_auth import SUPPORTED_SIG_ALGS
+from ..security import generate_nonce
+from ..app_state import get_app_state
+from ..crypto.context_manager import CryptoContextManager
 
 router = APIRouter()
 

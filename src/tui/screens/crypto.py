@@ -15,9 +15,9 @@ from rich.text import Text
 
 # Import crypto libraries
 try:
-    from lib import pre
-    from lib.key_manager import KeyManager
-    from lib import idk_message
+    from src.lib import pre
+    from src.lib.key_manager import KeyManager
+    from src.lib import idk_message
     import ecdsa
 
     crypto_available = True

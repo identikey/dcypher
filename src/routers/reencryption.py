@@ -6,12 +6,12 @@ from fastapi.responses import Response
 from typing import List, Dict, Any
 from datetime import datetime
 
-from lib.auth import verify_signature
-from lib.pq_auth import verify_pq_signature
-from lib import pre
-from security import verify_nonce
-from app_state import state
-from crypto.context_manager import CryptoContextManager
+from src.lib.auth import verify_signature
+from src.lib.pq_auth import verify_pq_signature
+from src.lib import pre
+from ..security import verify_nonce
+from ..app_state import state
+from ..crypto.context_manager import CryptoContextManager
 import ecdsa
 
 # Generate a signing key for the server (for re-signed IDK messages)
@@ -66,7 +66,7 @@ async def create_share(
     # Parse PQ signatures
     try:
         pq_signatures_list = json.loads(pq_signatures)
-        from models import PqSignature
+        from ..models import PqSignature
 
         parsed_pq_sigs = [PqSignature(**p) for p in pq_signatures_list]
     except (json.JSONDecodeError, TypeError):
@@ -193,7 +193,7 @@ async def download_shared_file(
     # Parse PQ signatures
     try:
         pq_signatures_list = json.loads(pq_signatures)
-        from models import PqSignature
+        from ..models import PqSignature
 
         parsed_pq_sigs = [PqSignature(**p) for p in pq_signatures_list]
     except (json.JSONDecodeError, TypeError):
@@ -239,8 +239,8 @@ async def download_shared_file(
     # Apply re-encryption using the stored re-encryption key
     try:
         # Import here to avoid circular imports
-        from lib import pre
-        
+        from src.lib import pre
+
         # CRITICAL FIX: Use the server's pre-initialized context from app startup
         # The server's context is initialized once at startup and stored in the singleton
         # We should NEVER call deserialize_context() on the server side as it can destroy the context
@@ -248,7 +248,7 @@ async def download_shared_file(
         # Get the server's singleton context - this was initialized at startup
         context_manager = CryptoContextManager()
         server_context = context_manager.get_context()
-        
+
         if server_context is None:
             # Context was destroyed (likely by fhe.ReleaseAllContexts() during parallel test execution)
             # Try to recover by reinitializing the server's context
@@ -257,16 +257,19 @@ async def download_shared_file(
                 # This should match the parameters used during server startup
                 fresh_context = pre.create_crypto_context()
                 pre.generate_keys(fresh_context)  # Initialize it
-                
+
                 # Store it in the singleton
                 context_manager._context = fresh_context
                 server_context = fresh_context
-                
+
                 # Log the recovery for debugging
                 import logging
+
                 logger = logging.getLogger(__name__)
-                logger.warning("Server crypto context was destroyed and has been recovered. This may indicate parallel test execution issues.")
-                
+                logger.warning(
+                    "Server crypto context was destroyed and has been recovered. This may indicate parallel test execution issues."
+                )
+
             except Exception as recovery_error:
                 # Recovery failed, this is a serious problem
                 raise RuntimeError(
@@ -294,7 +297,7 @@ async def download_shared_file(
 
         # Split into individual IDK parts and extract ciphertexts
         import re
-        from lib import idk_message
+        from src.lib import idk_message
 
         # Parse IDK message parts
         parts_with_empties = re.split(
@@ -458,7 +461,7 @@ async def revoke_share(
     # Parse PQ signatures
     try:
         pq_signatures_list = json.loads(pq_signatures)
-        from models import PqSignature
+        from ..models import PqSignature
 
         parsed_pq_sigs = [PqSignature(**p) for p in pq_signatures_list]
     except (json.JSONDecodeError, TypeError):

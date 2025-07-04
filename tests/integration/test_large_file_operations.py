@@ -9,8 +9,8 @@ import time
 import hashlib
 import os
 from pathlib import Path
-from lib.api_client import DCypherClient
-from lib.idk_message import create_idk_message_parts
+from src.lib.api_client import DCypherClient
+from src.lib.idk_message import create_idk_message_parts
 import gzip
 
 

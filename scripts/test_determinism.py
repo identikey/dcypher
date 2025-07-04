@@ -15,7 +15,7 @@ def test_subprocess_determinism():
     test_script = f"""
 import sys
 sys.path.insert(0, "src")
-from lib.key_manager import KeyManager
+from src.lib.key_manager import KeyManager
 import hashlib
 
 seed = {seed!r}

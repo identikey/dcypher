@@ -19,8 +19,8 @@ import tempfile
 import collections
 from main import app
 from config import ML_DSA_ALG
-from lib import pre
-from lib.idk_message import create_idk_message_parts, parse_idk_message_part
+from src.lib import pre
+from src.lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
     get_nonce,

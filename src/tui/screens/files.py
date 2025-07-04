@@ -25,9 +25,9 @@ from typing import Optional
 
 # Import file operation modules
 try:
-    from lib.api_client import DCypherClient, DCypherAPIError
-    from lib import idk_message
-    from lib import pre
+    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from src.lib import idk_message
+    from src.lib import pre
     import base64
     import ecdsa
 

@@ -33,10 +33,12 @@ from .sharing import (
 
 # Import TUI command
 try:
-    from ..tui_main import tui_command
-    TUI_AVAILABLE = True
+    from src.tui_main import tui_command
+
+    tui_available = True
 except ImportError:
-    TUI_AVAILABLE = False
+    tui_command = None
+    tui_available = False
 
 
 @click.group()
@@ -81,7 +83,7 @@ cli.add_command(download_shared)
 cli.add_command(revoke_share)
 
 # Add TUI command if available
-if TUI_AVAILABLE:
+if tui_available and tui_command is not None:
     cli.add_command(tui_command)
 
 

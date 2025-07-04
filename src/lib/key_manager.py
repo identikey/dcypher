@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from contextlib import contextmanager
 import oqs
 from oqs import rand as oqs_rand
-from lib.pq_auth import generate_pq_keys
+from src.lib.pq_auth import generate_pq_keys
 from config import ML_DSA_ALG
 from bip_utils import (
     Bip39MnemonicGenerator,
@@ -36,7 +36,7 @@ import time
 import logging
 import secrets
 import threading
-from lib import pre
+from src.lib import pre
 import base64
 
 try:

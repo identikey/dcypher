@@ -6,11 +6,11 @@ from fastapi import FastAPI
 # uvicorn src.main:app --reload
 # Ensure your PYTHONPATH is set up correctly if you have issues with the import.
 # For example: export PYTHONPATH=.
-from routers import accounts as accounts_router
-from routers import storage as storage_router
-from routers import system as system_router
-from routers import reencryption as reencryption_router
-from routers import crypto as crypto_router
+from .routers import accounts as accounts_router
+from .routers import storage as storage_router
+from .routers import system as system_router
+from .routers import reencryption as reencryption_router
+from .routers import crypto as crypto_router
 
 
 @asynccontextmanager

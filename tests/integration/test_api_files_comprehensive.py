@@ -20,16 +20,16 @@ import tempfile
 from unittest import mock
 from main import app
 from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
+from src.lib.pq_auth import SUPPORTED_SIG_ALGS
 from config import ML_DSA_ALG
-from lib import pre
-from lib.idk_message import MerkleTree, IDK_VERSION
-from lib.idk_message import create_idk_message_parts, parse_idk_message_part
+from src.lib import pre
+from src.lib.idk_message import MerkleTree, IDK_VERSION
+from src.lib.idk_message import create_idk_message_parts, parse_idk_message_part
 import base64
 from src.lib.api_client import DCypherClient, DCypherAPIError
 from pathlib import Path
-from lib.pq_auth import generate_pq_keys
-from lib import idk_message
+from src.lib.pq_auth import generate_pq_keys
+from src.lib import idk_message
 
 from tests.integration.test_api import (
     get_nonce,
@@ -490,8 +490,8 @@ def test_large_file_memory_management(api_base_url: str):
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
-    from lib import idk_message
+    from src.lib.pq_auth import generate_pq_keys
+    from src.lib import idk_message
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)

@@ -1,7 +1,7 @@
 import click
 from pathlib import Path
-from lib.api_client import DCypherClient, DCypherAPIError
-from lib.key_manager import KeyManager
+from src.lib.api_client import DCypherClient, DCypherAPIError
+from src.lib.key_manager import KeyManager
 
 
 @click.command("supported-algorithms")

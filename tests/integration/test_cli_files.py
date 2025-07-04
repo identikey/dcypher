@@ -16,15 +16,15 @@ from main import (
 )
 from config import ML_DSA_ALG
 from app_state import state
-from lib.pq_auth import generate_pq_keys
-from lib import pre
+from src.lib.pq_auth import generate_pq_keys
+from src.lib import pre
 from fastapi.testclient import TestClient
 import click
 import hashlib
 import socket
 import gzip
 import base64
-from lib import idk_message
+from src.lib import idk_message
 from src.lib.api_client import DCypherClient
 from src.lib.key_manager import KeyManager
 
@@ -37,7 +37,18 @@ def test_cli_upload_download_1mb_file(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # --- 1. Create Identity and Setup ---
-    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "TestUser",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     identity_file = test_dir / "TestUser.json"
     assert identity_file.exists()
 
@@ -136,7 +147,18 @@ def test_cli_download_compressed_verification(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # --- 1. Create Identity and Setup ---
-    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "TestUser",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     identity_file = test_dir / "TestUser.json"
     assert identity_file.exists()
 
@@ -256,7 +278,18 @@ def test_cli_download_integrity_failure(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # --- 1. Create Identity and Setup ---
-    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "TestUser",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     identity_file = test_dir / "TestUser.json"
     assert identity_file.exists()
 
@@ -401,7 +434,18 @@ def test_single_part_idk_message_flow(cli_test_env, api_base_url):
     run_command, test_dir = cli_test_env
 
     # --- 1. Create Identity and Setup ---
-    run_command(["identity", "new", "--name", "TestUser", "--path", str(test_dir), "--api-url", api_base_url])
+    run_command(
+        [
+            "identity",
+            "new",
+            "--name",
+            "TestUser",
+            "--path",
+            str(test_dir),
+            "--api-url",
+            api_base_url,
+        ]
+    )
     identity_file = test_dir / "TestUser.json"
     assert identity_file.exists()
 

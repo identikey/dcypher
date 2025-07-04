@@ -25,7 +25,7 @@ except ImportError:
         parent_dir = os.path.dirname(os.path.dirname(__file__))
         if parent_dir not in sys.path:
             sys.path.insert(0, parent_dir)
-        from lib import pre
+        from src.lib import pre
 
         _pre_module = pre
         _pre_module_available = True
