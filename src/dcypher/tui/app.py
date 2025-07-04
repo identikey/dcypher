@@ -65,6 +65,7 @@ class DCypherHeader(Static):
 
         # Get uptime info
         local_uptime = self.app_instance.get_uptime_string()
+        connection_uptime = self.app_instance.get_connection_uptime_string()
         server_uptime = self.app_instance.get_server_uptime_string()
 
         # Build header text
@@ -72,6 +73,12 @@ class DCypherHeader(Static):
         header_text.append(f"{self.app_instance.TITLE} | ", style="bold")
         header_text.append("Client: ", style="dim")
         header_text.append(local_uptime, style="green")
+
+        header_text.append(" | Conn: ", style="dim")
+        if connection_uptime == "X":
+            header_text.append(connection_uptime, style="red")
+        else:
+            header_text.append(connection_uptime, style="yellow")
 
         if server_uptime:
             header_text.append(" | Server: ", style="dim")
@@ -147,6 +154,9 @@ class DCypherTUI(App[None]):
         # Track server uptime
         self.server_uptime: Optional[str] = None
 
+        # Track connection start time for connection uptime calculation
+        self.connection_start_time: Optional[float] = None
+
     def get_uptime_string(self) -> str:
         """Calculate and format application uptime"""
         uptime_seconds = int(time.time() - self.start_time)
@@ -166,6 +176,17 @@ class DCypherTUI(App[None]):
     def get_server_uptime_string(self) -> Optional[str]:
         """Get formatted server uptime string"""
         return self.server_uptime
+
+    def get_connection_uptime_string(self) -> str:
+        """Get formatted connection uptime string or 'X' if disconnected"""
+        if (
+            self.connection_start_time is None
+            or self.connection_status == "disconnected"
+        ):
+            return "X"
+
+        uptime_seconds = int(time.time() - self.connection_start_time)
+        return self.format_uptime_seconds(uptime_seconds)
 
     @property
     def api_client(self) -> Optional[DCypherClient]:
@@ -331,15 +352,22 @@ class DCypherTUI(App[None]):
             if self._api_client:
                 # Try to get nonce to check connection first
                 self._api_client.get_nonce()
+
+                # If we weren't connected before, mark connection start time
+                if self.connection_status == "disconnected":
+                    self.connection_start_time = time.time()
+
                 self.connection_status = "connected"
                 # Try to get server uptime only if connection succeeded
                 self.fetch_server_uptime()
             else:
                 self.connection_status = "disconnected"
+                self.connection_start_time = None
                 self.server_uptime = None
         except Exception:
             # If connection fails, mark as disconnected
             self.connection_status = "disconnected"
+            self.connection_start_time = None
             self.server_uptime = None
             # Only clear the API client if we're not manually connecting
             # This prevents clearing during manual connect attempts
@@ -464,8 +492,9 @@ class DCypherTUI(App[None]):
             # Test connection by getting nonce
             self._api_client.get_nonce()
 
-            # If successful, update connection status
+            # If successful, update connection status and start time
             self.connection_status = "connected"
+            self.connection_start_time = time.time()
             self.notify("Connected to server successfully", severity="information")
 
             # Fetch server uptime immediately
@@ -473,6 +502,7 @@ class DCypherTUI(App[None]):
 
         except Exception as e:
             self.connection_status = "disconnected"
+            self.connection_start_time = None
             self.server_uptime = None
             self.notify(f"Failed to connect to server: {e}", severity="error")
 
@@ -482,8 +512,9 @@ class DCypherTUI(App[None]):
             # Clear API client
             self._api_client = None
 
-            # Update connection status
+            # Update connection status and reset connection time
             self.connection_status = "disconnected"
+            self.connection_start_time = None
             self.server_uptime = None
 
             self.notify("Disconnected from server", severity="information")
