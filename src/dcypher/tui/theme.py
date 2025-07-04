@@ -197,12 +197,12 @@ Footer {
 
 /* ASCII Banner styling */
 ASCIIBanner {
-    height: 12;
+    height: auto;
+    min-height: 12;
     background: $bg-medium;
     color: $primary;
     text-style: bold;
     text-align: center;
-    border: solid $border-primary;
 }
 
 /* Main container */

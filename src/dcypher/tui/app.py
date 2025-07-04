@@ -124,6 +124,9 @@ class DCypherTUI(App[None]):
         Binding("f1", "show_help", "Help"),
         Binding("f2", "show_logs", "Logs"),
         Binding("f12", "screenshot", "Screenshot"),
+        # Matrix effects
+        Binding("f3", "toggle_matrix_rain", "Toggle Matrix Rain"),
+        Binding("f4", "toggle_scrolling_code", "Toggle Scrolling Code"),
         # Tab navigation
         Binding("left", "previous_tab", "Previous Tab"),
         Binding("right", "next_tab", "Next Tab"),
@@ -288,11 +291,12 @@ class DCypherTUI(App[None]):
         """Create the main UI layout"""
         yield DCypherHeader(self)
 
-        # CPU usage divider - positioned under header
-        self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
-        yield self.cpu_divider
+        # Use a simple Vertical container to maintain layout structure for widgets
+        with Vertical(id="main-content"):
+            # CPU usage divider - positioned under header
+            self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
+            yield self.cpu_divider
 
-        with Container(id="main-container"):
             # ASCII Banner
             yield ASCIIBanner()
 
@@ -522,6 +526,30 @@ class DCypherTUI(App[None]):
 
         except Exception as e:
             self.notify(f"Error during disconnect: {e}", severity="warning")
+
+    def action_toggle_matrix_rain(self) -> None:
+        """Toggle matrix rain background effect"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            ascii_banner.matrix_background = not ascii_banner.matrix_background
+            if hasattr(ascii_banner, "matrix_rain"):
+                ascii_banner.matrix_rain.toggle_rain()
+
+            status = "enabled" if ascii_banner.matrix_background else "disabled"
+            self.notify(f"Matrix rain effect {status}", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to toggle matrix rain: {e}", severity="error")
+
+    def action_toggle_scrolling_code(self) -> None:
+        """Toggle scrolling code background effect"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            ascii_banner.scrolling_code = not ascii_banner.scrolling_code
+
+            status = "enabled" if ascii_banner.scrolling_code else "disabled"
+            self.notify(f"Scrolling code effect {status}", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to toggle scrolling code: {e}", severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """
