@@ -329,12 +329,10 @@ class DCypherTUI(App[None]):
         # This will be called every 5 seconds to check API connectivity
         try:
             if self._api_client:
-                # Try to get nonce to check connection
-                self._api_client.get_nonce()
-                self.connection_status = "connected"
-
                 # Try to get server uptime
                 self.fetch_server_uptime()
+                # Try to get nonce to check connection
+                self.connection_status = "connected"
             else:
                 self.connection_status = "disconnected"
                 self.server_uptime = None
@@ -349,12 +347,10 @@ class DCypherTUI(App[None]):
         """Fetch server uptime from the API"""
         try:
             if self._api_client:
-                # Get server health status which includes uptime
-                health_status = self._api_client.get_health_status()
-                if health_status and "uptime_formatted" in health_status:
-                    self.server_uptime = health_status["uptime_formatted"]
-                else:
-                    self.server_uptime = "unknown"
+                # Get server health information including uptime
+                health_data = self._api_client.get_health()
+                uptime_seconds = health_data.get("uptime_seconds", 0)
+                self.server_uptime = self.format_uptime_seconds(uptime_seconds)
         except Exception:
             # If health endpoint doesn't exist or fails, just set to None
             self.server_uptime = None

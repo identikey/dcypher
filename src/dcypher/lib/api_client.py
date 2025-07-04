@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
-from dcypher.lib.auth import sign_message_with_keys
-from dcypher.lib import pre
+from .auth import sign_message_with_keys
+from lib import pre
 import ecdsa
 import oqs
 import base64
@@ -85,7 +85,7 @@ class DCypherClient:
             raise AuthenticationError("No authentication keys configured")
 
         # Import here to avoid circular import
-        from dcypher.lib.key_manager import KeyManager
+        from lib.key_manager import KeyManager
 
         # Use KeyManager's unified signing context
         assert self.keys_path is not None
@@ -209,7 +209,7 @@ class DCypherClient:
 
         try:
             # Import here to avoid circular import
-            from dcypher.lib.key_manager import KeyManager
+            from lib.key_manager import KeyManager
 
             # Use KeyManager's unified loader to support both auth_keys and identity files
             assert self.keys_path is not None
@@ -228,19 +228,28 @@ class DCypherClient:
         except (requests.exceptions.RequestException, KeyError) as e:
             raise DCypherAPIError(f"Failed to get nonce from API: {e}")
 
-    def get_health_status(self) -> Dict[str, Any]:
+    def get_health(self) -> Dict[str, Any]:
         """
         Get server health status and uptime information.
 
+        This endpoint does not require authentication.
+
         Returns:
-            dict: Contains server status, uptime, and other health information
+            Dict containing server health information including:
+            - status: "healthy"
+            - uptime_seconds: Server uptime in seconds
+            - server_start_time: When server started (timestamp)
+            - current_time: Current server time (timestamp)
+            - version: Server version
+            - service: Service name
+            - statistics: Server statistics (accounts, files)
         """
         try:
-            response = requests.get(f"{self.api_url}/health")
+            response = requests.get(f"{self.api_url}/health", timeout=5)
             response.raise_for_status()
             return response.json()
-        except (requests.exceptions.RequestException, KeyError) as e:
-            raise DCypherAPIError(f"Failed to get health status from API: {e}")
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to get server health: {e}")
 
     def _sign_message(self, message: str) -> Dict[str, Any]:
         """Sign a message with the loaded authentication keys."""
@@ -305,7 +314,7 @@ class DCypherClient:
             raise AuthenticationError("Identity file not configured or does not exist.")
 
         # Import here to avoid circular import
-        from dcypher.lib.key_manager import KeyManager
+        from lib.key_manager import KeyManager
 
         # 1. Get crypto context object from server (avoids local deserialization)
         cc_object = self.get_crypto_context_object()
@@ -321,7 +330,7 @@ class DCypherClient:
             Hex-encoded uncompressed SECP256k1 public key
         """
         # Import here to avoid circular import
-        from dcypher.lib.key_manager import KeyManager
+        from lib.key_manager import KeyManager
 
         auth_keys = self._load_auth_keys()
         return KeyManager.get_classic_public_key(auth_keys["classic_sk"])
@@ -1056,7 +1065,7 @@ class DCypherClient:
             context_bytes = self.get_crypto_context_bytes()
 
             # Import here to avoid circular import
-            from dcypher.lib.key_manager import KeyManager
+            from lib.key_manager import KeyManager
 
             # Create identity file with server's crypto context
             mnemonic, file_path = KeyManager.create_identity_file(
@@ -1095,7 +1104,7 @@ class DCypherClient:
             tuple: (DCypherClient, classic_public_key_hex)
         """
         import base64
-        from dcypher.lib.key_manager import KeyManager
+        from lib.key_manager import KeyManager
 
         # Get context bytes from server for PRE capabilities
         cc_bytes = requests.get(f"{api_url}/pre-crypto-context").content
