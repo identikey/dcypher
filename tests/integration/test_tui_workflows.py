@@ -546,7 +546,7 @@ class TestTUIIntegration:
 
             # Verify Files screen loads and can be navigated
             files_screen = pilot.app.query_one("#files")
-            setattr(files_screen.app, "current_identity_path", str(identity_file))
+            setattr(files_screen.app, "current_identity_path", str(alice_identity_file))
             files_screen.api_url = api_base_url
             assert files_screen is not None, "Files screen should load"
             print("✅ TUI Files screen verified")

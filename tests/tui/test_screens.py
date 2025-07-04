@@ -116,11 +116,18 @@ class TestDashboardScreen:
 class TestIdentityScreen:
     """Test cases for identity screen"""
 
-    def test_identity_initialization(self):
+    @pytest.mark.asyncio
+    async def test_identity_initialization(self):
         """Test identity screen initialization"""
-        identity = IdentityScreen()
-        assert identity.current_identity_path is None
-        assert identity.identity_info is None
+        from dcypher.tui.app import DCypherTUI
+
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            identity = pilot.app.query_one("#identity", IdentityScreen)
+            assert identity.current_identity_path is None
+            assert identity.identity_info is None
 
     @pytest.mark.asyncio
     async def test_identity_compose(self):
