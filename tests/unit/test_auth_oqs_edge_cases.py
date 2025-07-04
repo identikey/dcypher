@@ -1,5 +1,5 @@
 import oqs
-from src.lib.pq_auth import verify_pq_signature
+from dcypher.lib.pq_auth import verify_pq_signature
 
 
 def test_verify_pq_signature_unsupported_alg() -> None:

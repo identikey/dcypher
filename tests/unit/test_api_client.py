@@ -5,15 +5,15 @@ from unittest.mock import Mock, patch, mock_open, MagicMock
 import requests
 import tempfile
 
-from src.lib.api_client import (
+from dcypher.lib.api_client import (
     DCypherClient,
     DCypherAPIError,
     AuthenticationError,
     ResourceNotFoundError,
     ValidationError,
 )
-from src.lib.key_manager import KeyManager
-from src.config import ML_DSA_ALG
+from dcypher.lib.key_manager import KeyManager
+from dcypher.config import ML_DSA_ALG
 import secrets
 
 
@@ -21,7 +21,7 @@ def _generate_mock_context_bytes():
     """Generate valid crypto context bytes for testing purposes."""
     # Create a real crypto context and serialize it for testing
     # This ensures unit tests work with valid crypto context data
-    from src.lib import pre
+    from dcypher.lib import pre
 
     cc = pre.create_crypto_context()
     return pre.serialize_to_bytes(cc)
@@ -161,8 +161,8 @@ class TestDCypherClient:
         ):
             client._handle_response(mock_response)
 
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_create_account_success(self, mock_post, mock_sign, mock_nonce):
         """Test successful account creation"""
@@ -301,8 +301,8 @@ class TestDCypherClient:
         assert result[1]["size"] == 2048
         mock_get.assert_called_once_with("http://localhost:8000/storage/test_account")
 
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_register_file_success(self, mock_post, mock_sign, mock_nonce):
         """Test successful file registration"""
@@ -344,8 +344,8 @@ class TestDCypherClient:
         assert call_args[1]["data"]["filename"] == "test.txt"
         assert call_args[1]["data"]["total_size"] == "1024"
 
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_upload_chunk_success(self, mock_post, mock_sign, mock_nonce):
         """Test successful chunk upload"""
@@ -383,8 +383,8 @@ class TestDCypherClient:
         )
         mock_sign.assert_called_once_with(expected_message)
 
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_download_chunks_success(self, mock_post, mock_sign, mock_nonce):
         """Test successful chunks download"""
@@ -421,9 +421,9 @@ class TestDCypherClient:
         assert payload["nonce"] == "test_nonce"
         assert payload["classic_signature"] == "classic_sig_hex"
 
-    @patch("src.lib.api_client.DCypherClient.get_classic_public_key")
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_classic_public_key")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_create_share_success(self, mock_post, mock_sign, mock_nonce, mock_get_pk):
         """Test successful share creation"""
@@ -560,9 +560,9 @@ class TestDCypherClient:
         with pytest.raises(DCypherAPIError, match="Failed to list shares"):
             client.list_shares("test_pk")
 
-    @patch("src.lib.api_client.DCypherClient.get_classic_public_key")
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_classic_public_key")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_create_share_failure(self, mock_post, mock_sign, mock_nonce, mock_get_pk):
         """Test share creation failure"""
@@ -584,9 +584,9 @@ class TestDCypherClient:
                 re_encryption_key_hex="re_key_hex",
             )
 
-    @patch("src.lib.api_client.DCypherClient.get_classic_public_key")
-    @patch("src.lib.api_client.DCypherClient.get_nonce")
-    @patch("src.lib.api_client.DCypherClient._sign_message")
+    @patch("dcypher.lib.api_client.DCypherClient.get_classic_public_key")
+    @patch("dcypher.lib.api_client.DCypherClient.get_nonce")
+    @patch("dcypher.lib.api_client.DCypherClient._sign_message")
     @patch("requests.post")
     def test_download_shared_file_success(
         self, mock_post, mock_sign, mock_nonce, mock_get_pk
@@ -749,7 +749,7 @@ def test_dcypher_client_create_test_account_with_identity(mock_requests_get):
         mock_requests_get.return_value = mock_response
 
         # Also create a real context object for the new API
-        from src.lib import pre
+        from dcypher.lib import pre
 
         mock_context_object = pre.create_crypto_context()
         pre.generate_keys(mock_context_object)  # Initialize it

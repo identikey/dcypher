@@ -6,11 +6,11 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import base64
 
-from src.lib.api_client import DCypherClient
-from src.lib.key_manager import KeyManager
-from src.lib import pre, idk_message
-from src.app_state import get_app_state
-from src.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
+from dcypher.lib.api_client import DCypherClient
+from dcypher.lib.key_manager import KeyManager
+from dcypher.lib import pre, idk_message
+from dcypher.app_state import get_app_state
+from dcypher.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
 
 
 @pytest.fixture

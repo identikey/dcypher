@@ -12,16 +12,16 @@ from pathlib import Path
 from textual.pilot import Pilot
 from textual.app import App
 
-from src.tui.app import DCypherTUI
-from src.lib.api_client import DCypherClient
-from src.lib.key_manager import KeyManager
+from dcypher.tui.app import DCypherTUI
+from dcypher.lib.api_client import DCypherClient
+from dcypher.lib.key_manager import KeyManager
 
 # Import TUI screen classes for proper type casting
 try:
-    from src.tui.screens.files import FilesScreen
-    from src.tui.screens.sharing import SharingScreen
-    from src.tui.screens.accounts import AccountsScreen
-    from src.tui.screens.identity import IdentityScreen
+    from dcypher.tui.screens.files import FilesScreen
+    from dcypher.tui.screens.sharing import SharingScreen
+    from dcypher.tui.screens.accounts import AccountsScreen
+    from dcypher.tui.screens.identity import IdentityScreen
     from textual.widgets import Input
 
     from typing import cast
@@ -34,7 +34,7 @@ except ImportError:
 import gzip
 import hashlib
 import ecdsa
-from src.lib import pre, idk_message
+from dcypher.lib import pre, idk_message
 
 
 class TestDCypherTUI:
@@ -54,7 +54,7 @@ class TestDCypherTUI:
             await pilot.pause(0.5)
 
             # Test that the app started successfully
-            assert app.title == "dCypher - Quantum-Resistant Encryption TUI"
+            assert app.title == "v0.0.1 dCypher Terminal: PQ-Lattice FHE System"
             assert app.api_url == api_base_url
 
             # Test tab navigation
@@ -117,7 +117,7 @@ class TestDCypherTUI:
             await pilot.pause(0.5)
 
             # Verify the identity was loaded
-            assert app.current_identity == str(identity_file)
+            assert app.current_identity_path == str(identity_file)
 
             # Test navigation with loaded identity
             await pilot.press("2")  # Identity tab
@@ -354,7 +354,7 @@ class TestTUIIntegration:
             await pilot.pause(0.2)
 
             # Verify identity integration
-            assert app.current_identity == str(identity_file)
+            assert app.current_identity_path == str(identity_file)
 
     @pytest.mark.asyncio
     async def test_tui_api_client_integration(self, api_base_url: str, tmp_path):
@@ -546,6 +546,8 @@ class TestTUIIntegration:
 
             # Verify Files screen loads and can be navigated
             files_screen = pilot.app.query_one("#files")
+            setattr(files_screen.app, "current_identity_path", str(identity_file))
+            files_screen.api_url = api_base_url
             assert files_screen is not None, "Files screen should load"
             print("✅ TUI Files screen verified")
 
@@ -848,7 +850,7 @@ class TestTUIWorkflowEdgeCases:
             await pilot.pause(0.5)
 
             files_screen = pilot.app.query_one("#files")
-            files_screen.current_identity_path = str(identity_file)
+            setattr(files_screen.app, "current_identity_path", str(identity_file))
             files_screen.api_url = api_base_url
 
             # Set invalid file path

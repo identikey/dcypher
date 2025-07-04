@@ -16,16 +16,19 @@ import time
 from datetime import datetime, timedelta
 from rich.text import Text
 
-from .theme import CYBERPUNK_THEME, get_cyberpunk_theme
-from .widgets.ascii_art import ASCIIBanner
-from .widgets.system_monitor import SystemMonitor
-from .widgets.process_monitor import ProcessCPUDivider, ProcessCPU15MinDivider
-from .screens.dashboard import DashboardScreen
-from .screens.identity import IdentityScreen
-from .screens.crypto import CryptoScreen
-from .screens.accounts import AccountsScreen
-from .screens.files import FilesScreen
-from .screens.sharing import SharingScreen
+from dcypher.tui.theme import CYBERPUNK_THEME, get_cyberpunk_theme
+from dcypher.tui.widgets.ascii_art import ASCIIBanner
+from dcypher.tui.widgets.system_monitor import SystemMonitor
+from dcypher.tui.widgets.process_monitor import (
+    ProcessCPUDivider,
+    ProcessCPU15MinDivider,
+)
+from dcypher.tui.screens.dashboard import DashboardScreen
+from dcypher.tui.screens.identity import IdentityScreen
+from dcypher.tui.screens.crypto import CryptoScreen
+from dcypher.tui.screens.accounts import AccountsScreen
+from dcypher.tui.screens.files import FilesScreen
+from dcypher.tui.screens.sharing import SharingScreen
 
 # Import API client
 from src.lib.api_client import DCypherClient

@@ -12,7 +12,7 @@ import pytest
 import json
 import requests
 from main import app
-from config import ML_DSA_ALG
+from dcypher.config import ML_DSA_ALG
 
 from tests.integration.test_api import (
     get_nonce,

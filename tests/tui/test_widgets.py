@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import Mock, patch
 from textual.app import App
 
-from src.tui.widgets.ascii_art import ASCIIBanner, MatrixRain, CyberpunkBorder
-from src.tui.widgets.system_monitor import SystemMonitor, CryptoMonitor
+from dcypher.tui.widgets.ascii_art import ASCIIBanner, MatrixRain, CyberpunkBorder
+from dcypher.tui.widgets.system_monitor import SystemMonitor, CryptoMonitor
 
 
 class TestASCIIBanner:
@@ -53,7 +53,7 @@ class TestASCIIBanner:
         assert len(banner.SUBTITLE) > 0
         assert len(banner.MATRIX_CHARS) > 0
 
-    @patch("src.tui.widgets.ascii_art.ASCIIBanner.set_interval")
+    @patch("dcypher.tui.widgets.ascii_art.ASCIIBanner.set_interval")
     @pytest.mark.asyncio
     async def test_banner_animation_setup(self, mock_set_interval):
         """Test that animation is set up on mount"""

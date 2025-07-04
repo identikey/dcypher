@@ -1,6 +1,6 @@
 import oqs
 import pytest
-from src.lib.pq_auth import verify_pq_signature
+from dcypher.lib.pq_auth import verify_pq_signature
 
 from .util.util import get_enabled_sigs
 

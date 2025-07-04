@@ -46,7 +46,7 @@ def test_liboqs_integration():
     print("\n=== Testing KeyManager._find_liboqs_library ===")
     try:
         sys.path.insert(0, "/app")  # Add app path for Docker
-        from src.lib.key_manager import KeyManager
+        from dcypher.lib.key_manager import KeyManager
 
         lib = KeyManager._find_liboqs_library()
         if lib:

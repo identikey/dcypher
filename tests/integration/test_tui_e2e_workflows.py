@@ -87,7 +87,7 @@ from pathlib import Path
 from textual.pilot import Pilot
 from textual.widgets import Input
 
-from src.tui.app import DCypherTUI
+from dcypher.tui.app import DCypherTUI
 from tests.helpers.tui_test_helpers import (
     create_identity_via_tui,
     create_test_file,
@@ -146,7 +146,7 @@ class TestTUIRealEndToEndWorkflows:
                 assert False, "TUI failed to load properly"
 
             # Verify fresh start
-            assert app.current_identity is None or app.current_identity == ""
+            assert app.current_identity_path is None or app.current_identity_path == ""
             print("   ✅ TUI started fresh with no identity")
 
             # === STEP 2: Navigate to Identity tab ===
@@ -342,8 +342,8 @@ class TestTUIWorkflowIntegration:
             print("   ✅ Identity file created by TUI")
 
             # Test that backend can load and use this identity
-            from src.lib.api_client import DCypherClient
-            from src.lib.key_manager import KeyManager
+            from dcypher.lib.api_client import DCypherClient
+            from dcypher.lib.key_manager import KeyManager
 
             try:
                 # Load keys using backend
@@ -397,8 +397,8 @@ class TestTUIWorkflowIntegration:
                     print("   ✅ Manual trigger worked! TUI functionality confirmed.")
 
                     # Now test backend integration
-                    from src.lib.api_client import DCypherClient
-                    from src.lib.key_manager import KeyManager
+                    from dcypher.lib.api_client import DCypherClient
+                    from dcypher.lib.key_manager import KeyManager
 
                     try:
                         # Load keys using backend
@@ -443,7 +443,7 @@ class TestTUIWorkflowIntegration:
         print("=" * 60)
 
         try:
-            from src.lib.api_client import DCypherClient
+            from dcypher.lib.api_client import DCypherClient
 
             # Test the new cleaner API
             print("1️⃣  Creating identity via DCypherClient.create_identity_file()...")

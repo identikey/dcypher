@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import Mock, patch
 import asyncio
 
-from src.tui.app import DCypherTUI
+from dcypher.tui.app import DCypherTUI
 
 
 class TestDCypherTUI:
@@ -15,9 +15,9 @@ class TestDCypherTUI:
     def test_app_initialization(self):
         """Test that the app initializes correctly"""
         app = DCypherTUI()
-        assert app.TITLE == "dCypher - Quantum-Resistant Encryption TUI"
+        assert app.TITLE == "v0.0.1 dCypher Terminal: PQ-Lattice FHE System"
         assert app.SUB_TITLE == "REPLICANT TERMINAL v2.1.0"
-        assert app.current_identity is None
+        assert app.current_identity_path is None
         assert app.api_url == "http://127.0.0.1:8000"
         assert app.connection_status == "disconnected"
 
@@ -27,7 +27,7 @@ class TestDCypherTUI:
         api_url = "https://api.example.com"
 
         app = DCypherTUI(identity_path=identity_path, api_url=api_url)
-        assert app.current_identity == identity_path
+        assert app.current_identity_path == identity_path
         assert app.api_url == api_url
 
     @pytest.mark.asyncio
@@ -102,8 +102,8 @@ class TestDCypherTUI:
 
         # Test identity property
         test_identity = "/test/identity.json"
-        app.current_identity = test_identity
-        assert app.current_identity == test_identity
+        app.current_identity_path = test_identity
+        assert app.current_identity_path == test_identity
 
         # Test API URL property
         test_api_url = "https://test.api.com"
@@ -114,7 +114,7 @@ class TestDCypherTUI:
         app.connection_status = "connected"
         assert app.connection_status == "connected"
 
-    @patch("src.tui.app.DCypherTUI.set_interval")
+    @patch("dcypher.tui.app.DCypherTUI.set_interval")
     @pytest.mark.asyncio
     async def test_app_mount_intervals(self, mock_set_interval):
         """Test that intervals are set up on mount"""
@@ -204,7 +204,7 @@ class TestTUIIntegration:
             await pilot.pause()
 
             # Set some state using the app instance directly
-            app.current_identity = "/test/identity.json"
+            app.current_identity_path = "/test/identity.json"
             app.api_url = "https://test.api.com"
 
             # Switch tabs (simulate user interaction)
@@ -212,7 +212,7 @@ class TestTUIIntegration:
             await pilot.pause()
 
             # State should persist
-            assert app.current_identity == "/test/identity.json"
+            assert app.current_identity_path == "/test/identity.json"
             assert app.api_url == "https://test.api.com"
 
 
@@ -290,7 +290,7 @@ class TestTUIWithMockData:
     def test_app_with_mock_identity(self, mock_identity_file):
         """Test app initialization with mock identity file"""
         app = DCypherTUI(identity_path=mock_identity_file)
-        assert app.current_identity == mock_identity_file
+        assert app.current_identity_path == mock_identity_file
 
     @pytest.mark.asyncio
     async def test_identity_loading_integration(self, mock_identity_file):
@@ -301,8 +301,8 @@ class TestTUIWithMockData:
 
             # This would test the actual identity loading process
             # For now, just verify the app can handle the file path
-            app.current_identity = mock_identity_file
-            assert app.current_identity == mock_identity_file
+            app.current_identity_path = mock_identity_file
+            assert app.current_identity_path == mock_identity_file
 
 
 class TestTUIErrorHandling:

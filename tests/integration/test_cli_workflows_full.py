@@ -14,16 +14,16 @@ import time
 from main import (
     app,
 )
-from config import ML_DSA_ALG
-from app_state import state
-from src.lib.pq_auth import generate_pq_keys
-from src.lib import pre
+from dcypher.config import ML_DSA_ALG
+from dcypher.app_state import state
+from dcypher.lib.pq_auth import generate_pq_keys
+from dcypher.lib import pre
 from fastapi.testclient import TestClient
 import click
 import hashlib
 import socket
 import gzip
-from src.lib.api_client import DCypherClient
+from dcypher.lib.api_client import DCypherClient
 import base64
 
 
@@ -430,7 +430,7 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     # Use the DCypherClient's built-in context management instead of manual singleton manipulation
     import gzip
     import base64
-    from src.lib import pre, idk_message
+    from dcypher.lib import pre, idk_message
     import json
 
     # Bob client is already created above - reuse it for context consistency

@@ -11,8 +11,8 @@ from unittest.mock import patch, MagicMock, mock_open
 from tests.helpers.tui_test_helpers import (
     wait_for_notification,
 )
-from src.tui.app import DCypherTUI
-from src.tui.screens.dashboard import DashboardScreen
+from dcypher.tui.app import DCypherTUI
+from dcypher.tui.screens.dashboard import DashboardScreen
 
 
 class TestDashboardTabOperations:
@@ -120,8 +120,8 @@ class TestDashboardTabOperations:
 
             dashboard = pilot.app.query_one(DashboardScreen)
 
-            # Simulate identity loaded
-            dashboard.identity_loaded = True
+            # Simulate identity loaded by setting it on the app
+            setattr(pilot.app, "current_identity_path", "/test/identity.json")
             dashboard.update_identity_status(
                 {"loaded": True, "path": "/test/identity.json"}
             )
@@ -160,8 +160,8 @@ class TestDashboardTabOperations:
 
             dashboard = pilot.app.query_one(DashboardScreen)
 
-            # Simulate identity loaded
-            dashboard.identity_loaded = True
+            # Simulate identity loaded by setting it on the app
+            setattr(pilot.app, "current_identity_path", "/test/identity.json")
             dashboard.update_identity_status({"loaded": True})
 
             # Click create share button

@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 
 import pytest
 
-from src.tui.app import DCypherTUI
+from dcypher.tui.app import DCypherTUI
 
 
 # =============================================================================
@@ -1196,7 +1196,7 @@ async def create_share_direct_action(
         sharing_screen = pilot.app.query_one("#sharing")
 
         # ✅ NEW: With the new identity system, no manual identity setting needed
-        # The sharing screen will read identity from app.current_identity
+        # The sharing screen will read identity from app.current_identity_path
 
         # Fill the input fields directly - FIXED: Use sharing screen's query method
         # to ensure we set the same widgets that the action will read
@@ -1232,7 +1232,7 @@ async def create_share_direct_action(
             # ENHANCED DEBUGGING: Check backend state directly
             print("   🔍 Enhanced debugging - checking backend and client state...")
             try:
-                from src.lib.api_client import DCypherClient
+                from dcypher.lib.api_client import DCypherClient
 
                 alice_client = DCypherClient(
                     api_base_url, identity_path=str(identity_path)
@@ -1513,7 +1513,7 @@ def run_cli_command(args):
     import subprocess
     import sys
 
-    cmd = [sys.executable, "-m", "src.cli"] + args
+    cmd = ["uv", "run", "dcypher"] + args
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result
 

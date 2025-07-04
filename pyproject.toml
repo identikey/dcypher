@@ -31,11 +31,14 @@ dependencies = [
 ]
 
 [project.scripts]
-dcypher = "src.dcypher_cli:main"
+dcypher = "dcypher.cli.main:cli"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["*"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.ruff]
 line-length = 88

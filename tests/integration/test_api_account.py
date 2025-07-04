@@ -11,10 +11,10 @@ from unittest import mock
 from main import (
     app,
 )
-from app_state import state
-from src.lib.pq_auth import SUPPORTED_SIG_ALGS
-from config import ML_DSA_ALG
-from security import SERVER_SECRET
+from dcypher.app_state import state
+from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
+from dcypher.config import ML_DSA_ALG
+from dcypher.security import SERVER_SECRET
 
 from tests.integration.test_api import (
     get_nonce,
@@ -512,7 +512,7 @@ def test_get_accounts_and_account_by_id(api_base_url: str, tmp_path):
     This test demonstrates using the new DCypherClient for account retrieval
     with automatic resource management.
     """
-    from src.lib.api_client import DCypherClient, ResourceNotFoundError
+    from dcypher.lib.api_client import DCypherClient, ResourceNotFoundError
 
     # 1. Create two distinct accounts using the new KeyManager-based helper
     client1, pk_classic_1_hex = create_test_account_with_keymanager(
