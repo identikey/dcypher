@@ -68,26 +68,37 @@ class DCypherHeader(Static):
         connection_uptime = self.app_instance.get_connection_uptime_string()
         server_uptime = self.app_instance.get_server_uptime_string()
 
-        # Build header text
+        # Build header text with colors optimized for cyan background
         header_text = Text()
-        header_text.append(f"{self.app_instance.TITLE} | ", style="bold")
-        header_text.append("Client: ", style="dim")
-        header_text.append(local_uptime, style="green")
+        header_text.append(f"{self.app_instance.TITLE} | ", style="bold bright_white")
+        header_text.append("Client ", style="bright_black")
+        header_text.append(local_uptime, style="bold dark_green")
 
-        header_text.append(" | Conn: ", style="dim")
-        if connection_uptime == "X":
-            header_text.append(connection_uptime, style="red")
+        header_text.append(" | Conn ", style="bright_black")
+        if connection_uptime == "XX:XX:XX":
+            header_text.append(connection_uptime, style="bold dark_red")
         else:
-            header_text.append(connection_uptime, style="yellow")
+            header_text.append(connection_uptime, style="bold dark_green")
 
         if server_uptime:
-            header_text.append(" | Server: ", style="dim")
-            header_text.append(server_uptime, style="cyan")
+            header_text.append(" | Server ", style="bold bright_black")
+            header_text.append(server_uptime, style="bold dark_green")
         else:
-            header_text.append(" | Server: ", style="dim")
-            header_text.append("disconnected", style="red")
+            header_text.append(" | Server ", style="bold bright_black")
+            header_text.append("XX:XX:XX", style="bold dark_red")
 
-        header_text.append(f" | {current_time}", style="bold")
+        # Add API server name/URL
+        header_text.append(" | API ", style="bold bright_black")
+        # Extract just the host:port from the URL for cleaner display
+        api_display = self.app_instance.api_url.replace("http://", "").replace(
+            "https://", ""
+        )
+        if server_uptime:
+            header_text.append(api_display, style="bold dark_green")
+        else:
+            header_text.append(api_display, style="bold dark_red")
+
+        header_text.append(f" | {current_time}", style="bold bright_white")
 
         self.update(header_text)
 
@@ -100,7 +111,7 @@ class DCypherTUI(App[None]):
     Influences: btop, cipherpunk aesthetics, art deco, @repligate
     """
 
-    TITLE = "v0.0.1 dCypher Terminal: PQ-Lattice FHE System"
+    TITLE = "v0.0.1 dCypher Terminal"
     SUB_TITLE = "REPLICANT TERMINAL v2.1.0"
     CSS = CYBERPUNK_THEME
 
@@ -158,7 +169,7 @@ class DCypherTUI(App[None]):
         self.connection_start_time: Optional[float] = None
 
     def get_uptime_string(self) -> str:
-        """Calculate and format application uptime"""
+        """Calculate and format application uptime in HH:MM:SS format"""
         uptime_seconds = int(time.time() - self.start_time)
 
         # Convert to hours, minutes, seconds
@@ -166,24 +177,19 @@ class DCypherTUI(App[None]):
         minutes = (uptime_seconds % 3600) // 60
         seconds = uptime_seconds % 60
 
-        if hours > 0:
-            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
-        elif minutes > 0:
-            return f"{minutes:02d}m {seconds:02d}s"
-        else:
-            return f"{seconds:02d}s"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def get_server_uptime_string(self) -> Optional[str]:
         """Get formatted server uptime string"""
         return self.server_uptime
 
     def get_connection_uptime_string(self) -> str:
-        """Get formatted connection uptime string or 'X' if disconnected"""
+        """Get formatted connection uptime string or 'XX:XX:XX' if disconnected"""
         if (
             self.connection_start_time is None
             or self.connection_status == "disconnected"
         ):
-            return "X"
+            return "XX:XX:XX"
 
         uptime_seconds = int(time.time() - self.connection_start_time)
         return self.format_uptime_seconds(uptime_seconds)
@@ -385,18 +391,13 @@ class DCypherTUI(App[None]):
             self.server_uptime = None
 
     def format_uptime_seconds(self, uptime_seconds: int) -> str:
-        """Format uptime seconds into readable string"""
+        """Format uptime seconds into HH:MM:SS format"""
         # Convert to hours, minutes, seconds
         hours = uptime_seconds // 3600
         minutes = (uptime_seconds % 3600) // 60
         seconds = uptime_seconds % 60
 
-        if hours > 0:
-            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
-        elif minutes > 0:
-            return f"{minutes:02d}m {seconds:02d}s"
-        else:
-            return f"{seconds:02d}s"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def action_toggle_dark(self) -> None:
         """Toggle dark mode"""

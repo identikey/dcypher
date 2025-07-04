@@ -20,6 +20,15 @@ $accent: #00d4ff;         /* Cyan blue */
 $warning: #ffff00;        /* Electric yellow */
 $error: #ff073a;          /* Neon red */
 $success: #39ff14;        /* Bright green */
+
+/* Header-specific colors optimized for cyan background */
+$header-title: #ffffff;    /* Pure white for title */
+$header-time: #ffffff;     /* Pure white for time */
+$header-client: #39ff14;   /* Bright green for client uptime */
+$header-conn-ok: #ffff00;  /* Bright yellow for connection ok */
+$header-conn-err: #ff073a; /* Bright red for connection error */
+$header-server: #ff00ff;   /* Bright magenta for server uptime */
+$header-labels: #000000;   /* Black for labels */
 """
 
     if transparent_background:
@@ -81,6 +90,15 @@ Header .header--title {
 Header .header--clock {
     color: $accent;
     text-style: bold;
+}
+
+/* Custom header widget with optimized colors */
+DCypherHeader {
+    background: $accent;
+    color: $header-labels;
+    text-style: bold;
+    height: 1;
+    dock: top;
 }
 
 /* Footer styling */
