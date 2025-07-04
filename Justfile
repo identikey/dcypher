@@ -4,6 +4,12 @@
 default:
     @just --list
 
+run:
+    uv run uvicorn main:app --reload
+
+tui:
+    uv run python -m src.cli tui
+
 # Build the Docker image for Intel processor
 docker-build-intel:
     docker build build --platform linux/amd64 -t dcypher --load .

@@ -30,6 +30,9 @@ dependencies = [
     "liboqs-python>=0.13.0",
 ]
 
+[project.scripts]
+dcypy = "dcypher.cli:main"
+
 [tool.ruff]
 line-length = 88
 select = ["E", "F", "W", "I"]
