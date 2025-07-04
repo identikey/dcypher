@@ -70,30 +70,47 @@ class TestDashboardScreen:
             assert pilot.app.query("#create-share-btn")
             assert pilot.app.query("#view-logs-btn")
 
-    def test_dashboard_status_updates(self, dashboard_screen):
+    @pytest.mark.asyncio
+    async def test_dashboard_status_updates(self):
         """Test dashboard status updates"""
-        dashboard = dashboard_screen
+        from dcypher.tui.app import DCypherTUI
 
-        # Update app state instead of trying to set read-only properties
-        dashboard.app.connection_status = "connected"
-        assert dashboard.api_connected is True
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
 
-        dashboard.app.connection_status = "disconnected"
-        assert dashboard.api_connected is False
+            dashboard = pilot.app.query_one("#dashboard", DashboardScreen)
 
-        dashboard.app.current_identity_path = "/test/identity.json"
-        assert dashboard.identity_loaded is True
+            # Update app state instead of trying to set read-only properties
+            pilot.app.connection_status = "connected"
+            await pilot.pause()  # Give reactive system time to update
+            assert dashboard.api_connected is True
+
+            pilot.app.connection_status = "disconnected"
+            await pilot.pause()
+            assert dashboard.api_connected is False
+
+            pilot.app.current_identity_path = "/test/identity.json"
+            await pilot.pause()
+            assert dashboard.identity_loaded is True
 
     @pytest.mark.asyncio
-    async def test_dashboard_button_actions(self, dashboard_screen):
+    async def test_dashboard_button_actions(self):
         """Test dashboard button actions"""
-        dashboard = dashboard_screen
+        from dcypher.tui.app import DCypherTUI
 
-        # Set identity on app, not dashboard
-        dashboard.app.current_identity_path = "/test/path.json"
-        dashboard.app.connection_status = "connected"
-        assert dashboard.identity_loaded is True
-        assert dashboard.api_connected is True
+        app = DCypherTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            dashboard = pilot.app.query_one("#dashboard", DashboardScreen)
+
+            # Set identity on app, not dashboard
+            pilot.app.current_identity_path = "/test/path.json"
+            pilot.app.connection_status = "connected"
+            await pilot.pause()
+            assert dashboard.identity_loaded is True
+            assert dashboard.api_connected is True
 
 
 class TestIdentityScreen:
