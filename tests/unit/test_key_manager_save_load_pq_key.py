@@ -3,7 +3,7 @@
 import pytest
 import tempfile
 from pathlib import Path
-from src.lib.key_manager import KeyManager
+from dcypher.lib.key_manager import KeyManager
 from .util.util import get_enabled_sigs
 
 

@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from app_state import ServerState, get_app_state
+from dcypher.app_state import ServerState, get_app_state
 
 
 def test_get_app_state():
@@ -20,7 +20,7 @@ def clean_state():
     new_state = ServerState()
     # This is a bit of a hack, but it's the simplest way to replace the singleton
     # for testing purposes. We'll manually set the global `state` variable.
-    import app_state
+    import dcypher.app_state as app_state
 
     app_state.state = new_state
     yield new_state

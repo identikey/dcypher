@@ -10,9 +10,9 @@ from unittest import mock
 from main import (
     app,
 )
-from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
-from config import ML_DSA_ALG
+from dcypher.app_state import state
+from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
+from dcypher.config import ML_DSA_ALG
 
 from tests.integration.test_api import (
     get_nonce,
@@ -28,7 +28,7 @@ def test_get_supported_pq_algs(api_base_url: str):
 
     This test now uses the DCypherClient for more realistic usage patterns.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
 
     client = DCypherClient(api_base_url)
     algorithms = client.get_supported_algorithms()
@@ -47,11 +47,11 @@ def test_add_and_remove_pq_keys(api_base_url: str):
 
     This test now uses the DCypherClient for realistic usage patterns.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    from dcypher.lib.pq_auth import generate_pq_keys
 
     add_pq_alg_1 = "Falcon-512"
     add_pq_alg_2 = "Falcon-1024"
@@ -197,7 +197,7 @@ def test_remove_mandatory_pq_key_fails(api_base_url: str, tmp_path):
     assert account_info["pq_keys"][0]["alg"] == ML_DSA_ALG
 
     # Attempt to remove the mandatory key - should raise ValidationError
-    from src.lib.api_client import ValidationError
+    from dcypher.lib.api_client import ValidationError
 
     with pytest.raises(ValidationError) as exc_info:
         client.remove_pq_keys(pk_classic_hex, [ML_DSA_ALG])
@@ -339,7 +339,7 @@ def test_replace_existing_pq_key(api_base_url: str, tmp_path):
 
     This test now uses the DCypherClient for account and graveyard operations.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
 
     falcon_alg = "Falcon-512"
     # Create account with additional Falcon algorithm using KeyManager-based helper
@@ -465,11 +465,11 @@ def test_rotate_mandatory_pq_key_succeeds(api_base_url: str):
     This test demonstrates that users can rotate their mandatory ML-DSA key
     if it becomes compromised or for routine security maintenance.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    from dcypher.lib.pq_auth import generate_pq_keys
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -754,7 +754,7 @@ def test_add_and_remove_multiple_pq_keys(api_base_url: str, tmp_path):
 
     This test now uses the DCypherClient for account verification operations.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
 
     # 1. Setup: Create a minimal account using KeyManager-based helper
     add_pq_alg_1 = "Falcon-512"
@@ -878,7 +878,7 @@ def test_graveyard(api_base_url: str, tmp_path):
 
     This test now uses the DCypherClient for graveyard checks.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
 
     falcon_alg = "Falcon-512"
 

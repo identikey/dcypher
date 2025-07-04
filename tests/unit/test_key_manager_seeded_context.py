@@ -3,7 +3,7 @@
 import pytest
 import hashlib
 import oqs
-from src.lib.key_manager import KeyManager
+from dcypher.lib.key_manager import KeyManager
 from .util.util import get_sigs_with_ctx_support
 
 

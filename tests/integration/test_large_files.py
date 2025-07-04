@@ -16,10 +16,10 @@ import base64
 import io
 import requests
 from main import app
-from app_state import state
-from config import ML_DSA_ALG
-from lib import pre
-from lib.idk_message import create_idk_message_parts, parse_idk_message_part
+from dcypher.app_state import state
+from dcypher.config import ML_DSA_ALG
+from dcypher.lib import pre
+from dcypher.lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
     get_nonce,

@@ -44,13 +44,13 @@ import base64
 import hashlib
 import io
 
-from src.lib.api_client import DCypherClient, ResourceNotFoundError
-from src.lib.key_manager import KeyManager
-from src.lib import pre
-from src.app_state import get_app_state
-from src.lib import idk_message
+from dcypher.lib.api_client import DCypherClient, ResourceNotFoundError
+from dcypher.lib.key_manager import KeyManager
+from dcypher.lib import pre
+from dcypher.app_state import get_app_state
+from dcypher.lib import idk_message
 import ecdsa
-from src.crypto.context_manager import CryptoContextManager
+from dcypher.crypto.context_manager import CryptoContextManager
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def temp_dir():
 def alice_identity(temp_dir, api_base_url):
     """Create Alice's identity with PRE keys using server context."""
     # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
-    from src.lib.api_client import DCypherClient
+    from dcypher.lib.api_client import DCypherClient
 
     temp_client = DCypherClient(api_base_url)
     cc_bytes = temp_client.get_pre_crypto_context()
@@ -88,7 +88,7 @@ def alice_identity(temp_dir, api_base_url):
 def bob_identity(temp_dir, api_base_url):
     """Create Bob's identity with PRE keys using server context."""
     # ARCHITECTURAL FIX: Fetch context bytes externally to use new KeyManager API
-    from src.lib.api_client import DCypherClient
+    from dcypher.lib.api_client import DCypherClient
 
     temp_client = DCypherClient(api_base_url)
     cc_bytes = temp_client.get_pre_crypto_context()
@@ -127,14 +127,15 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     import gzip
     import base64
     import json
-    from src.lib import pre, idk_message
+    from dcypher.lib import pre, idk_message
 
     print("🔧 Setting up Alice and Bob's accounts with live server using CLI...")
 
     # === Step 1: Create Alice's Identity using CLI (just like working test) ===
     alice_identity_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "identity",
         "new",
         "--name",
@@ -152,8 +153,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === Step 2: Create Bob's Identity using CLI ===
     bob_identity_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "identity",
         "new",
         "--name",
@@ -171,8 +173,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === Step 3: Initialize PRE for both identities using CLI ===
     alice_pre_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "init-pre",
         "--identity-path",
         str(alice_identity_file),
@@ -184,8 +187,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     assert result.returncode == 0, f"Alice PRE init failed: {result.stderr}"
 
     bob_pre_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "init-pre",
         "--identity-path",
         str(bob_identity_file),
@@ -198,8 +202,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === Step 4: Create accounts on the server using CLI ===
     alice_account_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "create-account",
         "--identity-path",
         str(alice_identity_file),
@@ -211,8 +216,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     assert result.returncode == 0, f"Alice account creation failed: {result.stderr}"
 
     bob_account_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "create-account",
         "--identity-path",
         str(bob_identity_file),
@@ -241,8 +247,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # Use the CLI upload command that we know works perfectly
     upload_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "upload",
         "--identity-path",
         str(alice_identity_file),
@@ -275,8 +282,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === Step 5: Alice shares file with Bob using CLI ===
     share_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "create-share",
         "--identity-path",
         str(alice_identity_file),
@@ -309,8 +317,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     shared_file_path = temp_dir / "bob_received_file.txt"
     download_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "download-shared",
         "--identity-path",
         str(bob_identity_file),
@@ -382,8 +391,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     # === Step 7: Alice revokes Bob's access using CLI ===
     revoke_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "revoke-share",
         "--identity-path",
         str(alice_identity_file),
@@ -400,8 +410,9 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
     # === Step 8: Verify Bob can no longer access the revoked share using CLI ===
     revoked_file_path = temp_dir / "should_fail.txt"
     download_fail_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "download-shared",
         "--identity-path",
         str(bob_identity_file),
@@ -435,8 +446,9 @@ def test_pre_key_management_with_live_server(api_base_url, temp_dir):
 
     # Create identity with PRE keys using the CLI
     identity_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "identity",
         "new",
         "--name",
@@ -460,8 +472,9 @@ def test_pre_key_management_with_live_server(api_base_url, temp_dir):
 
     # Create account with PRE keys using the CLI
     account_cmd = [
-        sys.executable,
-        str(Path(__file__).parent.parent.parent / "src" / "cli.py"),
+        "uv",
+        "run",
+        "dcypher",
         "create-account",
         "--identity-path",
         str(identity_file),

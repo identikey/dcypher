@@ -16,8 +16,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from typing import Any, Dict
 
-from src.tui.app import DCypherTUI
-from src.lib.api_client import DCypherClient
+from dcypher.tui.app import DCypherTUI
+from dcypher.lib.api_client import DCypherClient
 from tests.helpers.tui_test_helpers import (
     wait_for_notification,
     wait_and_click,
@@ -137,7 +137,7 @@ class TestTUICentralizedIdentityManagement:
             print("✅ Identity screen uses centralized state")
 
     @pytest.mark.asyncio
-    @patch("src.lib.api_client.DCypherClient.create_identity_file")
+    @patch("dcypher.lib.api_client.DCypherClient.create_identity_file")
     async def test_identity_creation_flow(self, mock_create_identity, tmp_path):
         """Test creating a new identity through the Identity screen"""
         # Setup mock
@@ -455,7 +455,7 @@ class TestTUICentralizedIdentityManagement:
 
         # Mock the API client creation to avoid real server calls
         with patch(
-            "src.lib.api_client.DCypherClient.create_identity_file"
+            "dcypher.lib.api_client.DCypherClient.create_identity_file"
         ) as mock_create:
             # Setup mock identity
             identity_path = tmp_path / "e2e_identity.json"
@@ -760,7 +760,7 @@ async def test_tui_centralized_identity_management(tmp_path, api_base_url):
     identity_path = tmp_path / "test_identity.json"
 
     # Create identity data (same structure as KeyManager creates)
-    from src.lib.key_manager import KeyManager
+    from dcypher.lib.key_manager import KeyManager
     import secrets
 
     # Generate mnemonic using bip_utils like KeyManager does
@@ -900,7 +900,7 @@ async def test_tui_identity_persistence_across_operations(tmp_path, api_base_url
     """Test that identity persists correctly during various operations"""
 
     # Create test identity
-    from src.lib.key_manager import KeyManager
+    from dcypher.lib.key_manager import KeyManager
     from bip_utils import Bip39MnemonicGenerator, Bip39SeedGenerator, Bip39WordsNum
 
     identity_path = tmp_path / "persistent_identity.json"
@@ -971,7 +971,7 @@ async def test_tui_api_client_caching(tmp_path, api_base_url):
     """Test that API client is properly cached and reused"""
 
     # Create test identity
-    from src.lib.key_manager import KeyManager
+    from dcypher.lib.key_manager import KeyManager
     from bip_utils import Bip39MnemonicGenerator, Bip39SeedGenerator, Bip39WordsNum
 
     identity_path = tmp_path / "cached_identity.json"

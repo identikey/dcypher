@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from textual.app import App
 from textual.widgets import TabbedContent, TabPane
 
-from src.tui.app import DCypherTUI
+from dcypher.tui.app import DCypherTUI
 
 
 class TestNavigationFixes:
@@ -16,7 +16,7 @@ class TestNavigationFixes:
 
     def test_banner_height_increased(self):
         """Test that ASCII banner height has been increased in theme"""
-        from src.tui.theme import CYBERPUNK_THEME
+        from dcypher.tui.theme import CYBERPUNK_THEME
 
         # Check that ASCIIBanner height is now 12 instead of 8
         assert "height: 12;" in CYBERPUNK_THEME
@@ -28,7 +28,7 @@ class TestNavigationFixes:
 
     def test_background_colors_lightened(self):
         """Test that background colors have been lightened for better visibility"""
-        from src.tui.theme import CYBERPUNK_THEME
+        from dcypher.tui.theme import CYBERPUNK_THEME
 
         # Check that dark background is lightened
         assert "$bg-dark: #1a1a1a;" in CYBERPUNK_THEME
@@ -214,7 +214,7 @@ class TestNavigationFixes:
 
     def test_theme_consistency(self):
         """Test that theme changes are consistent"""
-        from src.tui.theme import CYBERPUNK_THEME
+        from dcypher.tui.theme import CYBERPUNK_THEME
 
         # Check that main container background is consistent
         assert "background: $bg-medium;" in CYBERPUNK_THEME
@@ -237,7 +237,7 @@ class TestThemeImprovements:
 
     def test_contrast_improvements(self):
         """Test that contrast has been improved"""
-        from src.tui.theme import CYBERPUNK_THEME
+        from dcypher.tui.theme import CYBERPUNK_THEME
 
         # SystemMonitor should have lighter background for better contrast
         assert "SystemMonitor {" in CYBERPUNK_THEME
@@ -253,7 +253,7 @@ class TestThemeImprovements:
 
     def test_cyberpunk_aesthetic_maintained(self):
         """Test that cyberpunk aesthetic is maintained despite improvements"""
-        from src.tui.theme import CYBERPUNK_THEME
+        from dcypher.tui.theme import CYBERPUNK_THEME
 
         # Check that cyberpunk colors are still present
         cyberpunk_elements = [
@@ -271,7 +271,7 @@ class TestThemeImprovements:
 
     def test_transparent_theme_generation(self):
         """Test that theme generation works for both transparent and normal modes"""
-        from src.tui.theme import get_cyberpunk_theme
+        from dcypher.tui.theme import get_cyberpunk_theme
 
         # Test normal background theme
         normal_theme = get_cyberpunk_theme(transparent_background=False)

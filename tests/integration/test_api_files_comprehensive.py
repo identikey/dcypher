@@ -19,17 +19,17 @@ import requests
 import tempfile
 from unittest import mock
 from main import app
-from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
-from config import ML_DSA_ALG
-from lib import pre
-from lib.idk_message import MerkleTree, IDK_VERSION
-from lib.idk_message import create_idk_message_parts, parse_idk_message_part
+from dcypher.app_state import state
+from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
+from dcypher.config import ML_DSA_ALG
+from dcypher.lib import pre
+from dcypher.lib.idk_message import MerkleTree, IDK_VERSION
+from dcypher.lib.idk_message import create_idk_message_parts, parse_idk_message_part
 import base64
-from src.lib.api_client import DCypherClient, DCypherAPIError
+from dcypher.lib.api_client import DCypherClient, DCypherAPIError
 from pathlib import Path
-from lib.pq_auth import generate_pq_keys
-from lib import idk_message
+from dcypher.lib.pq_auth import generate_pq_keys
+from dcypher.lib import idk_message
 
 from tests.integration.test_api import (
     get_nonce,
@@ -486,12 +486,12 @@ def test_large_file_memory_management(api_base_url: str):
 
     This test now uses the DCypherClient for more realistic usage patterns.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
-    from lib import idk_message
+    from dcypher.lib.pq_auth import generate_pq_keys
+    from dcypher.lib import idk_message
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -684,7 +684,7 @@ def test_file_access_authorization_edge_cases(api_base_url: str, tmp_path):
         assert response.status_code == 404
 
         # 3. Account 2 tries to access Account 1's file list (should not see it) using API client
-        from src.lib.api_client import DCypherClient
+        from dcypher.lib.api_client import DCypherClient
 
         client = DCypherClient(api_base_url)
         files = client.list_files(pk2_hex)
@@ -934,7 +934,7 @@ def test_audit_trail_file_operations(api_base_url: str, tmp_path):
         assert response.status_code == 200, "Download should succeed"
 
         # 3. List operation audit using API client
-        from src.lib.api_client import DCypherClient
+        from dcypher.lib.api_client import DCypherClient
 
         api_client = DCypherClient(api_base_url)
         files_list = api_client.list_files(pk_classic_hex)
@@ -1012,7 +1012,7 @@ def test_cross_account_access_prevention(api_base_url: str, tmp_path):
         assert response.status_code == 404
 
         # 3. Account 2 tries to access Account 1's file list (should not see it) using API client
-        from src.lib.api_client import DCypherClient
+        from dcypher.lib.api_client import DCypherClient
 
         client = DCypherClient(api_base_url)
         files = client.list_files(pk2_hex)

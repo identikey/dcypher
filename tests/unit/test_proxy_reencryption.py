@@ -4,7 +4,7 @@ This file tests the proxy re-encryption (PRE) library.
 
 import base64
 import pytest
-from lib import pre
+from dcypher.lib import pre
 
 
 @pytest.fixture

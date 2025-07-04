@@ -15,10 +15,10 @@ import gzip
 import base64
 import requests
 from main import app
-from app_state import state
-from config import ML_DSA_ALG
-from lib import pre
-from lib.idk_message import create_idk_message_parts, parse_idk_message_part
+from dcypher.app_state import state
+from dcypher.config import ML_DSA_ALG
+from dcypher.lib import pre
+from dcypher.lib.idk_message import create_idk_message_parts, parse_idk_message_part
 
 from tests.integration.test_api import (
     get_nonce,
@@ -32,7 +32,7 @@ def test_upload_chunk_compression_ratio(api_base_url: str, monkeypatch, tmp_path
     Tests that chunk compression provides significant space savings.
     This test demonstrates realistic file upload workflow using the API client.
     """
-    monkeypatch.setattr("src.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
+    monkeypatch.setattr("dcypher.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
 
     # Create account using the new KeyManager-based helper
     client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)
@@ -84,7 +84,7 @@ def test_upload_chunk_unauthorized(api_base_url: str, tmp_path, monkeypatch):
     Tests that uploading a file chunk with an invalid signature fails.
     This test demonstrates the new API client pattern with automatic resource management.
     """
-    monkeypatch.setattr("src.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
+    monkeypatch.setattr("dcypher.routers.storage.CHUNK_UPLOAD_TIMEOUT", 1)
 
     # Create account using the new KeyManager-based helper
     client, pk_classic_hex = create_test_account_with_keymanager(api_base_url, tmp_path)

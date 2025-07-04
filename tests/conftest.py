@@ -14,25 +14,25 @@ import uuid
 # Add the project root to the Python path to allow imports from `src`
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from main import (
+from dcypher.main import (
     app,
 )
-from app_state import state
-from config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
+from dcypher.app_state import state
+from dcypher.config import BLOCK_STORE_ROOT, CHUNK_STORE_ROOT
 
 # Import TUI app after path is set up
 try:
-    from src.tui.app import DCypherTUI
+    from dcypher.tui.app import DCypherTUI
 except ImportError:
-    from tui.app import DCypherTUI
+    from dcypher.tui.app import DCypherTUI
 
 # Global fixture for context manager test isolation
 try:
-    from src.crypto.context_manager import CryptoContextManager
+    from dcypher.crypto.context_manager import CryptoContextManager
 except ImportError:
     # Handle cases where src module isn't available
     try:
-        from crypto.context_manager import CryptoContextManager
+        from dcypher.crypto.context_manager import CryptoContextManager
     except ImportError:
         CryptoContextManager = None
 
@@ -78,8 +78,8 @@ def live_api_server(free_port, monkeypatch, tmp_path):
     chunk_store_path.mkdir()
 
     # Monkeypatch the storage roots and clear in-memory stores for this test run
-    monkeypatch.setattr("config.BLOCK_STORE_ROOT", str(block_store_path))
-    monkeypatch.setattr("config.CHUNK_STORE_ROOT", str(chunk_store_path))
+    monkeypatch.setattr("dcypher.config.BLOCK_STORE_ROOT", str(block_store_path))
+    monkeypatch.setattr("dcypher.config.CHUNK_STORE_ROOT", str(chunk_store_path))
     state.accounts.clear()
     state.used_nonces.clear()
     state.graveyard.clear()
@@ -135,10 +135,10 @@ def cli_test_env(tmp_path, request):
     """
     Sets up a test environment with a temporary directory and a helper for running CLI commands.
     """
-    cli_path = Path(os.getcwd()) / "src" / "cli.py"
 
+    # Use the installed dcypher command instead of the old cli.py file
     def run_command(cmd):
-        full_cmd = ["python3", str(cli_path)] + cmd
+        full_cmd = ["uv", "run", "dcypher"] + cmd
         result = subprocess.run(
             full_cmd, cwd=tmp_path, capture_output=True, text=True, check=False
         )
@@ -164,7 +164,7 @@ def api_client_factory(api_base_url, tmp_path):
     Factory fixture that creates test API clients with identities.
     Returns a function that when called creates a new client/identity pair.
     """
-    from lib.api_client import DCypherClient
+    from dcypher.lib.api_client import DCypherClient
     from pathlib import Path
     import uuid
 

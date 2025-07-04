@@ -10,9 +10,9 @@ import shutil
 from pathlib import Path
 import subprocess
 from unittest.mock import patch, MagicMock
-from lib.api_client import DCypherClient
-from src.tui.app import DCypherTUI
-from src.tui.screens.accounts import AccountsScreen
+from dcypher.lib.api_client import DCypherClient
+from dcypher.tui.app import DCypherTUI
+from dcypher.tui.screens.accounts import AccountsScreen
 import sys
 
 
@@ -117,7 +117,7 @@ class TestGraveyardCLI:
             [
                 sys.executable,
                 "-m",
-                "src.cli",
+                "dcypher.cli",
                 "identity",
                 "new",
                 "--name",
@@ -140,7 +140,7 @@ class TestGraveyardCLI:
             [
                 sys.executable,
                 "-m",
-                "src.cli",
+                "dcypher.cli",
                 "create-account",
                 "--identity-path",
                 str(identity_file),
@@ -157,7 +157,7 @@ class TestGraveyardCLI:
             [
                 sys.executable,
                 "-m",
-                "src.cli",
+                "dcypher.cli",
                 "get-graveyard",
                 "--identity-path",
                 str(identity_file),
@@ -184,7 +184,7 @@ class TestGraveyardCLI:
             [
                 sys.executable,
                 "-m",
-                "src.cli",
+                "dcypher.cli",
                 "identity",
                 "new",
                 "--name",
@@ -266,7 +266,7 @@ class TestGraveyardTUI:
         ]
 
         with patch(
-            "lib.api_client.DCypherClient.get_account_graveyard",
+            "dcypher.lib.api_client.DCypherClient.get_account_graveyard",
             return_value=mock_graveyard,
         ):
             async with app.run_test(size=(160, 60)) as pilot:
@@ -304,7 +304,8 @@ class TestGraveyardTUI:
         app = DCypherTUI()
 
         with patch(
-            "lib.api_client.DCypherClient.get_account_graveyard", return_value=[]
+            "dcypher.lib.api_client.DCypherClient.get_account_graveyard",
+            return_value=[],
         ):
             async with app.run_test(size=(160, 60)) as pilot:
                 # Navigate to Accounts tab
@@ -352,7 +353,7 @@ class TestGraveyardIntegration:
             [
                 sys.executable,
                 "-m",
-                "src.cli",
+                "dcypher.cli",
                 "get-graveyard",
                 "--identity-path",
                 str(identity_file),

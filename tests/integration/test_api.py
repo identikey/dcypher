@@ -11,10 +11,10 @@ from unittest import mock
 from main import (
     app,
 )
-from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
-from config import ML_DSA_ALG
-from lib import idk_message, pre
+from dcypher.app_state import state
+from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
+from dcypher.config import ML_DSA_ALG
+from dcypher.lib import idk_message, pre
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ def get_nonce(api_base_url: str):
     Helper function to request a nonce from the /nonce endpoint.
     Uses the API client for consistent behavior.
     """
-    from src.lib.api_client import DCypherClient
+    from dcypher.lib.api_client import DCypherClient
 
     client = DCypherClient(api_base_url)
     return client.get_nonce()
@@ -78,7 +78,7 @@ def test_get_nonce_endpoint(api_base_url: str):
     """
     Tests the /nonce endpoint to ensure it returns a valid, well-formed nonce.
     """
-    from src.lib.api_client import DCypherClient
+    from dcypher.lib.api_client import DCypherClient
 
     # Create API client (no auth needed for getting nonce)
     client = DCypherClient(api_base_url)
@@ -178,7 +178,7 @@ def create_test_account_with_keymanager(
     Returns:
         tuple: (DCypherClient, pk_classic_hex)
     """
-    from src.lib.api_client import DCypherClient
+    from dcypher.lib.api_client import DCypherClient
     from pathlib import Path
 
     # Use the enhanced factory method with KeyManager
@@ -201,7 +201,7 @@ def create_test_keys_with_keymanager(
     Returns:
         tuple: (pk_classic_hex, auth_keys_file_path)
     """
-    from src.lib.key_manager import KeyManager
+    from dcypher.lib.key_manager import KeyManager
     from pathlib import Path
 
     # Use KeyManager to create auth keys bundle

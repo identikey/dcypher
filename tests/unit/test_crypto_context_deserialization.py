@@ -6,8 +6,8 @@ in distributed systems.
 """
 
 import pytest
-from lib import pre
-from src.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
+from dcypher.lib import pre
+from dcypher.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
 
 
 @pytest.fixture

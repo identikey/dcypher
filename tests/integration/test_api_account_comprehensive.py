@@ -11,10 +11,10 @@ import concurrent.futures
 import requests
 from unittest import mock
 from main import app
-from app_state import state
-from lib.pq_auth import SUPPORTED_SIG_ALGS
-from config import ML_DSA_ALG
-from security import SERVER_SECRET
+from dcypher.app_state import state
+from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
+from dcypher.config import ML_DSA_ALG
+from dcypher.security import SERVER_SECRET
 
 from tests.integration.test_api import (
     get_nonce,
@@ -101,11 +101,11 @@ def test_concurrent_account_creation(api_base_url: str):
     Tests that multiple concurrent account creation requests are handled
     correctly without race conditions or data corruption.
     """
-    from src.lib.api_client import DCypherClient, DCypherAPIError
+    from dcypher.lib.api_client import DCypherClient, DCypherAPIError
     import tempfile
     import json
     from pathlib import Path
-    from lib.pq_auth import generate_pq_keys
+    from dcypher.lib.pq_auth import generate_pq_keys
 
     def create_single_account(thread_id):
         """Create a single account in a thread using the API client"""

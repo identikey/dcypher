@@ -1,6 +1,0 @@
-"""Main entry point for the CLI module."""
-
-from .main import cli
-
-if __name__ == "__main__":
-    cli()

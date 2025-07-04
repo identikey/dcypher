@@ -67,7 +67,7 @@ from textual.app import ComposeResult
 from textual.pilot import Pilot, WaitForScreenTimeout
 from textual.widgets import Button, Input, Label, TabPane
 
-from src.tui.app import DCypherTUI
+from dcypher.tui.app import DCypherTUI
 from tests.helpers.tui_test_helpers import (
     get_recommended_viewport_size,
     navigate_to_tab,
@@ -173,8 +173,8 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
         # Step 2: Bob creates account (using direct API due to TUI account creation issues)
         print("2️⃣ Bob creating account...")
         try:
-            from src.lib.api_client import DCypherClient
-            from src.lib.key_manager import KeyManager
+            from dcypher.lib.api_client import DCypherClient
+            from dcypher.lib.key_manager import KeyManager
 
             # Create account using direct API (proven to work)
             print("   🔧 Using direct API for account creation (TUI workaround)")
@@ -218,8 +218,8 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
         # Step 2: Alice creates account (using direct API due to TUI account creation issues)
         print("2️⃣ Alice creating account...")
         try:
-            from src.lib.api_client import DCypherClient
-            from src.lib.key_manager import KeyManager
+            from dcypher.lib.api_client import DCypherClient
+            from dcypher.lib.key_manager import KeyManager
 
             # Create account using direct API (proven to work)
             print("   🔧 Using direct API for account creation (TUI workaround)")
@@ -241,8 +241,8 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
         print("3️⃣ Alice uploading file...")
 
         # Import libraries needed for both TUI and fallback upload
-        from src.lib.api_client import DCypherClient
-        from src.lib import idk_message, pre
+        from dcypher.lib.api_client import DCypherClient
+        from dcypher.lib import idk_message, pre
         import ecdsa
         import json
         import hashlib
@@ -433,7 +433,7 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
         # Get share ID for Bob's download (using API fallback since TUI may not show it reliably)
         print("   🔧 Getting share ID for Bob's download...")
         try:
-            from src.lib.api_client import DCypherClient
+            from dcypher.lib.api_client import DCypherClient
 
             alice_client = DCypherClient(
                 api_base_url, identity_path=str(alice_identity_path)
@@ -470,7 +470,7 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
             assert False, "Bob's download TUI failed to load properly"
 
         # ✅ Verify Bob's identity is properly loaded in global app state
-        print(f"   ✅ Bob's identity loaded in app: {app.current_identity}")
+        print(f"   ✅ Bob's identity loaded in app: {app.current_identity_path}")
 
         # Navigate to sharing tab
         if not await navigate_to_tab(pilot, 6):  # Sharing tab

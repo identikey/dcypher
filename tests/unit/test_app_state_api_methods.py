@@ -23,7 +23,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import HTTPException
 
-from app_state import ServerState, find_account, get_app_state
+import dcypher.app_state as app_state
+from dcypher.app_state import ServerState, find_account, get_app_state
 
 
 @pytest.fixture
@@ -31,7 +32,6 @@ def clean_state():
     """Fixture to reset the app state for a test."""
     original_state = get_app_state()
     new_state = ServerState()
-    import app_state
 
     app_state.state = new_state
     yield new_state

@@ -2,7 +2,7 @@
 
 import pytest
 import oqs
-from src.lib.key_manager import KeyManager
+from dcypher.lib.key_manager import KeyManager
 from .util.util import get_enabled_sigs
 
 

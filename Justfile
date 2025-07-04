@@ -64,6 +64,19 @@ docker-cli *args:
 docker-exec command:
     docker run --rm -it dcypher {{command}}
 
+# Run the FastAPI server locally with uv
+serve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export LD_LIBRARY_PATH="/workspace/openfhe-local/lib:/workspace/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
+    export PYTHONPATH="/workspace/src:${PYTHONPATH:-}"
+    echo "🚀 Starting DCypher FastAPI server..."
+    uv run uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
+
+# Run the FastAPI server in development container
+dev-serve:
+    docker-compose -f docker-compose.dev.yml exec dcypher-dev uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
 # Build OpenFHE C++ library locally (not system-wide)
 build-openfhe:
     #!/usr/bin/env bash

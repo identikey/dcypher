@@ -11,8 +11,8 @@ from unittest.mock import patch, MagicMock
 from tests.helpers.tui_test_helpers import (
     wait_for_notification,
 )
-from src.tui.app import DCypherTUI
-from src.tui.screens.crypto import CryptoScreen
+from dcypher.tui.app import DCypherTUI
+from dcypher.tui.screens.crypto import CryptoScreen
 
 
 class TestCryptoTabOperations:

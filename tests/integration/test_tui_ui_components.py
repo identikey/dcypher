@@ -28,7 +28,7 @@ from pathlib import Path
 from textual.pilot import Pilot
 from textual.widgets import Input
 
-from src.tui.app import DCypherTUI
+from dcypher.tui.app import DCypherTUI
 from tests.helpers.tui_test_helpers import (
     create_identity_via_tui,
     create_test_file,
@@ -566,7 +566,7 @@ class TestTUIAdvanced:
         print("=" * 60)
 
         try:
-            from src.lib.api_client import DCypherClient
+            from dcypher.lib.api_client import DCypherClient
 
             # Test the new cleaner API
             print("1️⃣  Creating identity via DCypherClient.create_identity_file()...")
@@ -677,8 +677,8 @@ class TestTUIAdvanced:
         # Test 1: Direct KeyManager call
         print("1️⃣  Testing direct KeyManager.create_identity_file...")
         try:
-            from src.lib.api_client import DCypherClient
-            from src.lib.key_manager import KeyManager
+            from dcypher.lib.api_client import DCypherClient
+            from dcypher.lib.key_manager import KeyManager
 
             # Fetch context like TUI does
             temp_client = DCypherClient(api_base_url)
@@ -719,7 +719,7 @@ class TestTUIAdvanced:
         print("2️⃣  Testing TUI IdentityScreen action directly...")
         notifications = []  # Initialize here to avoid unbound variable
         try:
-            from src.tui.screens.identity import IdentityScreen
+            from dcypher.tui.screens.identity import IdentityScreen
             from textual.widgets import Input
 
             # Create identity screen with API URL

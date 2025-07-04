@@ -28,8 +28,8 @@ from typing import Optional
 
 import pytest
 
-from src.tui.app import DCypherTUI
-from src.lib.api_client import (
+from dcypher.tui.app import DCypherTUI
+from dcypher.lib.api_client import (
     DCypherClient,
     AuthenticationError,
     ValidationError,

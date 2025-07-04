@@ -6,10 +6,10 @@ from pathlib import Path
 import ecdsa
 import oqs
 import json
-from src.lib.key_manager import KeyManager, SecureBytes, SecureKeyHandle
-from src.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
+from dcypher.lib.key_manager import KeyManager, SecureBytes, SecureKeyHandle
+from dcypher.crypto.context_manager import CryptoContextManager, OPENFHE_AVAILABLE
 from bip_utils import Bip39SeedGenerator, Bip39MnemonicGenerator, Bip39WordsNum
-from src.config import ML_DSA_ALG
+from dcypher.config import ML_DSA_ALG
 from .util.util import get_enabled_sigs, get_sigs_with_ctx_support
 import secrets
 
@@ -27,7 +27,7 @@ def crypto_context_manager():
         batch_size=8,
     ) as manager:
         # Initialize with keys to make it fully functional
-        from src.lib import pre
+        from dcypher.lib import pre
 
         pre.generate_keys(manager.get_context())
         yield manager

@@ -10,7 +10,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pytest
-from app_state import ServerState
+from dcypher.app_state import ServerState
 
 
 def test_threading_vs_multiprocessing_race_detection():
