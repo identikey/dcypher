@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from fastapi.responses import Response
 import base64
+import time
+from datetime import datetime
 
 from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
 from ..security import generate_nonce
@@ -8,6 +10,41 @@ from ..app_state import get_app_state
 from ..crypto.context_manager import CryptoContextManager
 
 router = APIRouter()
+
+# Track server startup time
+_server_start_time = time.time()
+
+
+@router.get("/health")
+def get_health_status():
+    """
+    Returns server health status and uptime information.
+    This endpoint can be used by clients to check server availability and get uptime.
+    """
+    current_time = time.time()
+    uptime_seconds = int(current_time - _server_start_time)
+
+    # Convert to hours, minutes, seconds
+    hours = uptime_seconds // 3600
+    minutes = (uptime_seconds % 3600) // 60
+    seconds = uptime_seconds % 60
+
+    # Format uptime string
+    if hours > 0:
+        uptime_formatted = f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
+    elif minutes > 0:
+        uptime_formatted = f"{minutes:02d}m {seconds:02d}s"
+    else:
+        uptime_formatted = f"{seconds:02d}s"
+
+    return {
+        "status": "healthy",
+        "service": "dcypher-server",
+        "uptime_seconds": uptime_seconds,
+        "uptime_formatted": uptime_formatted,
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0",
+    }
 
 
 @router.get("/pre-crypto-context")

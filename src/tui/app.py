@@ -31,7 +31,7 @@ from dcypher.tui.screens.files import FilesScreen
 from dcypher.tui.screens.sharing import SharingScreen
 
 # Import API client
-from src.lib.api_client import DCypherClient
+from dcypher.lib.api_client import DCypherClient
 
 
 class DCypherHeader(Static):
@@ -101,6 +101,8 @@ class DCypherTUI(App[None]):
         Binding("ctrl+c", "quit", "Quit", priority=True),
         Binding("ctrl+d", "toggle_dark", "Toggle Dark Mode"),
         Binding("ctrl+t", "toggle_transparent", "Toggle Transparent Background"),
+        Binding("ctrl+r", "connect", "Connect to Server"),
+        Binding("ctrl+shift+r", "disconnect", "Disconnect from Server"),
         Binding("f1", "show_help", "Help"),
         Binding("f2", "show_logs", "Logs"),
         Binding("f12", "screenshot", "Screenshot"),
@@ -337,20 +339,24 @@ class DCypherTUI(App[None]):
                 self.connection_status = "disconnected"
                 self.server_uptime = None
         except Exception:
+            # If connection fails, mark as disconnected
             self.connection_status = "disconnected"
             self.server_uptime = None
+            # Only clear the API client if we're not manually connecting
+            # This prevents clearing during manual connect attempts
 
     def fetch_server_uptime(self) -> None:
         """Fetch server uptime from the API"""
         try:
             if self._api_client:
-                # Try to get server status/uptime
-                # This is a placeholder - you'll need to implement the actual API call
-                # based on your server's uptime endpoint
-                # For now, we'll just set a placeholder value when connected
-                self.server_uptime = "connected"
+                # Get server health status which includes uptime
+                health_status = self._api_client.get_health_status()
+                if health_status and "uptime_formatted" in health_status:
+                    self.server_uptime = health_status["uptime_formatted"]
+                else:
+                    self.server_uptime = "unknown"
         except Exception:
-            # If server uptime endpoint doesn't exist or fails, just set to None
+            # If health endpoint doesn't exist or fails, just set to None
             self.server_uptime = None
 
     def format_uptime_seconds(self, uptime_seconds: int) -> str:
@@ -449,6 +455,44 @@ class DCypherTUI(App[None]):
             tabs.active = actual_tab_id
         except Exception as e:
             self.log.warning(f"Could not switch to tab {tab_id}: {e}")
+
+    def action_connect(self) -> None:
+        """Connect to the server"""
+        try:
+            # Create or recreate API client
+            self._api_client = DCypherClient(
+                self.api_url, identity_path=self.current_identity_path
+            )
+
+            # Test connection by getting nonce
+            self._api_client.get_nonce()
+
+            # If successful, update connection status
+            self.connection_status = "connected"
+            self.notify("Connected to server successfully", severity="information")
+
+            # Fetch server uptime immediately
+            self.fetch_server_uptime()
+
+        except Exception as e:
+            self.connection_status = "disconnected"
+            self.server_uptime = None
+            self.notify(f"Failed to connect to server: {e}", severity="error")
+
+    def action_disconnect(self) -> None:
+        """Disconnect from the server"""
+        try:
+            # Clear API client
+            self._api_client = None
+
+            # Update connection status
+            self.connection_status = "disconnected"
+            self.server_uptime = None
+
+            self.notify("Disconnected from server", severity="information")
+
+        except Exception as e:
+            self.notify(f"Error during disconnect: {e}", severity="warning")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """

@@ -228,6 +228,20 @@ class DCypherClient:
         except (requests.exceptions.RequestException, KeyError) as e:
             raise DCypherAPIError(f"Failed to get nonce from API: {e}")
 
+    def get_health_status(self) -> Dict[str, Any]:
+        """
+        Get server health status and uptime information.
+
+        Returns:
+            dict: Contains server status, uptime, and other health information
+        """
+        try:
+            response = requests.get(f"{self.api_url}/health")
+            response.raise_for_status()
+            return response.json()
+        except (requests.exceptions.RequestException, KeyError) as e:
+            raise DCypherAPIError(f"Failed to get health status from API: {e}")
+
     def _sign_message(self, message: str) -> Dict[str, Any]:
         """Sign a message with the loaded authentication keys."""
         auth_keys = self._load_auth_keys()

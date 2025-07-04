@@ -84,6 +84,43 @@ class TestDCypherClient:
         assert algorithms == ["ML-DSA-87", "Falcon-512"]
         mock_get.assert_called_once_with("http://localhost:8000/supported-pq-algs")
 
+    @patch("requests.get")
+    def test_get_health_status_success(self, mock_get):
+        """Test successful health status retrieval"""
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "status": "healthy",
+            "service": "dcypher-server",
+            "uptime_seconds": 3661,
+            "uptime_formatted": "01h 01m 01s",
+            "timestamp": "2024-01-01T12:00:00",
+            "version": "1.0.0",
+        }
+        mock_get.return_value = mock_response
+
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
+        health_status = client.get_health_status()
+
+        assert health_status["status"] == "healthy"
+        assert health_status["service"] == "dcypher-server"
+        assert health_status["uptime_seconds"] == 3661
+        assert health_status["uptime_formatted"] == "01h 01m 01s"
+        assert health_status["version"] == "1.0.0"
+        mock_get.assert_called_once_with("http://localhost:8000/health")
+
+    @patch("requests.get")
+    def test_get_health_status_failure(self, mock_get):
+        """Test health status retrieval failure"""
+        mock_get.side_effect = requests.exceptions.RequestException("Connection error")
+
+        client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
+
+        with pytest.raises(
+            DCypherAPIError, match="Failed to get health status from API"
+        ):
+            client.get_health_status()
+
     def test_load_auth_keys_no_path(self):
         """Test loading auth keys when no path is configured"""
         client = DCypherClient("http://localhost:8000", "/path/to/identity.json")
