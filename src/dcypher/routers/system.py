@@ -3,10 +3,10 @@ from fastapi.responses import Response
 import base64
 import time
 
-from lib.pq_auth import SUPPORTED_SIG_ALGS
-from security import generate_nonce
-from app_state import get_app_state
-from crypto.context_manager import CryptoContextManager
+from dcypher.lib.pq_auth import SUPPORTED_SIG_ALGS
+from dcypher.security import generate_nonce
+from dcypher.app_state import get_app_state
+from dcypher.crypto.context_manager import CryptoContextManager
 
 router = APIRouter()
 

@@ -94,7 +94,7 @@ class DCypherTUI(App[None]):
     """
 
     TITLE = "v0.0.1 dCypher Terminal: PQ-Lattice FHE System"
-    SUB_TITLE = "REPLICANT TERMINAL v0.0.1"
+    SUB_TITLE = "REPLICANT TERMINAL v2.1.0"
     CSS = CYBERPUNK_THEME
 
     BINDINGS = [
@@ -259,7 +259,7 @@ class DCypherTUI(App[None]):
 
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
-        yield DCypherHeader(self)
+        yield DCypherHeader(self, id="header")
 
         # CPU usage divider - positioned under header
         self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
@@ -329,10 +329,11 @@ class DCypherTUI(App[None]):
         # This will be called every 5 seconds to check API connectivity
         try:
             if self._api_client:
-                # Try to get server uptime
-                self.fetch_server_uptime()
-                # Try to get nonce to check connection
+                # Try to get nonce to check connection first
+                self._api_client.get_nonce()
                 self.connection_status = "connected"
+                # Try to get server uptime only if connection succeeded
+                self.fetch_server_uptime()
             else:
                 self.connection_status = "disconnected"
                 self.server_uptime = None
