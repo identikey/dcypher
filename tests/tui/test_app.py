@@ -40,7 +40,9 @@ class TestDCypherTUI:
 
             # Check that main components are present
             assert pilot.app.query("#main-container")
-            assert pilot.app.query("Header")
+            assert pilot.app.query(
+                "DCypherHeader"
+            )  # Changed to match our custom header
             assert pilot.app.query("Footer")
             assert pilot.app.query("TabbedContent")
 
@@ -74,6 +76,9 @@ class TestDCypherTUI:
             # Handle Binding objects properly
             if hasattr(binding, "key"):
                 binding_keys.append(binding.key)
+            elif isinstance(binding, tuple):
+                # Handle tuple format (key, action, description)
+                binding_keys.append(binding[0])
             else:
                 # Fallback for other formats
                 binding_keys.append(str(binding))
