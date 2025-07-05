@@ -96,14 +96,23 @@ class ProcessCPUDivider(Widget):
         # Create content with both time periods
         content = Text()
 
-        # Calculate available width dynamically
-        # Get console width and subtract space for labels and margins
+        # Calculate available width dynamically based on widget size
+        # Use widget size instead of app size for better accuracy
         try:
-            console_width = self.app.size.width if hasattr(self.app, "size") else 120
-            # Subtract space for "15min: " (7 chars) and some margin
-            available_width = max(console_width - 11, 40)  # Minimum 40 chars
+            # Use the widget's actual size if available
+            if hasattr(self, "size") and self.size is not None:
+                widget_width = self.size.width
+            else:
+                widget_width = self.app.size.width if hasattr(self.app, "size") else 120
+
+            # Account for:
+            # - Panel borders (2 chars each side) = 4 chars
+            # - Label prefix "15min: " = 7 chars
+            # - No safety margin = 0 chars
+            # Total overhead = 11 chars
+            available_width = max(widget_width - 11, 100)  # Use almost all the space
         except:
-            available_width = 100  # Fallback
+            available_width = 140  # Wide fallback since panels now expand
 
         # 1-minute sparkline (top half) - 60 data points across full width
         content.append("1min:  ", style="bold cyan")
@@ -148,7 +157,7 @@ class ProcessCPUDivider(Widget):
             title=f"[bold cyan]◢dCYPHER CPU: {self.cpu_percent:.2f}% ({len(self.children_processes)} children)◣[/bold cyan]",
             border_style="cyan",
             box=box.DOUBLE,
-            expand=False,
+            expand=True,  # Take full width available
             height=5,  # Fixed height: 3 lines of content + 2 for borders
         )
 
@@ -406,7 +415,7 @@ class ProcessMemoryDivider(Widget):
             title="[bold yellow]◢dCYPHER MEMORY USAGE◣[/bold yellow]",
             border_style="yellow",
             box=box.DOUBLE,
-            expand=False,
+            expand=True,  # Take full width available
             height=3,  # Fixed height: 1 line of content + 2 for borders
         )
 
@@ -466,13 +475,23 @@ class ProcessCPU15MinDivider(Widget):
         # Create content with only 15-minute period
         content = Text()
 
-        # Calculate available width dynamically
+        # Calculate available width dynamically based on widget size
+        # Use widget size instead of app size for better accuracy
         try:
-            console_width = self.app.size.width if hasattr(self.app, "size") else 120
-            # Subtract space for "15min: " (7 chars) and some margin
-            available_width = max(console_width - 11, 40)  # Minimum 40 chars
+            # Use the widget's actual size if available
+            if hasattr(self, "size") and self.size is not None:
+                widget_width = self.size.width
+            else:
+                widget_width = self.app.size.width if hasattr(self.app, "size") else 120
+
+            # Account for:
+            # - Panel borders (2 chars each side) = 4 chars
+            # - Label prefix "15min: " = 7 chars
+            # - No safety margin = 0 chars
+            # Total overhead = 11 chars
+            available_width = max(widget_width - 11, 100)  # Use almost all the space
         except:
-            available_width = 100  # Fallback
+            available_width = 140  # Wide fallback since panels now expand
 
         # 15-minute sparkline only
         content.append("15min: ", style="bold yellow")
@@ -491,7 +510,7 @@ class ProcessCPU15MinDivider(Widget):
             title=f"[bold yellow]◢dCYPHER MEMORY 15min: {self.memory_mb:.2f}MB ({self.memory_percent:.3f}%) ({len(self.children_processes)} children)◣[/bold yellow]",
             border_style="yellow",
             box=box.DOUBLE,
-            expand=False,
+            expand=True,  # Take full width available
             height=3,  # Fixed height: 1 line of content + 2 for borders
         )
 
