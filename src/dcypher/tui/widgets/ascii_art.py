@@ -35,6 +35,8 @@ class MatrixRain:
         self.grid = []
         # Character grid to store what character is at each position
         self.char_grid = []
+        # Z-order grid to track which chunk is on top at each position
+        self.z_order_grid = []
         # Maximum fade states (determines tail length)
         self.max_fade_states = 12
         self.reset_grid()
@@ -44,6 +46,7 @@ class MatrixRain:
         self.column_chunks = []
         self.grid = []
         self.char_grid = []
+        self.z_order_grid = []
 
         # Create more hex chunks that can overlap - much denser
         num_chunks = self.width // 2  # Create way more chunks than width allows
@@ -56,17 +59,30 @@ class MatrixRain:
             x_start = random.randint(0, max(0, self.width - chunk_width))
 
             # Create chunk data
-            # 50/50 chance: start from bottom or random position
-            if random.random() < 0.5:
-                start_y = self.height - 1  # Bottom spawn
-            else:
-                start_y = random.randint(0, self.height - 1)  # Random position
+            # 50/50 chance: move up or down
+            direction = random.choice(["up", "down"])
+
+            # Set starting position based on direction
+            if direction == "up":
+                # 50/50 chance: start from bottom or random position
+                if random.random() < 0.5:
+                    start_y = self.height - 1  # Bottom spawn
+                else:
+                    start_y = random.randint(0, self.height - 1)  # Random position
+            else:  # direction == "down"
+                # 50/50 chance: start from top or random position
+                if random.random() < 0.5:
+                    start_y = 0  # Top spawn
+                else:
+                    start_y = random.randint(0, self.height - 1)  # Random position
 
             chunk = {
                 "x_start": x_start,
                 "width": chunk_width,
                 "y": start_y,
                 "last_y": start_y,
+                "direction": direction,
+                "z_order": random.randint(1, 100),  # Random z-order for layering
                 "hex_value": self._generate_hex_string(chunk_width),
                 "active": random.random() < 0.3,  # 30% start active - reduced density
                 "spawn_cooldown": random.randint(0, 20),  # Adjusted spawn timing
@@ -81,11 +97,14 @@ class MatrixRain:
         for y in range(self.height):
             row = []
             char_row = []
+            z_row = []
             for x in range(self.width):
                 row.append(0)  # Empty state
                 char_row.append(" ")  # Empty char
+                z_row.append(0)  # No z-order
             self.grid.append(row)
             self.char_grid.append(char_row)
+            self.z_order_grid.append(z_row)
 
     def _generate_hex_string(self, width: int) -> str:
         """Generate a random hex string of specified width"""
@@ -112,6 +131,7 @@ class MatrixRain:
                     if self.grid[y][x] > self.max_fade_states:
                         self.grid[y][x] = 0
                         self.char_grid[y][x] = " "
+                        self.z_order_grid[y][x] = 0
 
         # Now update each hex chunk
         for chunk in self.column_chunks:
@@ -126,13 +146,22 @@ class MatrixRain:
                     ):  # 8% chance per frame - reduced spawn rate
                         chunk["active"] = True
 
-                        # 50/50 chance: spawn from bottom or random position
-                        if random.random() < 0.5:
-                            # Spawn from bottom (traditional)
-                            chunk["y"] = self.height - 1
-                        else:
-                            # Spawn from random position in screen
-                            chunk["y"] = random.randint(0, self.height - 1)
+                        # Reset direction and position
+                        chunk["direction"] = random.choice(["up", "down"])
+                        chunk["z_order"] = random.randint(1, 100)
+
+                        if chunk["direction"] == "up":
+                            # 50/50 chance: spawn from bottom or random position
+                            if random.random() < 0.5:
+                                chunk["y"] = self.height - 1
+                            else:
+                                chunk["y"] = random.randint(0, self.height - 1)
+                        else:  # direction == "down"
+                            # 50/50 chance: spawn from top or random position
+                            if random.random() < 0.5:
+                                chunk["y"] = 0
+                            else:
+                                chunk["y"] = random.randint(0, self.height - 1)
 
                         chunk["last_y"] = chunk["y"]
                         chunk["hex_value"] = self._generate_hex_string(chunk["width"])
@@ -154,23 +183,39 @@ class MatrixRain:
                 if chunk["speed_counter"] >= chunk["speed"]:
                     chunk["speed_counter"] = 0
 
-                    # Place current chunk characters (frozen from last change)
+                    # Place current chunk characters (frozen from last change) with z-ordering
                     if 0 <= chunk["y"] < self.height:
                         for i, char in enumerate(chunk["hex_value"]):
                             x_pos = chunk["x_start"] + i
                             if x_pos < self.width:
-                                self.grid[chunk["y"]][x_pos] = 1  # White/head state
-                                self.char_grid[chunk["y"]][x_pos] = char
+                                # Only place if higher z-order or empty
+                                if (
+                                    self.grid[chunk["y"]][x_pos] == 0
+                                    or chunk["z_order"]
+                                    > self.z_order_grid[chunk["y"]][x_pos]
+                                ):
+                                    self.grid[chunk["y"]][x_pos] = 1  # White/head state
+                                    self.char_grid[chunk["y"]][x_pos] = char
+                                    self.z_order_grid[chunk["y"]][x_pos] = chunk[
+                                        "z_order"
+                                    ]
 
-                    # Move chunk up
+                    # Move chunk based on direction
                     chunk["last_y"] = chunk["y"]
-                    chunk["y"] -= 1
+                    if chunk["direction"] == "up":
+                        chunk["y"] -= 1
+                    else:  # direction == "down"
+                        chunk["y"] += 1
 
                     # Generate new hex value for next position
                     chunk["hex_value"] = self._generate_hex_string(chunk["width"])
 
                     # Reset chunk when it goes off screen
-                    if chunk["y"] < -1:
+                    off_screen = (chunk["direction"] == "up" and chunk["y"] < -1) or (
+                        chunk["direction"] == "down" and chunk["y"] > self.height
+                    )
+
+                    if off_screen:
                         chunk["active"] = False
                         chunk["spawn_cooldown"] = random.randint(
                             5, 25
@@ -180,15 +225,26 @@ class MatrixRain:
                         chunk["x_start"] = random.randint(
                             0, max(0, self.width - chunk["width"])
                         )
-                        chunk["last_y"] = self.height - 1
+                        chunk["last_y"] = (
+                            self.height - 1 if chunk["direction"] == "up" else 0
+                        )
                 else:
-                    # Still in same position - place the changing characters
+                    # Still in same position - place the changing characters with z-ordering
                     if 0 <= chunk["y"] < self.height:
                         for i, char in enumerate(chunk["hex_value"]):
                             x_pos = chunk["x_start"] + i
                             if x_pos < self.width:
-                                self.grid[chunk["y"]][x_pos] = 1  # White/head state
-                                self.char_grid[chunk["y"]][x_pos] = char
+                                # Only place if higher z-order or empty
+                                if (
+                                    self.grid[chunk["y"]][x_pos] == 0
+                                    or chunk["z_order"]
+                                    > self.z_order_grid[chunk["y"]][x_pos]
+                                ):
+                                    self.grid[chunk["y"]][x_pos] = 1  # White/head state
+                                    self.char_grid[chunk["y"]][x_pos] = char
+                                    self.z_order_grid[chunk["y"]][x_pos] = chunk[
+                                        "z_order"
+                                    ]
 
     def get_framebuffer(self):
         """Generate framebuffer with current matrix rain state"""
