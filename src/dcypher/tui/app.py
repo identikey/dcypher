@@ -519,8 +519,8 @@ class DCypherTUI(App[None]):
         try:
             ascii_banner = self.query_one(ASCIIBanner)
             ascii_banner.matrix_background = not ascii_banner.matrix_background
-            if hasattr(ascii_banner, "matrix_rain"):
-                ascii_banner.matrix_rain.toggle_rain()
+            # Note: No need to call toggle_rain() manually - the reactive property
+            # watch_matrix_background() handles enabling/disabling automatically
 
             status = "enabled" if ascii_banner.matrix_background else "disabled"
             self.notify(f"Matrix rain effect {status}", severity="information")

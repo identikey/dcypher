@@ -13,6 +13,112 @@ from rich.align import Align
 from rich.panel import Panel
 
 
+class MatrixRain:
+    """
+    Matrix rain effect controller implementing proper column-based drops
+    """
+
+    def __init__(self, width: int = 80, height: int = 20):
+        self.width = width
+        self.height = height
+        self.enabled = False
+        self.matrix_chars = list("0123456789ABCDEF01")  # Hex + binary
+
+        # Column-based drops - each column can have multiple active drops
+        self.columns = []
+        self.reset_columns()
+
+    def reset_columns(self):
+        """Initialize/reset all columns"""
+        self.columns = []
+        for x in range(self.width):
+            self.columns.append(
+                {
+                    "drops": [],  # List of active drops in this column
+                    "spawn_cooldown": 0,
+                }
+            )
+
+    def toggle_rain(self):
+        """Toggle matrix rain effect on/off"""
+        self.enabled = not self.enabled
+        if not self.enabled:
+            # Clear all drops when disabled
+            self.reset_columns()
+
+    def update(self):
+        """Update matrix rain animation - call this each frame"""
+        if not self.enabled:
+            return
+
+        # Update existing drops
+        for col_idx, column in enumerate(self.columns):
+            # Update each drop in this column
+            for drop in column["drops"][
+                :
+            ]:  # Copy list to avoid modification during iteration
+                drop["y"] += drop["speed"]
+                drop["age"] += 1
+
+                # Remove drops that have fallen off screen or aged out
+                if drop["y"] > self.height + drop["length"]:
+                    column["drops"].remove(drop)
+
+            # Handle spawn cooldown
+            if column["spawn_cooldown"] > 0:
+                column["spawn_cooldown"] -= 1
+
+            # Spawn new drops randomly
+            if column["spawn_cooldown"] <= 0 and random.random() < 0.05:  # 5% chance
+                new_drop = {
+                    "y": 0,
+                    "length": random.randint(3, 12),
+                    "speed": random.uniform(0.5, 2.0),
+                    "age": 0,
+                    "chars": [
+                        random.choice(self.matrix_chars)
+                        for _ in range(random.randint(3, 12))
+                    ],
+                }
+                column["drops"].append(new_drop)
+                column["spawn_cooldown"] = random.randint(
+                    5, 30
+                )  # Cooldown before next spawn
+
+    def get_framebuffer(self):
+        """Generate framebuffer with current matrix rain state"""
+        framebuffer = []
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                row.append((" ", "dim green"))  # Default empty cell
+            framebuffer.append(row)
+
+        if not self.enabled:
+            return framebuffer
+
+        # Draw all active drops
+        for col_idx, column in enumerate(self.columns):
+            for drop in column["drops"]:
+                # Draw each character in the drop
+                for i, char in enumerate(drop["chars"]):
+                    char_y = int(drop["y"]) + i
+                    if 0 <= char_y < self.height:
+                        # Calculate brightness based on position in drop
+                        if i == 0:  # Head of drop
+                            style = "bright_white"
+                        elif i == 1:  # Just behind head
+                            style = "bright_green"
+                        elif i < len(drop["chars"]) // 2:  # Middle
+                            style = "green"
+                        else:  # Tail
+                            style = "dim green"
+
+                        framebuffer[char_y][col_idx] = (char, style)
+
+        return framebuffer
+
+
 class ASCIIBanner(Widget):
     """
     ASCII art banner for dCypher TUI
@@ -64,11 +170,9 @@ class ASCIIBanner(Widget):
     def __init__(self, compact=False, **kwargs):
         super().__init__(**kwargs)
         self.ascii_art = self.DCYPHER_COMPACT if compact else self.DCYPHER_ASCII
-        # Matrix rain setup
-        self.matrix_chars = list("0123456789ABCDEF01")  # Hex + binary
-        self.framebuffer = []
-        self.width = 80
-        self.height = 20
+
+        # Initialize matrix rain controller
+        self.matrix_rain = MatrixRain()
         self.frame_count = 0
 
     def on_mount(self) -> None:
@@ -82,49 +186,13 @@ class ASCIIBanner(Widget):
     def watch_matrix_background(self, matrix_enabled: bool) -> None:
         """React to matrix background toggle"""
         if matrix_enabled:
-            # Start matrix animation at 10 FPS
-            self.auto_refresh = 1 / 10
+            # Start matrix animation at 1 FPS
+            self.auto_refresh = 1
+            self.matrix_rain.enabled = True
         else:
             # Stop auto refresh when disabled
             self.auto_refresh = 0
-
-    def _init_framebuffer(self, width: int, height: int):
-        """Initialize framebuffer with empty cells"""
-        self.width = width
-        self.height = height
-        self.framebuffer = []
-        for y in range(height):
-            row = []
-            for x in range(width):
-                row.append((" ", "dim green"))  # (char, style)
-            self.framebuffer.append(row)
-
-    def _update_matrix_rain(self):
-        """Update matrix rain animation"""
-        # Move characters down
-        for x in range(self.width):
-            for y in range(self.height - 1, 0, -1):
-                if random.random() < 0.8:  # 80% chance to move down
-                    self.framebuffer[y] = self.framebuffer[y - 1][:]
-
-        # Clear top row
-        for x in range(self.width):
-            self.framebuffer[0][x] = (" ", "dim green")
-
-        # Spawn new characters at top
-        for x in range(self.width):
-            if random.random() < 0.1:  # 10% spawn chance
-                char = random.choice(self.matrix_chars)
-                style = random.choice(["bright_green", "green", "dim green"])
-                self.framebuffer[0][x] = (char, style)
-
-        # Add some random sparkles
-        for _ in range(max(1, self.width // 20)):
-            x = random.randint(0, self.width - 1)
-            y = random.randint(0, self.height - 1)
-            if random.random() < 0.3:
-                char = random.choice(self.matrix_chars)
-                self.framebuffer[y][x] = (char, "bright_cyan")
+            self.matrix_rain.enabled = False
 
     def render(self) -> RenderResult:
         """Render the banner with optional matrix background"""
@@ -137,6 +205,15 @@ class ASCIIBanner(Widget):
         # Get container dimensions
         container_width = max(80, self.size.width - 4)
         container_height = content_height
+
+        # Update matrix rain dimensions if needed
+        if (
+            self.matrix_rain.width != container_width
+            or self.matrix_rain.height != container_height
+        ):
+            self.matrix_rain.width = container_width
+            self.matrix_rain.height = container_height
+            self.matrix_rain.reset_columns()
 
         # Create ASCII content
         ascii_text = Text()
@@ -154,12 +231,8 @@ class ASCIIBanner(Widget):
 
         # If matrix background is enabled, render with matrix rain
         if self.matrix_background:
-            # Initialize or resize framebuffer if needed
-            if not self.framebuffer or len(self.framebuffer[0]) != container_width:
-                self._init_framebuffer(container_width, container_height)
-
-            # Update matrix animation
-            self._update_matrix_rain()
+            # Update matrix rain animation
+            self.matrix_rain.update()
             self.frame_count += 1
 
             # Create matrix content with ASCII overlay
@@ -195,6 +268,9 @@ class ASCIIBanner(Widget):
         self, ascii_content: Text, width: int, height: int
     ) -> Text:
         """Render matrix background with ASCII content overlaid"""
+        # Get current matrix framebuffer
+        framebuffer = self.matrix_rain.get_framebuffer()
+
         # Convert ASCII to lines for overlay logic
         ascii_lines = str(ascii_content).strip().split("\n")
         ascii_width = max(len(line) for line in ascii_lines) if ascii_lines else 0
@@ -229,12 +305,8 @@ class ASCIIBanner(Widget):
                             has_ascii = True
 
                 # If no ASCII content, use matrix rain
-                if (
-                    not has_ascii
-                    and y < len(self.framebuffer)
-                    and x < len(self.framebuffer[0])
-                ):
-                    char, style = self.framebuffer[y][x]
+                if not has_ascii and y < len(framebuffer) and x < len(framebuffer[0]):
+                    char, style = framebuffer[y][x]
 
                 line_text.append(char, style=style)
 
