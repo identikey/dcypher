@@ -126,6 +126,9 @@ class DCypherTUI(App[None]):
         # Matrix effects
         Binding("f3", "toggle_matrix_rain", "Toggle Matrix Rain"),
         Binding("f4", "toggle_scrolling_code", "Toggle Scrolling Code"),
+        # Matrix framerate controls
+        Binding("plus,equal", "increase_matrix_framerate", "Increase Matrix FPS"),
+        Binding("minus", "decrease_matrix_framerate", "Decrease Matrix FPS"),
         # Tab navigation
         Binding("left", "previous_tab", "Previous Tab"),
         Binding("right", "next_tab", "Next Tab"),
@@ -537,6 +540,22 @@ class DCypherTUI(App[None]):
             self.notify(f"Scrolling code effect {status}", severity="information")
         except Exception as e:
             self.notify(f"Failed to toggle scrolling code: {e}", severity="error")
+
+    def action_increase_matrix_framerate(self) -> None:
+        """Increase matrix rain framerate globally"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            ascii_banner.increase_framerate()
+        except Exception as e:
+            self.notify(f"Failed to increase matrix framerate: {e}", severity="error")
+
+    def action_decrease_matrix_framerate(self) -> None:
+        """Decrease matrix rain framerate globally"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            ascii_banner.decrease_framerate()
+        except Exception as e:
+            self.notify(f"Failed to decrease matrix framerate: {e}", severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """

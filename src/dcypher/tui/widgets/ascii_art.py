@@ -4,6 +4,7 @@ Cyberpunk-inspired banner with @repligate aesthetics
 """
 
 import random
+import time
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.app import RenderResult
@@ -26,8 +27,12 @@ class MatrixRain:
         self.enabled = False
         self.hex_chars = "0123456789ABCDEF"
 
-        # Hex chunk widths that make sense for crypto/hex work
-        self.chunk_widths = [2, 4, 8]  # bytes, words, dwords
+        # Timing control for consistent 2 FPS updates (default)
+        self.last_update_time = 0
+        self.update_interval = 0.5  # 0.5 seconds = 2 FPS default
+
+        # Hex chunk dimensions that make sense for crypto/hex work
+        self.chunk_sizes = [2, 4, 8]  # bytes, words, dwords
 
         # Column chunks - each chunk spans multiple columns
         self.column_chunks = []
@@ -37,8 +42,12 @@ class MatrixRain:
         self.char_grid = []
         # Z-order grid to track which chunk is on top at each position
         self.z_order_grid = []
+        # Glitch grid to track red glitch cells: 0=normal, 1-N=glitch fade levels
+        self.glitch_grid = []
         # Maximum fade states (determines tail length)
         self.max_fade_states = 12
+        # Maximum glitch fade states (how long glitch lasts)
+        self.max_glitch_states = 8
         self.reset_grid()
 
     def reset_grid(self):
@@ -47,43 +56,75 @@ class MatrixRain:
         self.grid = []
         self.char_grid = []
         self.z_order_grid = []
+        self.glitch_grid = []
 
         # Create more hex chunks that can overlap - much denser
         num_chunks = self.width // 2  # Create way more chunks than width allows
 
         for _ in range(num_chunks):
-            # Choose random chunk width
-            chunk_width = random.choice(self.chunk_widths)
+            # 50/50 chance: vertical chunks (up/down) or horizontal chunks (left/right)
+            if random.random() < 0.5:
+                # Vertical chunks - move up/down, have width
+                direction = random.choice(["up", "down"])
+                chunk_width = random.choice(self.chunk_sizes)
+                chunk_height = 1
 
-            # Random x position - chunks can overlap and run over each other
-            x_start = random.randint(0, max(0, self.width - chunk_width))
+                # Random x position for vertical chunks
+                x_start = random.randint(0, max(0, self.width - chunk_width))
 
-            # Create chunk data
-            # 50/50 chance: move up or down
-            direction = random.choice(["up", "down"])
+                if direction == "up":
+                    # 50/50 chance: start from bottom or random position
+                    if random.random() < 0.5:
+                        start_y = self.height - 1  # Bottom spawn
+                    else:
+                        start_y = random.randint(0, self.height - 1)  # Random position
+                else:  # direction == "down"
+                    # 50/50 chance: start from top or random position
+                    if random.random() < 0.5:
+                        start_y = 0  # Top spawn
+                    else:
+                        start_y = random.randint(0, self.height - 1)  # Random position
 
-            # Set starting position based on direction
-            if direction == "up":
-                # 50/50 chance: start from bottom or random position
-                if random.random() < 0.5:
-                    start_y = self.height - 1  # Bottom spawn
-                else:
-                    start_y = random.randint(0, self.height - 1)  # Random position
-            else:  # direction == "down"
-                # 50/50 chance: start from top or random position
-                if random.random() < 0.5:
-                    start_y = 0  # Top spawn
-                else:
-                    start_y = random.randint(0, self.height - 1)  # Random position
+                start_x = x_start
+                hex_value = self._generate_hex_string(chunk_width)
+
+            else:
+                # Horizontal chunks - move left/right, have height
+                direction = random.choice(["left", "right"])
+                chunk_width = 1
+                chunk_height = random.choice(self.chunk_sizes)
+
+                # Random y position for horizontal chunks
+                start_y = random.randint(0, max(0, self.height - chunk_height))
+
+                if direction == "left":
+                    # 50/50 chance: start from right edge or random position
+                    if random.random() < 0.5:
+                        start_x = self.width - 1  # Right edge spawn
+                    else:
+                        start_x = random.randint(0, self.width - 1)  # Random position
+                else:  # direction == "right"
+                    # 50/50 chance: start from left edge or random position
+                    if random.random() < 0.5:
+                        start_x = 0  # Left edge spawn
+                    else:
+                        start_x = random.randint(0, self.width - 1)  # Random position
+
+                # Generate vertical stack of hex characters
+                hex_value = "".join(
+                    random.choice(self.hex_chars) for _ in range(chunk_height)
+                )
 
             chunk = {
-                "x_start": x_start,
+                "x_start": start_x,
                 "width": chunk_width,
+                "height": chunk_height,
                 "y": start_y,
                 "last_y": start_y,
+                "last_x": start_x,
                 "direction": direction,
                 "z_order": random.randint(1, 100),  # Random z-order for layering
-                "hex_value": self._generate_hex_string(chunk_width),
+                "hex_value": hex_value,
                 "active": random.random() < 0.3,  # 30% start active - reduced density
                 "spawn_cooldown": random.randint(0, 20),  # Adjusted spawn timing
                 "speed_counter": 0,
@@ -98,13 +139,16 @@ class MatrixRain:
             row = []
             char_row = []
             z_row = []
+            glitch_row = []
             for x in range(self.width):
                 row.append(0)  # Empty state
                 char_row.append(" ")  # Empty char
                 z_row.append(0)  # No z-order
+                glitch_row.append(0)  # No glitch
             self.grid.append(row)
             self.char_grid.append(char_row)
             self.z_order_grid.append(z_row)
+            self.glitch_grid.append(glitch_row)
 
     def _generate_hex_string(self, width: int) -> str:
         """Generate a random hex string of specified width"""
@@ -118,20 +162,59 @@ class MatrixRain:
             self.reset_grid()
 
     def update(self):
-        """Update matrix rain animation - call this each frame"""
+        """Update matrix rain animation - call this each frame with 1 FPS timing control"""
         if not self.enabled:
             return
 
-        # First, age all existing characters (fade them)
+        # Timing control: only update every 1 second
+        current_time = time.time()
+        if current_time - self.last_update_time < self.update_interval:
+            return
+
+        self.last_update_time = current_time
+
+        # First, age all existing characters (fade them) and handle glitch cells
+        active_cells = []  # Track active cells for glitch selection
         for y in range(self.height):
             for x in range(self.width):
                 if self.grid[y][x] > 0:
                     self.grid[y][x] += 1
+                    # Track active cells for potential glitching
+                    active_cells.append((y, x))
                     # Remove characters that have faded completely
                     if self.grid[y][x] > self.max_fade_states:
                         self.grid[y][x] = 0
                         self.char_grid[y][x] = " "
                         self.z_order_grid[y][x] = 0
+                        self.glitch_grid[y][x] = 0  # Reset glitch state
+
+                # Handle glitch cells
+                if self.glitch_grid[y][x] > 0:
+                    # Cycle through random characters in glitch cells
+                    self.char_grid[y][x] = random.choice(self.hex_chars)
+                    self.glitch_grid[y][x] += 1
+                    # Remove glitch when it has faded completely
+                    if self.glitch_grid[y][x] > self.max_glitch_states:
+                        self.glitch_grid[y][x] = 0
+                        # If the underlying cell has also faded, clear it
+                        if self.grid[y][x] == 0:
+                            self.char_grid[y][x] = " "
+                            self.z_order_grid[y][x] = 0
+
+        # Randomly select 1% of active cells to become glitch cells
+        if active_cells:
+            num_glitch = max(1, int(len(active_cells) * 0.01))  # At least 1 glitch
+            glitch_candidates = [
+                (y, x)
+                for (y, x) in active_cells
+                if self.glitch_grid[y][x] == 0  # Only non-glitch cells
+            ]
+            if glitch_candidates:
+                new_glitch_cells = random.sample(
+                    glitch_candidates, min(num_glitch, len(glitch_candidates))
+                )
+                for y, x in new_glitch_cells:
+                    self.glitch_grid[y][x] = 1  # Start glitch sequence
 
         # Now update each hex chunk
         for chunk in self.column_chunks:
@@ -147,30 +230,69 @@ class MatrixRain:
                         chunk["active"] = True
 
                         # Reset direction and position
-                        chunk["direction"] = random.choice(["up", "down"])
-                        chunk["z_order"] = random.randint(1, 100)
+                        # 50/50 chance: vertical chunks (up/down) or horizontal chunks (left/right)
+                        if random.random() < 0.5:
+                            # Vertical chunks - move up/down, have width
+                            chunk["direction"] = random.choice(["up", "down"])
+                            chunk["width"] = random.choice(self.chunk_sizes)
+                            chunk["height"] = 1
+                            chunk["z_order"] = random.randint(1, 100)
 
-                        if chunk["direction"] == "up":
-                            # 50/50 chance: spawn from bottom or random position
-                            if random.random() < 0.5:
-                                chunk["y"] = self.height - 1
-                            else:
-                                chunk["y"] = random.randint(0, self.height - 1)
-                        else:  # direction == "down"
-                            # 50/50 chance: spawn from top or random position
-                            if random.random() < 0.5:
-                                chunk["y"] = 0
-                            else:
-                                chunk["y"] = random.randint(0, self.height - 1)
+                            # Random x position for vertical chunks
+                            chunk["x_start"] = random.randint(
+                                0, max(0, self.width - chunk["width"])
+                            )
+
+                            if chunk["direction"] == "up":
+                                # 50/50 chance: spawn from bottom or random position
+                                if random.random() < 0.5:
+                                    chunk["y"] = self.height - 1
+                                else:
+                                    chunk["y"] = random.randint(0, self.height - 1)
+                            else:  # direction == "down"
+                                # 50/50 chance: spawn from top or random position
+                                if random.random() < 0.5:
+                                    chunk["y"] = 0
+                                else:
+                                    chunk["y"] = random.randint(0, self.height - 1)
+
+                            chunk["hex_value"] = self._generate_hex_string(
+                                chunk["width"]
+                            )
+                        else:
+                            # Horizontal chunks - move left/right, have height
+                            chunk["direction"] = random.choice(["left", "right"])
+                            chunk["width"] = 1
+                            chunk["height"] = random.choice(self.chunk_sizes)
+                            chunk["z_order"] = random.randint(1, 100)
+
+                            # Random y position for horizontal chunks
+                            chunk["y"] = random.randint(
+                                0, max(0, self.height - chunk["height"])
+                            )
+
+                            if chunk["direction"] == "left":
+                                # 50/50 chance: spawn from right edge or random position
+                                if random.random() < 0.5:
+                                    chunk["x_start"] = self.width - 1
+                                else:
+                                    chunk["x_start"] = random.randint(0, self.width - 1)
+                            else:  # direction == "right"
+                                # 50/50 chance: spawn from left edge or random position
+                                if random.random() < 0.5:
+                                    chunk["x_start"] = 0
+                                else:
+                                    chunk["x_start"] = random.randint(0, self.width - 1)
+
+                            chunk["hex_value"] = "".join(
+                                random.choice(self.hex_chars)
+                                for _ in range(chunk["height"])
+                            )
 
                         chunk["last_y"] = chunk["y"]
-                        chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+                        chunk["last_x"] = chunk["x_start"]
                         chunk["speed_counter"] = 0
                         chunk["tail_length"] = random.randint(4, 12)
-                        # Randomize position for more chaos and overlapping
-                        chunk["x_start"] = random.randint(
-                            0, max(0, self.width - chunk["width"])
-                        )
             else:
                 # Handle speed timing for active chunks
                 chunk["speed_counter"] += 1
@@ -178,41 +300,91 @@ class MatrixRain:
                 # While staying in same position, keep changing hex value (processing effect)
                 if chunk["speed_counter"] < chunk["speed"]:
                     # Still in same position - keep changing characters
-                    chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+                    if chunk["direction"] in ["up", "down"]:
+                        # Vertical chunks - generate horizontal hex string
+                        chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+                    else:
+                        # Horizontal chunks - generate vertical hex string
+                        chunk["hex_value"] = "".join(
+                            random.choice(self.hex_chars)
+                            for _ in range(chunk["height"])
+                        )
 
                 if chunk["speed_counter"] >= chunk["speed"]:
                     chunk["speed_counter"] = 0
 
                     # Place current chunk characters (frozen from last change) with z-ordering
-                    if 0 <= chunk["y"] < self.height:
-                        for i, char in enumerate(chunk["hex_value"]):
-                            x_pos = chunk["x_start"] + i
-                            if x_pos < self.width:
-                                # Only place if higher z-order or empty
-                                if (
-                                    self.grid[chunk["y"]][x_pos] == 0
-                                    or chunk["z_order"]
-                                    > self.z_order_grid[chunk["y"]][x_pos]
-                                ):
-                                    self.grid[chunk["y"]][x_pos] = 1  # White/head state
-                                    self.char_grid[chunk["y"]][x_pos] = char
-                                    self.z_order_grid[chunk["y"]][x_pos] = chunk[
-                                        "z_order"
-                                    ]
+                    if chunk["direction"] in ["up", "down"]:
+                        # Vertical chunks - place horizontally
+                        if 0 <= chunk["y"] < self.height:
+                            for i, char in enumerate(chunk["hex_value"]):
+                                x_pos = chunk["x_start"] + i
+                                if 0 <= x_pos < self.width:
+                                    # Only place if higher z-order or empty
+                                    if (
+                                        self.grid[chunk["y"]][x_pos] == 0
+                                        or chunk["z_order"]
+                                        > self.z_order_grid[chunk["y"]][x_pos]
+                                    ):
+                                        self.grid[chunk["y"]][x_pos] = (
+                                            1  # White/head state
+                                        )
+                                        self.char_grid[chunk["y"]][x_pos] = char
+                                        self.z_order_grid[chunk["y"]][x_pos] = chunk[
+                                            "z_order"
+                                        ]
+                    else:
+                        # Horizontal chunks - place vertically
+                        if 0 <= chunk["x_start"] < self.width:
+                            for i, char in enumerate(chunk["hex_value"]):
+                                y_pos = chunk["y"] + i
+                                if 0 <= y_pos < self.height:
+                                    # Only place if higher z-order or empty
+                                    if (
+                                        self.grid[y_pos][chunk["x_start"]] == 0
+                                        or chunk["z_order"]
+                                        > self.z_order_grid[y_pos][chunk["x_start"]]
+                                    ):
+                                        self.grid[y_pos][chunk["x_start"]] = (
+                                            1  # White/head state
+                                        )
+                                        self.char_grid[y_pos][chunk["x_start"]] = char
+                                        self.z_order_grid[y_pos][chunk["x_start"]] = (
+                                            chunk["z_order"]
+                                        )
 
                     # Move chunk based on direction
                     chunk["last_y"] = chunk["y"]
+                    chunk["last_x"] = chunk["x_start"]
                     if chunk["direction"] == "up":
                         chunk["y"] -= 1
-                    else:  # direction == "down"
+                    elif chunk["direction"] == "down":
                         chunk["y"] += 1
+                    elif chunk["direction"] == "left":
+                        chunk["x_start"] -= 1
+                    else:  # direction == "right"
+                        chunk["x_start"] += 1
 
                     # Generate new hex value for next position
-                    chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+                    if chunk["direction"] in ["up", "down"]:
+                        # Vertical chunks - generate horizontal hex string
+                        chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+                    else:
+                        # Horizontal chunks - generate vertical hex string
+                        chunk["hex_value"] = "".join(
+                            random.choice(self.hex_chars)
+                            for _ in range(chunk["height"])
+                        )
 
                     # Reset chunk when it goes off screen
-                    off_screen = (chunk["direction"] == "up" and chunk["y"] < -1) or (
-                        chunk["direction"] == "down" and chunk["y"] > self.height
+                    off_screen = (
+                        (chunk["direction"] == "up" and chunk["y"] < -1)
+                        or (chunk["direction"] == "down" and chunk["y"] > self.height)
+                        or (chunk["direction"] == "left" and chunk["x_start"] < -1)
+                        or (
+                            chunk["direction"] == "right"
+                            and chunk["x_start"] > self.width
+                        )
                     )
 
                     if off_screen:
@@ -221,30 +393,56 @@ class MatrixRain:
                             5, 25
                         )  # Longer cooldown since spawn rate is reduced
                         chunk["speed"] = random.randint(1, 4)  # Wide speed range
-                        # Randomize x position for next run (allows repositioning)
-                        chunk["x_start"] = random.randint(
-                            0, max(0, self.width - chunk["width"])
-                        )
-                        chunk["last_y"] = (
-                            self.height - 1 if chunk["direction"] == "up" else 0
-                        )
+                        # Reset position for next spawn
+                        if chunk["direction"] in ["up", "down"]:
+                            chunk["last_y"] = (
+                                self.height - 1 if chunk["direction"] == "up" else 0
+                            )
+                        else:  # left or right
+                            chunk["last_x"] = (
+                                self.width - 1 if chunk["direction"] == "left" else 0
+                            )
+                            chunk["last_y"] = chunk["y"]
                 else:
                     # Still in same position - place the changing characters with z-ordering
-                    if 0 <= chunk["y"] < self.height:
-                        for i, char in enumerate(chunk["hex_value"]):
-                            x_pos = chunk["x_start"] + i
-                            if x_pos < self.width:
-                                # Only place if higher z-order or empty
-                                if (
-                                    self.grid[chunk["y"]][x_pos] == 0
-                                    or chunk["z_order"]
-                                    > self.z_order_grid[chunk["y"]][x_pos]
-                                ):
-                                    self.grid[chunk["y"]][x_pos] = 1  # White/head state
-                                    self.char_grid[chunk["y"]][x_pos] = char
-                                    self.z_order_grid[chunk["y"]][x_pos] = chunk[
-                                        "z_order"
-                                    ]
+                    if chunk["direction"] in ["up", "down"]:
+                        # Vertical chunks - place horizontally
+                        if 0 <= chunk["y"] < self.height:
+                            for i, char in enumerate(chunk["hex_value"]):
+                                x_pos = chunk["x_start"] + i
+                                if 0 <= x_pos < self.width:
+                                    # Only place if higher z-order or empty
+                                    if (
+                                        self.grid[chunk["y"]][x_pos] == 0
+                                        or chunk["z_order"]
+                                        > self.z_order_grid[chunk["y"]][x_pos]
+                                    ):
+                                        self.grid[chunk["y"]][x_pos] = (
+                                            1  # White/head state
+                                        )
+                                        self.char_grid[chunk["y"]][x_pos] = char
+                                        self.z_order_grid[chunk["y"]][x_pos] = chunk[
+                                            "z_order"
+                                        ]
+                    else:
+                        # Horizontal chunks - place vertically
+                        if 0 <= chunk["x_start"] < self.width:
+                            for i, char in enumerate(chunk["hex_value"]):
+                                y_pos = chunk["y"] + i
+                                if 0 <= y_pos < self.height:
+                                    # Only place if higher z-order or empty
+                                    if (
+                                        self.grid[y_pos][chunk["x_start"]] == 0
+                                        or chunk["z_order"]
+                                        > self.z_order_grid[y_pos][chunk["x_start"]]
+                                    ):
+                                        self.grid[y_pos][chunk["x_start"]] = (
+                                            1  # White/head state
+                                        )
+                                        self.char_grid[y_pos][chunk["x_start"]] = char
+                                        self.z_order_grid[y_pos][chunk["x_start"]] = (
+                                            chunk["z_order"]
+                                        )
 
     def get_framebuffer(self):
         """Generate framebuffer with current matrix rain state"""
@@ -254,6 +452,11 @@ class MatrixRain:
         dim_matrix_green = Color.parse("#00AA2B")  # Dimmed Matrix green
         dark_green = Color.parse("#004400")  # Very dark green
         black = Color.parse("#333333")  # Pure black
+
+        # Glitch colors - cyan spectrum
+        bright_cyan = Color.parse("#00FFFF")  # Bright cyan
+        dim_cyan = Color.parse("#00AAAA")  # Dimmed cyan
+        dark_cyan = Color.parse("#004444")  # Very dark cyan
 
         # Create the 50/50 white/matrix green blend
         white_green_blend = white.blend(matrix_green, 0.5)
@@ -265,7 +468,26 @@ class MatrixRain:
         for y in range(self.height):
             row = []
             for x in range(self.width):
-                if self.grid[y][x] == 0:
+                # Check if this cell is in glitch state
+                if self.glitch_grid[y][x] > 0:
+                    # Handle glitch cells (red spectrum)
+                    glitch_level = self.glitch_grid[y][x]
+                    glitch_progress = (
+                        glitch_level / self.max_glitch_states
+                    )  # 0.0 to 1.0
+
+                    if glitch_progress <= 0.3:  # First 30% - bright cyan
+                        row.append((self.char_grid[y][x], bright_cyan.hex))
+                    elif glitch_progress <= 0.6:  # Next 30% - dimmed cyan
+                        row.append((self.char_grid[y][x], dim_cyan.hex))
+                    else:  # Final 40% - fade to black
+                        # Fade from dark cyan to black
+                        black_fade_progress = (
+                            glitch_progress - 0.6
+                        ) / 0.4  # 0.0 to 1.0
+                        color = dark_cyan.blend(black, black_fade_progress)
+                        row.append((self.char_grid[y][x], color.hex))
+                elif self.grid[y][x] == 0:
                     # Empty cell - pure black
                     row.append((" ", black.hex))
                 elif self.grid[y][x] == 1:
@@ -377,11 +599,41 @@ class ASCIIBanner(Widget):
         """Animate the banner (subtle effects)"""
         self.animation_frame = (self.animation_frame + 1) % 10
 
+    def increase_framerate(self) -> None:
+        """Increase matrix rain framerate (decrease update interval)"""
+        if not self.matrix_rain.enabled:
+            return
+
+        # Get current FPS as integer
+        current_fps = round(1.0 / self.matrix_rain.update_interval)
+
+        # Increment by 1 FPS, maximum 10 FPS
+        new_fps = min(10, current_fps + 1)
+        self.matrix_rain.update_interval = 1.0 / new_fps
+
+        # Show current FPS
+        self.notify(f"Matrix FPS: {new_fps}", timeout=1.0)
+
+    def decrease_framerate(self) -> None:
+        """Decrease matrix rain framerate (increase update interval)"""
+        if not self.matrix_rain.enabled:
+            return
+
+        # Get current FPS as integer
+        current_fps = round(1.0 / self.matrix_rain.update_interval)
+
+        # Decrement by 1 FPS, minimum 1 FPS (every 1 second)
+        new_fps = max(1, current_fps - 1)
+        self.matrix_rain.update_interval = 1.0 / new_fps
+
+        # Show current FPS
+        self.notify(f"Matrix FPS: {new_fps}", timeout=1.0)
+
     def watch_matrix_background(self, matrix_enabled: bool) -> None:
         """React to matrix background toggle"""
         if matrix_enabled:
-            # Start matrix animation at 1 FPS
-            self.auto_refresh = 1
+            # Start matrix animation at 2 frames per second (default)
+            self.auto_refresh = 0.5
             self.matrix_rain.enabled = True
         else:
             # Stop auto refresh when disabled
