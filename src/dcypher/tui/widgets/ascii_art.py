@@ -34,6 +34,9 @@ class MatrixRain:
         # Hex chunk dimensions that make sense for crypto/hex work
         self.chunk_sizes = [2, 4, 8]  # bytes, words, dwords
 
+        # Color cache for z_order based colors
+        self.color_cache = {}
+
         # Column chunks - each chunk spans multiple columns
         self.column_chunks = []
         # Grid to track fade states: 0=empty, 1=white/head, 2+=fading trail
@@ -154,12 +157,107 @@ class MatrixRain:
         """Generate a random hex string of specified width"""
         return "".join(random.choice(self.hex_chars) for _ in range(width))
 
+    def _get_chunk_color(self, z_order: int) -> tuple[Color, Color, Color]:
+        """Get a consistent 100% saturated vibrant color for a given z_order"""
+        if z_order not in self.color_cache:
+            # Use z_order as seed for consistent color generation
+            random_state = random.getstate()
+            random.seed(z_order)
+
+            # Generate random hue but force 100% saturation and optimal lightness
+            hue = random.randint(0, 360)
+            saturation = 100  # Force 100% saturation - no washed out colors!
+            lightness = random.randint(50, 60)  # Optimal lightness for vibrant colors
+
+            # Convert HSL to RGB
+            h = hue / 360.0
+            s = saturation / 100.0
+            l = lightness / 100.0
+
+            def hue_to_rgb(p, q, t):
+                if t < 0:
+                    t += 1
+                if t > 1:
+                    t -= 1
+                if t < 1 / 6:
+                    return p + (q - p) * 6 * t
+                if t < 1 / 2:
+                    return q
+                if t < 2 / 3:
+                    return p + (q - p) * (2 / 3 - t) * 6
+                return p
+
+            if s == 0:
+                r = g = b = l
+            else:
+                q = l * (1 + s) if l < 0.5 else l + s - l * s
+                p = 2 * l - q
+                r = hue_to_rgb(p, q, h + 1 / 3)
+                g = hue_to_rgb(p, q, h)
+                b = hue_to_rgb(p, q, h - 1 / 3)
+
+            # Convert to 0-255 range
+            r = int(r * 255)
+            g = int(g * 255)
+            b = int(b * 255)
+
+            # Create color objects using hex format
+            base_color = Color.parse(f"#{r:02x}{g:02x}{b:02x}")
+            dim_color = Color.parse(
+                f"#{int(r * 0.7):02x}{int(g * 0.7):02x}{int(b * 0.7):02x}"
+            )
+            dark_color = Color.parse(
+                f"#{int(r * 0.3):02x}{int(g * 0.3):02x}{int(b * 0.3):02x}"
+            )
+
+            self.color_cache[z_order] = (base_color, dim_color, dark_color)
+
+            # Restore random state
+            random.setstate(random_state)
+
+        return self.color_cache[z_order]
+
+    def _get_negative_color(self, z_order: int) -> tuple[Color, Color, Color]:
+        """Get the negative/complement colors for a given z_order"""
+        if z_order == 0:
+            # Fallback to cyan if no z_order
+            bright_cyan = Color.parse("#00FFFF")
+            dim_cyan = Color.parse("#00AAAA")
+            dark_cyan = Color.parse("#004444")
+            return (bright_cyan, dim_cyan, dark_cyan)
+
+        # Get the original colors
+        base_color, dim_color, dark_color = self._get_chunk_color(z_order)
+
+        # Parse original colors to get RGB values
+        base_hex = base_color.hex
+        r = int(base_hex[1:3], 16)
+        g = int(base_hex[3:5], 16)
+        b = int(base_hex[5:7], 16)
+
+        # Calculate negative/complement colors (255 - original)
+        neg_r = 255 - r
+        neg_g = 255 - g
+        neg_b = 255 - b
+
+        # Create negative color variations
+        neg_base = Color.parse(f"#{neg_r:02x}{neg_g:02x}{neg_b:02x}")
+        neg_dim = Color.parse(
+            f"#{int(neg_r * 0.7):02x}{int(neg_g * 0.7):02x}{int(neg_b * 0.7):02x}"
+        )
+        neg_dark = Color.parse(
+            f"#{int(neg_r * 0.3):02x}{int(neg_g * 0.3):02x}{int(neg_b * 0.3):02x}"
+        )
+
+        return (neg_base, neg_dim, neg_dark)
+
     def toggle_rain(self):
         """Toggle matrix rain effect on/off"""
         self.enabled = not self.enabled
         if not self.enabled:
             # Clear all when disabled
             self.reset_grid()
+            self.color_cache.clear()
 
     def update(self):
         """Update matrix rain animation - call this each frame with 1 FPS timing control"""
@@ -446,23 +544,9 @@ class MatrixRain:
 
     def get_framebuffer(self):
         """Generate framebuffer with current matrix rain state"""
-        # Define precise hex colors for Matrix rain effect
+        # Define base colors
         white = Color.parse("#FFFFFF")  # Pure white head
-        matrix_green = Color.parse("#00FF41")  # Classic Matrix green
-        dim_matrix_green = Color.parse("#00AA2B")  # Dimmed Matrix green
-        dark_green = Color.parse("#004400")  # Very dark green
         black = Color.parse("#333333")  # Pure black
-
-        # Glitch colors - cyan spectrum
-        bright_cyan = Color.parse("#00FFFF")  # Bright cyan
-        dim_cyan = Color.parse("#00AAAA")  # Dimmed cyan
-        dark_cyan = Color.parse("#004444")  # Very dark cyan
-
-        # Create the 50/50 white/matrix green blend
-        white_green_blend = white.blend(matrix_green, 0.5)
-
-        # Create the 50/50 dark green/black blend for final fade
-        dark_green_black_blend = dark_green.blend(black, 0.75)
 
         framebuffer = []
         for y in range(self.height):
@@ -470,22 +554,26 @@ class MatrixRain:
             for x in range(self.width):
                 # Check if this cell is in glitch state
                 if self.glitch_grid[y][x] > 0:
-                    # Handle glitch cells (red spectrum)
+                    # Handle glitch cells (negative color spectrum)
                     glitch_level = self.glitch_grid[y][x]
                     glitch_progress = (
                         glitch_level / self.max_glitch_states
                     )  # 0.0 to 1.0
 
-                    if glitch_progress <= 0.3:  # First 30% - bright cyan
-                        row.append((self.char_grid[y][x], bright_cyan.hex))
-                    elif glitch_progress <= 0.6:  # Next 30% - dimmed cyan
-                        row.append((self.char_grid[y][x], dim_cyan.hex))
+                    # Get the negative color for this sprite
+                    z_order = self.z_order_grid[y][x]
+                    neg_bright, neg_dim, neg_dark = self._get_negative_color(z_order)
+
+                    if glitch_progress <= 0.3:  # First 30% - bright negative
+                        row.append((self.char_grid[y][x], neg_bright.hex))
+                    elif glitch_progress <= 0.6:  # Next 30% - dimmed negative
+                        row.append((self.char_grid[y][x], neg_dim.hex))
                     else:  # Final 40% - fade to black
-                        # Fade from dark cyan to black
+                        # Fade from dark negative to black
                         black_fade_progress = (
                             glitch_progress - 0.6
                         ) / 0.4  # 0.0 to 1.0
-                        color = dark_cyan.blend(black, black_fade_progress)
+                        color = neg_dark.blend(black, black_fade_progress)
                         row.append((self.char_grid[y][x], color.hex))
                 elif self.grid[y][x] == 0:
                     # Empty cell - pure black
@@ -494,41 +582,64 @@ class MatrixRain:
                     # Head - bright white
                     row.append((self.char_grid[y][x], white.hex))
                 elif self.grid[y][x] == 2:
-                    # Second position - 50/50 white/green blend
-                    row.append((self.char_grid[y][x], white_green_blend.hex))
+                    # Second position - 50/50 white/color blend
+                    z_order = self.z_order_grid[y][x]
+                    if z_order > 0:
+                        base_color, dim_color, dark_color = self._get_chunk_color(
+                            z_order
+                        )
+                        white_color_blend = white.blend(base_color, 0.5)
+                        row.append((self.char_grid[y][x], white_color_blend.hex))
+                    else:
+                        row.append((self.char_grid[y][x], white.hex))
                 else:
-                    # Positions 3+ - gradual fade from blend to green to black
-                    fade_level = (
-                        self.grid[y][x] - 2
-                    )  # 1-10 (since grid starts at 2 after head)
-                    max_fade = self.max_fade_states - 2  # 10
-                    fade_progress = fade_level / max_fade  # 0.0 to 1.0
+                    # Positions 3+ - gradual fade from blend to color to black
+                    z_order = self.z_order_grid[y][x]
+                    if z_order > 0:
+                        base_color, dim_color, dark_color = self._get_chunk_color(
+                            z_order
+                        )
+                        white_color_blend = white.blend(base_color, 0.5)
+                        dark_color_black_blend = dark_color.blend(black, 0.75)
 
-                    if fade_progress <= 0.2:  # First 20% - blend to matrix green
-                        # Blend from white_green_blend to matrix green
-                        blend_factor = fade_progress / 0.2
-                        color = white_green_blend.blend(matrix_green, blend_factor)
-                        row.append((self.char_grid[y][x], color.hex))
-                    elif fade_progress <= 0.4:  # Next 20% - pure matrix green
-                        row.append((self.char_grid[y][x], matrix_green.hex))
-                    elif fade_progress <= 0.6:  # Next 20% - start dimming
-                        row.append((self.char_grid[y][x], dim_matrix_green.hex))
-                    else:  # Final 40% - gradual fade to black
-                        # Create smooth fade to black over the final 40%
-                        black_fade_progress = (fade_progress - 0.6) / 0.4  # 0.0 to 1.0
+                        fade_level = (
+                            self.grid[y][x] - 2
+                        )  # 1-10 (since grid starts at 2 after head)
+                        max_fade = self.max_fade_states - 2  # 10
+                        fade_progress = fade_level / max_fade  # 0.0 to 1.0
 
-                        if (
-                            black_fade_progress <= 0.5
-                        ):  # First half - dim green to darker green
-                            blend_factor = black_fade_progress * 2  # 0.0 to 1.0
-                            color = dim_matrix_green.blend(dark_green, blend_factor)
+                        if fade_progress <= 0.2:  # First 20% - blend to base color
+                            # Blend from white_color_blend to base color
+                            blend_factor = fade_progress / 0.2
+                            color = white_color_blend.blend(base_color, blend_factor)
                             row.append((self.char_grid[y][x], color.hex))
-                        else:  # Second half - dark green to dark green/black blend
-                            blend_factor = (black_fade_progress - 0.5) * 2  # 0.0 to 1.0
-                            color = dark_green.blend(
-                                dark_green_black_blend, blend_factor
-                            )
-                            row.append((self.char_grid[y][x], color.hex))
+                        elif fade_progress <= 0.4:  # Next 20% - pure base color
+                            row.append((self.char_grid[y][x], base_color.hex))
+                        elif fade_progress <= 0.6:  # Next 20% - start dimming
+                            row.append((self.char_grid[y][x], dim_color.hex))
+                        else:  # Final 40% - gradual fade to black
+                            # Create smooth fade to black over the final 40%
+                            black_fade_progress = (
+                                fade_progress - 0.6
+                            ) / 0.4  # 0.0 to 1.0
+
+                            if (
+                                black_fade_progress <= 0.5
+                            ):  # First half - dim color to darker color
+                                blend_factor = black_fade_progress * 2  # 0.0 to 1.0
+                                color = dim_color.blend(dark_color, blend_factor)
+                                row.append((self.char_grid[y][x], color.hex))
+                            else:  # Second half - dark color to dark color/black blend
+                                blend_factor = (
+                                    black_fade_progress - 0.5
+                                ) * 2  # 0.0 to 1.0
+                                color = dark_color.blend(
+                                    dark_color_black_blend, blend_factor
+                                )
+                                row.append((self.char_grid[y][x], color.hex))
+                    else:
+                        # Fallback to white if no z_order
+                        row.append((self.char_grid[y][x], white.hex))
 
             framebuffer.append(row)
 
