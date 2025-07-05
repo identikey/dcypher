@@ -68,26 +68,37 @@ class DCypherHeader(Static):
         connection_uptime = self.app_instance.get_connection_uptime_string()
         server_uptime = self.app_instance.get_server_uptime_string()
 
-        # Build header text
+        # Build header text with colors optimized for cyan background
         header_text = Text()
-        header_text.append(f"{self.app_instance.TITLE} | ", style="bold")
-        header_text.append("Client: ", style="dim")
-        header_text.append(local_uptime, style="green")
+        header_text.append(f"{self.app_instance.TITLE} | ", style="bold bright_white")
+        header_text.append("Client ", style="bright_black")
+        header_text.append(local_uptime, style="bold dark_green")
 
-        header_text.append(" | Conn: ", style="dim")
-        if connection_uptime == "X":
-            header_text.append(connection_uptime, style="red")
+        header_text.append(" | Conn ", style="bright_black")
+        if connection_uptime == "XX:XX:XX":
+            header_text.append(connection_uptime, style="bold dark_red")
         else:
-            header_text.append(connection_uptime, style="yellow")
+            header_text.append(connection_uptime, style="bold dark_green")
 
         if server_uptime:
-            header_text.append(" | Server: ", style="dim")
-            header_text.append(server_uptime, style="cyan")
+            header_text.append(" | Server ", style="bold bright_black")
+            header_text.append(server_uptime, style="bold dark_green")
         else:
-            header_text.append(" | Server: ", style="dim")
-            header_text.append("disconnected", style="red")
+            header_text.append(" | Server ", style="bold bright_black")
+            header_text.append("XX:XX:XX", style="bold dark_red")
 
-        header_text.append(f" | {current_time}", style="bold")
+        # Add API server name/URL
+        header_text.append(" | API ", style="bold bright_black")
+        # Extract just the host:port from the URL for cleaner display
+        api_display = self.app_instance.api_url.replace("http://", "").replace(
+            "https://", ""
+        )
+        if server_uptime:
+            header_text.append(api_display, style="bold dark_green")
+        else:
+            header_text.append(api_display, style="bold dark_red")
+
+        header_text.append(f" | {current_time}", style="bold bright_white")
 
         self.update(header_text)
 
@@ -100,19 +111,21 @@ class DCypherTUI(App[None]):
     Influences: btop, cipherpunk aesthetics, art deco, @repligate
     """
 
-    TITLE = "v0.0.1 dCypher Terminal: PQ-Lattice FHE System"
+    TITLE = "v0.0.1 dCypher Terminal"
     SUB_TITLE = "REPLICANT TERMINAL v2.1.0"
     CSS = CYBERPUNK_THEME
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", priority=True),
         Binding("ctrl+d", "toggle_dark", "Toggle Dark Mode"),
-        Binding("ctrl+t", "toggle_transparent", "Toggle Transparent Background"),
         Binding("ctrl+r", "connect", "Connect to Server"),
         Binding("ctrl+shift+r", "disconnect", "Disconnect from Server"),
         Binding("f1", "show_help", "Help"),
         Binding("f2", "show_logs", "Logs"),
         Binding("f12", "screenshot", "Screenshot"),
+        # Matrix effects
+        Binding("f3", "toggle_matrix_rain", "Toggle Matrix Rain"),
+        Binding("f4", "toggle_scrolling_code", "Toggle Scrolling Code"),
         # Tab navigation
         Binding("left", "previous_tab", "Previous Tab"),
         Binding("right", "next_tab", "Next Tab"),
@@ -132,7 +145,6 @@ class DCypherTUI(App[None]):
     identity_info: reactive[Optional[Dict[str, Any]]] = reactive(None)
     api_url: reactive[str] = reactive("http://127.0.0.1:8000")
     connection_status: reactive[str] = reactive("disconnected")
-    transparent_background: reactive[bool] = reactive(False)
 
     # Centralized API client
     _api_client: Optional[DCypherClient] = None
@@ -158,7 +170,7 @@ class DCypherTUI(App[None]):
         self.connection_start_time: Optional[float] = None
 
     def get_uptime_string(self) -> str:
-        """Calculate and format application uptime"""
+        """Calculate and format application uptime in HH:MM:SS format"""
         uptime_seconds = int(time.time() - self.start_time)
 
         # Convert to hours, minutes, seconds
@@ -166,24 +178,19 @@ class DCypherTUI(App[None]):
         minutes = (uptime_seconds % 3600) // 60
         seconds = uptime_seconds % 60
 
-        if hours > 0:
-            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
-        elif minutes > 0:
-            return f"{minutes:02d}m {seconds:02d}s"
-        else:
-            return f"{seconds:02d}s"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def get_server_uptime_string(self) -> Optional[str]:
         """Get formatted server uptime string"""
         return self.server_uptime
 
     def get_connection_uptime_string(self) -> str:
-        """Get formatted connection uptime string or 'X' if disconnected"""
+        """Get formatted connection uptime string or 'XX:XX:XX' if disconnected"""
         if (
             self.connection_start_time is None
             or self.connection_status == "disconnected"
         ):
-            return "X"
+            return "XX:XX:XX"
 
         uptime_seconds = int(time.time() - self.connection_start_time)
         return self.format_uptime_seconds(uptime_seconds)
@@ -273,20 +280,16 @@ class DCypherTUI(App[None]):
             except Exception:
                 pass
 
-    def watch_transparent_background(self, transparent: bool) -> None:
-        """Update CSS when transparency mode changes"""
-        # TODO: Implement dynamic CSS updates in future version
-        pass
-
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
         yield DCypherHeader(self)
 
-        # CPU usage divider - positioned under header
-        self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
-        yield self.cpu_divider
+        # Use a simple Vertical container to maintain layout structure for widgets
+        with Vertical(id="main-content"):
+            # CPU usage divider - positioned under header
+            self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
+            yield self.cpu_divider
 
-        with Container(id="main-container"):
             # ASCII Banner
             yield ASCIIBanner()
 
@@ -385,18 +388,13 @@ class DCypherTUI(App[None]):
             self.server_uptime = None
 
     def format_uptime_seconds(self, uptime_seconds: int) -> str:
-        """Format uptime seconds into readable string"""
+        """Format uptime seconds into HH:MM:SS format"""
         # Convert to hours, minutes, seconds
         hours = uptime_seconds // 3600
         minutes = (uptime_seconds % 3600) // 60
         seconds = uptime_seconds % 60
 
-        if hours > 0:
-            return f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
-        elif minutes > 0:
-            return f"{minutes:02d}m {seconds:02d}s"
-        else:
-            return f"{seconds:02d}s"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def action_toggle_dark(self) -> None:
         """Toggle dark mode"""
@@ -405,12 +403,6 @@ class DCypherTUI(App[None]):
             self.theme = "textual-light"
         else:
             self.theme = "textual-dark"
-
-    def action_toggle_transparent(self) -> None:
-        """Toggle transparent background mode"""
-        self.transparent_background = not self.transparent_background
-        # Note: CSS transparency will be implemented in a future update
-        self.refresh_css()  # Refresh the CSS to apply changes
 
     def action_show_help(self) -> None:
         """Show help screen"""
@@ -521,6 +513,30 @@ class DCypherTUI(App[None]):
 
         except Exception as e:
             self.notify(f"Error during disconnect: {e}", severity="warning")
+
+    def action_toggle_matrix_rain(self) -> None:
+        """Toggle matrix rain background effect"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            ascii_banner.matrix_background = not ascii_banner.matrix_background
+            # Note: No need to call toggle_rain() manually - the reactive property
+            # watch_matrix_background() handles enabling/disabling automatically
+
+            status = "enabled" if ascii_banner.matrix_background else "disabled"
+            self.notify(f"Matrix rain effect {status}", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to toggle matrix rain: {e}", severity="error")
+
+    def action_toggle_scrolling_code(self) -> None:
+        """Toggle scrolling code background effect"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            ascii_banner.scrolling_code = not ascii_banner.scrolling_code
+
+            status = "enabled" if ascii_banner.scrolling_code else "disabled"
+            self.notify(f"Scrolling code effect {status}", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to toggle scrolling code: {e}", severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """

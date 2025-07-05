@@ -11,7 +11,7 @@ def get_cyberpunk_theme(transparent_background: bool = False) -> str:
     Args:
         transparent_background: If True, removes background colors for terminal transparency
     """
-    # Base colors remain the same
+    # Base colors - using hex colors for better visuals
     base_colors = """
 /* Global Variables - Cyberpunk Color Palette */
 $primary: #00ff41;        /* Matrix green */
@@ -20,6 +20,15 @@ $accent: #00d4ff;         /* Cyan blue */
 $warning: #ffff00;        /* Electric yellow */
 $error: #ff073a;          /* Neon red */
 $success: #39ff14;        /* Bright green */
+
+/* Header-specific colors optimized for cyan background */
+$header-title: #ffffff;    /* Pure white for title */
+$header-time: #ffffff;     /* Pure white for time */
+$header-client: #39ff14;   /* Bright green for client uptime */
+$header-conn-ok: #ffff00;  /* Bright yellow for connection ok */
+$header-conn-err: #ff073a; /* Bright red for connection error */
+$header-server: #ff00ff;   /* Bright magenta for server uptime */
+$header-labels: #000000;   /* Black for labels */
 """
 
     if transparent_background:
@@ -53,7 +62,6 @@ $border-secondary: #ff6b35; /* Orange border */
     common_styles = """
 /* App-wide styles */
 App {
-    background: $bg-dark;
     color: $text-primary;
 }
 
@@ -65,9 +73,7 @@ Widget {
 
 /* Header styling - @repligate inspired */
 Header {
-    background: $bg-medium;
     color: $text-primary;
-    border: solid $border-primary;
     text-style: bold;
     height: 3;  /* Ensure header is tall enough for title + subtitle */
     min-height: 3;
@@ -83,11 +89,16 @@ Header .header--clock {
     text-style: bold;
 }
 
+/* Custom header widget with optimized colors */
+DCypherHeader {
+    text-style: bold;
+    height: 1;
+    dock: top;
+}
+
 /* Footer styling */
 Footer {
-    background: $bg-medium;
     color: $text-secondary;
-    border: solid $border-primary;
     text-style: bold;
     height: 3;  /* Ensure footer is tall enough for keybindings */
     min-height: 3;
@@ -179,12 +190,15 @@ Footer {
 
 /* ASCII Banner styling */
 ASCIIBanner {
-    height: 12;
+    height: auto;
     background: $bg-medium;
     color: $primary;
     text-style: bold;
     text-align: center;
-    border: solid $border-primary;
+    content-align: center middle;
+    width: 100%;
+    margin: 0;
+    padding: 0;
 }
 
 /* Main container */
@@ -193,6 +207,13 @@ ASCIIBanner {
     border: solid $border-primary;
     margin: 0;
     padding: 1;
+}
+
+/* Main content container */
+#main-content {
+    width: 100%;
+    height: 100%;
+    align: center middle;
 }
 
 /* Tabbed content styling */
@@ -425,6 +446,117 @@ LoadingIndicator {
 
 .glow {
     /* Will be used for glow effects */
+}
+
+/* Override default styles to use transparent backgrounds (keep header visible) */
+App {
+    background: transparent;
+}
+
+/* Keep header and footer visible for branding */
+Header {
+    background: $bg-medium;
+    border: solid $border-primary;
+}
+
+Footer {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+DCypherHeader {
+    background: $accent;
+    color: $header-labels;
+    text-style: bold;
+}
+
+/* Make main content transparent */
+ASCIIBanner {
+    background: transparent;
+    content-align: center middle;
+    text-align: center;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+TabbedContent {
+    background: transparent;
+}
+
+TabbedContent > Tabs {
+    background: transparent;
+}
+
+TabbedContent > Tabs > Tab {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+TabbedContent > Tabs > Tab.-active {
+    background: $primary;
+    color: #000000;
+}
+
+TabbedContent > ContentSwitcher {
+    background: transparent;
+}
+
+TabPane {
+    background: transparent;
+}
+
+DashboardScreen, IdentityScreen, CryptoScreen, AccountsScreen, 
+FilesScreen, SharingScreen {
+    background: transparent;
+}
+
+#identity-status, #api-status, #files-status {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+SystemMonitor {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+#cpu-divider, #memory-divider {
+    background: transparent;
+}
+
+Button {
+    background: transparent;
+    border: solid $primary;
+}
+
+Button:hover {
+    background: $primary;
+    color: #000000;
+}
+
+Input {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+DataTable {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+DataTable > .datatable--header {
+    background: transparent;
+    border: solid $border-primary;
+}
+
+DataTable > .datatable--row {
+    background: transparent;
+}
+
+ProgressBar {
+    background: transparent;
+    border: solid $border-primary;
 }
 """
 
