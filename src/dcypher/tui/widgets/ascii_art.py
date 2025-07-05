@@ -24,7 +24,7 @@ class MatrixRain:
     def __init__(self, width: int = 80, height: int = 20):
         self.width = width
         self.height = height
-        self.enabled = False
+        self.enabled = True
         self.hex_chars = "0123456789ABCDEF"
 
         # Timing control for consistent 2 FPS updates (default)
@@ -684,7 +684,7 @@ class ASCIIBanner(Widget):
     # Reactive properties
     show_subtitle = reactive(True)
     animation_frame = reactive(0)
-    matrix_background = reactive(False)
+    matrix_background = reactive(True)
     scrolling_code = reactive(False)
 
     # ASCII art for dCypher logo
