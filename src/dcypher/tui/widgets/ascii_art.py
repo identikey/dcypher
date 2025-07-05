@@ -7,6 +7,7 @@ import random
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.app import RenderResult
+from textual.color import Color
 from rich.console import Console, ConsoleOptions
 from rich.text import Text
 from rich.align import Align
@@ -15,7 +16,7 @@ from rich.panel import Panel
 
 class MatrixRain:
     """
-    Matrix rain effect controller implementing proper column-based drops
+    Matrix rain effect controller implementing simple upward-moving pattern
     """
 
     def __init__(self, width: int = 80, height: int = 20):
@@ -24,97 +25,170 @@ class MatrixRain:
         self.enabled = False
         self.matrix_chars = list("0123456789ABCDEF01")  # Hex + binary
 
-        # Column-based drops - each column can have multiple active drops
-        self.columns = []
-        self.reset_columns()
+        # Simple column heads - each column has one head moving upward
+        self.column_heads = []
+        # Grid to track fade states: 0=empty, 1=white/head, 2+=fading trail
+        self.grid = []
+        # Character grid to store what character is at each position
+        self.char_grid = []
+        # Maximum fade states (determines tail length)
+        self.max_fade_states = 12
+        self.reset_grid()
 
-    def reset_columns(self):
-        """Initialize/reset all columns"""
-        self.columns = []
+    def reset_grid(self):
+        """Initialize/reset the grid and column heads"""
+        self.column_heads = []
+        self.grid = []
+        self.char_grid = []
+
+        # Initialize each column head with random starting conditions
         for x in range(self.width):
-            self.columns.append(
+            self.column_heads.append(
                 {
-                    "drops": [],  # List of active drops in this column
-                    "spawn_cooldown": 0,
+                    "y": self.height - 1,  # Start at bottom
+                    "char": random.choice(self.matrix_chars),
+                    "active": random.random() < 0.3,  # Only 30% start active
+                    "spawn_cooldown": random.randint(0, 20),  # Random initial delay
+                    "speed_counter": 0,  # For variable speed
+                    "speed": random.randint(1, 3),  # How many frames between moves
+                    "tail_length": random.randint(3, 10),  # Random tail length
                 }
             )
+
+        # Initialize empty grid
+        for y in range(self.height):
+            row = []
+            char_row = []
+            for x in range(self.width):
+                row.append(0)  # Empty state
+                char_row.append(" ")  # Empty char
+            self.grid.append(row)
+            self.char_grid.append(char_row)
 
     def toggle_rain(self):
         """Toggle matrix rain effect on/off"""
         self.enabled = not self.enabled
         if not self.enabled:
-            # Clear all drops when disabled
-            self.reset_columns()
+            # Clear all when disabled
+            self.reset_grid()
 
     def update(self):
         """Update matrix rain animation - call this each frame"""
         if not self.enabled:
             return
 
-        # Update existing drops
-        for col_idx, column in enumerate(self.columns):
-            # Update each drop in this column
-            for drop in column["drops"][
-                :
-            ]:  # Copy list to avoid modification during iteration
-                drop["y"] += drop["speed"]
-                drop["age"] += 1
+        # First, age all existing characters (fade them)
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y][x] > 0:
+                    self.grid[y][x] += 1
+                    # Remove characters that have faded completely
+                    if self.grid[y][x] > self.max_fade_states:
+                        self.grid[y][x] = 0
+                        self.char_grid[y][x] = " "
 
-                # Remove drops that have fallen off screen or aged out
-                if drop["y"] > self.height + drop["length"]:
-                    column["drops"].remove(drop)
+        # Now update each column head
+        for col_idx, head in enumerate(self.column_heads):
+            # Handle spawn cooldown for inactive heads
+            if not head["active"]:
+                if head["spawn_cooldown"] > 0:
+                    head["spawn_cooldown"] -= 1
+                else:
+                    # Random chance to spawn a new head
+                    if random.random() < 0.08:  # 8% chance per frame
+                        head["active"] = True
+                        head["y"] = self.height - 1
+                        head["char"] = random.choice(self.matrix_chars)
+                        head["speed_counter"] = 0
+                        head["tail_length"] = random.randint(3, 10)
+            else:
+                # Handle speed timing for active heads
+                head["speed_counter"] += 1
+                if head["speed_counter"] >= head["speed"]:
+                    head["speed_counter"] = 0
 
-            # Handle spawn cooldown
-            if column["spawn_cooldown"] > 0:
-                column["spawn_cooldown"] -= 1
+                    # Place current head character
+                    if 0 <= head["y"] < self.height:
+                        self.grid[head["y"]][col_idx] = 1  # White/head state
+                        self.char_grid[head["y"]][col_idx] = head["char"]
 
-            # Spawn new drops randomly
-            if column["spawn_cooldown"] <= 0 and random.random() < 0.05:  # 5% chance
-                new_drop = {
-                    "y": 0,
-                    "length": random.randint(3, 12),
-                    "speed": random.uniform(0.5, 2.0),
-                    "age": 0,
-                    "chars": [
-                        random.choice(self.matrix_chars)
-                        for _ in range(random.randint(3, 12))
-                    ],
-                }
-                column["drops"].append(new_drop)
-                column["spawn_cooldown"] = random.randint(
-                    5, 30
-                )  # Cooldown before next spawn
+                    # Move head up
+                    head["y"] -= 1
+
+                    # Generate new character for next position
+                    head["char"] = random.choice(self.matrix_chars)
+
+                    # Reset head when it goes off screen
+                    if head["y"] < -1:
+                        head["active"] = False
+                        head["spawn_cooldown"] = random.randint(
+                            5, 30
+                        )  # Random delay before next spawn
+                        head["speed"] = random.randint(1, 3)  # New random speed
 
     def get_framebuffer(self):
         """Generate framebuffer with current matrix rain state"""
+        # Define precise hex colors for Matrix rain effect
+        white = Color.parse("#FFFFFF")  # Pure white head
+        matrix_green = Color.parse("#00FF41")  # Classic Matrix green
+        dim_matrix_green = Color.parse("#00AA2B")  # Dimmed Matrix green
+        dark_green = Color.parse("#004400")  # Very dark green
+        black = Color.parse("#333333")  # Pure black
+
+        # Create the 50/50 white/matrix green blend
+        white_green_blend = white.blend(matrix_green, 0.5)
+
+        # Create the 50/50 dark green/black blend for final fade
+        dark_green_black_blend = dark_green.blend(black, 0.75)
+
         framebuffer = []
         for y in range(self.height):
             row = []
             for x in range(self.width):
-                row.append((" ", "dim green"))  # Default empty cell
+                if self.grid[y][x] == 0:
+                    # Empty cell - pure black
+                    row.append((" ", black.hex))
+                elif self.grid[y][x] == 1:
+                    # Head - bright white
+                    row.append((self.char_grid[y][x], white.hex))
+                elif self.grid[y][x] == 2:
+                    # Second position - 50/50 white/green blend
+                    row.append((self.char_grid[y][x], white_green_blend.hex))
+                else:
+                    # Positions 3+ - gradual fade from blend to green to black
+                    fade_level = (
+                        self.grid[y][x] - 2
+                    )  # 1-10 (since grid starts at 2 after head)
+                    max_fade = self.max_fade_states - 2  # 10
+                    fade_progress = fade_level / max_fade  # 0.0 to 1.0
+
+                    if fade_progress <= 0.2:  # First 20% - blend to matrix green
+                        # Blend from white_green_blend to matrix green
+                        blend_factor = fade_progress / 0.2
+                        color = white_green_blend.blend(matrix_green, blend_factor)
+                        row.append((self.char_grid[y][x], color.hex))
+                    elif fade_progress <= 0.4:  # Next 20% - pure matrix green
+                        row.append((self.char_grid[y][x], matrix_green.hex))
+                    elif fade_progress <= 0.6:  # Next 20% - start dimming
+                        row.append((self.char_grid[y][x], dim_matrix_green.hex))
+                    else:  # Final 40% - gradual fade to black
+                        # Create smooth fade to black over the final 40%
+                        black_fade_progress = (fade_progress - 0.6) / 0.4  # 0.0 to 1.0
+
+                        if (
+                            black_fade_progress <= 0.5
+                        ):  # First half - dim green to darker green
+                            blend_factor = black_fade_progress * 2  # 0.0 to 1.0
+                            color = dim_matrix_green.blend(dark_green, blend_factor)
+                            row.append((self.char_grid[y][x], color.hex))
+                        else:  # Second half - dark green to dark green/black blend
+                            blend_factor = (black_fade_progress - 0.5) * 2  # 0.0 to 1.0
+                            color = dark_green.blend(
+                                dark_green_black_blend, blend_factor
+                            )
+                            row.append((self.char_grid[y][x], color.hex))
+
             framebuffer.append(row)
-
-        if not self.enabled:
-            return framebuffer
-
-        # Draw all active drops
-        for col_idx, column in enumerate(self.columns):
-            for drop in column["drops"]:
-                # Draw each character in the drop
-                for i, char in enumerate(drop["chars"]):
-                    char_y = int(drop["y"]) + i
-                    if 0 <= char_y < self.height:
-                        # Calculate brightness based on position in drop
-                        if i == 0:  # Head of drop
-                            style = "bright_white"
-                        elif i == 1:  # Just behind head
-                            style = "bright_green"
-                        elif i < len(drop["chars"]) // 2:  # Middle
-                            style = "green"
-                        else:  # Tail
-                            style = "dim green"
-
-                        framebuffer[char_y][col_idx] = (char, style)
 
         return framebuffer
 
@@ -213,7 +287,7 @@ class ASCIIBanner(Widget):
         ):
             self.matrix_rain.width = container_width
             self.matrix_rain.height = container_height
-            self.matrix_rain.reset_columns()
+            self.matrix_rain.reset_grid()
 
         # Create ASCII content
         ascii_text = Text()
