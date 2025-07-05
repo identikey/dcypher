@@ -16,17 +16,21 @@ from rich.panel import Panel
 
 class MatrixRain:
     """
-    Matrix rain effect controller implementing simple upward-moving pattern
+    Matrix rain effect controller implementing hex-chunk-based upward-moving pattern
+    Uses hex-meaningful widths (2, 4, 8 characters) for authentic crypto aesthetic
     """
 
     def __init__(self, width: int = 80, height: int = 20):
         self.width = width
         self.height = height
         self.enabled = False
-        self.matrix_chars = list("0123456789ABCDEF01")  # Hex + binary
+        self.hex_chars = "0123456789ABCDEF"
 
-        # Simple column heads - each column has one head moving upward
-        self.column_heads = []
+        # Hex chunk widths that make sense for crypto/hex work
+        self.chunk_widths = [2, 4, 8]  # bytes, words, dwords
+
+        # Column chunks - each chunk spans multiple columns
+        self.column_chunks = []
         # Grid to track fade states: 0=empty, 1=white/head, 2+=fading trail
         self.grid = []
         # Character grid to store what character is at each position
@@ -36,24 +40,42 @@ class MatrixRain:
         self.reset_grid()
 
     def reset_grid(self):
-        """Initialize/reset the grid and column heads"""
-        self.column_heads = []
+        """Initialize/reset the grid and column chunks"""
+        self.column_chunks = []
         self.grid = []
         self.char_grid = []
 
-        # Initialize each column head with random starting conditions
-        for x in range(self.width):
-            self.column_heads.append(
-                {
-                    "y": self.height - 1,  # Start at bottom
-                    "char": random.choice(self.matrix_chars),
-                    "active": random.random() < 0.3,  # Only 30% start active
-                    "spawn_cooldown": random.randint(0, 20),  # Random initial delay
-                    "speed_counter": 0,  # For variable speed
-                    "speed": random.randint(1, 3),  # How many frames between moves
-                    "tail_length": random.randint(3, 10),  # Random tail length
-                }
-            )
+        # Create more hex chunks that can overlap - much denser
+        num_chunks = self.width // 2  # Create way more chunks than width allows
+
+        for _ in range(num_chunks):
+            # Choose random chunk width
+            chunk_width = random.choice(self.chunk_widths)
+
+            # Random x position - chunks can overlap and run over each other
+            x_start = random.randint(0, max(0, self.width - chunk_width))
+
+            # Create chunk data
+            # 50/50 chance: start from bottom or random position
+            if random.random() < 0.5:
+                start_y = self.height - 1  # Bottom spawn
+            else:
+                start_y = random.randint(0, self.height - 1)  # Random position
+
+            chunk = {
+                "x_start": x_start,
+                "width": chunk_width,
+                "y": start_y,
+                "last_y": start_y,
+                "hex_value": self._generate_hex_string(chunk_width),
+                "active": random.random() < 0.3,  # 30% start active - reduced density
+                "spawn_cooldown": random.randint(0, 20),  # Adjusted spawn timing
+                "speed_counter": 0,
+                "speed": random.randint(1, 4),  # Wider speed range for overtaking
+                "tail_length": random.randint(4, 12),
+            }
+
+            self.column_chunks.append(chunk)
 
         # Initialize empty grid
         for y in range(self.height):
@@ -64,6 +86,10 @@ class MatrixRain:
                 char_row.append(" ")  # Empty char
             self.grid.append(row)
             self.char_grid.append(char_row)
+
+    def _generate_hex_string(self, width: int) -> str:
+        """Generate a random hex string of specified width"""
+        return "".join(random.choice(self.hex_chars) for _ in range(width))
 
     def toggle_rain(self):
         """Toggle matrix rain effect on/off"""
@@ -87,44 +113,82 @@ class MatrixRain:
                         self.grid[y][x] = 0
                         self.char_grid[y][x] = " "
 
-        # Now update each column head
-        for col_idx, head in enumerate(self.column_heads):
-            # Handle spawn cooldown for inactive heads
-            if not head["active"]:
-                if head["spawn_cooldown"] > 0:
-                    head["spawn_cooldown"] -= 1
+        # Now update each hex chunk
+        for chunk in self.column_chunks:
+            # Handle spawn cooldown for inactive chunks
+            if not chunk["active"]:
+                if chunk["spawn_cooldown"] > 0:
+                    chunk["spawn_cooldown"] -= 1
                 else:
-                    # Random chance to spawn a new head
-                    if random.random() < 0.08:  # 8% chance per frame
-                        head["active"] = True
-                        head["y"] = self.height - 1
-                        head["char"] = random.choice(self.matrix_chars)
-                        head["speed_counter"] = 0
-                        head["tail_length"] = random.randint(3, 10)
+                    # Random chance to spawn a new chunk
+                    if (
+                        random.random() < 0.08
+                    ):  # 8% chance per frame - reduced spawn rate
+                        chunk["active"] = True
+
+                        # 50/50 chance: spawn from bottom or random position
+                        if random.random() < 0.5:
+                            # Spawn from bottom (traditional)
+                            chunk["y"] = self.height - 1
+                        else:
+                            # Spawn from random position in screen
+                            chunk["y"] = random.randint(0, self.height - 1)
+
+                        chunk["last_y"] = chunk["y"]
+                        chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+                        chunk["speed_counter"] = 0
+                        chunk["tail_length"] = random.randint(4, 12)
+                        # Randomize position for more chaos and overlapping
+                        chunk["x_start"] = random.randint(
+                            0, max(0, self.width - chunk["width"])
+                        )
             else:
-                # Handle speed timing for active heads
-                head["speed_counter"] += 1
-                if head["speed_counter"] >= head["speed"]:
-                    head["speed_counter"] = 0
+                # Handle speed timing for active chunks
+                chunk["speed_counter"] += 1
 
-                    # Place current head character
-                    if 0 <= head["y"] < self.height:
-                        self.grid[head["y"]][col_idx] = 1  # White/head state
-                        self.char_grid[head["y"]][col_idx] = head["char"]
+                # While staying in same position, keep changing hex value (processing effect)
+                if chunk["speed_counter"] < chunk["speed"]:
+                    # Still in same position - keep changing characters
+                    chunk["hex_value"] = self._generate_hex_string(chunk["width"])
 
-                    # Move head up
-                    head["y"] -= 1
+                if chunk["speed_counter"] >= chunk["speed"]:
+                    chunk["speed_counter"] = 0
 
-                    # Generate new character for next position
-                    head["char"] = random.choice(self.matrix_chars)
+                    # Place current chunk characters (frozen from last change)
+                    if 0 <= chunk["y"] < self.height:
+                        for i, char in enumerate(chunk["hex_value"]):
+                            x_pos = chunk["x_start"] + i
+                            if x_pos < self.width:
+                                self.grid[chunk["y"]][x_pos] = 1  # White/head state
+                                self.char_grid[chunk["y"]][x_pos] = char
 
-                    # Reset head when it goes off screen
-                    if head["y"] < -1:
-                        head["active"] = False
-                        head["spawn_cooldown"] = random.randint(
-                            5, 30
-                        )  # Random delay before next spawn
-                        head["speed"] = random.randint(1, 3)  # New random speed
+                    # Move chunk up
+                    chunk["last_y"] = chunk["y"]
+                    chunk["y"] -= 1
+
+                    # Generate new hex value for next position
+                    chunk["hex_value"] = self._generate_hex_string(chunk["width"])
+
+                    # Reset chunk when it goes off screen
+                    if chunk["y"] < -1:
+                        chunk["active"] = False
+                        chunk["spawn_cooldown"] = random.randint(
+                            5, 25
+                        )  # Longer cooldown since spawn rate is reduced
+                        chunk["speed"] = random.randint(1, 4)  # Wide speed range
+                        # Randomize x position for next run (allows repositioning)
+                        chunk["x_start"] = random.randint(
+                            0, max(0, self.width - chunk["width"])
+                        )
+                        chunk["last_y"] = self.height - 1
+                else:
+                    # Still in same position - place the changing characters
+                    if 0 <= chunk["y"] < self.height:
+                        for i, char in enumerate(chunk["hex_value"]):
+                            x_pos = chunk["x_start"] + i
+                            if x_pos < self.width:
+                                self.grid[chunk["y"]][x_pos] = 1  # White/head state
+                                self.char_grid[chunk["y"]][x_pos] = char
 
     def get_framebuffer(self):
         """Generate framebuffer with current matrix rain state"""
