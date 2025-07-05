@@ -64,9 +64,20 @@ class MatrixRain:
         # Create more hex chunks that can overlap - much denser
         num_chunks = self.width // 2  # Create way more chunks than width allows
 
+        # Calculate aspect ratio to determine sprite direction bias
+        # For wide viewports, favor vertical sprites (up/down movement)
+        # For tall viewports, favor horizontal sprites (left/right movement)
+        aspect_ratio = self.width / max(self.height, 1)  # Avoid division by zero
+
+        # Convert aspect ratio to probability for vertical sprites
+        # aspect_ratio = 1.0 -> 50% vertical (square)
+        # aspect_ratio > 1.0 -> more vertical (wide)
+        # aspect_ratio < 1.0 -> more horizontal (tall)
+        vertical_probability = min(0.85, max(0.15, 0.5 + (aspect_ratio - 1.0) * 0.2))
+
         for _ in range(num_chunks):
-            # 50/50 chance: vertical chunks (up/down) or horizontal chunks (left/right)
-            if random.random() < 0.5:
+            # Aspect-ratio-based chance: bias towards vertical for wide viewports
+            if random.random() < vertical_probability:
                 # Vertical chunks - move up/down, have width
                 direction = random.choice(["up", "down"])
                 chunk_width = random.choice(self.chunk_sizes)
@@ -328,8 +339,13 @@ class MatrixRain:
                         chunk["active"] = True
 
                         # Reset direction and position
-                        # 50/50 chance: vertical chunks (up/down) or horizontal chunks (left/right)
-                        if random.random() < 0.5:
+                        # Use same aspect-ratio-based probability for respawning
+                        aspect_ratio = self.width / max(self.height, 1)
+                        vertical_probability = min(
+                            0.85, max(0.15, 0.5 + (aspect_ratio - 1.0) * 0.2)
+                        )
+
+                        if random.random() < vertical_probability:
                             # Vertical chunks - move up/down, have width
                             chunk["direction"] = random.choice(["up", "down"])
                             chunk["width"] = random.choice(self.chunk_sizes)
