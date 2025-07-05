@@ -19,6 +19,19 @@ class ASCIIBanner(Widget):
     Features cyberpunk styling with matrix-style effects
     """
 
+    DEFAULT_CSS = """
+    ASCIIBanner {
+        width: 100%;
+        height: auto;
+        content-align: center middle;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+        border: none;
+        max-height: 12;
+    }
+    """
+
     # Reactive properties
     show_subtitle = reactive(True)
     animation_frame = reactive(0)
@@ -60,124 +73,204 @@ class ASCIIBanner(Widget):
 
     def render(self) -> RenderResult:
         """Render the ASCII banner with optional matrix rain background"""
-        # Create the main ASCII art and subtitle content
-        content_lines = []
-
         # Split ASCII art into lines
         ascii_lines = self.ascii_art.strip().split("\n")
+
+        # Create ASCII art section with blank lines before and after
+        content_lines = []
+
+        # Add blank line before content
+        content_lines.append("")
+
+        # Add ASCII art lines
         content_lines.extend(ascii_lines)
 
         # Add subtitle if enabled
         if self.show_subtitle:
-            content_lines.append("")  # Empty line separator
             content_lines.append(self.SUBTITLE)
 
-        # Determine panel dimensions to fill the entire container
-        ascii_width = max(len(line) for line in ascii_lines)
+        # Add blank line after content
+        content_lines.append("")
 
-        # Use a much larger width to ensure it fills the container
-        panel_width = max(ascii_width + 80, 160)  # Much wider to fill container
+        # Join with newlines and strip trailing whitespace
+        content_string = "\n".join(content_lines).rstrip()
 
-        # Fixed height regardless of matrix background state
-        panel_height = len(ascii_lines) + 6  # More height for better matrix coverage
+        # Calculate exact content height (number of lines)
+        content_height = len(content_lines)
+
+        # Create Text object with the final content
+        ascii_text = Text(content_string)
+
+        # Apply styling to ASCII lines
+        for i, line in enumerate(ascii_lines):
+            start_pos = content_string.find(line)
+            if start_pos != -1:
+                ascii_text.stylize("bold green", start_pos, start_pos + len(line))
+
+        # Apply styling to subtitle if enabled
         if self.show_subtitle:
-            panel_height += 3  # Space for subtitle
+            subtitle_start = content_string.find(self.SUBTITLE)
+            if subtitle_start != -1:
+                # Style different parts of the subtitle
+                subtitle_end = subtitle_start + len(self.SUBTITLE)
+                encryption_end = subtitle_start + len("QUANTUM-RESISTANT ENCRYPTION")
+                separator_end = encryption_end + len(" • ")
 
-        # Create the final rendered content
-        final_content = Text()
+                ascii_text.stylize("dim cyan", subtitle_start, encryption_end)
+                ascii_text.stylize("bold white", encryption_end, separator_end)
+                ascii_text.stylize("bold yellow", separator_end, subtitle_end)
 
-        # Always add consistent top padding
-        final_content.append("\n")
+        # Center the content using Rich.Align
+        centered_content = Align.center(ascii_text)
 
-        # Render content with or without matrix background
-        for y in range(panel_height):
+        # If matrix background is enabled, render with matrix rain
+        if self.matrix_background:
+            # Initialize matrix rain with proper dimensions
+            terminal_width = 120  # Standard terminal width
+            # Calculate exact height based on our controlled spacing
+            terminal_height = (
+                1 + len(ascii_lines) + 1
+            )  # blank line + ASCII lines + blank line
+            if self.show_subtitle:
+                terminal_height += 1  # subtitle line
+
+            if hasattr(self, "matrix_rain") and self.matrix_rain.columns:
+                # For matrix background, we need to handle centering differently
+                # Render matrix background with ASCII overlay
+                matrix_content = self._render_with_matrix_background(
+                    ascii_text, terminal_width, terminal_height
+                )
+                centered_matrix_content = Align.center(matrix_content)
+            else:
+                # Fallback to simple ASCII
+                centered_matrix_content = centered_content
+
+            # Create panel with matrix content (minimal padding and exact height)
+            panel = Panel(
+                centered_matrix_content,
+                border_style="bright_green",
+                padding=(0, 1),  # Minimal horizontal padding for proper centering
+                height=content_height + 2,  # Content height + 2 for borders only
+                title="[bold red]◢[/bold red][bold yellow]Post Quantum Lattice FHE System[/bold yellow][bold red]◣[/bold red]",
+                title_align="center",
+            )
+        else:
+            # Create panel with centered content (minimal padding and exact height)
+            panel = Panel(
+                centered_content,
+                border_style="bright_green",
+                padding=(0, 1),  # Minimal horizontal padding for proper centering
+                height=content_height + 2,  # Content height + 2 for borders only
+                title="[bold red]◢[/bold red][bold yellow]Post Quantum Lattice FHE System[/bold yellow][bold red]◣[/bold red]",
+                title_align="center",
+            )
+
+        return panel
+
+    def _render_with_matrix_background(
+        self, ascii_content: Text, width: int, height: int
+    ) -> Text:
+        """Render ASCII content with matrix rain background"""
+        # Split ASCII content into lines for overlay
+        ascii_lines = str(ascii_content).split("\n")
+        ascii_width = max(len(line) for line in ascii_lines) if ascii_lines else 0
+
+        # Initialize matrix rain columns if needed
+        if not hasattr(self, "matrix_rain") or not self.matrix_rain.columns:
+            self.matrix_rain._initialize_columns(width, height)
+
+        # Create matrix background with ASCII overlay
+        matrix_content = Text()
+
+        for y in range(height):
             line_text = Text()
 
-            # Determine if this line should have ASCII content
-            ascii_line = ""
-            ascii_start_col = (panel_width - ascii_width) // 2  # Center ASCII art
+            # Calculate ASCII positioning (centered horizontally)
+            ascii_start_col = (width - ascii_width) // 2
 
-            # Check if we're in the ASCII art region
-            ascii_line_idx = y - 2  # Account for more top padding for better centering
-            if 0 <= ascii_line_idx < len(ascii_lines):
-                ascii_line = ascii_lines[ascii_line_idx]
-            elif ascii_line_idx == len(ascii_lines) + 2 and self.show_subtitle:
-                ascii_line = self.SUBTITLE
-                ascii_start_col = (
-                    panel_width - len(self.SUBTITLE)
-                ) // 2  # Center subtitle
+            # Map y position to content line based on our controlled spacing
+            # Structure: blank line + ASCII lines + subtitle + blank line
+            ascii_line_idx = -1
+            if y == 0:
+                ascii_line_idx = -1  # First blank line
+            elif 1 <= y <= len(self.ascii_art.strip().split("\n")):
+                ascii_line_idx = y - 1  # ASCII art lines (offset by 1 for blank line)
+            elif (
+                y == len(self.ascii_art.strip().split("\n")) + 1 and self.show_subtitle
+            ):
+                ascii_line_idx = len(
+                    self.ascii_art.strip().split("\n")
+                )  # Subtitle line (special marker)
+            else:
+                ascii_line_idx = -1  # Other empty lines (including final blank line)
 
-            # Build the line character by character
-            for x in range(panel_width):
+            # Build line character by character
+            for x in range(width):
                 char = " "
                 style = "dim green"
 
                 # Check if we should place ASCII content here
-                if ascii_line and ascii_start_col <= x < ascii_start_col + len(
-                    ascii_line
-                ):
-                    ascii_char = ascii_line[x - ascii_start_col]
-                    if ascii_char != " ":
-                        # Use ASCII character with bold styling
-                        if ascii_line_idx < len(ascii_lines):
+                if 0 <= ascii_line_idx < len(self.ascii_art.strip().split("\n")):
+                    # ASCII art line
+                    ascii_art_lines = self.ascii_art.strip().split("\n")
+                    ascii_line = ascii_art_lines[ascii_line_idx]
+                    if ascii_start_col <= x < ascii_start_col + len(ascii_line):
+                        ascii_char = ascii_line[x - ascii_start_col]
+                        if ascii_char != " ":
                             char = ascii_char
-                            style = "bold green"  # ASCII art
-                        else:  # Subtitle
-                            char = ascii_char
-                            style = "bold cyan"  # Subtitle
-                    else:
-                        # ASCII art has space, potentially use matrix rain
-                        if self.matrix_background and random.random() < 0.05:
-                            char = random.choice(self.MATRIX_CHARS)
-                            style = "dim green"
+                            style = "bold green"
                         else:
-                            char = " "
-                else:
-                    # Not in ASCII area, use matrix rain if enabled
+                            # ASCII has space, use matrix rain
+                            if self.matrix_rain.columns and x < len(
+                                self.matrix_rain.columns
+                            ):
+                                char, style = self.matrix_rain.get_matrix_char_at(x, y)
+                                if style != "dim green":
+                                    style = "dim green"  # Dimmer in ASCII space
+                elif (
+                    ascii_line_idx == len(self.ascii_art.strip().split("\n"))
+                    and self.show_subtitle
+                ):
+                    # Subtitle line
+                    subtitle_line = (
+                        "QUANTUM-RESISTANT ENCRYPTION • REPLICANT TERMINAL v2.1.0"
+                    )
+                    subtitle_start_col = (width - len(subtitle_line)) // 2
                     if (
-                        self.matrix_background and random.random() < 0.18
-                    ):  # Increased probability
-                        char = random.choice(self.MATRIX_CHARS)
-                        style = "dim green"
-                    else:
-                        char = " "
+                        subtitle_start_col
+                        <= x
+                        < subtitle_start_col + len(subtitle_line)
+                    ):
+                        subtitle_char = subtitle_line[x - subtitle_start_col]
+                        if subtitle_char != " ":
+                            char = subtitle_char
+                            # Apply different styles to different parts of subtitle
+                            char_pos = x - subtitle_start_col
+                            if char_pos < len("QUANTUM-RESISTANT ENCRYPTION"):
+                                style = "dim cyan"
+                            elif char_pos < len("QUANTUM-RESISTANT ENCRYPTION • "):
+                                style = "bold white"
+                            else:
+                                style = "bold yellow"
+                        else:
+                            # Subtitle has space, use matrix rain
+                            if self.matrix_rain.columns and x < len(
+                                self.matrix_rain.columns
+                            ):
+                                char, style = self.matrix_rain.get_matrix_char_at(x, y)
+                                if style != "dim green":
+                                    style = "dim green"  # Dimmer in subtitle space
+                else:
+                    # Not in ASCII area, use matrix rain
+                    if self.matrix_rain.columns and x < len(self.matrix_rain.columns):
+                        char, style = self.matrix_rain.get_matrix_char_at(x, y)
 
                 line_text.append(char, style=style)
 
-            final_content.append(line_text)
-            final_content.append("\n")
+            matrix_content.append(line_text)
+            matrix_content.append("\n")
 
-        # Always add consistent bottom padding
-        final_content.append("\n")
-
-        # Apply subtitle styling
-        if self.show_subtitle:
-            full_text = str(final_content)
-            if self.SUBTITLE in full_text:
-                subtitle_start = full_text.find(self.SUBTITLE)
-                if subtitle_start != -1:
-                    subtitle_end = subtitle_start + len(self.SUBTITLE)
-                    final_content.stylize(
-                        "dim",
-                        subtitle_start,
-                        subtitle_start + len("QUANTUM-RESISTANT ENCRYPTION"),
-                    )
-                    final_content.stylize(
-                        "bold yellow",
-                        subtitle_start + len("QUANTUM-RESISTANT ENCRYPTION • "),
-                        subtitle_end,
-                    )
-
-        # Create panel with cyberpunk border and title
-        panel = Panel(
-            final_content,  # Use final_content directly instead of aligned
-            border_style="bright_green",
-            padding=(0, 0),  # No padding to let content fill entire area
-            title="[bold red]◢[/bold red][bold yellow]Post Quantum Lattice FHE System[/bold yellow][bold red]◣[/bold red]",
-            title_align="center",
-        )
-
-        return panel
+        return matrix_content
 
     def on_mount(self) -> None:
         """Start animation timer when mounted"""
@@ -195,11 +288,14 @@ class ASCIIBanner(Widget):
     def watch_matrix_background(self, matrix_enabled: bool) -> None:
         """React to matrix background toggle"""
         if matrix_enabled:
-            # Start matrix rain animation
+            # Initialize matrix rain with proper dimensions
+            self.matrix_rain.max_columns = 120  # Standard terminal width
+            self.matrix_rain.max_rows = 20  # Adequate height for banner
             self.matrix_rain.enabled = True
-            # Start the animation timer if not already running
+
+            # Start the animation timer if not already running (1 second intervals)
             if not hasattr(self, "_matrix_timer_started"):
-                self.set_interval(0.5, self.update_matrix_background)
+                self.set_interval(1.0, self.update_matrix_background)
                 self._matrix_timer_started = True
         else:
             # Stop matrix rain animation
@@ -389,17 +485,28 @@ class MatrixRain(Widget):
         self.enabled = not self.enabled
         if not self.enabled:
             # Clear all columns when disabled
-            for col in self.columns:
-                col["active"] = False
-                col["chars"] = []
-                col["positions"] = []
-        self.refresh()
+            for column in self.columns:
+                column.head_position = -1
+                column.ticks_left = 0
+                column.spawn_delay = 0
+                for cell in column.cells:
+                    cell.char = ""
+                    cell.active_for = 0
 
-    def set_speed(self, speed: float) -> None:
-        """Set rain animation speed"""
-        self.rain_speed = max(0.05, min(1.0, speed))
-        # Update the interval
-        self.set_interval(self.rain_speed, self.update_rain)
+    def get_matrix_char_at(self, x: int, y: int) -> tuple[str, str]:
+        """Get matrix character and style at specific position for background rendering"""
+        if (
+            not self.enabled
+            or x >= len(self.columns)
+            or y >= len(self.columns[0].cells)
+        ):
+            return " ", "dim green"
+
+        cell = self.columns[x].cells[y]
+        if cell.active_for > 0 and cell.char:
+            return cell.char, cell.color
+        else:
+            return " ", "dim green"
 
 
 class CyberpunkBorder(Widget):

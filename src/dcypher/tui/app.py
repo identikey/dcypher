@@ -118,7 +118,6 @@ class DCypherTUI(App[None]):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", priority=True),
         Binding("ctrl+d", "toggle_dark", "Toggle Dark Mode"),
-        Binding("ctrl+t", "toggle_transparent", "Toggle Transparent Background"),
         Binding("ctrl+r", "connect", "Connect to Server"),
         Binding("ctrl+shift+r", "disconnect", "Disconnect from Server"),
         Binding("f1", "show_help", "Help"),
@@ -146,7 +145,6 @@ class DCypherTUI(App[None]):
     identity_info: reactive[Optional[Dict[str, Any]]] = reactive(None)
     api_url: reactive[str] = reactive("http://127.0.0.1:8000")
     connection_status: reactive[str] = reactive("disconnected")
-    transparent_background: reactive[bool] = reactive(False)
 
     # Centralized API client
     _api_client: Optional[DCypherClient] = None
@@ -282,11 +280,6 @@ class DCypherTUI(App[None]):
             except Exception:
                 pass
 
-    def watch_transparent_background(self, transparent: bool) -> None:
-        """Update CSS when transparency mode changes"""
-        # TODO: Implement dynamic CSS updates in future version
-        pass
-
     def compose(self) -> ComposeResult:
         """Create the main UI layout"""
         yield DCypherHeader(self)
@@ -410,12 +403,6 @@ class DCypherTUI(App[None]):
             self.theme = "textual-light"
         else:
             self.theme = "textual-dark"
-
-    def action_toggle_transparent(self) -> None:
-        """Toggle transparent background mode"""
-        self.transparent_background = not self.transparent_background
-        # Note: CSS transparency will be implemented in a future update
-        self.refresh_css()  # Refresh the CSS to apply changes
 
     def action_show_help(self) -> None:
         """Show help screen"""
