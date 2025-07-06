@@ -40,13 +40,17 @@ class ScrollingCode:
         self.height = height
         self.enabled = True
 
+        # Saturation control (0-100%)
+        self.saturation = 25  # Default 50% saturation for scrolling code
+
         # Timing control - much more conservative like MatrixRain
         self.last_update_time = 0
         self.update_interval = 0.5  # 0.5 seconds = 2 FPS default (same as MatrixRain)
         self.chars_per_update = 8  # Reveal more characters per update to compensate
 
-        # Code content and reveal state
-        self.current_code = ""
+        # Code content and reveal state - now persistent across sources
+        self.combined_code = ""  # Persistent buffer containing all sources
+        self.current_code = ""  # Current source being processed
         self.revealed_chars = 0
         self.total_chars = 0
 
@@ -172,7 +176,7 @@ class ScrollingCode:
             pass
 
     def _load_next_source(self):
-        """Load the next source code for scrolling"""
+        """Load the next source code for scrolling - now appends to combined buffer"""
         # If this is the first call and we have sources, select randomly
         if (
             self.source_functions
@@ -185,7 +189,7 @@ class ScrollingCode:
 
         if not self.source_functions:
             # Fallback code if no sources available
-            self.current_code = """
+            new_source = """
 # dCypher - Quantum-Resistant Encryption System
 # No source code available for display
 
@@ -229,12 +233,12 @@ def create_hex_pattern():
                 else:
                     source_code = inspect.getsource(obj)
 
-                self.current_code = f"# {module_name}.{obj_name}\n{source_code}"
+                new_source = f"# {module_name}.{obj_name}\n{source_code}"
 
             except Exception as e:
                 # If we can't get source, create a descriptive placeholder
                 obj_type = "class" if inspect.isclass(obj) else "function"
-                self.current_code = f"""# {module_name}.{obj_name}
+                new_source = f"""# {module_name}.{obj_name}
 # {obj_type.title()} from {module_name}
 # Source code not available: {str(e)[:50]}...
 
@@ -262,12 +266,19 @@ def placeholder_{obj_name.lower()}():
             else:
                 self.current_source_index = 0
 
-        # Reset state for new source
-        self.scroll_position = 0
-        self.revealed_chars = 0
-        self.total_chars = len(self.current_code)
+        # Append new source to combined buffer (with separator for first source)
+        if self.combined_code:
+            # Add simple line breaks between sources
+            self.combined_code += "\n\n"
+
+        # Add the new source to the combined code
+        self.combined_code += new_source
+        self.current_code = self.combined_code  # Use combined code for all operations
+
+        # Update total characters but don't reset revealed chars (continue from where we left off)
+        self.total_chars = len(self.combined_code)
         self.cache_valid = False  # Reset syntax highlighting cache
-        self.scroll_timer = 0  # Reset scroll timer
+        # Don't reset scroll_position, revealed_chars, or scroll_timer - continue seamlessly
 
     def _generate_syntax_highlighted_segments(self):
         """Generate properly syntax highlighted segments using Rich's Syntax class"""
@@ -384,13 +395,13 @@ def placeholder_{obj_name.lower()}():
                 # Handle comments
                 if char == "#" and not in_string:
                     in_comment = True
-                    color = "#6c5ce7"  # Purple for comments
+                    color = self._apply_saturation("#6c5ce7")  # Purple for comments
                     line_segments.append((char, color))
                     i += 1
                     continue
 
                 if in_comment:
-                    color = "#6c5ce7"  # Purple for comments
+                    color = self._apply_saturation("#6c5ce7")  # Purple for comments
                     line_segments.append((char, color))
                     i += 1
                     continue
@@ -399,19 +410,21 @@ def placeholder_{obj_name.lower()}():
                 if char in "\"'" and not in_string:
                     in_string = True
                     string_char = char
-                    color = "#95e1d3"  # Light green for strings
+                    color = self._apply_saturation("#95e1d3")  # Light green for strings
                     line_segments.append((char, color))
                     i += 1
                     continue
                 elif char == string_char and in_string:
                     in_string = False
                     string_char = None
-                    color = "#95e1d3"  # Light green for strings
+                    color = self._apply_saturation("#95e1d3")  # Light green for strings
                     line_segments.append((char, color))
                     i += 1
                     continue
                 elif in_string:
-                    color = "#95e1d3"  # Light green for string content
+                    color = self._apply_saturation(
+                        "#95e1d3"
+                    )  # Light green for string content
                     line_segments.append((char, color))
                     i += 1
                     continue
@@ -424,9 +437,13 @@ def placeholder_{obj_name.lower()}():
                     word = line[word_start:i]
 
                     if word in python_keywords:
-                        color = "#ff6b6b"  # Bright red for keywords
+                        color = self._apply_saturation(
+                            "#ff6b6b"
+                        )  # Bright red for keywords
                     elif word in builtin_functions:
-                        color = "#ffe66d"  # Yellow for built-in functions
+                        color = self._apply_saturation(
+                            "#ffe66d"
+                        )  # Yellow for built-in functions
                     elif (
                         word_start > 0
                         and line[word_start - 1 : word_start + len(word) + 1].find(
@@ -434,7 +451,9 @@ def placeholder_{obj_name.lower()}():
                         )
                         != -1
                     ):
-                        color = "#4ecdc4"  # Cyan for function names
+                        color = self._apply_saturation(
+                            "#4ecdc4"
+                        )  # Cyan for function names
                     elif (
                         word_start > 0
                         and line[word_start - 1 : word_start + len(word) + 1].find(
@@ -442,9 +461,13 @@ def placeholder_{obj_name.lower()}():
                         )
                         != -1
                     ):
-                        color = "#4ecdc4"  # Cyan for class names
+                        color = self._apply_saturation(
+                            "#4ecdc4"
+                        )  # Cyan for class names
                     else:
-                        color = "#00ff41"  # Matrix green for regular identifiers
+                        color = self._apply_saturation(
+                            "#00ff41"
+                        )  # Matrix green for regular identifiers
 
                     for c in word:
                         line_segments.append((c, color))
@@ -459,27 +482,109 @@ def placeholder_{obj_name.lower()}():
 
         return segments
 
+    def _apply_saturation(self, hex_color: str) -> str:
+        """Apply current saturation level to a hex color"""
+        # Parse hex color
+        if hex_color.startswith("#"):
+            hex_color = hex_color[1:]
+
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+
+        # Convert RGB to HSL
+        r_norm = r / 255.0
+        g_norm = g / 255.0
+        b_norm = b / 255.0
+
+        max_val = max(r_norm, g_norm, b_norm)
+        min_val = min(r_norm, g_norm, b_norm)
+        diff = max_val - min_val
+
+        # Calculate lightness
+        lightness = (max_val + min_val) / 2.0
+
+        if diff == 0:
+            # Grayscale - no saturation to adjust
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        # Calculate saturation
+        if lightness < 0.5:
+            saturation = diff / (max_val + min_val)
+        else:
+            saturation = diff / (2.0 - max_val - min_val)
+
+        # Calculate hue
+        if max_val == r_norm:
+            hue = (g_norm - b_norm) / diff
+            if g_norm < b_norm:
+                hue += 6
+        elif max_val == g_norm:
+            hue = (b_norm - r_norm) / diff + 2
+        else:  # max_val == b_norm
+            hue = (r_norm - g_norm) / diff + 4
+        hue /= 6
+
+        # Apply new saturation
+        new_saturation = saturation * (self.saturation / 100.0)
+
+        # Convert back to RGB
+        def hue_to_rgb(p, q, t):
+            if t < 0:
+                t += 1
+            if t > 1:
+                t -= 1
+            if t < 1 / 6:
+                return p + (q - p) * 6 * t
+            if t < 1 / 2:
+                return q
+            if t < 2 / 3:
+                return p + (q - p) * (2 / 3 - t) * 6
+            return p
+
+        if new_saturation == 0:
+            new_r = new_g = new_b = lightness
+        else:
+            if lightness < 0.5:
+                q = lightness * (1 + new_saturation)
+            else:
+                q = lightness + new_saturation - lightness * new_saturation
+            p = 2 * lightness - q
+            new_r = hue_to_rgb(p, q, hue + 1 / 3)
+            new_g = hue_to_rgb(p, q, hue)
+            new_b = hue_to_rgb(p, q, hue - 1 / 3)
+
+        # Convert back to hex
+        new_r = int(new_r * 255)
+        new_g = int(new_g * 255)
+        new_b = int(new_b * 255)
+
+        return f"#{new_r:02x}{new_g:02x}{new_b:02x}"
+
     def _get_enhanced_char_color(self, char):
         """Enhanced color mapping for better syntax highlighting appearance"""
         # Cyberpunk/Matrix-inspired color scheme with better contrast
+        base_color = None
         if char.isalpha():
-            return "#00ff41"  # Bright green for keywords/identifiers (classic Matrix green)
+            base_color = "#00ff41"  # Bright green for keywords/identifiers (classic Matrix green)
         elif char.isdigit():
-            return "#ff6b6b"  # Bright red for numbers
+            base_color = "#ff6b6b"  # Bright red for numbers
         elif char in "()[]{}":
-            return "#4ecdc4"  # Cyan for brackets
+            base_color = "#4ecdc4"  # Cyan for brackets
         elif char in "+-*/=<>!&|":
-            return "#ffe66d"  # Yellow for operators
+            base_color = "#ffe66d"  # Yellow for operators
         elif char in "\"'":
-            return "#95e1d3"  # Light green for string delimiters
+            base_color = "#95e1d3"  # Light green for string delimiters
         elif char == "#":
-            return "#6c5ce7"  # Purple for comments
+            base_color = "#6c5ce7"  # Purple for comments
         elif char in ".,;:":
-            return "#fd79a8"  # Pink for punctuation
+            base_color = "#fd79a8"  # Pink for punctuation
         elif char in " \t":
-            return "#2a2a2a"  # Dim for whitespace
+            base_color = "#2a2a2a"  # Dim for whitespace
         else:
-            return "#74b9ff"  # Light blue for other characters
+            base_color = "#74b9ff"  # Light blue for other characters
+
+        return self._apply_saturation(base_color)
 
     def update(self):
         """Update character-by-character reveal and scrolling animation - same timing as MatrixRain"""
@@ -623,14 +728,14 @@ def placeholder_{obj_name.lower()}():
         return self._mirror_cache.get(char, char)
 
     def toggle_scrolling(self):
-        """Toggle scrolling code effect on/off - same pattern as MatrixRain"""
+        """Toggle scrolling code effect on/off - preserves combined buffer"""
         self.enabled = not self.enabled
         if self.enabled:
-            self._load_next_source()
+            # If we have no content yet, load the first source
+            if not self.combined_code:
+                self._load_next_source()
         else:
-            # Reset state when disabled
-            self.revealed_chars = 0
-            self.scroll_position = 0
+            # When disabled, only reset scroll timer, keep the combined buffer
             self.scroll_timer = 0
             self.cache_valid = False
 
@@ -670,11 +775,37 @@ def placeholder_{obj_name.lower()}():
         self.chars_per_update = max(1, min(chunk_size, 10))  # Keep between 1-10
 
     def skip_to_next_source(self):
-        """Skip to next source code immediately"""
+        """Skip to next source code immediately - appends to combined buffer"""
         self._load_next_source()
 
+    def clear_buffer(self):
+        """Clear the combined code buffer and start fresh"""
+        self.combined_code = ""
+        self.current_code = ""
+        self.revealed_chars = 0
+        self.total_chars = 0
+        self.scroll_position = 0
+        self.scroll_timer = 0
+        self.cache_valid = False
+        if self.enabled:
+            self._load_next_source()
+
+    def set_saturation(self, saturation: int):
+        """Set saturation level (0-100%)"""
+        self.saturation = max(0, min(100, saturation))
+        # Invalidate cache to force regeneration with new saturation
+        self.cache_valid = False
+
+    def increase_saturation(self):
+        """Increase saturation by 10%"""
+        self.set_saturation(self.saturation + 10)
+
+    def decrease_saturation(self):
+        """Decrease saturation by 10%"""
+        self.set_saturation(self.saturation - 10)
+
     def get_stats(self):
-        """Get statistics about discovered source functions"""
+        """Get statistics about discovered source functions and combined buffer"""
         if not self.source_functions:
             return "No source functions discovered"
 
@@ -688,4 +819,9 @@ def placeholder_{obj_name.lower()}():
         )
         actual_speed = self.chars_per_update * current_fps
 
-        return f"Sources: {len(self.source_functions)} | Progress: {progress:.0f}% | Speed: {actual_speed:.0f} cps | FPS: {current_fps} | Chunk: {self.chars_per_update} | Syntax: Enhanced"
+        # Calculate combined buffer stats
+        combined_lines = (
+            len(self.combined_code.split("\n")) if self.combined_code else 0
+        )
+
+        return f"Sources: {len(self.source_functions)} | Lines: {combined_lines} | Progress: {progress:.0f}% | Speed: {actual_speed:.0f} cps | FPS: {current_fps} | Saturation: {self.saturation}%"

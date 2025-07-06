@@ -32,6 +32,9 @@ class MatrixRain:
         self.enabled = True
         self.hex_chars = "0123456789ABCDEF"
 
+        # Saturation control (0-100%)
+        self.saturation = 75  # Default 80% saturation for matrix rain
+
         # Timing control for consistent 2 FPS updates (default)
         self.last_update_time = 0
         self.update_interval = 0.5  # 0.5 seconds = 2 FPS default
@@ -180,9 +183,9 @@ class MatrixRain:
             random_state = random.getstate()
             random.seed(z_order)
 
-            # Generate random hue but force 100% saturation and optimal lightness
+            # Generate random hue with configurable saturation and optimal lightness
             hue = random.randint(0, 360)
-            saturation = 100  # Force 100% saturation - no washed out colors!
+            saturation = self.saturation  # Use configurable saturation
             lightness = random.randint(50, 60)  # Optimal lightness for vibrant colors
 
             # Convert HSL to RGB
@@ -274,6 +277,30 @@ class MatrixRain:
             # Clear all when disabled
             self.reset_grid()
             self.color_cache.clear()
+
+    def set_saturation(self, saturation: int):
+        """Set saturation level (0-100%)"""
+        self.saturation = max(0, min(100, saturation))
+        # Clear color cache to force regeneration with new saturation
+        self.color_cache.clear()
+
+    def increase_saturation(self):
+        """Increase saturation by 10%"""
+        self.set_saturation(self.saturation + 10)
+
+    def decrease_saturation(self):
+        """Decrease saturation by 10%"""
+        self.set_saturation(self.saturation - 10)
+
+    def get_stats(self):
+        """Get statistics about matrix rain effect"""
+        current_fps = (
+            round(1.0 / self.update_interval) if self.update_interval > 0 else 0
+        )
+        active_chunks = len([chunk for chunk in self.column_chunks if chunk["active"]])
+        total_chunks = len(self.column_chunks)
+
+        return f"Matrix Rain: {active_chunks}/{total_chunks} chunks active | FPS: {current_fps} | Saturation: {self.saturation}%"
 
     def update(self):
         """Update matrix rain animation - call this each frame with 1 FPS timing control"""

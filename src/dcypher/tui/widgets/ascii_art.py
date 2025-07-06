@@ -373,6 +373,42 @@ class ASCIIBanner(Widget):
         """Toggle scrolling code effect"""
         self.scrolling_code = not self.scrolling_code
 
+    def set_matrix_saturation(self, saturation: int) -> None:
+        """Set matrix rain saturation (0-100%)"""
+        self.matrix_rain.set_saturation(saturation)
+        self.notify(f"Matrix saturation: {saturation}%", timeout=1.0)
+
+    def set_code_saturation(self, saturation: int) -> None:
+        """Set scrolling code saturation (0-100%)"""
+        self.scrolling_code_controller.set_saturation(saturation)
+        self.notify(f"Code saturation: {saturation}%", timeout=1.0)
+
+    def increase_matrix_saturation(self) -> None:
+        """Increase matrix rain saturation by 10%"""
+        self.matrix_rain.increase_saturation()
+        self.notify(f"Matrix saturation: {self.matrix_rain.saturation}%", timeout=1.0)
+
+    def decrease_matrix_saturation(self) -> None:
+        """Decrease matrix rain saturation by 10%"""
+        self.matrix_rain.decrease_saturation()
+        self.notify(f"Matrix saturation: {self.matrix_rain.saturation}%", timeout=1.0)
+
+    def increase_code_saturation(self) -> None:
+        """Increase scrolling code saturation by 10%"""
+        self.scrolling_code_controller.increase_saturation()
+        self.notify(
+            f"Code saturation: {self.scrolling_code_controller.saturation}%",
+            timeout=1.0,
+        )
+
+    def decrease_code_saturation(self) -> None:
+        """Decrease scrolling code saturation by 10%"""
+        self.scrolling_code_controller.decrease_saturation()
+        self.notify(
+            f"Code saturation: {self.scrolling_code_controller.saturation}%",
+            timeout=1.0,
+        )
+
 
 class CyberpunkBorder(Widget):
     """
