@@ -14,14 +14,6 @@ from pathlib import Path
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.app import RenderResult
-from textual.color import Color
-from rich.console import Console, ConsoleOptions
-from rich.text import Text
-from rich.align import Align
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.console import Console
-from rich.text import Text
 
 try:
     import dill
@@ -37,7 +29,7 @@ class ScrollingCode:
     """
     Scrolling code effect controller that displays random dcypher source code
     Uses dill to extract source code from dcypher package functions and classes
-    Features character-by-character reveal with jitter support
+    Features optimized character-by-character reveal with constant timing
     """
 
     def __init__(self, width: int = 80, height: int = 20):
@@ -45,35 +37,33 @@ class ScrollingCode:
         self.height = height
         self.enabled = True
 
-        # Timing control for character reveal
+        # Timing control - much more conservative like MatrixRain
         self.last_update_time = 0
-        self.update_interval = 0.05  # Base interval between characters (50ms)
-        self.jitter_range = 0.03  # Random jitter ±30ms
-        self.next_char_time = 0
+        self.update_interval = 0.5  # 0.5 seconds = 2 FPS default (same as MatrixRain)
+        self.chars_per_update = 8  # Reveal more characters per update to compensate
 
         # Code content and reveal state
         self.current_code = ""
-        self.current_code_lines = []
-        self.syntax_highlighted_text = None
-        self.revealed_chars = 0  # How many characters have been revealed
+        self.revealed_chars = 0
         self.total_chars = 0
+
+        # Cached data to avoid repeated calculations
+        self.revealed_text_cache = ""
+        self.revealed_lines_cache = []
+        self.last_revealed_chars = -1  # Track when cache needs update
 
         # Scrolling state
         self.scroll_position = 0
         self.lines_per_screen = height
-        self.scroll_speed = 1  # Lines to scroll per update when scrolling
-        self.scroll_delay = 0.5  # Delay between scroll steps
+        self.scroll_speed = 1
+        self.scroll_delay = 0.5  # Match scroll delay to update interval
+        self.scroll_timer = 0  # Track when to scroll
 
         # Source code collection
         self.source_functions = []
         self.current_source_index = 0
 
-        # Rich console for syntax highlighting
-        self.console = Console(width=width, legacy_windows=False)
-
         self._collect_dcypher_sources()
-
-        # Load first source
         self._load_next_source()
 
     def _collect_dcypher_sources(self):
@@ -249,94 +239,67 @@ def placeholder_{obj_name.lower()}():
                 1, len(self.source_functions)
             )
 
-        # Split into lines and reset scroll position
-        self.current_code_lines = self.current_code.split("\n")
+        # Reset state for new source
         self.scroll_position = 0
-        self.revealed_chars = 0  # Reset character reveal
-
-        # Generate syntax highlighted version
-        self._generate_syntax_highlighting()
-
-    def _generate_syntax_highlighting(self):
-        """Generate syntax highlighted text using Rich for character-by-character reveal"""
-        try:
-            # Use Rich Syntax for Python highlighting
-            syntax = Syntax(
-                self.current_code,
-                "python",
-                theme="monokai",
-                line_numbers=False,
-                background_color="transparent",
-                word_wrap=True,
-                code_width=self.width,
-            )
-
-            # Render to Rich Text object
-            self.syntax_highlighted_text = syntax
-
-            # Calculate total characters for reveal animation
-            self.total_chars = len(self.current_code)
-            self.revealed_chars = 0
-
-            # Reset timing for character reveal
-            self.next_char_time = time.time() + self.update_interval
-
-        except Exception as e:
-            # Fallback to plain text if syntax highlighting fails
-            self.syntax_highlighted_text = Text(self.current_code, style="dim green")
-            self.total_chars = len(self.current_code)
-            self.revealed_chars = 0
-            self.next_char_time = time.time() + self.update_interval
+        self.revealed_chars = 0
+        self.total_chars = len(self.current_code)
+        self.last_revealed_chars = -1  # Reset cache
+        self.scroll_timer = 0  # Reset scroll timer
 
     def update(self):
-        """Update character-by-character reveal and scrolling animation"""
+        """Update character-by-character reveal and scrolling animation - same timing as MatrixRain"""
         if not self.enabled:
             return
 
         current_time = time.time()
 
-        # Check if it's time to reveal the next character
+        # Timing control: only update at the specified interval
+        if current_time - self.last_update_time < self.update_interval:
+            return
+
+        self.last_update_time = current_time
+
+        # Check if it's time to reveal the next chunk of characters
         if self.revealed_chars < self.total_chars:
-            if current_time >= self.next_char_time:
-                self.revealed_chars += 1
+            # Reveal multiple characters at once, but don't exceed total
+            remaining_chars = self.total_chars - self.revealed_chars
+            chars_to_reveal = min(self.chars_per_update, remaining_chars)
+            self.revealed_chars += chars_to_reveal
 
-                # Calculate next character time with jitter
-                jitter = random.uniform(-self.jitter_range, self.jitter_range)
-                self.next_char_time = current_time + self.update_interval + jitter
-
-                # Check if we need to scroll during character revelation
-                self._check_and_scroll_during_reveal()
+            # Check if we need to scroll during character revelation
+            self._check_and_scroll_during_reveal()
 
         # Check if we need to continue scrolling after all characters are revealed
         elif self.revealed_chars >= self.total_chars:
-            # All characters revealed, continue scrolling if needed
-            if current_time - self.next_char_time > self.scroll_delay:
-                # Get the revealed text as lines
-                revealed_text = self.current_code[: self.revealed_chars]
-                revealed_lines = revealed_text.split("\n")
+            # Start scroll timer when all characters are revealed
+            if self.scroll_timer == 0:
+                self.scroll_timer = current_time
 
-                # Check if we need to scroll more
-                if self.scroll_position < len(revealed_lines) - self.lines_per_screen:
+            if current_time - self.scroll_timer > self.scroll_delay:
+                # Use cached lines instead of string operations
+                if (
+                    self.scroll_position
+                    < len(self.revealed_lines_cache) - self.lines_per_screen
+                ):
                     self.scroll_position += self.scroll_speed
-                    self.next_char_time = current_time  # Reset timer for next scroll
+                    self.scroll_timer = current_time
                 else:
                     # Finished scrolling, load next source
                     self._load_next_source()
 
     def _check_and_scroll_during_reveal(self):
-        """Check if we need to scroll during character revelation"""
+        """Check if we need to scroll during character revelation - optimized"""
         if self.revealed_chars == 0:
             return
 
-        # Get the revealed text and split into lines
-        revealed_text = self.current_code[: self.revealed_chars]
-        revealed_lines = revealed_text.split("\n")
+        # Use cached lines count instead of string operations
+        lines = self.revealed_lines_cache
 
         # Count complete lines (lines that have been fully revealed)
         complete_lines = (
-            len(revealed_lines) - 1
-            if revealed_text and not revealed_text.endswith("\n")
-            else len(revealed_lines)
+            len(lines) - 1
+            if self.revealed_text_cache and not self.revealed_text_cache.endswith("\n")
+            else len(lines)
         )
 
         # If we have more complete lines than can fit in the framebuffer, scroll up
@@ -345,176 +308,181 @@ def placeholder_{obj_name.lower()}():
             self.scroll_position = complete_lines - self.height + 1
 
     def get_framebuffer(self):
-        """Generate framebuffer with mirrored split-screen effect"""
+        """Generate framebuffer with mirrored split-screen effect - chunked optimized"""
+        if not self.current_code:
+            # Pre-computed empty row for better performance
+            empty_row = [(" ", "#2a2a2a")] * self.width
+            return [empty_row.copy() for _ in range(self.height)]
+
+        # Pre-compute empty character for padding
+        empty_char = (" ", "#2a2a2a")
+
+        # Update cache only if revealed_chars changed significantly
+        if (
+            abs(self.last_revealed_chars - self.revealed_chars) >= self.chars_per_update
+            or self.last_revealed_chars == -1
+        ):
+            if self.revealed_chars > 0:
+                self.revealed_text_cache = self.current_code[: self.revealed_chars]
+                self.revealed_lines_cache = self.revealed_text_cache.split("\n")
+            else:
+                self.revealed_text_cache = ""
+                self.revealed_lines_cache = []
+            self.last_revealed_chars = self.revealed_chars
+
+        # Use cached data
+        lines = self.revealed_lines_cache
+        half_width = self.width // 2
         framebuffer = []
 
-        if not self.syntax_highlighted_text:
-            # Fill with empty characters if no content
-            for y in range(self.height):
-                row = []
-                for x in range(self.width):
-                    row.append((" ", "#2a2a2a"))
-                framebuffer.append(row)
-            return framebuffer
+        # Fill framebuffer with split-screen mirrored effect
+        for y in range(self.height):
+            # Calculate which line to show based on scroll position
+            line_index = y + self.scroll_position
 
-        # Split-screen mirrored framebuffer strategy
-        try:
-            # Get the text to reveal (up to revealed_chars)
-            revealed_text = (
-                self.current_code[: self.revealed_chars]
-                if self.revealed_chars > 0
-                else ""
-            )
+            if line_index < len(lines):
+                line = lines[line_index]
 
-            # Split text into lines
-            lines = revealed_text.split("\n")
+                # Truncate line to fit in half width
+                if len(line) > half_width:
+                    line = line[:half_width]
 
-            # Calculate half width for split screen
-            half_width = self.width // 2
+                # Right side: normal text - optimized
+                right_chars = []
+                for char in line:
+                    color = self._get_char_color_cached(char)
+                    right_chars.append((char, color))
 
-            # Fill framebuffer with split-screen mirrored effect
-            for y in range(self.height):
-                row = []
+                # Pad right side to half width
+                padding_needed = half_width - len(right_chars)
+                right_chars.extend([empty_char] * padding_needed)
 
-                # Calculate which line to show based on scroll position
-                line_index = y + self.scroll_position
+                # Left side: mirrored text - optimized
+                left_chars = []
+                for char, color in reversed(right_chars):
+                    left_chars.append((self._mirror_character_cached(char), color))
 
-                if line_index < len(lines):
-                    line = lines[line_index]
+                # Combine left (mirrored) + right (normal)
+                row = left_chars + right_chars
+            else:
+                # Empty line - pre-computed
+                row = [empty_char] * self.width
 
-                    # Truncate line to fit in half width (no wrapping)
-                    if len(line) > half_width:
-                        line = line[:half_width]
-
-                    # Right side: normal text (left to right)
-                    right_chars = []
-                    for char in line:
-                        color = self._get_char_color(char)
-                        right_chars.append((char, color))
-
-                    # Pad right side to half width
-                    while len(right_chars) < half_width:
-                        right_chars.append((" ", "#2a2a2a"))
-
-                    # Left side: mirrored text (right to left)
-                    left_chars = []
-                    for char, color in reversed(right_chars):
-                        left_chars.append((self._mirror_character(char), color))
-
-                    # Combine left (mirrored) + right (normal)
-                    row = left_chars + right_chars
-                else:
-                    # Empty line (past end of content)
-                    for _ in range(self.width):
-                        row.append((" ", "#2a2a2a"))
-
-                framebuffer.append(row)
-
-        except Exception as e:
-            # Fallback to simple split-screen effect
-            for y in range(self.height):
-                row = []
-
-                # Calculate which characters to show on this line
-                line_start_char = y * self.width
-
-                for x in range(self.width):
-                    char_pos = line_start_char + x
-
-                    if char_pos < self.revealed_chars and char_pos < len(
-                        self.current_code
-                    ):
-                        char = self.current_code[char_pos]
-                        # Use very dim colors for background effect
-                        row.append((char, "#303030"))
-                    else:
-                        row.append((" ", "#2a2a2a"))
-
-                framebuffer.append(row)
+            framebuffer.append(row)
 
         return framebuffer
 
-    def _get_char_color(self, char):
-        """Get color for a character based on its type"""
-        if char.isalnum():
-            return "#353535"  # Dimmer for background
-        elif char in "()[]{}":
-            return "#404040"  # Brackets
-        elif char in "+-*/=<>":
-            return "#383838"  # Operators
-        elif char in "\"'":
-            return "#2a4a2a"  # String delimiters in very dim green
-        elif char == "#":
-            return "#404040"  # Comments
-        elif char in " \t":
-            return "#2a2a2a"  # Whitespace
-        else:
-            return "#303030"  # Other characters very dim
+    # Cache for character colors to avoid repeated calculations
+    _char_color_cache = {}
 
-    def _mirror_character(self, char):
-        """Mirror directional characters for the split-screen effect"""
-        mirror_map = {
-            "(": ")",
-            ")": "(",
-            "[": "]",
-            "]": "[",
-            "{": "}",
-            "}": "{",
-            "<": ">",
-            ">": "<",
-            "/": "\\",
-            "\\": "/",
-        }
-        return mirror_map.get(char, char)
+    def _get_char_color_cached(self, char):
+        """Get color for a character based on its type - cached and optimized"""
+        if char not in self._char_color_cache:
+            if char.isalpha():
+                color = "#4a4a4a"  # Keywords and identifiers - brighter
+            elif char.isdigit():
+                color = "#5a5a5a"  # Numbers - slightly brighter
+            elif char in "()[]{}":
+                color = "#606060"  # Brackets - more visible
+            elif char in "+-*/=<>!&|":
+                color = "#555555"  # Operators - visible
+            elif char in "\"'":
+                color = "#2a5a2a"  # String delimiters - brighter green
+            elif char == "#":
+                color = "#505050"  # Comments - medium brightness
+            elif char in ".,;:":
+                color = "#454545"  # Punctuation
+            elif char in " \t":
+                color = "#2a2a2a"  # Whitespace - dim
+            else:
+                color = "#404040"  # Other characters - medium dim
+
+            self._char_color_cache[char] = color
+
+        return self._char_color_cache[char]
+
+    # Cache for mirrored characters
+    _mirror_cache = {
+        "(": ")",
+        ")": "(",
+        "[": "]",
+        "]": "[",
+        "{": "}",
+        "}": "{",
+        "<": ">",
+        ">": "<",
+        "/": "\\",
+        "\\": "/",
+    }
+
+    def _mirror_character_cached(self, char):
+        """Mirror directional characters for the split-screen effect - cached version"""
+        return self._mirror_cache.get(char, char)
 
     def toggle_scrolling(self):
-        """Toggle scrolling code effect on/off"""
+        """Toggle scrolling code effect on/off - same pattern as MatrixRain"""
         self.enabled = not self.enabled
         if self.enabled:
             self._load_next_source()
+        else:
+            # Reset state when disabled
+            self.revealed_chars = 0
+            self.scroll_position = 0
+            self.scroll_timer = 0
+            self.last_revealed_chars = -1
+
+    def increase_framerate(self):
+        """Increase scrolling code framerate (decrease update interval) - same pattern as MatrixRain"""
+        if not self.enabled:
+            return
+
+        # Get current FPS as integer
+        current_fps = round(1.0 / self.update_interval)
+
+        # Increment by 1 FPS, maximum 10 FPS
+        new_fps = min(10, current_fps + 1)
+        self.update_interval = 1.0 / new_fps
+
+    def decrease_framerate(self):
+        """Decrease scrolling code framerate (increase update interval) - same pattern as MatrixRain"""
+        if not self.enabled:
+            return
+
+        # Get current FPS as integer
+        current_fps = round(1.0 / self.update_interval)
+
+        # Decrement by 1 FPS, minimum 1 FPS
+        new_fps = max(1, current_fps - 1)
+        self.update_interval = 1.0 / new_fps
 
     def set_typing_speed(self, speed: float):
-        """Set typing speed (characters per second)"""
+        """Set typing speed (characters per second) - works with framerate system"""
         if speed > 0:
-            self.update_interval = 1.0 / speed
+            # Calculate how many characters per update to achieve desired speed
+            fps = 1.0 / self.update_interval
+            self.chars_per_update = max(1, int(speed / fps))
 
-    def set_jitter_range(self, jitter: float):
-        """Set jitter range (±seconds)"""
-        self.jitter_range = max(0, jitter)
-
-    def set_scroll_speed(self, speed: int):
-        """Set scrolling speed (lines per scroll step)"""
-        self.scroll_speed = max(1, speed)
-
-    def set_scroll_delay(self, delay: float):
-        """Set delay between scroll steps (seconds)"""
-        self.scroll_delay = max(0.1, delay)
+    def set_chunk_size(self, chunk_size: int):
+        """Set how many characters to reveal per update"""
+        self.chars_per_update = max(1, min(chunk_size, 10))  # Keep between 1-10
 
     def skip_to_next_source(self):
         """Skip to next source code immediately"""
         self._load_next_source()
-
-    def get_typing_stats(self):
-        """Get current typing statistics"""
-        if self.total_chars == 0:
-            return "No code loaded"
-
-        progress = (self.revealed_chars / self.total_chars) * 100
-        chars_per_sec = 1.0 / self.update_interval if self.update_interval > 0 else 0
-
-        return f"Progress: {progress:.1f}% ({self.revealed_chars}/{self.total_chars} chars) @ {chars_per_sec:.1f} cps"
 
     def get_stats(self):
         """Get statistics about discovered source functions"""
         if not self.source_functions:
             return "No source functions discovered"
 
-        module_counts = {}
-        for module_name, obj_name, obj in self.source_functions:
-            module_counts[module_name] = module_counts.get(module_name, 0) + 1
+        progress = (
+            (self.revealed_chars / self.total_chars) * 100
+            if self.total_chars > 0
+            else 0
+        )
+        current_fps = (
+            round(1.0 / self.update_interval) if self.update_interval > 0 else 0
+        )
+        actual_speed = self.chars_per_update * current_fps
 
-        stats = f"Found {len(self.source_functions)} objects from {len(module_counts)} modules:\n"
-        for module, count in sorted(module_counts.items()):
-            stats += f"  {module}: {count} objects\n"
-
-        return stats.strip()
+        return f"Sources: {len(self.source_functions)} | Progress: {progress:.0f}% | Speed: {actual_speed:.0f} cps | FPS: {current_fps} | Chunk: {self.chars_per_update}"

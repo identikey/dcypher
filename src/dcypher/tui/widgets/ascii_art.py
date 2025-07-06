@@ -94,45 +94,101 @@ class ASCIIBanner(Widget):
         self.animation_frame = (self.animation_frame + 1) % 10
 
     def increase_framerate(self) -> None:
-        """Increase matrix rain framerate (decrease update interval)"""
-        if not self.matrix_rain.enabled:
-            return
+        """Increase framerate for active effects (matrix rain and/or scrolling code)"""
+        effects_updated = []
 
-        # Get current FPS as integer
-        current_fps = round(1.0 / self.matrix_rain.update_interval)
+        # Update matrix rain framerate if enabled
+        if self.matrix_rain.enabled:
+            current_fps = round(1.0 / self.matrix_rain.update_interval)
+            new_fps = min(10, current_fps + 1)
+            self.matrix_rain.update_interval = 1.0 / new_fps
+            effects_updated.append(f"Matrix: {new_fps} FPS")
 
-        # Increment by 1 FPS, maximum 10 FPS
-        new_fps = min(10, current_fps + 1)
-        self.matrix_rain.update_interval = 1.0 / new_fps
+        # Update scrolling code framerate if enabled
+        if self.scrolling_code_controller.enabled:
+            current_fps = round(1.0 / self.scrolling_code_controller.update_interval)
+            new_fps = min(10, current_fps + 1)
+            self.scrolling_code_controller.update_interval = 1.0 / new_fps
+            effects_updated.append(f"Code: {new_fps} FPS")
 
-        # Show current FPS
-        self.notify(f"Matrix FPS: {new_fps}", timeout=1.0)
+        # Update auto-refresh to handle faster effect speeds
+        self._update_auto_refresh_for_speeds()
+
+        if effects_updated:
+            self.notify(" | ".join(effects_updated), timeout=1.0)
+        else:
+            self.notify("No effects enabled", timeout=1.0)
 
     def decrease_framerate(self) -> None:
-        """Decrease matrix rain framerate (increase update interval)"""
-        if not self.matrix_rain.enabled:
+        """Decrease framerate for active effects (matrix rain and/or scrolling code)"""
+        effects_updated = []
+
+        # Update matrix rain framerate if enabled
+        if self.matrix_rain.enabled:
+            current_fps = round(1.0 / self.matrix_rain.update_interval)
+            new_fps = max(1, current_fps - 1)
+            self.matrix_rain.update_interval = 1.0 / new_fps
+            effects_updated.append(f"Matrix: {new_fps} FPS")
+
+        # Update scrolling code framerate if enabled
+        if self.scrolling_code_controller.enabled:
+            current_fps = round(1.0 / self.scrolling_code_controller.update_interval)
+            new_fps = max(1, current_fps - 1)
+            self.scrolling_code_controller.update_interval = 1.0 / new_fps
+            effects_updated.append(f"Code: {new_fps} FPS")
+
+        # Update auto-refresh to handle slower effect speeds
+        self._update_auto_refresh_for_speeds()
+
+        if effects_updated:
+            self.notify(" | ".join(effects_updated), timeout=1.0)
+        else:
+            self.notify("No effects enabled", timeout=1.0)
+
+    def _update_auto_refresh_for_speeds(self) -> None:
+        """Update auto-refresh rate based on the current effect speeds"""
+        if not (self.matrix_background or self.scrolling_code):
+            self.auto_refresh = 0
             return
 
-        # Get current FPS as integer
-        current_fps = round(1.0 / self.matrix_rain.update_interval)
+        # Find the fastest enabled effect to determine minimum refresh needed
+        min_interval = float("inf")
 
-        # Decrement by 1 FPS, minimum 1 FPS (every 1 second)
-        new_fps = max(1, current_fps - 1)
-        self.matrix_rain.update_interval = 1.0 / new_fps
+        if self.matrix_rain.enabled:
+            min_interval = min(min_interval, self.matrix_rain.update_interval)
 
-        # Show current FPS
-        self.notify(f"Matrix FPS: {new_fps}", timeout=1.0)
+        if self.scrolling_code_controller.enabled:
+            min_interval = min(
+                min_interval, self.scrolling_code_controller.update_interval
+            )
+
+        if min_interval == float("inf"):
+            # No effects enabled
+            self.auto_refresh = 0
+        else:
+            # Set auto-refresh to match the fastest effect, but cap at reasonable limits
+            # Min 1 FPS (1.0s), Max 5 FPS (0.2s) for banner refresh
+            self.auto_refresh = max(0.2, min(1.0, min_interval))
+
+    def _update_auto_refresh(self) -> None:
+        """Update auto-refresh rate based on active effects using unified timing"""
+        if self.matrix_background or self.scrolling_code:
+            # Use speed-aware refresh rate
+            self._update_auto_refresh_for_speeds()
+        else:
+            # No effects enabled, no need to refresh
+            self.auto_refresh = 0
+        self.refresh()
 
     def watch_matrix_background(self, matrix_enabled: bool) -> None:
         """React to matrix background toggle"""
-        if matrix_enabled:
-            # Start matrix animation at 2 frames per second (default)
-            self.auto_refresh = 0.5
-            self.matrix_rain.enabled = True
-        else:
-            # Stop auto refresh when disabled
-            self.auto_refresh = 0
-            self.matrix_rain.enabled = False
+        self.matrix_rain.enabled = matrix_enabled
+        self._update_auto_refresh()
+
+    def watch_scrolling_code(self, scrolling_enabled: bool) -> None:
+        """React to scrolling code toggle"""
+        self.scrolling_code_controller.enabled = scrolling_enabled
+        self._update_auto_refresh()
 
     def render(self) -> RenderResult:
         """Render the banner with optional matrix background"""
@@ -316,20 +372,6 @@ class ASCIIBanner(Widget):
     def toggle_scrolling_code(self) -> None:
         """Toggle scrolling code effect"""
         self.scrolling_code = not self.scrolling_code
-
-    def watch_scrolling_code(self, scrolling_enabled: bool) -> None:
-        """React to scrolling code toggle"""
-        self.scrolling_code_controller.enabled = scrolling_enabled
-        if scrolling_enabled:
-            # Enable auto-refresh for scrolling effect
-            self.auto_refresh = 0.1
-        else:
-            # Maintain matrix rain refresh rate if enabled
-            if self.matrix_background:
-                self.auto_refresh = 0.5
-            else:
-                self.auto_refresh = 0
-        self.refresh()
 
 
 class CyberpunkBorder(Widget):
