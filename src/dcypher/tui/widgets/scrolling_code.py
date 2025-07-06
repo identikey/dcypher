@@ -64,7 +64,7 @@ class ScrollingCode:
 
         # Source code collection
         self.source_functions = []
-        self.current_source_index = 0
+        self.current_source_index = 0  # Will be set randomly after collecting sources
 
         # Rich console for rendering syntax highlighting
         self.console = Console(width=width, legacy_windows=False)
@@ -173,6 +173,16 @@ class ScrollingCode:
 
     def _load_next_source(self):
         """Load the next source code for scrolling"""
+        # If this is the first call and we have sources, select randomly
+        if (
+            self.source_functions
+            and self.current_source_index == 0
+            and self.current_code == ""
+        ):
+            self.current_source_index = random.randint(
+                0, len(self.source_functions) - 1
+            )
+
         if not self.source_functions:
             # Fallback code if no sources available
             self.current_code = """
@@ -240,10 +250,17 @@ def placeholder_{obj_name.lower()}():
     pass
 """
 
-            # Move to next source for next time
-            self.current_source_index = (self.current_source_index + 1) % max(
-                1, len(self.source_functions)
-            )
+            # Move to next source for next time - select randomly
+            if len(self.source_functions) > 1:
+                # Avoid selecting the same source twice in a row
+                available_indices = [
+                    i
+                    for i in range(len(self.source_functions))
+                    if i != self.current_source_index
+                ]
+                self.current_source_index = random.choice(available_indices)
+            else:
+                self.current_source_index = 0
 
         # Reset state for new source
         self.scroll_position = 0
@@ -498,7 +515,7 @@ def placeholder_{obj_name.lower()}():
                 highlighted_segments = self._generate_syntax_highlighted_segments()
                 if (
                     self.scroll_position
-                    < len(highlighted_segments) - self.lines_per_screen
+                    <= len(highlighted_segments) - self.lines_per_screen
                 ):
                     self.scroll_position += self.scroll_speed
                     self.scroll_timer = current_time
@@ -516,9 +533,9 @@ def placeholder_{obj_name.lower()}():
         complete_lines = len(revealed_text.split("\n"))
 
         # If we have more complete lines than can fit in the framebuffer, scroll up
-        if complete_lines >= self.height:
+        if complete_lines > self.height:
             # Scroll to show the most recent lines
-            self.scroll_position = complete_lines - self.height + 1
+            self.scroll_position = complete_lines - self.height
 
     def get_framebuffer(self):
         """Generate framebuffer with mirrored split-screen effect using proper syntax highlighting"""
