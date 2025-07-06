@@ -48,8 +48,10 @@ class ASCIIBanner(Widget):
     # Reactive properties
     show_subtitle = reactive(True)
     animation_frame = reactive(0)
-    matrix_background = reactive(True)
-    scrolling_code = reactive(False)
+    matrix_background = reactive(
+        False
+    )  # Start disabled, will be enabled when server connects
+    scrolling_code = reactive(True)  # Start enabled by default
 
     # ASCII art for dCypher logo
     DCYPHER_ASCII = """
@@ -183,11 +185,17 @@ class ASCIIBanner(Widget):
     def watch_matrix_background(self, matrix_enabled: bool) -> None:
         """React to matrix background toggle"""
         self.matrix_rain.enabled = matrix_enabled
+        if matrix_enabled:
+            # Clear framebuffer when enabling for a fresh start
+            self.matrix_rain.reset_grid()
         self._update_auto_refresh()
 
     def watch_scrolling_code(self, scrolling_enabled: bool) -> None:
         """React to scrolling code toggle"""
         self.scrolling_code_controller.enabled = scrolling_enabled
+        if scrolling_enabled:
+            # Clear buffer when enabling for a fresh start
+            self.scrolling_code_controller.clear_buffer()
         self._update_auto_refresh()
 
     def render(self) -> RenderResult:
@@ -408,6 +416,16 @@ class ASCIIBanner(Widget):
             f"Code saturation: {self.scrolling_code_controller.saturation}%",
             timeout=1.0,
         )
+
+    def update_matrix_for_connection(self, connected: bool) -> None:
+        """Update matrix background based on server connection status"""
+        self.matrix_background = connected
+        if connected:
+            # Clear framebuffer when enabling for a fresh start
+            self.matrix_rain.reset_grid()
+            self.notify("Matrix rain activated - Server connected", timeout=2.0)
+        else:
+            self.notify("Matrix rain deactivated - Server disconnected", timeout=2.0)
 
 
 class CyberpunkBorder(Widget):

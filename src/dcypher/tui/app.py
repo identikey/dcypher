@@ -17,12 +17,12 @@ from datetime import datetime, timedelta
 from rich.text import Text
 
 from dcypher.tui.theme import CYBERPUNK_THEME, get_cyberpunk_theme
-from dcypher.tui.widgets.ascii_art import ASCIIBanner
-from dcypher.tui.widgets.system_monitor import SystemMonitor
 from dcypher.tui.widgets.process_monitor import (
     ProcessCPUDivider,
     ProcessCPU15MinDivider,
 )
+from dcypher.tui.widgets.ascii_art import ASCIIBanner
+from dcypher.tui.widgets.system_monitor import SystemMonitor
 from dcypher.tui.screens.dashboard import DashboardScreen
 from dcypher.tui.screens.identity import IdentityScreen
 from dcypher.tui.screens.crypto import CryptoScreen
@@ -341,6 +341,9 @@ class DCypherTUI(App[None]):
             self.load_identity_info(self.current_identity_path)
             self.broadcast_identity_change()
 
+        # Initialize matrix background based on connection status
+        self.update_matrix_for_connection_status()
+
     def update_system_status(self) -> None:
         """Update system status information"""
         # This will be called every second to update real-time data
@@ -354,6 +357,7 @@ class DCypherTUI(App[None]):
     def check_api_connection(self) -> None:
         """Check API connection status and get server uptime"""
         # This will be called every 5 seconds to check API connectivity
+        old_status = self.connection_status
         try:
             if self._api_client:
                 # Try to get nonce to check connection first
@@ -377,6 +381,10 @@ class DCypherTUI(App[None]):
             self.server_uptime = None
             # Only clear the API client if we're not manually connecting
             # This prevents clearing during manual connect attempts
+
+        # Update matrix background if connection status changed
+        if old_status != self.connection_status:
+            self.update_matrix_for_connection_status()
 
     def fetch_server_uptime(self) -> None:
         """Fetch server uptime from the API"""
@@ -495,11 +503,16 @@ class DCypherTUI(App[None]):
             # Fetch server uptime immediately
             self.fetch_server_uptime()
 
+            # Update matrix background for connection
+            self.update_matrix_for_connection_status()
+
         except Exception as e:
             self.connection_status = "disconnected"
             self.connection_start_time = None
             self.server_uptime = None
             self.notify(f"Failed to connect to server: {e}", severity="error")
+            # Update matrix background for disconnection
+            self.update_matrix_for_connection_status()
 
     def action_disconnect(self) -> None:
         """Disconnect from the server"""
@@ -513,6 +526,9 @@ class DCypherTUI(App[None]):
             self.server_uptime = None
 
             self.notify("Disconnected from server", severity="information")
+
+            # Update matrix background for disconnection
+            self.update_matrix_for_connection_status()
 
         except Exception as e:
             self.notify(f"Error during disconnect: {e}", severity="warning")
@@ -611,6 +627,15 @@ class DCypherTUI(App[None]):
             pass
         elif button_id == "help-btn":
             self.action_show_help()
+
+    def update_matrix_for_connection_status(self) -> None:
+        """Update matrix background based on connection status"""
+        try:
+            ascii_banner = self.query_one(ASCIIBanner)
+            connected = self.connection_status == "connected"
+            ascii_banner.update_matrix_for_connection(connected)
+        except Exception as e:
+            self.log.warning(f"Failed to update matrix background: {e}")
 
 
 def run_tui(identity_path=None, api_url=None):
