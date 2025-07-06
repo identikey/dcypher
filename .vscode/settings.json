@@ -1,4 +1,9 @@
 {
     "workbench.colorTheme": "Default Dark Modern",
-    "workbench.startupEditor": "none"
+    "workbench.startupEditor": "none",
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
