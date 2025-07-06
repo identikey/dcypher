@@ -399,7 +399,7 @@ def placeholder_{obj_name.lower()}():
                     # Left side: mirrored text (right to left)
                     left_chars = []
                     for char, color in reversed(right_chars):
-                        left_chars.append((char, color))
+                        left_chars.append((self._mirror_character(char), color))
 
                     # Combine left (mirrored) + right (normal)
                     row = left_chars + right_chars
@@ -450,6 +450,22 @@ def placeholder_{obj_name.lower()}():
             return "#2a2a2a"  # Whitespace
         else:
             return "#303030"  # Other characters very dim
+
+    def _mirror_character(self, char):
+        """Mirror directional characters for the split-screen effect"""
+        mirror_map = {
+            "(": ")",
+            ")": "(",
+            "[": "]",
+            "]": "[",
+            "{": "}",
+            "}": "{",
+            "<": ">",
+            ">": "<",
+            "/": "\\",
+            "\\": "/",
+        }
+        return mirror_map.get(char, char)
 
     def toggle_scrolling(self):
         """Toggle scrolling code effect on/off"""
