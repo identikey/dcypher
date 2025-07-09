@@ -755,9 +755,9 @@ class {obj_type}Analysis:
             self._render_line_to_row(line, row_idx, width, visible_styled)
 
         # SMART CACHE: Store result and mark framebuffer as clean
-        import copy
-
-        self._framebuffer_cache = copy.deepcopy(self.framebuffer)
+        # PERFORMANCE FIX: Replace expensive deepcopy with shallow reference
+        # The framebuffer is regenerated each time anyway, so deep copying is unnecessary
+        self._framebuffer_cache = self.framebuffer  # Reference instead of deep copy
         self._framebuffer_dirty = False
 
     def _render_line_to_row(self, line: str, row_idx: int, width: int, visible_styled):

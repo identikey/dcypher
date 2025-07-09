@@ -45,7 +45,7 @@ except ImportError:
 
         return decorator
 
-    def profile_block(name: Any, backend: str = "cprofile"):
+    def profile_block(name: str, backend: str = "cprofile"):  # type: ignore
         return nullcontext()
 
     def create_animation_profiler():
@@ -459,17 +459,16 @@ class ASCIIBanner(Widget):
         with profile_block(
             "ASCIIBanner._render_with_layered_effects.layer_composition"
         ):
-            # REVOLUTIONARY OPTIMIZATION: Build entire content as strings, then style in bulk
-            # This eliminates 1,154+ Rich Text.append() calls down to ~10-20 total
+            # ULTRA-OPTIMIZED: Build segments efficiently without Rich markup overhead
+            # Avoiding both expensive markup parsing AND excessive append calls
 
             # Pre-calculate positioning once
             ascii_start_row = (height - len(ascii_lines)) // 2
             ascii_start_col = (width - ascii_width) // 2
 
-            # Pre-allocate output structure for maximum speed
-            composed_lines = []
+            # Pre-allocate segment list for single append operation
+            all_segments = []
 
-            # OPTIMIZATION 1: Process entire rows at once instead of character-by-character
             for y in range(height):
                 # Build entire row as string first, then determine styling
                 row_chars = [" "] * width
@@ -508,47 +507,32 @@ class ASCIIBanner(Widget):
                                 row_chars[x_pos] = ascii_char
                                 row_styles[x_pos] = "bold green"
 
-                # OPTIMIZATION 2: Build styled segments in bulk instead of character-by-character
-                # Group consecutive characters with same style into chunks
-                styled_segments = []
-                if row_chars:  # Ensure we have content
-                    current_text = ""
-                    current_style = row_styles[0]
+                # Build segments for this row with maximum efficiency
+                current_text = ""
+                current_style = row_styles[0]
 
-                    for x in range(width):
-                        char = row_chars[x]
-                        style = row_styles[x]
+                for x in range(width):
+                    char = row_chars[x]
+                    style = row_styles[x]
 
-                        if style == current_style:
-                            current_text += char
-                        else:
-                            # Style changed - save current segment and start new one
-                            if current_text:
-                                styled_segments.append((current_text, current_style))
-                            current_text = char
-                            current_style = style
+                    if style == current_style:
+                        current_text += char
+                    else:
+                        # Style changed - save current segment and start new one
+                        if current_text:
+                            all_segments.append((current_text, current_style))
+                        current_text = char
+                        current_style = style
 
-                    # Don't forget the last segment
-                    if current_text:
-                        styled_segments.append((current_text, current_style))
+                # Don't forget the last segment of the row
+                if current_text:
+                    all_segments.append((current_text, current_style))
 
-                composed_lines.append(styled_segments)
+                # Add newline except for last row
+                if y < height - 1:
+                    all_segments.append(("\n", current_style))
 
-            # OPTIMIZATION 3: Create Rich content with minimal append operations
-            # Instead of 1,154+ calls, we now make just ~10-50 calls total
-            layered_content = Text()
-
-            # ULTRA-AGGRESSIVE OPTIMIZATION: Merge consecutive identical styles across lines
-            # to reduce Rich Text operations even further
-            all_segments = []
-            for y, line_segments in enumerate(composed_lines):
-                # Add line segments
-                all_segments.extend(line_segments)
-                # Add newline except for last line
-                if y < len(composed_lines) - 1:
-                    all_segments.append(("\n", ""))
-
-            # Merge consecutive segments with same style
+            # ULTRA-OPTIMIZATION: Merge segments across lines to reduce Rich operations
             merged_segments = []
             if all_segments:
                 current_text = all_segments[0][0]
@@ -567,7 +551,8 @@ class ASCIIBanner(Widget):
                 if current_text:
                     merged_segments.append((current_text, current_style))
 
-            # Apply merged segments in bulk
+            # Create Rich content with MINIMAL operations (typically 5-15 total calls)
+            layered_content = Text()
             for text_chunk, style in merged_segments:
                 layered_content.append(text_chunk, style=style)
 

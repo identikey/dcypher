@@ -268,6 +268,11 @@ class MatrixRain:
         # Initialize profiler for animations
         self.animation_profiler = create_animation_profiler()
 
+        # Character batch for optimized sprite generation
+        self._char_batch_size = 200
+        self._char_batch = np.random.choice(self.hex_chars, size=self._char_batch_size)
+        self._char_batch_index = 0
+
         # Initialize state
         self.reset_grid()
 
@@ -503,13 +508,16 @@ class MatrixRain:
 
     @profile("MatrixRain._update_sprites")
     def _update_sprites(self):
-        """OPTIMIZED: Update sprite positions and characters with reduced function calls"""
+        """ULTRA-OPTIMIZED: Update sprite positions and characters with minimal overhead"""
         with profile_block("MatrixRain._update_sprites.sprite_loop"):
             # OPTIMIZATION 1: Pre-compute values to avoid repeated calculations
             activation_threshold = 0.08
             current_frame = self._current_frame
 
-            # OPTIMIZATION 2: Process sprites in batches to reduce overhead
+            # OPTIMIZATION 2: Use persistent character batch to reduce numpy calls
+            # Character batch is now initialized in __init__, just use it directly
+
+            # OPTIMIZATION 3: Process sprites in batches to reduce overhead
             active_sprites = []
             inactive_sprites = []
 
@@ -520,7 +528,7 @@ class MatrixRain:
                 else:
                     inactive_sprites.append(sprite)
 
-            # OPTIMIZATION 3: Process inactive sprites with reduced frequency
+            # OPTIMIZATION 4: Process inactive sprites with reduced frequency
             # Only check every few frames to reduce unnecessary work
             if current_frame % 2 == 0:  # Every other frame for inactive sprites
                 for sprite in inactive_sprites:
@@ -531,7 +539,7 @@ class MatrixRain:
                         self._reset_sprite(sprite)
                         active_sprites.append(sprite)  # Move to active list
 
-            # OPTIMIZATION 4: Bulk process active sprites with fewer function calls
+            # OPTIMIZATION 5: Bulk process active sprites with fewer function calls
             sprites_to_deactivate = []
             for sprite in active_sprites:
                 sprite["counter"] += 1
@@ -559,12 +567,24 @@ class MatrixRain:
                             sprites_to_deactivate.append(sprite)
                             continue
 
-                # OPTIMIZATION 5: Inline character update to reduce function calls
+                # OPTIMIZATION 6: Use persistent character batch for maximum efficiency
                 x, y = sprite["x"], sprite["y"]
                 if 0 <= y < self.height:
                     if sprite["direction"] in ["up", "down"]:
-                        # Generate chars for horizontal sprites
-                        chars = np.random.choice(self.hex_chars, sprite["width"])
+                        # Generate chars for horizontal sprites using persistent batch
+                        char_count = sprite["width"]
+                        if self._char_batch_index + char_count > self._char_batch_size:
+                            # Refresh batch when needed
+                            self._char_batch = np.random.choice(
+                                self.hex_chars, size=self._char_batch_size
+                            )
+                            self._char_batch_index = 0
+
+                        chars = self._char_batch[
+                            self._char_batch_index : self._char_batch_index + char_count
+                        ]
+                        self._char_batch_index += char_count
+
                         for i, char in enumerate(chars):
                             if 0 <= x + i < self.width:
                                 # Inline _set_cell logic
@@ -578,8 +598,20 @@ class MatrixRain:
                                     self.z_order[y, cell_x] = sprite["z_order"]
                                     self.active_mask[y, cell_x] = True
                     else:
-                        # Generate chars for vertical sprites
-                        chars = np.random.choice(self.hex_chars, sprite["height"])
+                        # Generate chars for vertical sprites using persistent batch
+                        char_count = sprite["height"]
+                        if self._char_batch_index + char_count > self._char_batch_size:
+                            # Refresh batch when needed
+                            self._char_batch = np.random.choice(
+                                self.hex_chars, size=self._char_batch_size
+                            )
+                            self._char_batch_index = 0
+
+                        chars = self._char_batch[
+                            self._char_batch_index : self._char_batch_index + char_count
+                        ]
+                        self._char_batch_index += char_count
+
                         for i, char in enumerate(chars):
                             cell_y = y + i
                             if 0 <= cell_y < self.height and 0 <= x < self.width:
@@ -593,7 +625,7 @@ class MatrixRain:
                                     self.z_order[cell_y, x] = sprite["z_order"]
                                     self.active_mask[cell_y, x] = True
 
-            # OPTIMIZATION 6: Batch deactivate sprites to avoid individual updates
+            # OPTIMIZATION 7: Batch deactivate sprites to avoid individual updates
             for sprite in sprites_to_deactivate:
                 sprite["active"] = False
                 sprite["cooldown"] = random.randint(5, 25)
@@ -634,35 +666,37 @@ class MatrixRain:
                 return self._framebuffer_cache
 
         with profile_block("MatrixRain.get_framebuffer.buffer_generation"):
-            # ULTRA-OPTIMIZATION: Vectorized framebuffer generation
-            # Instead of nested loops with function calls, process entire arrays at once
+            # ULTRA-OPTIMIZATION: Remove expensive pre-computation and use direct access
+            color_pool = self.color_pool
+            black_str = color_pool.black
 
-            # Pre-allocate the framebuffer structure
+            # OPTIMIZATION: Build framebuffer with minimal function calls and object creation
             framebuffer = []
 
-            # Get all color pools in advance to avoid repeated function calls
-            color_pool = self.color_pool
-            black = color_pool.black
+            # Pre-cache common values to avoid repeated access
+            fade_cache = color_pool._fade_cache
+            fade_levels = color_pool.fade_levels
 
-            # OPTIMIZATION: Process rows in batches to reduce function call overhead
             for y in range(self.height):
-                row = []
+                # Pre-allocate row for efficiency with correct tuple type
+                row = [("", "")] * self.width
 
-                # Get entire row data at once
+                # Get entire row data at once to avoid repeated array access
                 chars_row = self.chars[y]
                 state_row = self.state[y]
                 glitch_row = self.glitch[y]
                 z_order_row = self.z_order[y]
 
-                # OPTIMIZATION: Vectorized row processing
+                # ULTRA-OPTIMIZATION: Vectorized row processing with minimal overhead
                 for x in range(self.width):
                     char = chars_row[x]
                     state_val = state_row[x]
                     glitch_val = glitch_row[x]
                     z_val = z_order_row[x]
 
+                    # ULTRA-OPTIMIZATION: Streamlined color computation
                     if glitch_val > 0:
-                        # OPTIMIZATION: Use cached negative colors
+                        # Direct negative color computation without pre-caching
                         glitch_progress = glitch_val / 8
                         if glitch_progress <= 0.3:
                             color = color_pool.get_negative_color(z_val, 0)
@@ -671,21 +705,19 @@ class MatrixRain:
                         else:
                             color = color_pool.get_negative_color(z_val, 2)
                     elif state_val == 0:
-                        color = black
+                        color = black_str
                     else:
-                        # OPTIMIZATION: Direct cache access instead of function call
-                        fade_level = state_val - 1
-                        if z_val in color_pool._fade_cache:
-                            color = color_pool._fade_cache[z_val][
-                                min(fade_level, color_pool.fade_levels - 1)
-                            ]
+                        # OPTIMIZATION: Direct cache access with minimal bounds checking
+                        if z_val in fade_cache:
+                            fade_level = min(state_val - 1, fade_levels - 1)
+                            color = fade_cache[z_val][fade_level]
                         else:
-                            color = black
+                            color = black_str
 
-                    row.append((char, color))
+                    row[x] = (char, color)
                 framebuffer.append(row)
 
-            # SMART CACHE: Store result and cache state hash
+            # SMART CACHE: Store result and update cache state hash
             self._framebuffer_cache = framebuffer
             self._cached_state_hash = self._state_hash
             self._state_dirty = False
