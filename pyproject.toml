@@ -27,8 +27,9 @@ dependencies = [
     "cryptography>=45.0.4",
     "psutil>=7.0.0",
     "textual[syntax]>=3.5.0",
-    "liboqs-python>=0.13.0",
     "dill>=0.3.8",
+    "numpy>=2.3.1",
+    "pqcow-liboqs>=0.10.1.dev0",
 ]
 
 [project.scripts]

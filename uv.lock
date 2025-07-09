@@ -390,9 +390,10 @@ dependencies = [
     { name = "dill" },
     { name = "ecdsa" },
     { name = "fastapi" },
-    { name = "liboqs-python" },
+    { name = "numpy" },
     { name = "openfhe" },
     { name = "pandas" },
+    { name = "pqcow-liboqs" },
     { name = "pre-commit" },
     { name = "psutil" },
     { name = "pytest" },
@@ -422,9 +423,10 @@ requires-dist = [
     { name = "dill", specifier = ">=0.3.8" },
     { name = "ecdsa", specifier = ">=0.19.1" },
     { name = "fastapi" },
-    { name = "liboqs-python", specifier = ">=0.13.0" },
+    { name = "numpy", specifier = ">=2.3.1" },
     { name = "openfhe", editable = "vendor/openfhe-python" },
     { name = "pandas" },
+    { name = "pqcow-liboqs", specifier = ">=0.10.1.dev0" },
     { name = "pre-commit" },
     { name = "psutil", specifier = ">=7.0.0" },
     { name = "pytest" },
@@ -648,14 +650,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
-]
-
-[[package]]
-name = "liboqs-python"
-version = "0.13.0"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/0a/20f63fe0b4f3bca3c67453e692c64a94c1a5ca4ac6815fa9b7310160bac2/liboqs_python-0.13.0-py3-none-any.whl", hash = "sha256:775eac996682c02b05512737cdcb6f83528d723879e119c559a3d70b1e8f2b8d", size = 12992, upload-time = "2025-06-21T05:00:33.524Z" },
 ]
 
 [[package]]
@@ -960,6 +954,16 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "pqcow-liboqs"
+version = "0.10.1.dev0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/40/bd8c6f74b27ca7e8644a32987921d0ef138b04340cea6afd3f257832c035/pqcow_liboqs-0.10.1.dev0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:3b6dd1df89d0e62b19f7bf245885456afa3ad02c34eb7858d9873f11d3d7b709", size = 1186927, upload-time = "2024-11-19T02:53:18.923Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/99/a18adffe0f49cb7e85dc96184c118ac8be68a568dc790015b4494b9c684a/pqcow_liboqs-0.10.1.dev0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:47e729446de07d7812811bd0799028864ecca3a4cc40527a8b5a4f6907de72a3", size = 207125, upload-time = "2024-11-19T02:53:14.637Z" },
+    { url = "https://files.pythonhosted.org/packages/44/3f/f523670b6751c84e04171e47a46d661997fe8834814cccce6381ac7b6fa6/pqcow_liboqs-0.10.1.dev0-cp312-cp312-win_amd64.whl", hash = "sha256:ebd864db021232bb403c75e5896552cd29cec2f32c989d8904e223596a3aafa2", size = 293983, upload-time = "2024-11-19T02:53:16.506Z" },
 ]
 
 [[package]]
