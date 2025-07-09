@@ -678,8 +678,8 @@ class MatrixRain:
             fade_levels = color_pool.fade_levels
 
             for y in range(self.height):
-                # Pre-allocate row for efficiency with correct tuple type
-                row = [("", "")] * self.width
+                # Use append operations instead of pre-allocation for better efficiency
+                row = []
 
                 # Get entire row data at once to avoid repeated array access
                 chars_row = self.chars[y]
@@ -714,7 +714,7 @@ class MatrixRain:
                         else:
                             color = black_str
 
-                    row[x] = (char, color)
+                    row.append((char, color))
                 framebuffer.append(row)
 
             # SMART CACHE: Store result and update cache state hash

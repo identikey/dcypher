@@ -10,7 +10,7 @@ import os
 import pkgutil
 import inspect
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.app import RenderResult
@@ -126,6 +126,12 @@ class ASCIIBanner(Widget):
         self._matrix_state_hash: int = 0
         self._code_state_hash: int = 0
         self._cache_timestamp: float = 0.0  # Time-based cache validation
+
+        # PERFORMANCE OPTIMIZATION: Cache static ASCII content
+        self._ascii_lines_cache: Optional[List[str]] = None
+        self._ascii_text_cache: Optional[Text] = None
+        self._dimension_cache: Optional[Tuple[int, List[str]]] = None
+        self._last_subtitle_state: Optional[bool] = None
 
         # DISABLED CACHING (for design finalization):
         # - Layer composition result caching (_layer_cache)
@@ -272,6 +278,56 @@ class ASCIIBanner(Widget):
         self._layer_cache_result = None
         self._cache_timestamp = 0.0  # Reset timestamp to force regeneration
 
+    def _get_cached_ascii_lines(self) -> List[str]:
+        """PERFORMANCE: Get cached ASCII lines to avoid repeated string splitting"""
+        if self._ascii_lines_cache is None:
+            self._ascii_lines_cache = self.ascii_art.strip().split("\n")
+        return self._ascii_lines_cache
+
+    def _get_cached_ascii_text(self) -> Text:
+        """PERFORMANCE: Get cached ASCII text to avoid repeated Rich Text creation"""
+        # Check if we need to invalidate cache due to subtitle change
+        if self._last_subtitle_state != self.show_subtitle:
+            self._ascii_text_cache = None
+            self._last_subtitle_state = self.show_subtitle
+
+        if self._ascii_text_cache is None:
+            # Create ASCII content once and cache it
+            ascii_text = Text()
+            ascii_lines = self._get_cached_ascii_lines()
+
+            # Add the ASCII art
+            ascii_text.append("\n")  # Top padding
+            for line in ascii_lines:
+                ascii_text.append(line + "\n", style="bold green")
+
+            # Add subtitle if enabled
+            if self.show_subtitle:
+                ascii_text.append(self.SUBTITLE, style="dim cyan")
+
+            ascii_text.append("\n")  # Bottom padding
+
+            self._ascii_text_cache = ascii_text
+
+        return self._ascii_text_cache
+
+    def _get_cached_dimensions(self) -> Tuple[int, List[str]]:
+        """PERFORMANCE: Get cached dimensions to avoid repeated calculation"""
+        # Check if we need to invalidate cache due to subtitle change
+        if self._last_subtitle_state != self.show_subtitle:
+            self._dimension_cache = None
+            self._last_subtitle_state = self.show_subtitle
+
+        if self._dimension_cache is None:
+            ascii_lines = self._get_cached_ascii_lines()
+            content_height = len(ascii_lines) + 2  # ASCII + padding
+            if self.show_subtitle:
+                content_height += 1
+
+            self._dimension_cache = (content_height, ascii_lines)
+
+        return self._dimension_cache
+
     @profile("ASCIIBanner.render")
     def render(self) -> RenderResult:
         """Render the banner with optional matrix background"""
@@ -283,11 +339,8 @@ class ASCIIBanner(Widget):
             pass
 
         with profile_block("ASCIIBanner.render.dimension_calculation"):
-            # Calculate dimensions based on ASCII content (fixed)
-            ascii_lines = self.ascii_art.strip().split("\n")
-            content_height = len(ascii_lines) + 2  # ASCII + padding
-            if self.show_subtitle:
-                content_height += 1
+            # PERFORMANCE: Use cached dimensions instead of recalculating
+            content_height, ascii_lines = self._get_cached_dimensions()
 
             # Get container dimensions
             container_width = max(80, self.size.width - 4)
@@ -312,19 +365,8 @@ class ASCIIBanner(Widget):
                 self.scrolling_code_controller.height = container_height
 
         with profile_block("ASCIIBanner.render.ascii_text_creation"):
-            # Create ASCII content
-            ascii_text = Text()
-
-            # Add the ASCII art
-            ascii_text.append("\n")  # Top padding
-            for line in ascii_lines:
-                ascii_text.append(line + "\n", style="bold green")
-
-            # Add subtitle if enabled
-            if self.show_subtitle:
-                ascii_text.append(self.SUBTITLE, style="dim cyan")
-
-            ascii_text.append("\n")  # Bottom padding
+            # PERFORMANCE: Use cached ASCII text instead of recreating every render
+            ascii_text = self._get_cached_ascii_text()
 
         # If matrix background or scrolling code is enabled, render with layered effects
         if self.matrix_background or self.scrolling_code:
@@ -466,13 +508,17 @@ class ASCIIBanner(Widget):
             ascii_start_row = (height - len(ascii_lines)) // 2
             ascii_start_col = (width - ascii_width) // 2
 
+            # PERFORMANCE: Pre-compute style strings to avoid repeated operations
+            default_style = "dim green"
+            ascii_style = "bold green"
+
             # Pre-allocate segment list for single append operation
             all_segments = []
 
             for y in range(height):
                 # Build entire row as string first, then determine styling
                 row_chars = [" "] * width
-                row_styles = ["dim green"] * width
+                row_styles = [default_style] * width
 
                 # Layer 1: Background (scrolling code or matrix)
                 if scrolling_framebuffer and y < len(scrolling_framebuffer):
@@ -505,7 +551,7 @@ class ASCIIBanner(Widget):
                             x_pos = ascii_start_col + i
                             if 0 <= x_pos < width:
                                 row_chars[x_pos] = ascii_char
-                                row_styles[x_pos] = "bold green"
+                                row_styles[x_pos] = ascii_style
 
                 # Build segments for this row with maximum efficiency
                 current_text = ""
@@ -551,7 +597,7 @@ class ASCIIBanner(Widget):
                 if current_text:
                     merged_segments.append((current_text, current_style))
 
-            # Create Rich content with MINIMAL operations (typically 5-15 total calls)
+            # Create Rich content with MINIMAL operations (typically 50-200 total calls)
             layered_content = Text()
             for text_chunk, style in merged_segments:
                 layered_content.append(text_chunk, style=style)
@@ -566,6 +612,9 @@ class ASCIIBanner(Widget):
     def toggle_subtitle(self) -> None:
         """Toggle subtitle visibility"""
         self.show_subtitle = not self.show_subtitle
+        # PERFORMANCE: Invalidate ASCII caches when subtitle state changes
+        self._ascii_text_cache = None
+        self._dimension_cache = None
 
     def toggle_scrolling_code(self) -> None:
         """Toggle scrolling code effect"""
