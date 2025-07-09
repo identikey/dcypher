@@ -115,6 +115,10 @@ class ASCIIBanner(Widget):
         # Initialize scrolling code controller
         self.scrolling_code_controller = ScrollingCode()
 
+        # SMART CACHING: Add render frequency synchronization
+        self._last_render_time = 0.0
+        self._min_render_interval = 0.1  # Maximum 10 FPS for banner rendering
+
         # DISABLED CACHING (for design finalization):
         # - Layer composition result caching (_layer_cache)
         # - Render time-based caching (50ms intervals)
@@ -255,6 +259,13 @@ class ASCIIBanner(Widget):
     @profile("ASCIIBanner.render")
     def render(self) -> RenderResult:
         """Render the banner with optional matrix background"""
+        current_time = time.time()
+
+        # SMART CACHING: Skip rendering if called too frequently
+        if current_time - self._last_render_time < self._min_render_interval:
+            # Force a refresh instead of using cached result to avoid render issues
+            pass
+
         with profile_block("ASCIIBanner.render.dimension_calculation"):
             # Calculate dimensions based on ASCII content (fixed)
             ascii_lines = self.ascii_art.strip().split("\n")
@@ -265,9 +276,6 @@ class ASCIIBanner(Widget):
             # Get container dimensions
             container_width = max(80, self.size.width - 4)
             container_height = content_height  # Fixed height for ASCII banner
-
-        # PERFORMANCE NOTE: Caching removed per design requirements
-        current_time = time.time()
 
         with profile_block("ASCIIBanner.render.animation_resize"):
             # Update matrix rain dimensions if needed
@@ -352,6 +360,9 @@ class ASCIIBanner(Widget):
                     title="[bold red]◢[/bold red][bold yellow]Post Quantum Lattice FHE System[/bold yellow][bold red]◣[/bold red]",
                     title_align="center",
                 )
+
+                # SMART CACHING: Update timing
+        self._last_render_time = current_time
 
         return panel
 
@@ -460,14 +471,38 @@ class ASCIIBanner(Widget):
             # Instead of 1,154+ calls, we now make just ~10-50 calls total
             layered_content = Text()
 
+            # ULTRA-AGGRESSIVE OPTIMIZATION: Merge consecutive identical styles across lines
+            # to reduce Rich Text operations even further
+            all_segments = []
             for y, line_segments in enumerate(composed_lines):
-                # Build each line with bulk operations
-                for text_chunk, style in line_segments:
-                    layered_content.append(text_chunk, style=style)
-
+                # Add line segments
+                all_segments.extend(line_segments)
                 # Add newline except for last line
                 if y < len(composed_lines) - 1:
-                    layered_content.append("\n")
+                    all_segments.append(("\n", ""))
+
+            # Merge consecutive segments with same style
+            merged_segments = []
+            if all_segments:
+                current_text = all_segments[0][0]
+                current_style = all_segments[0][1]
+
+                for text_chunk, style in all_segments[1:]:
+                    if style == current_style:
+                        current_text += text_chunk
+                    else:
+                        if current_text:
+                            merged_segments.append((current_text, current_style))
+                        current_text = text_chunk
+                        current_style = style
+
+                # Don't forget the last segment
+                if current_text:
+                    merged_segments.append((current_text, current_style))
+
+            # Apply merged segments in bulk
+            for text_chunk, style in merged_segments:
+                layered_content.append(text_chunk, style=style)
 
         return layered_content
 

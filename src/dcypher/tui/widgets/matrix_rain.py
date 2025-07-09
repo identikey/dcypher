@@ -27,10 +27,10 @@ except ImportError:
 
     F = TypeVar("F", bound=Callable[..., Any])
 
-    def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:  # type: ignore
+    def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:
         return lambda func: func
 
-    def profile_block(name: Any, backend: str = "cprofile"):  # type: ignore
+    def profile_block(name: str, backend: str = "cprofile"):  # type: ignore
         return nullcontext()
 
     def create_animation_profiler():  # type: ignore
@@ -251,16 +251,14 @@ class MatrixRain:
         self.hex_chars = np.array(list("0123456789ABCDEF"))
         self.chunk_sizes = np.array([2, 4, 8])
 
-        # DISABLED CACHING (for design finalization):
-        # - Framebuffer result caching (_framebuffer_cache)
-        # - Frame-based cache intervals (every 2-3 frames)
-        # - State hash-based cache invalidation
-        # - Quality-based cache interval adjustment
-        # TODO: Re-enable these caches after design is settled
+        # SMART CACHING (non-design-blocking):
+        # - Framebuffer result caching (only when state unchanged)
+        # - State-based cache invalidation (not time-based)
+        # Note: No layer composition caching to allow design changes
 
-        # PERFORMANCE OPTIMIZATION: Pre-computed lookups
-        self._last_state_hash: Optional[int] = None
-        self._frame_skip_counter: int = 0
+        # PERFORMANCE OPTIMIZATION: Smart framebuffer caching
+        self._framebuffer_cache: Optional[List[List[Tuple[str, str]]]] = None
+        self._state_dirty: bool = True  # Mark when state changes
         self._current_frame: int = 0
 
         # Initialize profiler for animations
@@ -295,8 +293,8 @@ class MatrixRain:
         self.sprites: List[SpriteState] = []
         self._initialize_sprites()
 
-        # OPTIMIZATION: Clear state when resetting
-        self._last_state_hash = None
+        # OPTIMIZATION: Mark state as dirty when resetting
+        self._state_dirty = True
 
     def _initialize_sprites(self):
         """Initialize matrix rain sprites"""
@@ -434,7 +432,8 @@ class MatrixRain:
             self._update_states()
             self._update_sprites()
 
-        # State updated - no caching currently enabled
+        # OPTIMIZATION: Mark state as dirty after updates
+        self._state_dirty = True
 
     @profile("MatrixRain._update_states")
     def _update_states(self):
@@ -603,7 +602,11 @@ class MatrixRain:
 
     @profile("MatrixRain.get_framebuffer")
     def get_framebuffer(self) -> List[List[Tuple[str, str]]]:
-        """ULTRA-OPTIMIZED: Generate framebuffer with vectorization (caching disabled)"""
+        """ULTRA-OPTIMIZED: Generate framebuffer with smart state-based caching"""
+
+        # SMART CACHE: Only regenerate if state has changed
+        if not self._state_dirty and self._framebuffer_cache is not None:
+            return self._framebuffer_cache
 
         with profile_block("MatrixRain.get_framebuffer.buffer_generation"):
             # ULTRA-OPTIMIZATION: Vectorized framebuffer generation
@@ -657,6 +660,10 @@ class MatrixRain:
                     row.append((char, color))
                 framebuffer.append(row)
 
+            # SMART CACHE: Store result and mark state as clean
+            self._framebuffer_cache = framebuffer
+            self._state_dirty = False
+
             return framebuffer
 
     def _get_negative_color(self, z_order: int, variant: int) -> str:
@@ -678,7 +685,8 @@ class MatrixRain:
         if saturation != self.color_pool.saturation:
             self.color_pool.saturation = saturation
             self.color_pool.clear_caches()
-            # Colors updated - no caching currently enabled
+            # OPTIMIZATION: Invalidate framebuffer cache when colors change
+            self._state_dirty = True
 
     def get_profiling_stats(self) -> Dict[str, Any]:
         """Get profiling statistics for this animation"""
@@ -694,7 +702,8 @@ class MatrixRain:
                 "glitch_cells": int(np.count_nonzero(self.glitch_mask)),
                 "quality_level": self.quality,
                 "update_interval": self.update_interval,
-                "caching_status": "disabled_for_design",
+                "framebuffer_cached": self._framebuffer_cache is not None,
+                "state_dirty": self._state_dirty,
             }
         )
 

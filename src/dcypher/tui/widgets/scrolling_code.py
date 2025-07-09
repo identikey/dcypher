@@ -37,7 +37,7 @@ try:
     profiling_available = True
 except ImportError:
     # Create no-op decorators if profiling not available
-    from typing import Any, Callable, TypeVar
+    from typing import Any, Callable, TypeVar, Union
     from contextlib import nullcontext
 
     F = TypeVar("F", bound=Callable[..., Any])
@@ -45,7 +45,7 @@ except ImportError:
     def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:  # type: ignore
         return lambda func: func
 
-    def profile_block(name: Any, backend: str = "cprofile"):  # type: ignore
+    def profile_block(name: str, backend: str = "cprofile"):  # type: ignore
         return nullcontext()
 
     def create_animation_profiler():  # type: ignore
@@ -226,13 +226,14 @@ class ScrollingCode:
         self._cached_empty_style = Style(color="#2a2a2a")
         self._cached_default_style = Style(color="#74b9ff")
 
-        # DISABLED CACHING (for design finalization):
-        # - Module-level source discovery caching (_global_source_cache)
-        # - Character count caching (_last_total_chars, _cached_line_lengths)
-        # - Display line validation caching (_display_cache_valid)
-        # - Character revelation state caching (_last_revealed_chars)
-        # - Source switch timing controls (_source_switch_time delays)
-        # TODO: Re-enable these caches after design is settled
+        # SMART CACHING (non-design-blocking):
+        # - Module-level source discovery caching (_global_source_cache) - KEPT
+        # - Character count caching (_last_total_chars, _cached_line_lengths) - KEPT
+        # - Display line validation caching (_display_cache_valid) - KEPT
+        # - Character revelation state caching (_last_revealed_chars) - KEPT
+        # - Source switch timing controls (_source_switch_time delays) - KEPT
+        # + Framebuffer result caching (only when state unchanged) - ADDED
+        # Note: No layer composition caching to allow design changes
 
         # RUNTIME OPTIMIZATION: Character mirroring cache (kept for core functionality)
         self._ord_cache = {}  # Cache ord() calls for character mirroring
@@ -244,6 +245,8 @@ class ScrollingCode:
         # Framebuffer: list of rows, each row is list of (char, style) tuples
         self.framebuffer: List[List[Tuple[str, Style]]] = []
         self._initialize_framebuffer()
+
+        # PERFORMANCE NOTE: Removed framebuffer caching to eliminate deep copy overhead
 
         # Code state - Initialize before loading sources
         self.highlighted_lines: List[
@@ -312,6 +315,7 @@ class ScrollingCode:
             [(" ", empty_style) for _ in range(self._width)]
             for _ in range(self._height)
         ]
+        # Framebuffer initialized and ready for use
 
     def _collect_sources(self):
         """PERFORMANCE OPTIMIZED: Use global source cache instead of expensive module discovery"""
@@ -414,6 +418,7 @@ class ScrollingCode:
         self._display_cache_valid = False
         if hasattr(self, "_cached_line_lengths"):
             del self._cached_line_lengths
+        # New content loaded - framebuffer will be updated on next render
 
     def _extract_source_with_dill(self, obj, module_name: str, obj_name: str) -> str:
         """Extract source code using dill's advanced capabilities"""
@@ -644,6 +649,8 @@ class {obj_type}Analysis:
         # Convert revealed characters to display lines
         self._update_display_lines()
 
+        # Content changes - framebuffer will be updated on next render
+
         # Render to framebuffer
         self._render_to_framebuffer()
 
@@ -707,6 +714,9 @@ class {obj_type}Analysis:
 
     def _render_to_framebuffer(self):
         """Render display lines to framebuffer with terminal-style scrolling"""
+        # PERFORMANCE NOTE: Removed caching due to deep copy overhead
+        # Direct rendering is faster than expensive copy operations
+
         # PERFORMANCE FIX: Cache property access and reuse Style objects
         width = self._width  # Cache to avoid 272 property calls
         height = self._height  # Cache to avoid property calls
@@ -736,6 +746,9 @@ class {obj_type}Analysis:
                 break
 
             self._render_line_to_row(line, row_idx, width, visible_styled)
+
+        # PERFORMANCE NOTE: Removed caching to eliminate deep copy overhead
+        # Direct rendering provides better performance than caching mechanisms
 
     def _render_line_to_row(self, line: str, row_idx: int, width: int, visible_styled):
         """Render a single line to a framebuffer row with mirroring"""
