@@ -249,23 +249,42 @@ class ProcessCPUDivider(Widget):
             return "bright_red bold"
 
     def update_cpu_usage(self) -> None:
-        """ULTRA-OPTIMIZED: Update CPU usage with cached children discovery"""
+        """MEGA-OPTIMIZED: Update CPU usage with aggressive caching and reduced overhead"""
         if not PSUTIL_AVAILABLE or not self.process:
             return
 
         try:
-            # Get main process CPU usage
-            main_cpu = self.process.cpu_percent()
-
-            # OPTIMIZATION: Cache children processes and only refresh every 10 seconds
-            # This eliminates 95% of the expensive children() calls that do 652 file I/O operations each
             current_time = time.time()
+
+            # OPTIMIZATION 1: Skip expensive operations if called too frequently
+            if not hasattr(self, "_last_update_time"):
+                self._last_update_time = 0
+
+            # Don't update more than once per second to reduce CPU overhead
+            if current_time - self._last_update_time < 1.0:
+                return
+
+            self._last_update_time = current_time
+
+            # OPTIMIZATION 2: Batch psutil calls and cache results
+            if not hasattr(self, "_main_cpu_cache"):
+                self._main_cpu_cache = 0.0
+                self._main_cpu_cache_time = 0
+
+            # Cache main process CPU for 2 seconds to reduce psutil overhead
+            if current_time - self._main_cpu_cache_time > 2.0:
+                self._main_cpu_cache = self.process.cpu_percent()
+                self._main_cpu_cache_time = current_time
+
+            main_cpu = self._main_cpu_cache
+
+            # OPTIMIZATION 3: Extended children caching with stale data tolerance
             if not hasattr(self, "_children_cache_time"):
                 self._children_cache_time = 0
                 self._cached_children = []
 
-            # Only refresh children cache every 10 seconds instead of every 2 seconds
-            if current_time - self._children_cache_time > 10.0:
+            # Extend cache time to 15 seconds (was 10) for less I/O
+            if current_time - self._children_cache_time > 15.0:
                 self._cached_children = []
                 try:
                     children = self.process.children(recursive=True)
@@ -282,9 +301,10 @@ class ProcessCPUDivider(Widget):
                     pass
                 self._children_cache_time = current_time
 
-            # Get CPU usage from cached children (much faster)
+            # OPTIMIZATION 4: Bulk process children with error tolerance
             children_cpu = 0.0
             self.children_processes = []
+            valid_children = []
 
             for child_info in self._cached_children:
                 try:
@@ -297,27 +317,50 @@ class ProcessCPUDivider(Widget):
                             "cpu": child_cpu,
                         }
                     )
-                except (
-                    Exception
-                ):  # Child process died, it will be cleaned up at next cache refresh
+                    valid_children.append(child_info)
+                except Exception:
+                    # Child process died - don't include in valid list
                     continue
 
-            # Total CPU usage
+            # Update cached children to remove dead processes
+            self._cached_children = valid_children
+
+            # OPTIMIZATION 5: Reduce history management overhead
             total_cpu = main_cpu + children_cpu
             self.cpu_percent = total_cpu
-            self.cpu_history.append(total_cpu)
-            self.cpu_history_5min.append(total_cpu)
-            self.cpu_history_15min.append(total_cpu)
 
-            # Refresh the display to show updated data
-            self.refresh()
+            # Only add to history if significantly different or every 5th update
+            if not hasattr(self, "_history_update_counter"):
+                self._history_update_counter = 0
+                self._last_cpu_recorded = -1
+
+            self._history_update_counter += 1
+            should_record = (
+                abs(total_cpu - self._last_cpu_recorded) > 2.0  # 2% difference
+                or self._history_update_counter % 5 == 0  # Every 5th update
+            )
+
+            if should_record:
+                self.cpu_history.append(total_cpu)
+                self.cpu_history_5min.append(total_cpu)
+                self.cpu_history_15min.append(total_cpu)
+                self._last_cpu_recorded = total_cpu
+
+            # OPTIMIZATION 6: Conditional refresh only when data changed significantly
+            if should_record:
+                self.refresh()
 
         except Exception:  # Handle any psutil exceptions
             self.cpu_percent = 0.0
-            self.cpu_history.append(0.0)
-            self.cpu_history_5min.append(0.0)
-            self.cpu_history_15min.append(0.0)
-            self.refresh()
+            # Only add to history occasionally for errors to avoid spam
+            if not hasattr(self, "_error_counter"):
+                self._error_counter = 0
+            self._error_counter += 1
+            if self._error_counter % 10 == 0:  # Every 10th error
+                self.cpu_history.append(0.0)
+                self.cpu_history_5min.append(0.0)
+                self.cpu_history_15min.append(0.0)
+                self.refresh()
 
     def watch_cpu_history(self):
         """Update the display when CPU history changes"""

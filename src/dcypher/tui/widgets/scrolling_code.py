@@ -37,10 +37,12 @@ try:
     profiling_available = True
 except ImportError:
     # Create no-op decorators if profiling not available
-    from typing import Any
+    from typing import Any, Callable, TypeVar
     from contextlib import nullcontext
 
-    def profile(name: Any = None, backend: str = "cprofile"):  # type: ignore
+    F = TypeVar("F", bound=Callable[..., Any])
+
+    def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:  # type: ignore
         return lambda func: func
 
     def profile_block(name: Any, backend: str = "cprofile"):  # type: ignore
@@ -224,7 +226,15 @@ class ScrollingCode:
         self._cached_empty_style = Style(color="#2a2a2a")
         self._cached_default_style = Style(color="#74b9ff")
 
-        # RUNTIME OPTIMIZATION: Pre-compute expensive operations
+        # DISABLED CACHING (for design finalization):
+        # - Module-level source discovery caching (_global_source_cache)
+        # - Character count caching (_last_total_chars, _cached_line_lengths)
+        # - Display line validation caching (_display_cache_valid)
+        # - Character revelation state caching (_last_revealed_chars)
+        # - Source switch timing controls (_source_switch_time delays)
+        # TODO: Re-enable these caches after design is settled
+
+        # RUNTIME OPTIMIZATION: Character mirroring cache (kept for core functionality)
         self._ord_cache = {}  # Cache ord() calls for character mirroring
         self._last_total_chars = 0  # Cache total character count
         self._display_cache_valid = False  # Track if display lines are valid
