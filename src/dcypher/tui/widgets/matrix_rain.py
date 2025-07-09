@@ -2,6 +2,7 @@
 ASCII Art Banner Widget - OPTIMIZED VERSION 2.0
 Cyberpunk-inspired banner with @repligate aesthetics
 High-performance matrix rain with efficient rendering using numpy
+NOW WITH PROFILING INSTRUMENTATION
 """
 
 import random
@@ -13,6 +14,27 @@ from textual.app import RenderResult
 from textual.color import Color
 from typing import Dict, List, Set, Tuple, Optional, Any, Union, TypedDict
 import threading
+
+# Import profiling tools
+try:
+    from dcypher.lib.profiling import profile, profile_block, create_animation_profiler  # type: ignore
+
+    profiling_available = True
+except ImportError:
+    # Create no-op decorators if profiling not available
+    from typing import Any
+    from contextlib import nullcontext
+
+    def profile(name: Any = None, backend: str = "cprofile"):  # type: ignore
+        return lambda func: func
+
+    def profile_block(name: Any, backend: str = "cprofile"):  # type: ignore
+        return nullcontext()
+
+    def create_animation_profiler():  # type: ignore
+        return None
+
+    profiling_available = False
 
 
 class SpriteState(TypedDict):
@@ -35,6 +57,7 @@ class ColorPool:
     Efficient color management using pre-computed colors and blending
     """
 
+    @profile("ColorPool.__init__")
     def __init__(self, saturation: int = 75):
         self.saturation = saturation
         self._color_cache: Dict[
@@ -53,6 +76,7 @@ class ColorPool:
         self.fade_levels = 12
         self._compute_fade_colors()
 
+    @profile("ColorPool._compute_fade_colors")
     def _compute_fade_colors(self):
         """Pre-compute all possible fade colors for better performance"""
         self._fade_cache = {}
@@ -154,6 +178,7 @@ class ColorPool:
         self._blend_cache[cache_key] = result
         return result
 
+    @profile("ColorPool.get_fade_color")
     def get_fade_color(self, z_order: int, fade_level: int) -> str:
         """Get pre-computed fade color for a z-order and level"""
         if z_order in self._fade_cache:
@@ -171,8 +196,10 @@ class MatrixRain:
     """
     OPTIMIZED Matrix rain effect controller implementing hex-chunk-based pattern
     Now using numpy arrays and efficient color management
+    NOW WITH COMPREHENSIVE PROFILING INSTRUMENTATION
     """
 
+    @profile("MatrixRain.__init__")
     def __init__(self, width: int = 80, height: int = 20):
         self.width = width
         self.height = height
@@ -192,22 +219,33 @@ class MatrixRain:
         self.hex_chars = np.array(list("0123456789ABCDEF"))
         self.chunk_sizes = np.array([2, 4, 8])
 
+        # Initialize profiler for animations
+        self.animation_profiler = create_animation_profiler()
+
         # Initialize state
         self.reset_grid()
 
+    @profile("MatrixRain.reset_grid")
     def reset_grid(self):
         """Reset all grids and sprites to initial state"""
-        # Efficient numpy arrays for state
-        self.state = np.zeros((self.height, self.width), dtype=np.uint8)  # Fade state
-        self.chars = np.full((self.height, self.width), " ", dtype=str)  # Characters
-        self.z_order = np.zeros((self.height, self.width), dtype=np.uint8)  # Z-ordering
-        self.glitch = np.zeros(
-            (self.height, self.width), dtype=np.uint8
-        )  # Glitch state
+        with profile_block("MatrixRain.reset_grid.numpy_allocation"):
+            # Efficient numpy arrays for state
+            self.state = np.zeros(
+                (self.height, self.width), dtype=np.uint8
+            )  # Fade state
+            self.chars = np.full(
+                (self.height, self.width), " ", dtype=str
+            )  # Characters
+            self.z_order = np.zeros(
+                (self.height, self.width), dtype=np.uint8
+            )  # Z-ordering
+            self.glitch = np.zeros(
+                (self.height, self.width), dtype=np.uint8
+            )  # Glitch state
 
-        # Active cell tracking - now using numpy for efficiency
-        self.active_mask = np.zeros((self.height, self.width), dtype=bool)
-        self.glitch_mask = np.zeros((self.height, self.width), dtype=bool)
+            # Active cell tracking - now using numpy for efficiency
+            self.active_mask = np.zeros((self.height, self.width), dtype=bool)
+            self.glitch_mask = np.zeros((self.height, self.width), dtype=bool)
 
         # Sprite management
         self.sprites: List[SpriteState] = []
@@ -215,18 +253,19 @@ class MatrixRain:
 
     def _initialize_sprites(self):
         """Initialize matrix rain sprites"""
-        # Adjust sprite count based on quality
-        base_sprites = self.width // 2
-        sprite_multiplier = (
-            0.5 if self.quality == 1 else 1.0 if self.quality == 2 else 1.5
-        )
-        num_sprites = int(base_sprites * sprite_multiplier)
+        with profile_block("MatrixRain._initialize_sprites"):
+            # Adjust sprite count based on quality
+            base_sprites = self.width // 2
+            sprite_multiplier = (
+                0.5 if self.quality == 1 else 1.0 if self.quality == 2 else 1.5
+            )
+            num_sprites = int(base_sprites * sprite_multiplier)
 
-        for _ in range(num_sprites):
-            sprite = self._create_sprite()
-            if random.random() < 0.3:  # 30% start active
-                sprite["active"] = True
-            self.sprites.append(sprite)
+            for _ in range(num_sprites):
+                sprite = self._create_sprite()
+                if random.random() < 0.3:  # 30% start active
+                    sprite["active"] = True
+                self.sprites.append(sprite)
 
     def _create_sprite(self) -> SpriteState:
         """Create a new sprite with random properties"""
@@ -325,10 +364,15 @@ class MatrixRain:
         sprite["counter"] = 0
         sprite["z_order"] = random.randint(1, 100)
 
+    @profile("MatrixRain.update")
     def update(self, current_time: Optional[float] = None) -> None:
         """Update matrix rain state"""
         if not self.enabled:
             return
+
+        # Mark frame start for animation profiling
+        if self.animation_profiler:
+            self.animation_profiler.start_frame()
 
         # Use provided time or get current time
         now = current_time if current_time is not None else time.time()
@@ -338,81 +382,90 @@ class MatrixRain:
 
         self.last_update = now
 
-        self._update_states()
-        self._update_sprites()
+        with profile_block("MatrixRain.update.main_logic"):
+            self._update_states()
+            self._update_sprites()
 
+    @profile("MatrixRain._update_states")
     def _update_states(self):
         """Update all states in one pass"""
-        # Get active cells
-        active = self.state > 0
+        with profile_block("MatrixRain._update_states.numpy_operations"):
+            # Get active cells
+            active = self.state > 0
 
-        # Update fade states
-        self.state[active] += 1
+            # Update fade states
+            self.state[active] += 1
 
-        # Handle expired cells
-        expired = self.state > self.color_pool.fade_levels
-        if expired.any():
-            # Clear all states for expired cells
-            self.state[expired] = 0
-            self.chars[expired] = " "
-            self.z_order[expired] = 0
-            self.glitch[expired] = 0
-            self.active_mask[expired] = False
-            self.glitch_mask[expired] = False
+            # Handle expired cells
+            expired = self.state > self.color_pool.fade_levels
+            if expired.any():
+                # Clear all states for expired cells
+                self.state[expired] = 0
+                self.chars[expired] = " "
+                self.z_order[expired] = 0
+                self.glitch[expired] = 0
+                self.active_mask[expired] = False
+                self.glitch_mask[expired] = False
 
-        # Update glitch states
-        glitch_active = self.glitch > 0
-        if glitch_active.any():
-            # Update glitch counters
-            self.glitch[glitch_active] += 1
+        with profile_block("MatrixRain._update_states.glitch_processing"):
+            # Update glitch states
+            glitch_active = self.glitch > 0
+            if glitch_active.any():
+                # Update glitch counters
+                self.glitch[glitch_active] += 1
 
-            # Randomize glitch characters efficiently
-            glitch_coords = np.where(glitch_active)
-            random_chars = np.random.choice(self.hex_chars, size=len(glitch_coords[0]))
-            self.chars[glitch_coords] = random_chars
+                # Randomize glitch characters efficiently
+                glitch_coords = np.where(glitch_active)
+                random_chars = np.random.choice(
+                    self.hex_chars, size=len(glitch_coords[0])
+                )
+                self.chars[glitch_coords] = random_chars
 
-            # Remove expired glitches
-            glitch_expired = self.glitch > 8
-            if glitch_expired.any():
-                self.glitch[glitch_expired] = 0
-                self.glitch_mask[glitch_expired] = False
+                # Remove expired glitches
+                glitch_expired = self.glitch > 8
+                if glitch_expired.any():
+                    self.glitch[glitch_expired] = 0
+                    self.glitch_mask[glitch_expired] = False
 
-        # Add new glitches - 5% of active cells
-        active_count = np.count_nonzero(active)
-        current_glitch_count = np.count_nonzero(self.glitch_mask)
-        target_glitch_count = int(active_count * 0.05)
+        with profile_block("MatrixRain._update_states.new_glitches"):
+            # Add new glitches - 5% of active cells
+            active_count = np.count_nonzero(active)
+            current_glitch_count = np.count_nonzero(self.glitch_mask)
+            target_glitch_count = int(active_count * 0.05)
 
-        if current_glitch_count < target_glitch_count:
-            # Get potential glitch candidates (active but not glitched)
-            candidates = active & ~self.glitch_mask
-            if candidates.any():
-                # Get candidate coordinates
-                candidate_coords = np.where(candidates)
-                # Randomly select one
-                idx = np.random.randint(len(candidate_coords[0]))
-                y, x = candidate_coords[0][idx], candidate_coords[1][idx]
-                # Add new glitch
-                self.glitch[y, x] = 1
-                self.glitch_mask[y, x] = True
+            if current_glitch_count < target_glitch_count:
+                # Get potential glitch candidates (active but not glitched)
+                candidates = active & ~self.glitch_mask
+                if candidates.any():
+                    # Get candidate coordinates
+                    candidate_coords = np.where(candidates)
+                    # Randomly select one
+                    idx = np.random.randint(len(candidate_coords[0]))
+                    y, x = candidate_coords[0][idx], candidate_coords[1][idx]
+                    # Add new glitch
+                    self.glitch[y, x] = 1
+                    self.glitch_mask[y, x] = True
 
+    @profile("MatrixRain._update_sprites")
     def _update_sprites(self):
         """Update sprite positions and characters"""
-        for sprite in self.sprites:
-            if not sprite["active"]:
-                if sprite["cooldown"] > 0:
-                    sprite["cooldown"] -= 1
-                elif random.random() < 0.08:  # 8% chance to activate
-                    sprite["active"] = True
-                    self._reset_sprite(sprite)
-                continue
+        with profile_block("MatrixRain._update_sprites.sprite_loop"):
+            for sprite in self.sprites:
+                if not sprite["active"]:
+                    if sprite["cooldown"] > 0:
+                        sprite["cooldown"] -= 1
+                    elif random.random() < 0.08:  # 8% chance to activate
+                        sprite["active"] = True
+                        self._reset_sprite(sprite)
+                    continue
 
-            sprite["counter"] += 1
-            if sprite["counter"] >= sprite["speed"]:
-                sprite["counter"] = 0
-                self._move_sprite(sprite)
+                sprite["counter"] += 1
+                if sprite["counter"] >= sprite["speed"]:
+                    sprite["counter"] = 0
+                    self._move_sprite(sprite)
 
-            # Update sprite characters
-            self._update_sprite_chars(sprite)
+                # Update sprite characters
+                self._update_sprite_chars(sprite)
 
     def _move_sprite(self, sprite: SpriteState):
         """Move sprite based on direction"""
@@ -465,36 +518,38 @@ class MatrixRain:
             self.z_order[y, x] = z_order
             self.active_mask[y, x] = True
 
+    @profile("MatrixRain.get_framebuffer")
     def get_framebuffer(self) -> List[List[Tuple[str, str]]]:
         """Generate framebuffer with current state"""
-        framebuffer = []
+        with profile_block("MatrixRain.get_framebuffer.buffer_generation"):
+            framebuffer = []
 
-        for y in range(self.height):
-            row = []
-            for x in range(self.width):
-                char = self.chars[y, x]
-                if self.glitch[y, x] > 0:
-                    # Glitch effect - negative colors
-                    glitch_progress = self.glitch[y, x] / 8
-                    z = self.z_order[y, x]
-                    if glitch_progress <= 0.3:
-                        color = self._get_negative_color(z, 0)
-                    elif glitch_progress <= 0.6:
-                        color = self._get_negative_color(z, 1)
+            for y in range(self.height):
+                row = []
+                for x in range(self.width):
+                    char = self.chars[y, x]
+                    if self.glitch[y, x] > 0:
+                        # Glitch effect - negative colors
+                        glitch_progress = self.glitch[y, x] / 8
+                        z = self.z_order[y, x]
+                        if glitch_progress <= 0.3:
+                            color = self._get_negative_color(z, 0)
+                        elif glitch_progress <= 0.6:
+                            color = self._get_negative_color(z, 1)
+                        else:
+                            color = self._get_negative_color(z, 2)
+                    elif self.state[y, x] == 0:
+                        color = self.color_pool.black
                     else:
-                        color = self._get_negative_color(z, 2)
-                elif self.state[y, x] == 0:
-                    color = self.color_pool.black
-                else:
-                    # Normal fade effect
-                    z = self.z_order[y, x]
-                    fade_level = self.state[y, x] - 1
-                    color = self.color_pool.get_fade_color(z, fade_level)
+                        # Normal fade effect
+                        z = self.z_order[y, x]
+                        fade_level = self.state[y, x] - 1
+                        color = self.color_pool.get_fade_color(z, fade_level)
 
-                row.append((char, color))
-            framebuffer.append(row)
+                    row.append((char, color))
+                framebuffer.append(row)
 
-        return framebuffer
+            return framebuffer
 
     def _get_negative_color(self, z_order: int, variant: int) -> str:
         """Get negative color for glitch effect"""
@@ -528,3 +583,22 @@ class MatrixRain:
         if saturation != self.color_pool.saturation:
             self.color_pool.saturation = saturation
             self.color_pool.clear_caches()
+
+    def get_profiling_stats(self) -> Dict[str, Any]:
+        """Get profiling statistics for this animation"""
+        stats = {}
+        if self.animation_profiler:
+            stats.update(self.animation_profiler.get_performance_stats())
+
+        stats.update(
+            {
+                "sprite_count": len(self.sprites),
+                "active_sprites": sum(1 for s in self.sprites if s["active"]),
+                "active_cells": int(np.count_nonzero(self.active_mask)),
+                "glitch_cells": int(np.count_nonzero(self.glitch_mask)),
+                "quality_level": self.quality,
+                "update_interval": self.update_interval,
+            }
+        )
+
+        return stats

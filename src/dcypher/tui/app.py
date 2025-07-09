@@ -1,6 +1,7 @@
 """
 dCypher TUI Main Application
 Cyberpunk-inspired terminal interface with @repligate aesthetics
+NOW WITH COMPREHENSIVE PROFILING FOR FULL CPU ANALYSIS
 """
 
 from textual.app import App, ComposeResult
@@ -33,6 +34,32 @@ from dcypher.tui.screens.sharing import SharingScreen
 # Import API client
 from dcypher.lib.api_client import DCypherClient
 
+# Import comprehensive profiling tools
+try:
+    from dcypher.lib.profiling import profile, profile_block, create_animation_profiler  # type: ignore
+
+    profiling_available = True
+except ImportError:
+    # Create no-op decorators if profiling not available
+    from typing import Any, Callable, TypeVar
+    from contextlib import nullcontext
+
+    F = TypeVar("F", bound=Callable[..., Any])
+
+    def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:
+        def decorator(func: F) -> F:
+            return func
+
+        return decorator
+
+    def profile_block(name: Any, backend: str = "cprofile"):
+        return nullcontext()
+
+    def create_animation_profiler():
+        return None
+
+    profiling_available = False
+
 
 class DCypherHeader(Static):
     """Custom header widget that displays title, uptime information, and clock"""
@@ -55,52 +82,60 @@ class DCypherHeader(Static):
 
     def on_mount(self):
         """Update the header every second"""
-        self.set_interval(1.0, self.update_header)
+        # PERFORMANCE OPTIMIZATION: Reduce header update frequency
+        # Header was taking 0.5% of CPU with 86 calls - reduce to every 2 seconds
+        self.set_interval(2.0, self.update_header)  # Reduced from 1.0s
         self.update_header()
 
+    @profile("DCypherHeader.update_header")
     def update_header(self):
         """Update the header content with current uptime and time"""
-        # Get current time
-        current_time = datetime.now().strftime("%H:%M:%S")
+        with profile_block("DCypherHeader.update_header.time_calculation"):
+            # Get current time
+            current_time = datetime.now().strftime("%H:%M:%S")
 
-        # Get uptime info
-        local_uptime = self.app_instance.get_uptime_string()
-        connection_uptime = self.app_instance.get_connection_uptime_string()
-        server_uptime = self.app_instance.get_server_uptime_string()
+            # Get uptime info
+            local_uptime = self.app_instance.get_uptime_string()
+            connection_uptime = self.app_instance.get_connection_uptime_string()
+            server_uptime = self.app_instance.get_server_uptime_string()
 
-        # Build header text with colors optimized for cyan background
-        header_text = Text()
-        header_text.append(f"{self.app_instance.TITLE} | ", style="bold bright_white")
-        header_text.append("Client ", style="bright_black")
-        header_text.append(local_uptime, style="bold dark_green")
+        with profile_block("DCypherHeader.update_header.text_formatting"):
+            # Build header text with colors optimized for cyan background
+            header_text = Text()
+            header_text.append(
+                f"{self.app_instance.TITLE} | ", style="bold bright_white"
+            )
+            header_text.append("Client ", style="bright_black")
+            header_text.append(local_uptime, style="bold dark_green")
 
-        header_text.append(" | Conn ", style="bright_black")
-        if connection_uptime == "XX:XX:XX":
-            header_text.append(connection_uptime, style="bold dark_red")
-        else:
-            header_text.append(connection_uptime, style="bold dark_green")
+            header_text.append(" | Conn ", style="bright_black")
+            if connection_uptime == "XX:XX:XX":
+                header_text.append(connection_uptime, style="bold dark_red")
+            else:
+                header_text.append(connection_uptime, style="bold dark_green")
 
-        if server_uptime:
-            header_text.append(" | Server ", style="bold bright_black")
-            header_text.append(server_uptime, style="bold dark_green")
-        else:
-            header_text.append(" | Server ", style="bold bright_black")
-            header_text.append("XX:XX:XX", style="bold dark_red")
+            if server_uptime:
+                header_text.append(" | Server ", style="bold bright_black")
+                header_text.append(server_uptime, style="bold dark_green")
+            else:
+                header_text.append(" | Server ", style="bold bright_black")
+                header_text.append("XX:XX:XX", style="bold dark_red")
 
-        # Add API server name/URL
-        header_text.append(" | API ", style="bold bright_black")
-        # Extract just the host:port from the URL for cleaner display
-        api_display = self.app_instance.api_url.replace("http://", "").replace(
-            "https://", ""
-        )
-        if server_uptime:
-            header_text.append(api_display, style="bold dark_green")
-        else:
-            header_text.append(api_display, style="bold dark_red")
+            # Add API server name/URL
+            header_text.append(" | API ", style="bold bright_black")
+            # Extract just the host:port from the URL for cleaner display
+            api_display = self.app_instance.api_url.replace("http://", "").replace(
+                "https://", ""
+            )
+            if server_uptime:
+                header_text.append(api_display, style="bold dark_green")
+            else:
+                header_text.append(api_display, style="bold dark_red")
 
-        header_text.append(f" | {current_time}", style="bold bright_white")
+            header_text.append(f" | {current_time}", style="bold bright_white")
 
-        self.update(header_text)
+        with profile_block("DCypherHeader.update_header.widget_update"):
+            self.update(header_text)
 
 
 class DCypherTUI(App[None]):
@@ -109,6 +144,8 @@ class DCypherTUI(App[None]):
 
     A cyberpunk-inspired TUI for quantum-resistant encryption operations.
     Influences: btop, cipherpunk aesthetics, art deco, @repligate
+
+    NOW WITH COMPREHENSIVE PROFILING FOR FULL CPU ANALYSIS
     """
 
     TITLE = "v0.0.1 dCypher Terminal"
@@ -152,12 +189,22 @@ class DCypherTUI(App[None]):
     # Centralized API client
     _api_client: Optional[DCypherClient] = None
 
-    def __init__(self, identity_path=None, api_url=None):
+    def __init__(
+        self,
+        identity_path=None,
+        api_url=None,
+        profiling_config=None,
+        profile_animations=False,
+    ):
         super().__init__()
         if identity_path:
             self.current_identity_path = identity_path
         if api_url:
             self.api_url = api_url
+
+        # Store profiling configuration
+        self.profiling_config = profiling_config
+        self.profile_animations = profile_animations
 
         # Initialize process monitoring widgets
         self.cpu_divider: Optional[ProcessCPUDivider] = None
@@ -330,11 +377,14 @@ class DCypherTUI(App[None]):
 
         yield Footer()
 
+    @profile("DCypherTUI.on_mount")
     def on_mount(self) -> None:
         """Initialize the application"""
-        # Start background tasks
-        self.set_interval(1.0, self.update_system_status)
-        self.set_interval(5.0, self.check_api_connection)
+        # PERFORMANCE OPTIMIZATION: Reduce background task frequency to save CPU
+        # Previously: 1s system status, 5s API check
+        # Now: 2s system status (50% reduction), 10s API check (50% reduction)
+        self.set_interval(2.0, self.update_system_status)  # Reduced from 1.0s
+        self.set_interval(10.0, self.check_api_connection)  # Reduced from 5.0s
 
         # Load identity if provided at startup
         if self.current_identity_path:
@@ -344,48 +394,58 @@ class DCypherTUI(App[None]):
         # Initialize matrix background based on connection status
         self.update_matrix_for_connection_status()
 
+    @profile("DCypherTUI.update_system_status")
     def update_system_status(self) -> None:
         """Update system status information"""
         # This will be called every second to update real-time data
+        with profile_block("DCypherTUI.update_system_status.cpu_monitoring"):
+            # Update process monitoring widgets
+            if self.cpu_divider:
+                self.cpu_divider.update_cpu_usage()
 
-        # Update process monitoring widgets
-        if self.cpu_divider:
-            self.cpu_divider.update_cpu_usage()
-        if self.memory_divider:
-            self.memory_divider.update_memory_usage()
+        with profile_block("DCypherTUI.update_system_status.memory_monitoring"):
+            if self.memory_divider:
+                self.memory_divider.update_memory_usage()
 
+    @profile("DCypherTUI.check_api_connection")
     def check_api_connection(self) -> None:
         """Check API connection status and get server uptime"""
         # This will be called every 5 seconds to check API connectivity
         old_status = self.connection_status
-        try:
-            if self._api_client:
-                # Try to get nonce to check connection first
-                self._api_client.get_nonce()
 
-                # If we weren't connected before, mark connection start time
-                if self.connection_status == "disconnected":
-                    self.connection_start_time = time.time()
+        with profile_block("DCypherTUI.check_api_connection.connection_test"):
+            try:
+                if self._api_client:
+                    # Try to get nonce to check connection first
+                    self._api_client.get_nonce()
 
-                self.connection_status = "connected"
-                # Try to get server uptime only if connection succeeded
-                self.fetch_server_uptime()
-            else:
+                    # If we weren't connected before, mark connection start time
+                    if self.connection_status == "disconnected":
+                        self.connection_start_time = time.time()
+
+                    self.connection_status = "connected"
+
+                    with profile_block("DCypherTUI.check_api_connection.server_uptime"):
+                        # Try to get server uptime only if connection succeeded
+                        self.fetch_server_uptime()
+                else:
+                    self.connection_status = "disconnected"
+                    self.connection_start_time = None
+                    self.server_uptime = None
+            except Exception:
+                # If connection fails, mark as disconnected
                 self.connection_status = "disconnected"
                 self.connection_start_time = None
                 self.server_uptime = None
-        except Exception:
-            # If connection fails, mark as disconnected
-            self.connection_status = "disconnected"
-            self.connection_start_time = None
-            self.server_uptime = None
-            # Only clear the API client if we're not manually connecting
-            # This prevents clearing during manual connect attempts
+                # Only clear the API client if we're not manually connecting
+                # This prevents clearing during manual connect attempts
 
-        # Update matrix background if connection status changed
-        if old_status != self.connection_status:
-            self.update_matrix_for_connection_status()
+        with profile_block("DCypherTUI.check_api_connection.matrix_update"):
+            # Update matrix background if connection status changed
+            if old_status != self.connection_status:
+                self.update_matrix_for_connection_status()
 
+    @profile("DCypherTUI.fetch_server_uptime")
     def fetch_server_uptime(self) -> None:
         """Fetch server uptime from the API"""
         try:
@@ -638,9 +698,16 @@ class DCypherTUI(App[None]):
             self.log.warning(f"Failed to update matrix background: {e}")
 
 
-def run_tui(identity_path=None, api_url=None):
-    """Run the dCypher TUI application"""
-    app = DCypherTUI(identity_path=identity_path, api_url=api_url)
+def run_tui(
+    identity_path=None, api_url=None, profiling_config=None, profile_animations=False
+):
+    """Run the dCypher TUI application with optional profiling"""
+    app = DCypherTUI(
+        identity_path=identity_path,
+        api_url=api_url,
+        profiling_config=profiling_config,
+        profile_animations=profile_animations,
+    )
     app.run()
 
 
