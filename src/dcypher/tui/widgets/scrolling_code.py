@@ -680,6 +680,10 @@ def create_hex_pattern():
 
         framebuffer = []
 
+        # Calculate proper centering for odd/even widths
+        left_width = self.width // 2
+        right_width = self.width - left_width  # This handles odd widths properly
+
         # Fill framebuffer with split-screen mirrored effect
         for y in range(self.height):
             # Calculate which line to show based on scroll position
@@ -691,9 +695,9 @@ def create_hex_pattern():
                 line = revealed_lines[line_index]
                 line_segments = highlighted_segments[line_index]
 
-                # Right side: normal text - fill the full half width properly
+                # Right side: normal text - fill the right_width properly
                 right_chars = []
-                for i in range(self.half_width):
+                for i in range(right_width):
                     if i < len(line):
                         char = line[i]
                         if i < len(line_segments):
@@ -708,7 +712,9 @@ def create_hex_pattern():
 
                 # Left side: mirrored text using cached mirror characters
                 left_chars = []
-                for char, color in reversed(right_chars):
+                # Take only left_width characters from the right side for mirroring
+                chars_to_mirror = right_chars[:left_width]
+                for char, color in reversed(chars_to_mirror):
                     mirrored_char = self.mirror_cache.get(char, char)
                     left_chars.append((mirrored_char, color))
 
