@@ -45,10 +45,10 @@ except ImportError:
     def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:  # type: ignore
         return lambda func: func
 
-    def profile_block(name: str, backend: str = "cprofile"):  # type: ignore
+    def profile_block(name: str, backend: str = "cprofile") -> Any:  # type: ignore
         return nullcontext()
 
-    def create_animation_profiler():  # type: ignore
+    def create_animation_profiler() -> Any:  # type: ignore
         return None
 
     profiling_available = False
@@ -686,26 +686,41 @@ class {obj_type}Analysis:
             self, "_cached_line_lengths", [len(line) for line in self.highlighted_lines]
         )
 
+        # PERFORMANCE OPTIMIZATION: Pre-allocate lists to avoid repeated resizing
+        display_lines = []
+        display_lines_styled = []
+
         for i, line_chars in enumerate(self.highlighted_lines):
             line_length = line_lengths[i] if i < len(line_lengths) else len(line_chars)
 
             if chars_processed + line_length <= self.revealed_chars:
-                # Full line revealed - OPTIMIZED: Build string once
-                line_text = "".join(char for char, style in line_chars)
-                self.display_lines.append(line_text)
-                self.display_lines_styled.append(line_chars)
+                # Full line revealed - MEGA-OPTIMIZATION: Build string without generator
+                if line_chars:
+                    # Use list comprehension instead of generator for better performance
+                    line_chars_list = [char for char, style in line_chars]
+                    line_text = "".join(line_chars_list)
+                else:
+                    line_text = ""
+                display_lines.append(line_text)
+                display_lines_styled.append(line_chars)
                 chars_processed += line_length
             elif chars_processed < self.revealed_chars:
                 # Partial line revealed - preserve styling for revealed portion
                 chars_in_line = self.revealed_chars - chars_processed
                 if chars_in_line > 0:
                     line_chars_revealed = line_chars[:chars_in_line]
-                    line_text = "".join(char for char, style in line_chars_revealed)
-                    self.display_lines.append(line_text)
-                    self.display_lines_styled.append(line_chars_revealed)
+                    # OPTIMIZATION: Direct list construction instead of generator
+                    line_chars_list = [char for char, style in line_chars_revealed]
+                    line_text = "".join(line_chars_list)
+                    display_lines.append(line_text)
+                    display_lines_styled.append(line_chars_revealed)
                 break
             else:
                 break
+
+        # Assign results in bulk
+        self.display_lines = display_lines
+        self.display_lines_styled = display_lines_styled
 
         # Terminal-style scrolling: adjust scroll offset when content grows
         total_display_lines = len(self.display_lines)

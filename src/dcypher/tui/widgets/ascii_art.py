@@ -121,7 +121,7 @@ class ASCIIBanner(Widget):
         self._min_render_interval = 0.1  # Maximum 10 FPS for banner rendering
 
         # SMART LAYER COMPOSITION CACHING (no deep copy)
-        self._layer_cache_key: Optional[Tuple[int, int, int, bool, bool]] = None
+        self._layer_cache_key: Optional[Tuple[int, int, int, bool, bool, bool]] = None
         self._layer_cache_result: Optional[Text] = None
         self._matrix_state_hash: int = 0
         self._code_state_hash: int = 0
@@ -379,7 +379,7 @@ class ASCIIBanner(Widget):
             with profile_block("ASCIIBanner.render.layered_effects"):
                 # Create layered content with scrolling code, matrix rain, and ASCII overlay
                 layered_content = self._render_with_layered_effects(
-                    ascii_text, container_width, container_height
+                    container_width, container_height
                 )
 
             with profile_block("ASCIIBanner.render.panel_creation"):
@@ -425,196 +425,191 @@ class ASCIIBanner(Widget):
         return panel
 
     @profile("ASCIIBanner._render_with_layered_effects")
-    def _render_with_layered_effects(
-        self, ascii_content: Text, width: int, height: int
-    ) -> Text:
-        """ULTRA-OPTIMIZED: Render layered effects with minimal Rich Text operations"""
+    def _render_with_layered_effects(self, width: int, height: int) -> Text:
+        """Render with layered effects, optimized for consistent frame timing"""
+        # FRAME CONSISTENCY: Implement frame budget to prevent animation skips
+        frame_start_time = time.time()
+        frame_budget = 0.03  # 30ms max per frame to maintain smooth animation
 
-        # SMART CACHING: Check if we can use cached result
+        # SMART LAYER COMPOSITION CACHING: Check cache validity with timing awareness
         with profile_block("ASCIIBanner._render_with_layered_effects.cache_check"):
-            # Generate BUCKETED state hashes for better cache hit rates
-            matrix_state_hash = (
-                hash(
-                    (
-                        self.matrix_rain._current_frame // 5,  # Bucket frames by 5
-                        self.matrix_rain.enabled,
-                        len(self.matrix_rain.sprites)
-                        if self.matrix_rain.sprites
-                        else 0,
-                    )
-                )
-                if self.matrix_background
-                else 0
-            )
-            code_state_hash = (
-                hash(
-                    (
-                        self.scrolling_code_controller.revealed_chars
-                        // 50,  # Bucket characters by 50
-                        self.scrolling_code_controller.enabled,
-                        len(self.scrolling_code_controller.display_lines)
-                        // 3,  # Bucket lines by 3
-                    )
-                )
-                if self.scrolling_code
-                else 0
-            )
-            ascii_state_hash = hash(str(ascii_content))
-
-            # Create cache key
+            # Enhanced cache key with frame timing awareness
             cache_key = (
-                matrix_state_hash,
-                code_state_hash,
-                ascii_state_hash,
-                self.matrix_background,
-                self.scrolling_code,
+                width,
+                height,
+                self.frame_count // 4,  # Less sensitive to frame changes
+                self.show_subtitle,
+                self.scrolling_code_controller.enabled,
+                self.matrix_rain.enabled,
             )
 
-            # TIME-BASED CACHE: Allow cache usage for 200ms even with minor changes
-            current_time = time.time()
-            cache_age = current_time - self._cache_timestamp
-
-            # Check if cache is valid (state match OR recent cache)
+            # Check cache validity with timing budget
             if (
-                self._layer_cache_key == cache_key or cache_age < 0.2
-            ) and self._layer_cache_result is not None:
+                self._layer_cache_key == cache_key
+                and self._layer_cache_result is not None
+                and time.time() - frame_start_time < frame_budget * 0.3
+            ):  # Reserve 70% budget for processing
                 return self._layer_cache_result
 
+        # SYNCHRONIZED FRAMEBUFFER FETCH: Ensure all components are in sync
         with profile_block(
             "ASCIIBanner._render_with_layered_effects.framebuffer_fetch"
         ):
-            # Get framebuffers for all layers
-            scrolling_framebuffer = (
-                self.scrolling_code_controller.get_framebuffer()
-                if self.scrolling_code
-                else None
-            )
-            matrix_framebuffer = (
-                self.matrix_rain.get_framebuffer() if self.matrix_background else None
-            )
+            # Synchronized timing to prevent component desync
+            current_time = time.time()
 
+            # Get scrolling code framebuffer with timing sync
+            scrolling_framebuffer = None
+            if self.scrolling_code_controller.enabled:
+                self.scrolling_code_controller.update(current_time)
+                scrolling_framebuffer = self.scrolling_code_controller.get_framebuffer()
+
+            # Get matrix rain framebuffer with same timing
+            matrix_framebuffer = None
+            if self.matrix_rain.enabled:
+                self.matrix_rain.update(current_time)
+                matrix_framebuffer = self.matrix_rain.get_framebuffer()
+
+        # ASCII processing with timing awareness
         with profile_block("ASCIIBanner._render_with_layered_effects.ascii_processing"):
-            # Convert ASCII to lines for overlay logic
-            ascii_lines = str(ascii_content).strip().split("\n")
+            # Quick timeout check to prevent long processing
+            if time.time() - frame_start_time > frame_budget * 0.5:
+                # Time budget exceeded - use cached result if available
+                if self._layer_cache_result is not None:
+                    return self._layer_cache_result
+
+            ascii_lines = self._get_cached_ascii_lines()
             ascii_width = max(len(line) for line in ascii_lines) if ascii_lines else 0
 
+        # TIMING-AWARE LAYER COMPOSITION
         with profile_block(
             "ASCIIBanner._render_with_layered_effects.layer_composition"
         ):
-            # ULTRA-OPTIMIZED: Build segments efficiently without Rich markup overhead
-            # Avoiding both expensive markup parsing AND excessive append calls
+            # Quick budget check before expensive operation
+            if time.time() - frame_start_time > frame_budget * 0.7:
+                # Emergency fallback - return minimal content to prevent skip
+                if self._layer_cache_result is not None:
+                    return self._layer_cache_result
+                else:
+                    # Create minimal fallback content
+                    fallback_text = Text()
+                    fallback_text.append("dCypher", style="bold green")
+                    return fallback_text
 
-            # Pre-calculate positioning once
+            # ULTRA-VECTORIZED: Process entire layers at once with timing checks
             ascii_start_row = (height - len(ascii_lines)) // 2
             ascii_start_col = (width - ascii_width) // 2
-
-            # PERFORMANCE: Pre-compute style strings to avoid repeated operations
             default_style = "dim green"
             ascii_style = "bold green"
 
-            # Pre-allocate segment list for single append operation
-            all_segments = []
+            # Build content with periodic timing checks
+            content_rows = []
+            row_batch_size = 10  # Process in batches to check timing
 
-            for y in range(height):
-                # Build entire row as string first, then determine styling
-                row_chars = [" "] * width
-                row_styles = [default_style] * width
+            for batch_start in range(0, height, row_batch_size):
+                # Timing check every batch
+                if time.time() - frame_start_time > frame_budget * 0.9:
+                    # Use cached result to prevent animation skip
+                    if self._layer_cache_result is not None:
+                        return self._layer_cache_result
+                    break
 
-                # Layer 1: Background (scrolling code or matrix)
-                if scrolling_framebuffer and y < len(scrolling_framebuffer):
-                    scrolling_row = scrolling_framebuffer[y]
-                    for x in range(min(width, len(scrolling_row))):
-                        char, style = scrolling_row[x]
-                        if char != " ":
-                            row_chars[x] = char
-                            row_styles[x] = str(style)  # Ensure string type
+                batch_end = min(batch_start + row_batch_size, height)
 
-                # Layer 2: Matrix rain (overrides background where present)
-                if matrix_framebuffer and y < len(matrix_framebuffer):
-                    matrix_row = matrix_framebuffer[y]
-                    for x in range(min(width, len(matrix_row))):
-                        char, style = matrix_row[x]
-                        if char != " ":
-                            row_chars[x] = char
-                            row_styles[x] = str(style)  # Ensure string type
+                for y in range(batch_start, batch_end):
+                    # Process row with optimized layer composition
+                    row_chars = [" "] * width
+                    row_styles = [default_style] * width
 
-                # Layer 3: ASCII art (highest priority, overrides everything)
-                if ascii_start_row <= y < ascii_start_row + len(ascii_lines):
-                    ascii_line_idx = y - ascii_start_row
-                    ascii_line = ascii_lines[ascii_line_idx]
+                    # Layer 1: Background (scrolling code) - BATCH PROCESS
+                    if scrolling_framebuffer and y < len(scrolling_framebuffer):
+                        scrolling_row = scrolling_framebuffer[y]
+                        for x in range(min(width, len(scrolling_row))):
+                            char, style = scrolling_row[x]
+                            if char != " ":
+                                row_chars[x] = char
+                                row_styles[x] = str(style)
 
-                    # Apply ASCII characters with bounds checking
-                    ascii_end = min(len(ascii_line), width - ascii_start_col)
-                    for i in range(ascii_end):
-                        ascii_char = ascii_line[i]
-                        if ascii_char not in (" ", "\n"):
-                            x_pos = ascii_start_col + i
-                            if 0 <= x_pos < width:
-                                row_chars[x_pos] = ascii_char
-                                row_styles[x_pos] = ascii_style
+                    # Layer 2: Matrix rain - BATCH PROCESS
+                    if matrix_framebuffer and y < len(matrix_framebuffer):
+                        matrix_row = matrix_framebuffer[y]
+                        for x in range(min(width, len(matrix_row))):
+                            char, style = matrix_row[x]
+                            if char != " ":
+                                row_chars[x] = char
+                                row_styles[x] = str(style)
 
-                # Build segments for this row with maximum efficiency
-                current_text = ""
-                current_style = row_styles[0]
+                    # Layer 3: ASCII art - BULK OVERLAY
+                    if ascii_start_row <= y < ascii_start_row + len(ascii_lines):
+                        ascii_line_idx = y - ascii_start_row
+                        ascii_line = ascii_lines[ascii_line_idx]
+                        ascii_end = min(len(ascii_line), width - ascii_start_col)
+                        for i in range(ascii_end):
+                            ascii_char = ascii_line[i]
+                            if ascii_char not in (" ", "\n"):
+                                x_pos = ascii_start_col + i
+                                if 0 <= x_pos < width:
+                                    row_chars[x_pos] = ascii_char
+                                    row_styles[x_pos] = ascii_style
 
-                for x in range(width):
-                    char = row_chars[x]
-                    style = row_styles[x]
+                    # Build segments with run-length encoding
+                    if row_chars:
+                        segments = []
+                        current_chars = []
+                        current_style = row_styles[0]
 
-                    if style == current_style:
-                        current_text += char
-                    else:
-                        # Style changed - save current segment and start new one
-                        if current_text:
-                            all_segments.append((current_text, current_style))
-                        current_text = char
-                        current_style = style
+                        for x in range(width):
+                            char = row_chars[x]
+                            style = row_styles[x]
 
-                # Don't forget the last segment of the row
-                if current_text:
-                    all_segments.append((current_text, current_style))
+                            if style == current_style:
+                                current_chars.append(char)
+                            else:
+                                if current_chars:
+                                    segments.append(
+                                        ("".join(current_chars), current_style)
+                                    )
+                                current_chars = [char]
+                                current_style = style
 
-                # Add newline except for last row
-                if y < height - 1:
-                    all_segments.append(("\n", current_style))
+                        if current_chars:
+                            segments.append(("".join(current_chars), current_style))
 
-            # ULTRA-OPTIMIZATION: Merge segments across lines to reduce Rich operations
-            merged_segments = []
-            if all_segments:
-                current_text = all_segments[0][0]
-                current_style = all_segments[0][1]
+                        content_rows.append(segments)
 
-                for text_chunk, style in all_segments[1:]:
-                    if style == current_style:
-                        current_text += text_chunk
-                    else:
-                        if current_text:
-                            merged_segments.append((current_text, current_style))
-                        current_text = text_chunk
-                        current_style = style
-
-                # Don't forget the last segment
-                if current_text:
-                    merged_segments.append((current_text, current_style))
-
-            # Create Rich content with MINIMAL operations (typically 50-200 total calls)
+            # Build final content with timing awareness
             layered_content = Text()
-            for text_chunk, style in merged_segments:
-                layered_content.append(text_chunk, style=style)
+            if content_rows:
+                # Process final segments with timing check
+                all_segments = []
+                for row_idx, row_segments in enumerate(content_rows):
+                    all_segments.extend(row_segments)
+                    if row_idx < len(content_rows) - 1:
+                        all_segments.append(("\n", default_style))
 
-        # SMART CACHING: Store result for future use (reference, not copy)
+                # Create Rich content efficiently
+                for text_chunk, style in all_segments:
+                    layered_content.append(text_chunk, style=style)
+
+                    # Final timing check during Rich operations
+                    if time.time() - frame_start_time > frame_budget:
+                        break
+
+        # SMART CACHE: Store result with timing metadata
         self._layer_cache_key = cache_key
         self._layer_cache_result = layered_content
-        self._cache_timestamp = time.time()  # Update cache timestamp
+        self._cache_timestamp = time.time()
 
         return layered_content
 
     def toggle_subtitle(self) -> None:
         """Toggle subtitle visibility"""
         self.show_subtitle = not self.show_subtitle
-        # PERFORMANCE: Invalidate ASCII caches when subtitle state changes
+        # PERFORMANCE: Invalidate caches when subtitle state changes
         self._ascii_text_cache = None
         self._dimension_cache = None
+        self._layer_cache_key = None  # Invalidate layer cache
+        self._layer_cache_result = None
 
     def toggle_scrolling_code(self) -> None:
         """Toggle scrolling code effect"""

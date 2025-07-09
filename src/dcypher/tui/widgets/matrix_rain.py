@@ -30,10 +30,10 @@ except ImportError:
     def profile(name: Any = None, backend: str = "cprofile") -> Callable[[F], F]:
         return lambda func: func
 
-    def profile_block(name: str, backend: str = "cprofile"):  # type: ignore
+    def profile_block(name: str, backend: str = "cprofile") -> Any:  # type: ignore
         return nullcontext()
 
-    def create_animation_profiler():  # type: ignore
+    def create_animation_profiler() -> Any:  # type: ignore
         return None
 
     profiling_available = False
@@ -272,6 +272,15 @@ class MatrixRain:
         self._char_batch_size = 200
         self._char_batch = np.random.choice(self.hex_chars, size=self._char_batch_size)
         self._char_batch_index = 0
+
+        # PERFORMANCE OPTIMIZATION: Pre-compute glitch colors once at initialization
+        self._glitch_colors = {}
+        for z_val in range(1, 101):  # Common Z range
+            self._glitch_colors[z_val] = [
+                self.color_pool.get_negative_color(z_val, 0),  # <= 0.3 progress
+                self.color_pool.get_negative_color(z_val, 1),  # <= 0.6 progress
+                self.color_pool.get_negative_color(z_val, 2),  # > 0.6 progress
+            ]
 
         # Initialize state
         self.reset_grid()
@@ -666,19 +675,22 @@ class MatrixRain:
                 return self._framebuffer_cache
 
         with profile_block("MatrixRain.get_framebuffer.buffer_generation"):
-            # ULTRA-OPTIMIZATION: Remove expensive pre-computation and use direct access
+            # ULTRA-OPTIMIZATION: Use pre-computed colors to eliminate all function calls
             color_pool = self.color_pool
             black_str = color_pool.black
-
-            # OPTIMIZATION: Build framebuffer with minimal function calls and object creation
-            framebuffer = []
 
             # Pre-cache common values to avoid repeated access
             fade_cache = color_pool._fade_cache
             fade_levels = color_pool.fade_levels
 
+            # Use pre-computed glitch colors from initialization
+            glitch_colors = self._glitch_colors
+
+            # Build framebuffer with maximum efficiency
+            framebuffer = []
+
             for y in range(self.height):
-                # Use append operations instead of pre-allocation for better efficiency
+                # Use append operations for cleaner object creation
                 row = []
 
                 # Get entire row data at once to avoid repeated array access
@@ -687,27 +699,30 @@ class MatrixRain:
                 glitch_row = self.glitch[y]
                 z_order_row = self.z_order[y]
 
-                # ULTRA-OPTIMIZATION: Vectorized row processing with minimal overhead
+                # ULTRA-OPTIMIZATION: Vectorized row processing with pre-computed lookups
                 for x in range(self.width):
                     char = chars_row[x]
                     state_val = state_row[x]
                     glitch_val = glitch_row[x]
                     z_val = z_order_row[x]
 
-                    # ULTRA-OPTIMIZATION: Streamlined color computation
+                    # MEGA-OPTIMIZATION: Streamlined color lookup with pre-computed tables
                     if glitch_val > 0:
-                        # Direct negative color computation without pre-caching
+                        # Use pre-computed glitch color table - NO FUNCTION CALLS
                         glitch_progress = glitch_val / 8
-                        if glitch_progress <= 0.3:
-                            color = color_pool.get_negative_color(z_val, 0)
-                        elif glitch_progress <= 0.6:
-                            color = color_pool.get_negative_color(z_val, 1)
+                        if z_val in glitch_colors:
+                            if glitch_progress <= 0.3:
+                                color = glitch_colors[z_val][0]
+                            elif glitch_progress <= 0.6:
+                                color = glitch_colors[z_val][1]
+                            else:
+                                color = glitch_colors[z_val][2]
                         else:
-                            color = color_pool.get_negative_color(z_val, 2)
+                            color = black_str
                     elif state_val == 0:
                         color = black_str
                     else:
-                        # OPTIMIZATION: Direct cache access with minimal bounds checking
+                        # OPTIMIZATION: Direct cache access with pre-computed bounds
                         if z_val in fade_cache:
                             fade_level = min(state_val - 1, fade_levels - 1)
                             color = fade_cache[z_val][fade_level]
@@ -743,6 +758,16 @@ class MatrixRain:
         if saturation != self.color_pool.saturation:
             self.color_pool.saturation = saturation
             self.color_pool.clear_caches()
+
+            # PERFORMANCE: Regenerate glitch color cache with new saturation
+            self._glitch_colors = {}
+            for z_val in range(1, 101):  # Common Z range
+                self._glitch_colors[z_val] = [
+                    self.color_pool.get_negative_color(z_val, 0),  # <= 0.3 progress
+                    self.color_pool.get_negative_color(z_val, 1),  # <= 0.6 progress
+                    self.color_pool.get_negative_color(z_val, 2),  # > 0.6 progress
+                ]
+
             # OPTIMIZATION: Invalidate framebuffer cache when colors change
             self._state_dirty = True
 
