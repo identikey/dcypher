@@ -209,7 +209,7 @@ class ScrollingCode:
 
         # Timing control
         self.last_update_time = 0.0
-        self.update_interval = 0.3  # How often to reveal new chunks
+        self.update_interval = 0.5  # 2 FPS default - controlled by global keybindings
         self.min_chunk_size = 5
         self.max_chunk_size = 25
 

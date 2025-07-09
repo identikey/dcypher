@@ -131,54 +131,72 @@ class ASCIIBanner(Widget):
         self.animation_frame = (self.animation_frame + 1) % 10
 
     def increase_framerate(self) -> None:
-        """Increase framerate for active effects (matrix rain and/or scrolling code)"""
+        """Increase framerate for active effects (matrix rain and/or scrolling code) - SYNCHRONIZED"""
         effects_updated = []
 
-        # Update matrix rain framerate if enabled
+        # Get current FPS from any enabled effect to determine synchronized target
+        current_fps = 2  # Default starting point
         if self.matrix_rain.enabled:
             current_fps = round(1.0 / self.matrix_rain.update_interval)
-            new_fps = min(10, current_fps + 1)
-            self.matrix_rain.update_interval = 1.0 / new_fps
+        elif self.scrolling_code_controller.enabled:
+            current_fps = round(1.0 / self.scrolling_code_controller.update_interval)
+
+        # Calculate new synchronized FPS
+        new_fps = min(10, current_fps + 1)
+        new_interval = 1.0 / new_fps
+
+        # Apply the same FPS to both effects if enabled
+        if self.matrix_rain.enabled:
+            self.matrix_rain.update_interval = new_interval
             effects_updated.append(f"Matrix: {new_fps} FPS")
 
-        # Update scrolling code framerate if enabled
         if self.scrolling_code_controller.enabled:
-            current_fps = round(1.0 / self.scrolling_code_controller.update_interval)
-            new_fps = min(10, current_fps + 1)
-            self.scrolling_code_controller.update_interval = 1.0 / new_fps
+            self.scrolling_code_controller.update_interval = new_interval
             effects_updated.append(f"Code: {new_fps} FPS")
 
         # Update auto-refresh to handle faster effect speeds
         self._update_auto_refresh_for_speeds()
 
         if effects_updated:
-            self.notify(" | ".join(effects_updated), timeout=1.0)
+            self.notify(
+                f"Synchronized FPS: {new_fps} | " + " | ".join(effects_updated),
+                timeout=1.0,
+            )
         else:
             self.notify("No effects enabled", timeout=1.0)
 
     def decrease_framerate(self) -> None:
-        """Decrease framerate for active effects (matrix rain and/or scrolling code)"""
+        """Decrease framerate for active effects (matrix rain and/or scrolling code) - SYNCHRONIZED"""
         effects_updated = []
 
-        # Update matrix rain framerate if enabled
+        # Get current FPS from any enabled effect to determine synchronized target
+        current_fps = 2  # Default starting point
         if self.matrix_rain.enabled:
             current_fps = round(1.0 / self.matrix_rain.update_interval)
-            new_fps = max(1, current_fps - 1)
-            self.matrix_rain.update_interval = 1.0 / new_fps
+        elif self.scrolling_code_controller.enabled:
+            current_fps = round(1.0 / self.scrolling_code_controller.update_interval)
+
+        # Calculate new synchronized FPS
+        new_fps = max(1, current_fps - 1)
+        new_interval = 1.0 / new_fps
+
+        # Apply the same FPS to both effects if enabled
+        if self.matrix_rain.enabled:
+            self.matrix_rain.update_interval = new_interval
             effects_updated.append(f"Matrix: {new_fps} FPS")
 
-        # Update scrolling code framerate if enabled
         if self.scrolling_code_controller.enabled:
-            current_fps = round(1.0 / self.scrolling_code_controller.update_interval)
-            new_fps = max(1, current_fps - 1)
-            self.scrolling_code_controller.update_interval = 1.0 / new_fps
+            self.scrolling_code_controller.update_interval = new_interval
             effects_updated.append(f"Code: {new_fps} FPS")
 
         # Update auto-refresh to handle slower effect speeds
         self._update_auto_refresh_for_speeds()
 
         if effects_updated:
-            self.notify(" | ".join(effects_updated), timeout=1.0)
+            self.notify(
+                f"Synchronized FPS: {new_fps} | " + " | ".join(effects_updated),
+                timeout=1.0,
+            )
         else:
             self.notify("No effects enabled", timeout=1.0)
 
