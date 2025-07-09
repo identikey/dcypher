@@ -74,34 +74,6 @@ class ColorPool:
                 fade_colors.append(color)
             self._fade_cache[z_order] = fade_colors
 
-    def _generate_base_colors(self, z_order: int) -> Tuple[str, str, str]:
-        """Generate base colors for a z-order with current saturation"""
-        if z_order not in self._color_cache:
-            # Use z_order as seed for consistent colors
-            random.seed(z_order)
-            hue = random.randint(0, 360)
-            random.seed()  # Reset seed
-
-            # Convert HSL to RGB with current saturation
-            h = hue / 360.0
-            s = self.saturation / 100.0
-            l = 0.5  # Fixed lightness for consistency
-
-            # Get base color
-            rgb = self._hsl_to_rgb(h, s, l)
-            base = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
-
-            # Generate dim and dark variants
-            rgb_dim = [int(c * 0.7) for c in rgb]
-            rgb_dark = [int(c * 0.3) for c in rgb]
-
-            dim = f"#{rgb_dim[0]:02x}{rgb_dim[1]:02x}{rgb_dim[2]:02x}"
-            dark = f"#{rgb_dark[0]:02x}{rgb_dark[1]:02x}{rgb_dark[2]:02x}"
-
-            self._color_cache[z_order] = (base, dim, dark)
-
-        return self._color_cache[z_order]
-
     def _hsl_to_rgb(self, h: float, s: float, l: float) -> Tuple[int, int, int]:
         """Optimized HSL to RGB conversion"""
         if s == 0:
@@ -129,6 +101,34 @@ class ColorPool:
         b = hue_to_rgb(p, q, h - 1 / 3)
 
         return (int(r * 255), int(g * 255), int(b * 255))
+
+    def _generate_base_colors(self, z_order: int) -> Tuple[str, str, str]:
+        """Generate base colors for a z-order with current saturation"""
+        if z_order not in self._color_cache:
+            # Use z_order as seed for consistent colors
+            random.seed(z_order)
+            hue = random.randint(0, 360)
+            random.seed()  # Reset seed
+
+            # Convert HSL to RGB with current saturation
+            h = hue / 360.0
+            s = self.saturation / 100.0
+            l = 0.5  # Fixed lightness for consistency
+
+            # Get base color
+            rgb = self._hsl_to_rgb(h, s, l)
+            base = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+            # Generate dim and dark variants
+            rgb_dim = [int(c * 0.7) for c in rgb]
+            rgb_dark = [int(c * 0.3) for c in rgb]
+
+            dim = f"#{rgb_dim[0]:02x}{rgb_dim[1]:02x}{rgb_dim[2]:02x}"
+            dark = f"#{rgb_dark[0]:02x}{rgb_dark[1]:02x}{rgb_dark[2]:02x}"
+
+            self._color_cache[z_order] = (base, dim, dark)
+
+        return self._color_cache[z_order]
 
     def _blend_hex(self, color1: str, color2: str, factor: float) -> str:
         """Blend two hex colors with caching"""
@@ -178,16 +178,15 @@ class MatrixRain:
         self.height = height
         self.enabled = True
 
-        # Quality settings
+        # Quality settings (affects sprite density)
         self.quality = 2  # 1=low, 2=medium, 3=high
-        self.frame_skip = 0  # Additional frames to skip based on quality
 
         # Color management
         self.color_pool = ColorPool(saturation=75)
 
         # Timing control
-        self.last_update = 0
-        self.update_interval = 0.5  # 2 FPS default
+        self.last_update = 0.0  # Initialize as float
+        self.update_interval = 0.5  # 2 FPS default - controlled by global keybindings
 
         # Character management
         self.hex_chars = np.array(list("0123456789ABCDEF"))
@@ -195,9 +194,6 @@ class MatrixRain:
 
         # Initialize state
         self.reset_grid()
-
-        # Threading lock for updates
-        self._lock = threading.Lock()
 
     def reset_grid(self):
         """Reset all grids and sprites to initial state"""
@@ -209,9 +205,9 @@ class MatrixRain:
             (self.height, self.width), dtype=np.uint8
         )  # Glitch state
 
-        # Active cell tracking using sets for O(1) lookup
-        self.active_cells: Set[Tuple[int, int]] = set()
-        self.glitch_cells: Set[Tuple[int, int]] = set()
+        # Active cell tracking - now using numpy for efficiency
+        self.active_mask = np.zeros((self.height, self.width), dtype=bool)
+        self.glitch_mask = np.zeros((self.height, self.width), dtype=bool)
 
         # Sprite management
         self.sprites: List[SpriteState] = []
@@ -219,7 +215,13 @@ class MatrixRain:
 
     def _initialize_sprites(self):
         """Initialize matrix rain sprites"""
-        num_sprites = self.width // 2
+        # Adjust sprite count based on quality
+        base_sprites = self.width // 2
+        sprite_multiplier = (
+            0.5 if self.quality == 1 else 1.0 if self.quality == 2 else 1.5
+        )
+        num_sprites = int(base_sprites * sprite_multiplier)
+
         for _ in range(num_sprites):
             sprite = self._create_sprite()
             if random.random() < 0.3:  # 30% start active
@@ -323,79 +325,75 @@ class MatrixRain:
         sprite["counter"] = 0
         sprite["z_order"] = random.randint(1, 100)
 
-    def update(self):
+    def update(self, current_time: Optional[float] = None) -> None:
         """Update matrix rain state"""
         if not self.enabled:
             return
 
-        current_time = time.time()
-        if current_time - self.last_update < self.update_interval:
+        # Use provided time or get current time
+        now = current_time if current_time is not None else time.time()
+
+        if now - self.last_update < self.update_interval:
             return
 
-        self.last_update = current_time
+        self.last_update = now
 
-        # Skip frames based on quality setting
-        if self.frame_skip > 0:
-            self.frame_skip -= 1
-            return
+        self._update_states()
+        self._update_sprites()
 
-        with self._lock:
-            self._update_fade_states()
-            self._update_glitch_states()
-            self._update_sprites()
+    def _update_states(self):
+        """Update all states in one pass"""
+        # Get active cells
+        active = self.state > 0
 
-        # Reset frame skip based on quality
-        self.frame_skip = max(0, 3 - self.quality)
+        # Update fade states
+        self.state[active] += 1
 
-    def _update_fade_states(self):
-        """Update fade states for active cells"""
-        # Numpy vectorized operations for fade states
-        active_mask = self.state > 0
-        self.state[active_mask] += 1
+        # Handle expired cells
+        expired = self.state > self.color_pool.fade_levels
+        if expired.any():
+            # Clear all states for expired cells
+            self.state[expired] = 0
+            self.chars[expired] = " "
+            self.z_order[expired] = 0
+            self.glitch[expired] = 0
+            self.active_mask[expired] = False
+            self.glitch_mask[expired] = False
 
-        # Remove expired cells
-        expired_mask = self.state > self.color_pool.fade_levels
-        if expired_mask.any():
-            self.state[expired_mask] = 0
-            self.chars[expired_mask] = " "
-            self.z_order[expired_mask] = 0
-            self.glitch[expired_mask] = 0
+        # Update glitch states
+        glitch_active = self.glitch > 0
+        if glitch_active.any():
+            # Update glitch counters
+            self.glitch[glitch_active] += 1
 
-            # Update active cells set
-            expired_coords = np.where(expired_mask)
-            for y, x in zip(*expired_coords):
-                self.active_cells.discard((y, x))
+            # Randomize glitch characters efficiently
+            glitch_coords = np.where(glitch_active)
+            random_chars = np.random.choice(self.hex_chars, size=len(glitch_coords[0]))
+            self.chars[glitch_coords] = random_chars
 
-    def _update_glitch_states(self):
-        """Update glitch effects"""
-        if not self.active_cells:
-            return
+            # Remove expired glitches
+            glitch_expired = self.glitch > 8
+            if glitch_expired.any():
+                self.glitch[glitch_expired] = 0
+                self.glitch_mask[glitch_expired] = False
 
-        # Add new glitch cells - increased to 5% for more visible glitches
-        if len(self.glitch_cells) < len(self.active_cells) * 0.05:  # Keep 5% glitched
-            candidates = list(self.active_cells - self.glitch_cells)
-            if candidates:
-                new_glitch = random.choice(candidates)
-                self.glitch_cells.add(new_glitch)
-                y, x = new_glitch
+        # Add new glitches - 5% of active cells
+        active_count = np.count_nonzero(active)
+        current_glitch_count = np.count_nonzero(self.glitch_mask)
+        target_glitch_count = int(active_count * 0.05)
+
+        if current_glitch_count < target_glitch_count:
+            # Get potential glitch candidates (active but not glitched)
+            candidates = active & ~self.glitch_mask
+            if candidates.any():
+                # Get candidate coordinates
+                candidate_coords = np.where(candidates)
+                # Randomly select one
+                idx = np.random.randint(len(candidate_coords[0]))
+                y, x = candidate_coords[0][idx], candidate_coords[1][idx]
+                # Add new glitch
                 self.glitch[y, x] = 1
-
-        # Update existing glitch cells
-        glitch_mask = self.glitch > 0
-        self.glitch[glitch_mask] += 1
-
-        # Randomize glitch characters
-        glitch_coords = np.where(glitch_mask)
-        for y, x in zip(*glitch_coords):
-            self.chars[y, x] = random.choice(self.hex_chars)
-
-        # Remove expired glitch cells
-        expired_mask = self.glitch > 8  # Max glitch states
-        if expired_mask.any():
-            self.glitch[expired_mask] = 0
-            expired_coords = np.where(expired_mask)
-            for y, x in zip(*expired_coords):
-                self.glitch_cells.discard((y, x))
+                self.glitch_mask[y, x] = True
 
     def _update_sprites(self):
         """Update sprite positions and characters"""
@@ -465,37 +463,36 @@ class MatrixRain:
             self.chars[y, x] = char
             self.state[y, x] = 1
             self.z_order[y, x] = z_order
-            self.active_cells.add((y, x))
+            self.active_mask[y, x] = True
 
     def get_framebuffer(self) -> List[List[Tuple[str, str]]]:
         """Generate framebuffer with current state"""
         framebuffer = []
 
-        with self._lock:
-            for y in range(self.height):
-                row = []
-                for x in range(self.width):
-                    char = self.chars[y, x]
-                    if self.glitch[y, x] > 0:
-                        # Glitch effect - negative colors
-                        glitch_progress = self.glitch[y, x] / 8
-                        z = self.z_order[y, x]
-                        if glitch_progress <= 0.3:
-                            color = self._get_negative_color(z, 0)
-                        elif glitch_progress <= 0.6:
-                            color = self._get_negative_color(z, 1)
-                        else:
-                            color = self._get_negative_color(z, 2)
-                    elif self.state[y, x] == 0:
-                        color = self.color_pool.black
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                char = self.chars[y, x]
+                if self.glitch[y, x] > 0:
+                    # Glitch effect - negative colors
+                    glitch_progress = self.glitch[y, x] / 8
+                    z = self.z_order[y, x]
+                    if glitch_progress <= 0.3:
+                        color = self._get_negative_color(z, 0)
+                    elif glitch_progress <= 0.6:
+                        color = self._get_negative_color(z, 1)
                     else:
-                        # Normal fade effect
-                        z = self.z_order[y, x]
-                        fade_level = self.state[y, x] - 1
-                        color = self.color_pool.get_fade_color(z, fade_level)
+                        color = self._get_negative_color(z, 2)
+                elif self.state[y, x] == 0:
+                    color = self.color_pool.black
+                else:
+                    # Normal fade effect
+                    z = self.z_order[y, x]
+                    fade_level = self.state[y, x] - 1
+                    color = self.color_pool.get_fade_color(z, fade_level)
 
-                    row.append((char, color))
-                framebuffer.append(row)
+                row.append((char, color))
+            framebuffer.append(row)
 
         return framebuffer
 
@@ -517,36 +514,17 @@ class MatrixRain:
         # Calculate negative
         return f"#{(255 - r):02x}{(255 - g):02x}{(255 - b):02x}"
 
-    def set_quality(self, quality: int):
+    def set_quality(self, quality: int) -> None:
         """Set animation quality (1=low, 2=medium, 3=high)"""
-        self.quality = max(1, min(3, quality))
+        if quality != self.quality:
+            self.quality = max(1, min(3, quality))
+            # Reset sprites to adjust density
+            self.sprites.clear()
+            self._initialize_sprites()
 
-    def set_saturation(self, saturation: int):
+    def set_saturation(self, saturation: int) -> None:
         """Set color saturation (0-100%)"""
         saturation = max(0, min(100, saturation))
         if saturation != self.color_pool.saturation:
             self.color_pool.saturation = saturation
             self.color_pool.clear_caches()
-
-    def toggle_rain(self):
-        """Toggle animation on/off"""
-        self.enabled = not self.enabled
-        if not self.enabled:
-            with self._lock:
-                self.state.fill(0)
-                self.chars.fill(" ")
-                self.z_order.fill(0)
-                self.glitch.fill(0)
-                self.active_cells.clear()
-                self.glitch_cells.clear()
-
-    def get_stats(self) -> str:
-        """Get animation statistics"""
-        fps = round(1.0 / self.update_interval) if self.update_interval > 0 else 0
-        active_sprites = sum(1 for sprite in self.sprites if sprite["active"])
-        return (
-            f"Matrix Rain: {active_sprites}/{len(self.sprites)} sprites | "
-            f"{len(self.active_cells)} active cells | "
-            f"FPS: {fps} | Quality: {self.quality} | "
-            f"Saturation: {self.color_pool.saturation}%"
-        )
