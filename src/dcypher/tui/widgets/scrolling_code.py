@@ -1,7 +1,7 @@
 """
-Scrolling Code Widget - OPTIMIZED VERSION
-Displays random dcypher source code scrolling in the background with proper syntax highlighting
-High-performance implementation with caching and optimizations
+Scrolling Code Widget - PYGMENTS/RICH OPTIMIZED
+Uses Rich's Syntax class (Pygments under the hood) for professional syntax highlighting
+Combined with targeted performance optimizations
 """
 
 import random
@@ -12,12 +12,14 @@ import inspect
 import importlib
 import sys
 from pathlib import Path
+from typing import List, Tuple, Any
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.app import RenderResult
 from rich.console import Console
 from rich.syntax import Syntax
 from rich.text import Text
+from rich.style import Style
 
 try:
     import dill
@@ -31,17 +33,14 @@ except ImportError:
 
 class ScrollingCode:
     """
-    OPTIMIZED Scrolling code effect controller that displays random dcypher source code
-    Uses dill to extract source code from dcypher package functions and classes
-    Features optimized character-by-character reveal with constant timing and proper syntax highlighting
+    PYGMENTS-OPTIMIZED Scrolling code using Rich's Syntax class
 
-    Performance improvements:
-    - Cached syntax highlighting with invalidation
-    - Pre-computed color mappings
-    - Reduced string operations
-    - Optimized character mirroring
-    - Efficient line processing
-    - Batch character reveals
+    Key optimizations:
+    1. Professional syntax highlighting via Rich/Pygments (once per source)
+    2. Pre-split lines with caching
+    3. Pre-allocated framebuffer rows
+    4. Efficient character mirroring
+    5. Minimal per-frame processing
     """
 
     def __init__(self, width: int = 80, height: int = 20):
@@ -49,32 +48,73 @@ class ScrollingCode:
         self.height = height
         self.enabled = True
 
-        # Saturation control (0-100%)
-        self.saturation = 25  # Default 25% saturation for scrolling code
+        # Timing control
+        self.last_update_time = 0.0
+        self.update_interval = 0.5
+        self.chars_per_update = 8
+        self.saturation = 25
 
-        # Timing control - much more conservative like MatrixRain
-        self.last_update_time = 0
-        self.update_interval = 0.5  # 0.5 seconds = 2 FPS default (same as MatrixRain)
-        self.chars_per_update = 8  # Reveal more characters per update to compensate
+        # OPTIMIZATION 1: Pre-computed constants
+        self.left_width = width // 2
+        self.right_width = width - self.left_width
+        self.empty_char: Tuple[str, Style] = (" ", Style(color="#2a2a2a"))
 
-        # Code content and reveal state - now persistent across sources
-        self.combined_code = ""  # Persistent buffer containing all sources
-        self.current_code = ""  # Current source being processed
+        # OPTIMIZATION 2: Pre-allocated framebuffer rows (reuse same objects)
+        self.framebuffer_rows: List[List[Tuple[str, Style]]] = [
+            [self.empty_char for _ in range(self.width)] for _ in range(self.height)
+        ]
+
+        # OPTIMIZATION 3: Rich Console for syntax highlighting
+        self.console = Console(width=width, legacy_windows=False, force_terminal=False)
+
+        # OPTIMIZATION 4: Character mirroring as simple list for speed
+        self.mirror_chars = [chr(i) for i in range(256)]  # Default: no change
+        self._setup_mirroring()
+
+        # OPTIMIZATION 5: Syntax highlighting cache (per source, not per line)
+        self.highlighted_segments = []  # List of lines, each line is [(char, color), ...]
+        self.highlight_valid = False
+        self.current_syntax_hash = None
+
+        # OPTIMIZATION 6: Pre-split lines cache
+        self.lines_cache = []
+        self.lines_valid = False
+
+        # Code state
+        self.combined_code = ""
         self.revealed_chars = 0
         self.total_chars = 0
 
-        # OPTIMIZATION: Pre-computed values
-        self.half_width = width // 2
-        self.empty_char = (" ", "#2a2a2a")
+        # Scrolling state
+        self.scroll_position = 0
+        self.scroll_speed = 1
+        self.scroll_delay = 0.5
+        self.scroll_timer = 0
 
-        # OPTIMIZATION: Syntax highlighting cache with invalidation
-        self.syntax_cache = {"code": "", "segments": [], "valid": False}
+        # Source collection
+        self.source_functions = []
+        self.current_source_index = 0
 
-        # OPTIMIZATION: Pre-computed color mappings
-        self.color_map = self._create_color_map()
+        self._collect_dcypher_sources()
+        self._load_next_source()
 
-        # OPTIMIZATION: Mirror character cache
-        self.mirror_cache = {
+    def _ensure_framebuffer_size(self):
+        """Ensure framebuffer matches current width/height"""
+        # Check if we need to resize the framebuffer
+        if len(self.framebuffer_rows) != self.height or (
+            self.framebuffer_rows and len(self.framebuffer_rows[0]) != self.width
+        ):
+            # Recreate framebuffer with current dimensions
+            self.framebuffer_rows = [
+                [self.empty_char for _ in range(self.width)] for _ in range(self.height)
+            ]
+            # Update pre-computed constants
+            self.left_width = self.width // 2
+            self.right_width = self.width - self.left_width
+
+    def _setup_mirroring(self):
+        """Setup character mirroring using simple array for O(1) access"""
+        mirror_pairs = {
             "(": ")",
             ")": "(",
             "[": "]",
@@ -87,138 +127,154 @@ class ScrollingCode:
             "\\": "/",
         }
 
-        # Scrolling state
-        self.scroll_position = 0
-        self.lines_per_screen = height
-        self.scroll_speed = 1
-        self.scroll_delay = 0.5  # Match scroll delay to update interval
-        self.scroll_timer = 0  # Track when to scroll
+        for src, dst in mirror_pairs.items():
+            self.mirror_chars[ord(src)] = dst
 
-        # Source code collection
-        self.source_functions = []
-        self.current_source_index = 0  # Will be set randomly after collecting sources
+    def _invalidate_caches(self):
+        """Invalidate all caches when code changes"""
+        self.lines_valid = False
+        self.highlight_valid = False
 
-        # Rich console for rendering syntax highlighting
-        self.console = Console(width=width, legacy_windows=False)
+    def _get_lines(self):
+        """Get lines with caching to avoid repeated splits"""
+        if not self.lines_valid:
+            self.lines_cache = self.combined_code.split("\n")
+            self.lines_valid = True
+        return self.lines_cache
 
-        # OPTIMIZATION: Pre-compute Python keywords and builtins
-        self.python_keywords = frozenset(
-            {
-                "def",
-                "class",
-                "if",
-                "elif",
-                "else",
-                "for",
-                "while",
-                "try",
-                "except",
-                "finally",
-                "with",
-                "import",
-                "from",
-                "as",
-                "return",
-                "yield",
-                "break",
-                "continue",
-                "pass",
-                "raise",
-                "assert",
-                "del",
-                "global",
-                "nonlocal",
-                "lambda",
-                "and",
-                "or",
-                "not",
-                "is",
-                "in",
-                "True",
-                "False",
-                "None",
-            }
-        )
+    def _generate_rich_highlighting(self):
+        """OPTIMIZED: Use Rich/Pygments for professional syntax highlighting"""
+        # Create a hash to see if we need to re-highlight
+        code_hash = hash(self.combined_code)
+        if self.highlight_valid and self.current_syntax_hash == code_hash:
+            return self.highlighted_segments
 
-        self.builtin_functions = frozenset(
-            {
-                "print",
-                "len",
-                "range",
-                "enumerate",
-                "zip",
-                "map",
-                "filter",
-                "sum",
-                "min",
-                "max",
-                "sorted",
-                "reversed",
-                "any",
-                "all",
-                "type",
-                "isinstance",
-                "hasattr",
-                "getattr",
-                "setattr",
-                "delattr",
-                "super",
-                "open",
-                "input",
-            }
-        )
+        # Use Rich's Syntax class for professional highlighting
+        try:
+            # Create syntax object - Rich auto-detects language or defaults to Python
+            syntax = Syntax(
+                self.combined_code,
+                "python",  # Default to Python, Rich handles it well
+                theme="monokai",  # Professional dark theme
+                line_numbers=False,
+                word_wrap=False,
+                background_color="default",
+            )
 
-        self._collect_dcypher_sources()
-        self._load_next_source()
+            # Render syntax to get Rich segments with proper colors
+            console_options = self.console.options
+            rendered_lines = self.console.render_lines(syntax, console_options)
 
-    def _create_color_map(self):
-        """Create pre-computed color mappings for better performance"""
-        return {
-            "keyword": self._apply_saturation("#ff6b6b"),  # Bright red for keywords
-            "builtin": self._apply_saturation(
-                "#ffe66d"
-            ),  # Yellow for built-in functions
-            "function": self._apply_saturation("#4ecdc4"),  # Cyan for function names
-            "class": self._apply_saturation("#4ecdc4"),  # Cyan for class names
-            "string": self._apply_saturation("#95e1d3"),  # Light green for strings
-            "comment": self._apply_saturation("#6c5ce7"),  # Purple for comments
-            "number": self._apply_saturation("#ff6b6b"),  # Bright red for numbers
-            "operator": self._apply_saturation("#ffe66d"),  # Yellow for operators
-            "bracket": self._apply_saturation("#4ecdc4"),  # Cyan for brackets
-            "punctuation": self._apply_saturation("#fd79a8"),  # Pink for punctuation
-            "identifier": self._apply_saturation(
-                "#00ff41"
-            ),  # Matrix green for identifiers
-            "other": self._apply_saturation(
-                "#74b9ff"
-            ),  # Light blue for other characters
-            "whitespace": self._apply_saturation("#2a2a2a"),  # Dim for whitespace
-        }
+            # Convert Rich segments to our format - use the Style objects directly!
+            self.highlighted_segments = []
+            for line in rendered_lines:
+                line_segments = []
+                for segment in line:
+                    text = segment.text
+                    style = segment.style or Style()  # Use Rich's Style object directly
+
+                    # Add each character with the original Rich Style object
+                    for char in text:
+                        line_segments.append((char, style))
+
+                self.highlighted_segments.append(line_segments)
+
+        except Exception as e:
+            # Fallback to plain text if Rich fails
+            print(f"Rich highlighting failed: {e}")
+            lines = self._get_lines()
+            self.highlighted_segments = []
+            default_style = Style(color="#74b9ff")  # Default blue
+            for line in lines:
+                line_segments = [(char, default_style) for char in line]
+                self.highlighted_segments.append(line_segments)
+
+        # Update cache state
+        self.current_syntax_hash = code_hash
+        self.highlight_valid = True
+        return self.highlighted_segments
+
+    def _convert_rich_text_to_segments(self, rich_text):
+        """Convert Rich Text object to our segment format"""
+        segments = []
+        current_line = []
+
+        # Rich Text has spans with style information
+        for span in rich_text._spans:
+            text = span.text
+            style = span.style
+
+            # Extract color from Rich style
+            if style and hasattr(style, "color") and style.color:
+                color = (
+                    f"#{style.color.triplet.hex}"
+                    if hasattr(style.color, "triplet")
+                    else "#74b9ff"
+                )
+            else:
+                color = "#74b9ff"  # Default color
+
+            # Apply saturation to the color
+            color = self._apply_saturation(color)
+
+            # Process each character in the span
+            for char in text:
+                if char == "\n":
+                    segments.append(current_line)
+                    current_line = []
+                else:
+                    current_line.append((char, color))
+
+        # Add the final line if it exists
+        if current_line:
+            segments.append(current_line)
+
+        return segments
+
+    def _apply_saturation(self, hex_color: str) -> str:
+        """Fast saturation application"""
+        if self.saturation == 100:
+            return hex_color
+
+        # Simple saturation scaling - much faster than full HSL conversion
+        if hex_color.startswith("#"):
+            hex_color = hex_color[1:]
+
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+        except (ValueError, IndexError):
+            return "#74b9ff"  # Default color on parse error
+
+        # Linear interpolation toward gray (128, 128, 128)
+        factor = self.saturation / 100.0
+        gray = 128
+
+        r = int(gray + (r - gray) * factor)
+        g = int(gray + (g - gray) * factor)
+        b = int(gray + (b - gray) * factor)
+
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def _collect_dcypher_sources(self):
-        """Collect all functions and classes from dcypher package using modern importlib"""
+        """Collect source functions (same as original)"""
         try:
             import dcypher
 
             self.source_functions = []
 
-            # Use pkgutil.walk_packages to discover all modules
             for importer, modname, ispkg in pkgutil.walk_packages(
                 dcypher.__path__, dcypher.__name__ + "."
             ):
                 try:
-                    # Use importlib to load the module
                     module = importlib.import_module(modname)
-
-                    # Get all functions and classes from the module
                     for name, obj in inspect.getmembers(module):
-                        # Only include objects defined in this specific module
                         if (
                             (inspect.isfunction(obj) or inspect.isclass(obj))
                             and hasattr(obj, "__module__")
                             and obj.__module__ == modname
                         ):
-                            # Try to get source code to verify it's available
                             try:
                                 if dill_available and dill is not None:
                                     dill.source.getsource(obj)
@@ -226,26 +282,19 @@ class ScrollingCode:
                                     inspect.getsource(obj)
                                 self.source_functions.append((modname, name, obj))
                             except (OSError, TypeError):
-                                # Can't get source, skip this object
                                 continue
-
                 except Exception:
-                    # Skip modules that can't be imported or processed
                     continue
 
-            # Also add some built-in examples if we don't have much
             if len(self.source_functions) < 5:
                 self._add_builtin_examples()
-
         except Exception:
-            # Fallback to empty list if dcypher can't be imported
             self.source_functions = []
             self._add_builtin_examples()
 
     def _add_builtin_examples(self):
-        """Add some built-in example code objects"""
+        """Add fallback examples"""
         try:
-            # Add some functions from the current module
             current_module = sys.modules[__name__]
             for name, obj in inspect.getmembers(current_module):
                 if (
@@ -254,58 +303,14 @@ class ScrollingCode:
                     and obj.__module__ == __name__
                 ):
                     self.source_functions.append((__name__, name, obj))
-
-            # Add some from common modules if available
-            for module_name in ["random", "time", "os", "pathlib"]:
-                try:
-                    module = importlib.import_module(module_name)
-                    for name, obj in inspect.getmembers(module):
-                        if (
-                            inspect.isfunction(obj)
-                            and hasattr(obj, "__module__")
-                            and obj.__module__ == module_name
-                        ):
-                            # Only add a few from each module
-                            if (
-                                len(
-                                    [
-                                        x
-                                        for x in self.source_functions
-                                        if x[0] == module_name
-                                    ]
-                                )
-                                < 3
-                            ):
-                                try:
-                                    inspect.getsource(obj)
-                                    self.source_functions.append(
-                                        (module_name, name, obj)
-                                    )
-                                except:
-                                    continue
-                except:
-                    continue
-
         except Exception:
             pass
 
     def _load_next_source(self):
-        """Load the next source code for scrolling - now appends to combined buffer"""
-        # If this is the first call and we have sources, select randomly
-        if (
-            self.source_functions
-            and self.current_source_index == 0
-            and self.current_code == ""
-        ):
-            self.current_source_index = random.randint(
-                0, len(self.source_functions) - 1
-            )
-
+        """Load next source code"""
         if not self.source_functions:
-            # Fallback code if no sources available
             new_source = self._get_fallback_code()
         else:
-            # Get source code using dill or inspect
             module_name, obj_name, obj = self.source_functions[
                 self.current_source_index
             ]
@@ -315,58 +320,35 @@ class ScrollingCode:
                     source_code = dill.source.getsource(obj)
                 else:
                     source_code = inspect.getsource(obj)
-
                 new_source = f"# {module_name}.{obj_name}\n{source_code}"
-
             except Exception as e:
-                # If we can't get source, create a descriptive placeholder
-                obj_type = "class" if inspect.isclass(obj) else "function"
                 new_source = f"""# {module_name}.{obj_name}
-# {obj_type.title()} from {module_name}
-# Source code not available: {str(e)[:50]}...
-
-# This is a {obj_type} that would normally show here
-# but the source code could not be retrieved.
-# This often happens with C extensions or built-ins.
-
-def placeholder_{obj_name.lower()}():
-    \"\"\"
-    This is a placeholder for {obj_name}
-    The actual implementation is not accessible.
-    \"\"\"
+# Source not available: {str(e)[:50]}...
+def placeholder():
     pass
 """
 
-            # Move to next source for next time - select randomly
+            # Move to next source
             if len(self.source_functions) > 1:
-                # Avoid selecting the same source twice in a row
                 available_indices = [
                     i
                     for i in range(len(self.source_functions))
                     if i != self.current_source_index
                 ]
                 self.current_source_index = random.choice(available_indices)
-            else:
-                self.current_source_index = 0
 
-        # Append new source to combined buffer (with separator for first source)
+        # Update combined buffer
         if self.combined_code:
             self.combined_code += "\n\n"
-
-        # Add the new source to the combined code
         self.combined_code += new_source
-        self.current_code = self.combined_code  # Use combined code for all operations
-
-        # Update total characters but don't reset revealed chars (continue from where we left off)
         self.total_chars = len(self.combined_code)
-        self.syntax_cache["valid"] = False  # Reset syntax highlighting cache
+
+        # Invalidate caches
+        self._invalidate_caches()
 
     def _get_fallback_code(self):
-        """Get fallback code when no sources are available"""
-        return """
-# dCypher - Quantum-Resistant Encryption System
-# No source code available for display
-
+        """Fallback code"""
+        return """# dCypher - Quantum-Resistant Encryption System
 import random
 import time
 from typing import List, Optional
@@ -377,390 +359,165 @@ class CryptoSystem:
         self.lattice_based = True
         
     def encrypt(self, data: bytes) -> bytes:
-        \"\"\"Encrypt data using post-quantum algorithms\"\"\"
         return b"encrypted_" + data
         
     def decrypt(self, ciphertext: bytes) -> bytes:
-        \"\"\"Decrypt ciphertext\"\"\"
-        return ciphertext[10:]  # Remove "encrypted_" prefix
+        return ciphertext[10:]
 
-def generate_random_key(length: int = 32) -> bytes:
-    \"\"\"Generate a random cryptographic key\"\"\"
+def generate_key(length: int = 32) -> bytes:
     return bytes(random.randint(0, 255) for _ in range(length))
 
-# Matrix rain effect with hex characters
-def create_hex_pattern():
-    hex_chars = "0123456789ABCDEF"
-    return ''.join(random.choice(hex_chars) for _ in range(16))
-
-# End of fallback code
+class AdvancedCrypto:
+    def __init__(self):
+        self.algorithms = ["Kyber", "Dilithium", "SPHINCS+"]
+    
+    def process_data(self, data):
+        # Complex processing logic
+        for algorithm in self.algorithms:
+            data = self._apply_algorithm(algorithm, data)
+        return data
+    
+    def _apply_algorithm(self, alg, data):
+        return f"{alg}({data})"
 """
 
-    def _generate_syntax_highlighted_segments(self):
-        """OPTIMIZED Generate properly syntax highlighted segments with caching"""
-        # Check if cache is valid
-        if (
-            self.syntax_cache["valid"]
-            and self.syntax_cache["code"] == self.current_code
-        ):
-            cached_segments = self.syntax_cache["segments"]
-            # Type assertion to help the linter understand this is a list
-            return cached_segments if isinstance(cached_segments, list) else []
-
-        # Generate new segments
-        segments = self._generate_optimized_highlighted_segments()
-
-        # Update cache
-        self.syntax_cache["code"] = self.current_code
-        self.syntax_cache["segments"] = segments
-        self.syntax_cache["valid"] = True
-
-        return segments
-
-    def _generate_optimized_highlighted_segments(self):
-        """OPTIMIZED Enhanced Python-aware syntax highlighting with pre-computed colors"""
-        lines = self.current_code.split("\n")
-        segments = []
-
-        for line in lines:
-            line_segments = []
-            i = 0
-            in_string = False
-            string_char = None
-            in_comment = False
-
-            while i < len(line):
-                char = line[i]
-
-                # Handle comments
-                if char == "#" and not in_string:
-                    in_comment = True
-                    line_segments.append((char, self.color_map["comment"]))
-                    i += 1
-                    continue
-
-                if in_comment:
-                    line_segments.append((char, self.color_map["comment"]))
-                    i += 1
-                    continue
-
-                # Handle strings
-                if char in "\"'" and not in_string:
-                    in_string = True
-                    string_char = char
-                    line_segments.append((char, self.color_map["string"]))
-                    i += 1
-                    continue
-                elif char == string_char and in_string:
-                    in_string = False
-                    string_char = None
-                    line_segments.append((char, self.color_map["string"]))
-                    i += 1
-                    continue
-                elif in_string:
-                    line_segments.append((char, self.color_map["string"]))
-                    i += 1
-                    continue
-
-                # Handle keywords and identifiers
-                if char.isalpha() or char == "_":
-                    word_start = i
-                    while i < len(line) and (line[i].isalnum() or line[i] == "_"):
-                        i += 1
-                    word = line[word_start:i]
-
-                    if word in self.python_keywords:
-                        color = self.color_map["keyword"]
-                    elif word in self.builtin_functions:
-                        color = self.color_map["builtin"]
-                    elif self._is_function_def(line, word_start):
-                        color = self.color_map["function"]
-                    elif self._is_class_def(line, word_start):
-                        color = self.color_map["class"]
-                    else:
-                        color = self.color_map["identifier"]
-
-                    for c in word:
-                        line_segments.append((c, color))
-                    continue
-
-                # Use optimized character coloring for everything else
-                color = self._get_optimized_char_color(char)
-                line_segments.append((char, color))
-                i += 1
-
-            segments.append(line_segments)
-
-        return segments
-
-    def _is_function_def(self, line, word_start):
-        """Check if word is a function definition"""
-        # Look for "def " before the word
-        def_pos = line.find("def ")
-        return def_pos != -1 and def_pos < word_start
-
-    def _is_class_def(self, line, word_start):
-        """Check if word is a class definition"""
-        # Look for "class " before the word
-        class_pos = line.find("class ")
-        return class_pos != -1 and class_pos < word_start
-
-    def _get_optimized_char_color(self, char):
-        """OPTIMIZED Enhanced color mapping using pre-computed colors"""
-        if char.isalpha():
-            return self.color_map["identifier"]
-        elif char.isdigit():
-            return self.color_map["number"]
-        elif char in "()[]{}":
-            return self.color_map["bracket"]
-        elif char in "+-*/=<>!&|":
-            return self.color_map["operator"]
-        elif char in "\"'":
-            return self.color_map["string"]
-        elif char == "#":
-            return self.color_map["comment"]
-        elif char in ".,;:":
-            return self.color_map["punctuation"]
-        elif char in " \t":
-            return self.color_map["whitespace"]
-        else:
-            return self.color_map["other"]
-
-    def _apply_saturation(self, hex_color: str) -> str:
-        """OPTIMIZED Apply current saturation level to a hex color"""
-        # Parse hex color
-        if hex_color.startswith("#"):
-            hex_color = hex_color[1:]
-
-        r = int(hex_color[0:2], 16)
-        g = int(hex_color[2:4], 16)
-        b = int(hex_color[4:6], 16)
-
-        # Convert RGB to HSL
-        r_norm = r / 255.0
-        g_norm = g / 255.0
-        b_norm = b / 255.0
-
-        max_val = max(r_norm, g_norm, b_norm)
-        min_val = min(r_norm, g_norm, b_norm)
-        diff = max_val - min_val
-
-        # Calculate lightness
-        lightness = (max_val + min_val) / 2.0
-
-        if diff == 0:
-            # Grayscale - no saturation to adjust
-            return f"#{r:02x}{g:02x}{b:02x}"
-
-        # Calculate saturation
-        if lightness < 0.5:
-            saturation = diff / (max_val + min_val)
-        else:
-            saturation = diff / (2.0 - max_val - min_val)
-
-        # Calculate hue
-        if max_val == r_norm:
-            hue = (g_norm - b_norm) / diff
-            if g_norm < b_norm:
-                hue += 6
-        elif max_val == g_norm:
-            hue = (b_norm - r_norm) / diff + 2
-        else:  # max_val == b_norm
-            hue = (r_norm - g_norm) / diff + 4
-        hue /= 6
-
-        # Apply new saturation
-        new_saturation = saturation * (self.saturation / 100.0)
-
-        # Convert back to RGB
-        def hue_to_rgb(p, q, t):
-            if t < 0:
-                t += 1
-            if t > 1:
-                t -= 1
-            if t < 1 / 6:
-                return p + (q - p) * 6 * t
-            if t < 1 / 2:
-                return q
-            if t < 2 / 3:
-                return p + (q - p) * (2 / 3 - t) * 6
-            return p
-
-        if new_saturation == 0:
-            new_r = new_g = new_b = lightness
-        else:
-            if lightness < 0.5:
-                q = lightness * (1 + new_saturation)
-            else:
-                q = lightness + new_saturation - lightness * new_saturation
-            p = 2 * lightness - q
-            new_r = hue_to_rgb(p, q, hue + 1 / 3)
-            new_g = hue_to_rgb(p, q, hue)
-            new_b = hue_to_rgb(p, q, hue - 1 / 3)
-
-        # Convert back to hex
-        new_r = int(new_r * 255)
-        new_g = int(new_g * 255)
-        new_b = int(new_b * 255)
-
-        return f"#{new_r:02x}{new_g:02x}{new_b:02x}"
-
     def update(self):
-        """OPTIMIZED Update character-by-character reveal and scrolling animation"""
+        """Update animation state"""
         if not self.enabled:
             return
 
         current_time = time.time()
-
-        # Timing control: only update at the specified interval
         if current_time - self.last_update_time < self.update_interval:
             return
 
         self.last_update_time = current_time
 
-        # Check if it's time to reveal the next chunk of characters
+        # Character revelation
         if self.revealed_chars < self.total_chars:
-            # Reveal multiple characters at once, but don't exceed total
             remaining_chars = self.total_chars - self.revealed_chars
             chars_to_reveal = min(self.chars_per_update, remaining_chars)
             self.revealed_chars += chars_to_reveal
+            self._update_scroll_position()
 
-            # Check if we need to scroll during character revelation
-            self._check_and_scroll_during_reveal()
-
-        # Check if we need to continue scrolling after all characters are revealed
+        # Continue scrolling after reveal
         elif self.revealed_chars >= self.total_chars:
-            # Start scroll timer when all characters are revealed
             if self.scroll_timer == 0:
                 self.scroll_timer = current_time
 
             if current_time - self.scroll_timer > self.scroll_delay:
-                # Use cached lines instead of string operations
-                highlighted_segments = self._generate_syntax_highlighted_segments()
-                if (
-                    self.scroll_position
-                    <= len(highlighted_segments) - self.lines_per_screen
-                ):
+                lines = self._get_lines()
+                if self.scroll_position < len(lines) - self.height:
                     self.scroll_position += self.scroll_speed
                     self.scroll_timer = current_time
                 else:
-                    # Finished scrolling, load next source
                     self._load_next_source()
 
-    def _check_and_scroll_during_reveal(self):
-        """OPTIMIZED Check if we need to scroll during character revelation"""
+    def _update_scroll_position(self):
+        """Update scroll position efficiently"""
         if self.revealed_chars == 0:
             return
 
-        # Count complete lines that have been revealed
-        revealed_text = self.current_code[: self.revealed_chars]
-        complete_lines = revealed_text.count("\n") + 1  # More efficient than split()
+        # Count newlines in revealed text (faster than split)
+        revealed_text = self.combined_code[: self.revealed_chars]
+        complete_lines = revealed_text.count("\n") + 1
 
-        # If we have more complete lines than can fit in the framebuffer, scroll up
         if complete_lines > self.height:
-            # Scroll to show the most recent lines
             self.scroll_position = complete_lines - self.height
 
     def get_framebuffer(self):
-        """OPTIMIZED Generate framebuffer with mirrored split-screen effect"""
-        if not self.current_code:
-            # Pre-computed empty row for better performance
-            empty_row = [self.empty_char] * self.width
-            return [empty_row.copy() for _ in range(self.height)]
+        """OPTIMIZED: Generate framebuffer using Rich-highlighted segments"""
+        if not self.combined_code:
+            return [self.framebuffer_rows[i][:] for i in range(self.height)]
 
-        # Get syntax highlighted segments
-        highlighted_segments = self._generate_syntax_highlighted_segments()
+        # Check if we need to resize framebuffer
+        self._ensure_framebuffer_size()
 
-        # Only show revealed portion - use slicing instead of split when possible
-        if self.revealed_chars >= len(self.current_code):
-            revealed_lines = self.current_code.split("\n")
-        else:
-            revealed_text = self.current_code[: self.revealed_chars]
-            revealed_lines = revealed_text.split("\n")
+        # Get Rich-highlighted segments (cached)
+        highlighted_segments = self._generate_rich_highlighting()
+        lines = self._get_lines()
 
-        framebuffer = []
-
-        # Calculate proper centering for odd/even widths
-        left_width = self.width // 2
-        right_width = self.width - left_width  # This handles odd widths properly
-
-        # Fill framebuffer with split-screen mirrored effect
+        # OPTIMIZATION: Reuse framebuffer row objects
         for y in range(self.height):
-            # Calculate which line to show based on scroll position
+            # Clear row efficiently
+            row = self.framebuffer_rows[y]
+            for x in range(self.width):
+                row[x] = self.empty_char
+
             line_index = y + self.scroll_position
+            if line_index >= len(lines) or line_index >= len(highlighted_segments):
+                continue
 
-            if line_index < len(revealed_lines) and line_index < len(
-                highlighted_segments
-            ):
-                line = revealed_lines[line_index]
-                line_segments = highlighted_segments[line_index]
+            line_text = lines[line_index]
 
-                # Right side: normal text - fill the right_width properly
-                right_chars = []
-                for i in range(right_width):
-                    if i < len(line):
-                        char = line[i]
-                        if i < len(line_segments):
-                            right_chars.append(line_segments[i])
-                        else:
-                            # Fallback if segments don't match
-                            color = self._get_optimized_char_color(char)
-                            right_chars.append((char, color))
-                    else:
-                        # Pad with empty chars for proper centering
-                        right_chars.append(self.empty_char)
+            # Calculate if this line is revealed
+            lines_before = line_index
+            chars_before = sum(
+                len(lines[i]) + 1 for i in range(lines_before)
+            )  # +1 for \n
+            chars_after = chars_before + len(line_text)
 
-                # Left side: mirrored text using cached mirror characters
-                left_chars = []
-                # Take only left_width characters from the right side for mirroring
-                chars_to_mirror = right_chars[:left_width]
-                for char, color in reversed(chars_to_mirror):
-                    mirrored_char = self.mirror_cache.get(char, char)
-                    left_chars.append((mirrored_char, color))
+            if chars_before >= self.revealed_chars:
+                continue  # Line not revealed yet
 
-                # Combine left (mirrored) + right (normal)
-                row = left_chars + right_chars
+            # Clamp line to revealed characters
+            if chars_after > self.revealed_chars:
+                revealed_chars_in_line = self.revealed_chars - chars_before
+                revealed_chars_in_line = max(
+                    0, min(revealed_chars_in_line, len(line_text))
+                )
             else:
-                # Empty line - pre-computed
-                row = [self.empty_char] * self.width
+                revealed_chars_in_line = len(line_text)
 
-            framebuffer.append(row)
+            if revealed_chars_in_line <= 0:
+                continue
 
-        return framebuffer
+            # Get highlighted segments for this line
+            line_segments = (
+                highlighted_segments[line_index]
+                if line_index < len(highlighted_segments)
+                else []
+            )
 
+            # Ensure we have segments for revealed characters
+            segments_to_show = line_segments[:revealed_chars_in_line]
+
+            # OPTIMIZATION: Process right side efficiently
+            right_end = min(self.right_width, len(segments_to_show))
+            for i in range(right_end):
+                char, color = segments_to_show[i]
+                row[self.left_width + i] = (char, color)
+
+            # OPTIMIZATION: Process left side (mirrored) efficiently - right-aligned against center
+            mirror_count = min(self.left_width, right_end)
+            for i in range(mirror_count):
+                src_idx = i  # Take characters in forward order from right side
+                char, color = segments_to_show[src_idx]
+                mirrored_char = self.mirror_chars[ord(char)]
+                # Place mirrored text right-aligned against the center divider
+                # Start from the rightmost position of left half and work leftward
+                left_pos = self.left_width - 1 - i
+                row[left_pos] = (mirrored_char, color)
+
+        # Return the reused row objects (they're already updated in place)
+        return self.framebuffer_rows
+
+    # Interface methods (same as original)
     def toggle_scrolling(self):
-        """Toggle scrolling code effect on/off - preserves combined buffer"""
         self.enabled = not self.enabled
-        if self.enabled:
-            # If we have no content yet, load the first source
-            if not self.combined_code:
-                self._load_next_source()
-        else:
-            # When disabled, only reset scroll timer, keep the combined buffer
-            self.scroll_timer = 0
-            self.syntax_cache["valid"] = False
+        if self.enabled and not self.combined_code:
+            self._load_next_source()
 
     def increase_framerate(self):
-        """Increase scrolling code framerate (decrease update interval)"""
         if not self.enabled:
             return
-
-        # Get current FPS as integer
         current_fps = round(1.0 / self.update_interval)
-
-        # Increment by 1 FPS, maximum 10 FPS
         new_fps = min(10, current_fps + 1)
         self.update_interval = 1.0 / new_fps
 
     def decrease_framerate(self):
-        """Decrease scrolling code framerate (increase update interval)"""
         if not self.enabled:
             return
-
-        # Get current FPS as integer
         current_fps = round(1.0 / self.update_interval)
-
-        # Decrement by 1 FPS, minimum 1 FPS
         new_fps = max(1, current_fps - 1)
         self.update_interval = 1.0 / new_fps
 
@@ -782,22 +539,19 @@ def create_hex_pattern():
     def clear_buffer(self):
         """Clear the combined code buffer and start fresh"""
         self.combined_code = ""
-        self.current_code = ""
         self.revealed_chars = 0
         self.total_chars = 0
         self.scroll_position = 0
         self.scroll_timer = 0
-        self.syntax_cache["valid"] = False
+        self._invalidate_caches()
         if self.enabled:
             self._load_next_source()
 
     def set_saturation(self, saturation: int):
         """Set saturation level (0-100%) and update color map"""
         self.saturation = max(0, min(100, saturation))
-        # Regenerate color map with new saturation
-        self.color_map = self._create_color_map()
-        # Invalidate cache to force regeneration with new saturation
-        self.syntax_cache["valid"] = False
+        # Force re-highlighting with new saturation
+        self.highlight_valid = False
 
     def increase_saturation(self):
         """Increase saturation by 10%"""
@@ -823,6 +577,6 @@ def create_hex_pattern():
         actual_speed = self.chars_per_update * current_fps
 
         # Calculate combined buffer stats
-        combined_lines = self.combined_code.count("\n") + 1 if self.combined_code else 0
+        lines = self._get_lines()
 
-        return f"Sources: {len(self.source_functions)} | Lines: {combined_lines} | Progress: {progress:.0f}% | Speed: {actual_speed:.0f} cps | FPS: {current_fps} | Saturation: {self.saturation}%"
+        return f"Sources: {len(self.source_functions)} | Lines: {len(lines)} | Progress: {progress:.0f}% | Speed: {actual_speed:.0f} cps | FPS: {current_fps} | Saturation: {self.saturation}%"
