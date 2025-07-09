@@ -10,6 +10,7 @@ import os
 import pkgutil
 import inspect
 from pathlib import Path
+from typing import Optional, Tuple
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.app import RenderResult
@@ -118,6 +119,13 @@ class ASCIIBanner(Widget):
         # SMART CACHING: Add render frequency synchronization
         self._last_render_time = 0.0
         self._min_render_interval = 0.1  # Maximum 10 FPS for banner rendering
+
+        # SMART LAYER COMPOSITION CACHING (no deep copy)
+        self._layer_cache_key: Optional[Tuple[int, int, int, bool, bool]] = None
+        self._layer_cache_result: Optional[Text] = None
+        self._matrix_state_hash: int = 0
+        self._code_state_hash: int = 0
+        self._cache_timestamp: float = 0.0  # Time-based cache validation
 
         # DISABLED CACHING (for design finalization):
         # - Layer composition result caching (_layer_cache)
@@ -246,6 +254,7 @@ class ASCIIBanner(Widget):
         if matrix_enabled:
             # Clear framebuffer when enabling for a fresh start
             self.matrix_rain.reset_grid()
+        self._invalidate_layer_cache()
         self._update_auto_refresh()
 
     def watch_scrolling_code(self, scrolling_enabled: bool) -> None:
@@ -254,7 +263,14 @@ class ASCIIBanner(Widget):
         if scrolling_enabled:
             # Clear buffer when enabling for a fresh start
             self.scrolling_code_controller.clear_buffer()
+        self._invalidate_layer_cache()
         self._update_auto_refresh()
+
+    def _invalidate_layer_cache(self) -> None:
+        """Invalidate the layer composition cache"""
+        self._layer_cache_key = None
+        self._layer_cache_result = None
+        self._cache_timestamp = 0.0  # Reset timestamp to force regeneration
 
     @profile("ASCIIBanner.render")
     def render(self) -> RenderResult:
@@ -371,6 +387,57 @@ class ASCIIBanner(Widget):
         self, ascii_content: Text, width: int, height: int
     ) -> Text:
         """ULTRA-OPTIMIZED: Render layered effects with minimal Rich Text operations"""
+
+        # SMART CACHING: Check if we can use cached result
+        with profile_block("ASCIIBanner._render_with_layered_effects.cache_check"):
+            # Generate BUCKETED state hashes for better cache hit rates
+            matrix_state_hash = (
+                hash(
+                    (
+                        self.matrix_rain._current_frame // 5,  # Bucket frames by 5
+                        self.matrix_rain.enabled,
+                        len(self.matrix_rain.sprites)
+                        if self.matrix_rain.sprites
+                        else 0,
+                    )
+                )
+                if self.matrix_background
+                else 0
+            )
+            code_state_hash = (
+                hash(
+                    (
+                        self.scrolling_code_controller.revealed_chars
+                        // 50,  # Bucket characters by 50
+                        self.scrolling_code_controller.enabled,
+                        len(self.scrolling_code_controller.display_lines)
+                        // 3,  # Bucket lines by 3
+                    )
+                )
+                if self.scrolling_code
+                else 0
+            )
+            ascii_state_hash = hash(str(ascii_content))
+
+            # Create cache key
+            cache_key = (
+                matrix_state_hash,
+                code_state_hash,
+                ascii_state_hash,
+                self.matrix_background,
+                self.scrolling_code,
+            )
+
+            # TIME-BASED CACHE: Allow cache usage for 200ms even with minor changes
+            current_time = time.time()
+            cache_age = current_time - self._cache_timestamp
+
+            # Check if cache is valid (state match OR recent cache)
+            if (
+                self._layer_cache_key == cache_key or cache_age < 0.2
+            ) and self._layer_cache_result is not None:
+                return self._layer_cache_result
+
         with profile_block(
             "ASCIIBanner._render_with_layered_effects.framebuffer_fetch"
         ):
@@ -503,6 +570,11 @@ class ASCIIBanner(Widget):
             # Apply merged segments in bulk
             for text_chunk, style in merged_segments:
                 layered_content.append(text_chunk, style=style)
+
+        # SMART CACHING: Store result for future use (reference, not copy)
+        self._layer_cache_key = cache_key
+        self._layer_cache_result = layered_content
+        self._cache_timestamp = time.time()  # Update cache timestamp
 
         return layered_content
 

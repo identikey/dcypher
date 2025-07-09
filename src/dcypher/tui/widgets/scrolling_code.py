@@ -37,7 +37,7 @@ try:
     profiling_available = True
 except ImportError:
     # Create no-op decorators if profiling not available
-    from typing import Any, Callable, TypeVar, Union
+    from typing import Any, Callable, TypeVar
     from contextlib import nullcontext
 
     F = TypeVar("F", bound=Callable[..., Any])
@@ -246,7 +246,9 @@ class ScrollingCode:
         self.framebuffer: List[List[Tuple[str, Style]]] = []
         self._initialize_framebuffer()
 
-        # PERFORMANCE NOTE: Removed framebuffer caching to eliminate deep copy overhead
+        # SMART CACHING: Framebuffer result caching
+        self._framebuffer_cache: Optional[List[List[Tuple[str, Style]]]] = None
+        self._framebuffer_dirty: bool = True  # Mark when framebuffer needs regeneration
 
         # Code state - Initialize before loading sources
         self.highlighted_lines: List[
@@ -315,7 +317,8 @@ class ScrollingCode:
             [(" ", empty_style) for _ in range(self._width)]
             for _ in range(self._height)
         ]
-        # Framebuffer initialized and ready for use
+        # Mark framebuffer as dirty after initialization
+        self._framebuffer_dirty = True
 
     def _collect_sources(self):
         """PERFORMANCE OPTIMIZED: Use global source cache instead of expensive module discovery"""
@@ -418,7 +421,8 @@ class ScrollingCode:
         self._display_cache_valid = False
         if hasattr(self, "_cached_line_lengths"):
             del self._cached_line_lengths
-        # New content loaded - framebuffer will be updated on next render
+        # Mark framebuffer as dirty after new content is loaded
+        self._framebuffer_dirty = True
 
     def _extract_source_with_dill(self, obj, module_name: str, obj_name: str) -> str:
         """Extract source code using dill's advanced capabilities"""
@@ -649,7 +653,8 @@ class {obj_type}Analysis:
         # Convert revealed characters to display lines
         self._update_display_lines()
 
-        # Content changes - framebuffer will be updated on next render
+        # Mark framebuffer as dirty after content changes
+        self._framebuffer_dirty = True
 
         # Render to framebuffer
         self._render_to_framebuffer()
@@ -714,8 +719,10 @@ class {obj_type}Analysis:
 
     def _render_to_framebuffer(self):
         """Render display lines to framebuffer with terminal-style scrolling"""
-        # PERFORMANCE NOTE: Removed caching due to deep copy overhead
-        # Direct rendering is faster than expensive copy operations
+        # SMART CACHE: Skip rendering if framebuffer is not dirty
+        if not self._framebuffer_dirty and self._framebuffer_cache is not None:
+            self.framebuffer = self._framebuffer_cache
+            return
 
         # PERFORMANCE FIX: Cache property access and reuse Style objects
         width = self._width  # Cache to avoid 272 property calls
@@ -747,8 +754,11 @@ class {obj_type}Analysis:
 
             self._render_line_to_row(line, row_idx, width, visible_styled)
 
-        # PERFORMANCE NOTE: Removed caching to eliminate deep copy overhead
-        # Direct rendering provides better performance than caching mechanisms
+        # SMART CACHE: Store result and mark framebuffer as clean
+        import copy
+
+        self._framebuffer_cache = copy.deepcopy(self.framebuffer)
+        self._framebuffer_dirty = False
 
     def _render_line_to_row(self, line: str, row_idx: int, width: int, visible_styled):
         """Render a single line to a framebuffer row with mirroring"""

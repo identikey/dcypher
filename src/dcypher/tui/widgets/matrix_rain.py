@@ -261,6 +261,10 @@ class MatrixRain:
         self._state_dirty: bool = True  # Mark when state changes
         self._current_frame: int = 0
 
+        # SMART STATE-BASED CACHING
+        self._state_hash: int = 0
+        self._cached_state_hash: int = 0
+
         # Initialize profiler for animations
         self.animation_profiler = create_animation_profiler()
 
@@ -604,9 +608,30 @@ class MatrixRain:
     def get_framebuffer(self) -> List[List[Tuple[str, str]]]:
         """ULTRA-OPTIMIZED: Generate framebuffer with smart state-based caching"""
 
-        # SMART CACHE: Only regenerate if state has changed
-        if not self._state_dirty and self._framebuffer_cache is not None:
-            return self._framebuffer_cache
+        # SMART STATE-BASED CACHE: Use hash of current state for more precise caching
+        with profile_block("MatrixRain.get_framebuffer.state_hash"):
+            # Generate BUCKETED state hash for better cache hit rates
+            active_cells = int(np.count_nonzero(self.active_mask))
+            glitch_cells = int(np.count_nonzero(self.glitch_mask))
+            sprite_states = sum(1 for s in self.sprites if s["active"])
+
+            # BUCKET values to reduce cache sensitivity to minor changes
+            self._state_hash = hash(
+                (
+                    active_cells // 10,  # Bucket active cells by 10
+                    glitch_cells // 3,  # Bucket glitch cells by 3
+                    sprite_states,  # Keep sprite count exact (changes less frequently)
+                    self._current_frame
+                    // 8,  # Bucket frames by 8 (allow ~8 frames same cache)
+                )
+            )
+
+            # Check if state actually changed
+            if (
+                self._state_hash == self._cached_state_hash
+                and self._framebuffer_cache is not None
+            ):
+                return self._framebuffer_cache
 
         with profile_block("MatrixRain.get_framebuffer.buffer_generation"):
             # ULTRA-OPTIMIZATION: Vectorized framebuffer generation
@@ -660,8 +685,9 @@ class MatrixRain:
                     row.append((char, color))
                 framebuffer.append(row)
 
-            # SMART CACHE: Store result and mark state as clean
+            # SMART CACHE: Store result and cache state hash
             self._framebuffer_cache = framebuffer
+            self._cached_state_hash = self._state_hash
             self._state_dirty = False
 
             return framebuffer
