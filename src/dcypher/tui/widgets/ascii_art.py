@@ -103,7 +103,9 @@ class ASCIIBanner(Widget):
 """
 
     # Subtitle text
-    SUBTITLE = "HOMOMORPHIC RECRYPTION PROXY • BY IDENTIKEY"
+    SUBTITLE = (
+        "FREEDOM CANNOT BE GIVEN, IT MUST BE TAKEN • RECRYPTION PROXY BY IDENTIKEY"
+    )
 
     def __init__(self, compact=False, **kwargs):
         super().__init__(**kwargs)

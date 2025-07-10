@@ -67,9 +67,8 @@ docker-exec command:
 # Run the FastAPI server locally with uv
 serve:
     #!/usr/bin/env bash
-    set -euo pipefail
-    export LD_LIBRARY_PATH="/workspace/openfhe-local/lib:/workspace/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
-    export PYTHONPATH="/workspace/src:${PYTHONPATH:-}"
+    set -Eeuvxo pipefail
+    source ./env.sh
     echo "🚀 Starting DCypher FastAPI server..."
     uv run uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 
@@ -80,7 +79,7 @@ dev-serve:
 # Build OpenFHE C++ library locally (not system-wide)
 build-openfhe:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -Eeuvxo pipefail
     echo "Building OpenFHE C++ library locally..."
     cd vendor/openfhe-development
     mkdir -p build
@@ -90,7 +89,7 @@ build-openfhe:
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_UNITTESTS=OFF \
         -DBUILD_EXAMPLES=OFF \
-        -DBUILD_BENCHMARKS=OFF
+        -DBUILD_BENCHMARKS=ON
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
     echo "OpenFHE installed to: $(pwd)/../../../build"
@@ -98,7 +97,7 @@ build-openfhe:
 # Build OpenFHE Python bindings using local C++ library
 build-openfhe-python: build-openfhe
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -Eeuvxo pipefail
     echo "Building OpenFHE Python bindings..."
     export CMAKE_PREFIX_PATH="$(pwd)/build:${CMAKE_PREFIX_PATH:-}"
     export LD_LIBRARY_PATH="$(pwd)/build/lib:${LD_LIBRARY_PATH:-}"
@@ -112,7 +111,7 @@ build-openfhe-python: build-openfhe
 # Clone and build liboqs C library locally (not system-wide)
 build-liboqs:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -Eeuvxo pipefail
     echo "Building liboqs C library locally..."
     cd vendor/liboqs
     mkdir -p build
@@ -122,13 +121,23 @@ build-liboqs:
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=ON \
         -DOQS_BUILD_ONLY_LIB=ON \
-        -DOQS_MINIMAL_BUILD=OFF
+        -DOQS_ALGS_ENABLED=All
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
     make install
     echo "liboqs installed to: $(pwd)/../../../build"
 
-# Build both OpenFHE C++ and Python bindings
-build-all: build-openfhe-python build-liboqs
+# Build liboqs-python bindings using local liboqs library
+build-liboqs-python: build-liboqs
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Building liboqs-python bindings..."
+    source ./env.sh
+    # Install liboqs-python in development mode from the vendor directory
+    uv add --editable vendor/liboqs-python
+    echo "liboqs-python installed and available!"
+
+# Build both OpenFHE C++ and Python bindings, and liboqs-python
+build-all: build-openfhe-python build-liboqs-python
 
 # Clean OpenFHE builds
 clean-openfhe:
@@ -138,14 +147,43 @@ clean-openfhe:
 clean-liboqs:
     rm -rf vendor/liboqs/build liboqs-local
 
+# Clean liboqs-python builds
+clean-liboqs-python:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    # Remove from uv dependencies if it exists
+    if uv pip show liboqs-python >/dev/null 2>&1; then
+        uv remove liboqs-python
+    fi
+    # Clean any build artifacts
+    rm -rf vendor/liboqs-python/build vendor/liboqs-python/dist vendor/liboqs-python/*.egg-info
+
+# Clean OpenFHE-python builds
+clean-openfhe-python:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    # Remove from uv dependencies if it exists
+    if uv pip show openfhe-python >/dev/null 2>&1; then
+        uv remove openfhe-python
+    fi
+    # Clean any build artifacts
+    rm -rf vendor/openfhe-python/build vendor/openfhe-python/dist vendor/openfhe-python/*.egg-info vendor/openfhe-python/openfhe/openfhe.so
+
 # Clean all builds
-clean: clean-openfhe clean-liboqs
+clean: clean-openfhe clean-liboqs clean-liboqs-python clean-openfhe-python
+
+# Check which liboqs algorithms are available
+check-liboqs:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "🔍 Checking liboqs algorithm availability..."
+    source ./env.sh
+    uv run python scripts/check_liboqs_algorithms.py
 
 test:
     #!/usr/bin/env bash
-    set -euo pipefail
-    export LD_LIBRARY_PATH="/workspace/openfhe-local/lib:/workspace/liboqs-local/lib:${LD_LIBRARY_PATH:-}"
-    export PYTHONPATH="/workspace/src:${PYTHONPATH:-}"
+    set -Eeuvxo pipefail
+    source ./env.sh
     echo "🧪 Running DCypher test suite..."
     # echo "📋 Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
     uv run pytest -n auto --dist worksteal ./tests/
@@ -153,7 +191,7 @@ test:
 # Run tests repeatedly until they break or user cancels
 test-until-break:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -Eeuvxo pipefail
     echo "🔄 Running tests repeatedly until failure or cancellation (Ctrl+C to stop)..."
     run_count=0
     total_time=0
