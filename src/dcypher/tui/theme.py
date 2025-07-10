@@ -201,6 +201,20 @@ ASCIIBanner {
     padding: 0;
 }
 
+/* Client Status Bar */
+#client-status-bar {
+    height: 1;
+    min-height: 1;
+    max-height: 1;
+    background: $bg-dark;
+    color: $text-primary;
+    text-style: bold;
+    text-align: center;
+    content-align: center middle;
+    margin: 0;
+    padding: 0;
+}
+
 /* Main container */
 #main-container {
     background: $bg-medium;
@@ -218,8 +232,8 @@ ASCIIBanner {
 
 /* Tabbed content styling */
 TabbedContent {
-    border: solid $border-primary;
-    height: 100%;
+    height: 1fr;  /* Take remaining space after other elements */
+    min-height: 10;  /* Ensure minimum content height */
 }
 
 TabbedContent > Tabs {
@@ -242,7 +256,6 @@ TabbedContent > Tabs > Tab.-active {
 }
 
 TabbedContent > ContentSwitcher {
-    border: solid $border-primary;
     height: 1fr;  /* Take remaining space after tabs */
     min-height: 10;  /* Ensure minimum content height */
 }
@@ -265,30 +278,31 @@ DashboardScreen, IdentityScreen, CryptoScreen, AccountsScreen, FilesScreen, Shar
     height: 100%;
 }
 
-#monitors-row, #status-row, #actions-row {
+#status-row {
     height: auto;
     margin: 1 0;
-    min-height: 3;
+    min-height: 8;  /* Increased from 3 to ensure panel visibility */
 }
 
-#monitors-row {
-    height: 1fr;
-}
-
-#status-row {
-    height: 1fr;
-}
-
-#actions-row {
-    height: auto;
-}
-
-#identity-status, #api-status, #files-status {
+#identity-status, #network-status, #storage-status {
     border: solid $border-primary;
     margin: 0 1;
     padding: 1;
-    min-height: 5;
-    height: 1fr;
+    min-height: 8;  /* Increased from 5 to ensure content fits */
+    height: auto;   /* Changed from 1fr to auto for better content fitting */
+}
+
+/* Server statistics and activity sections */
+#quick-stats {
+    height: auto;
+    min-height: 8;
+    margin: 1 0;
+}
+
+#activity-log {
+    height: auto;
+    min-height: 8;
+    margin: 1 0;
 }
 
 /* System Monitor styling */

@@ -4,7 +4,7 @@ Main overview screen with system status and quick actions
 """
 
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Static, Button, DataTable, ProgressBar
+from textual.widgets import Static, DataTable, ProgressBar
 from textual.widget import Widget
 from textual.reactive import reactive
 from rich.panel import Panel
@@ -58,23 +58,13 @@ class DashboardScreen(Widget):
     def compose(self):
         """Compose the dashboard interface"""
         with Container(id="dashboard-container"):
-            yield Static("◢ DASHBOARD ◣", classes="title")
-
-            # Status panels row
+            # Status panels row (removed system-status)
             with Horizontal(id="status-row"):
-                yield Static(id="system-status")
                 yield Static(id="identity-status")
                 yield Static(id="network-status")
                 yield Static(id="storage-status")
 
-            # Quick actions
-            with Horizontal(id="actions-row"):
-                yield Button("Load Identity", id="load-identity-btn", variant="primary")
-                yield Button("Upload File", id="upload-file-btn")
-                yield Button("Create Share", id="create-share-btn")
-                yield Button("View Logs", id="view-logs-btn")
-
-            # Quick stats
+            # Server statistics
             yield QuickStats(id="quick-stats")
 
             # Recent activity
@@ -87,31 +77,9 @@ class DashboardScreen(Widget):
 
     def update_status(self) -> None:
         """Update all status panels"""
-        self.update_system_status_display()
         self.update_identity_status_display()
         self.update_api_status_display()
         self.update_files_status_display()
-
-    def update_system_status_display(self) -> None:
-        """Update system status panel"""
-        system_widget = self.query_one("#system-status", Static)
-
-        # Create system status panel
-        content = Text()
-        content.append("SYSTEM STATUS\n", style="bold cyan")
-        content.append("CPU: ", style="dim")
-        content.append("42%\n", style="green")
-        content.append("Memory: ", style="dim")
-        content.append("3.2GB / 16GB\n", style="yellow")
-        content.append("Disk: ", style="dim")
-        content.append("120GB free\n", style="green")
-
-        panel = Panel(
-            content,
-            title="[bold cyan]◢SYSTEM◣[/bold cyan]",
-            border_style="cyan",
-        )
-        system_widget.update(panel)
 
     def update_identity_status_display(self) -> None:
         """Update identity status panel"""
@@ -216,71 +184,6 @@ class DashboardScreen(Widget):
         # Just trigger a refresh of the display
         self.update_identity_status_display()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses"""
-        button_id = event.button.id
-
-        if button_id == "load-identity-btn":
-            self.action_load_identity()
-        elif button_id == "upload-file-btn":
-            self.action_upload_file()
-        elif button_id == "create-share-btn":
-            self.action_create_share()
-        elif button_id == "view-logs-btn":
-            self.action_view_logs()
-
-    def action_load_identity(self) -> None:
-        """Load identity file - navigate to Identity tab"""
-        # Switch to identity tab
-        try:
-            action_method = getattr(self.app, "action_switch_tab", None)
-            if action_method and callable(action_method):
-                action_method("identity")
-            self.notify(
-                "Navigate to Identity tab to load an identity", severity="information"
-            )
-        except Exception:
-            self.notify(
-                "Use the Identity tab to load an identity", severity="information"
-            )
-
-    def action_upload_file(self) -> None:
-        """Upload file action"""
-        if not self.current_identity_path:
-            self.notify("Load identity first", severity="warning")
-            return
-
-        # Switch to files tab
-        try:
-            action_method = getattr(self.app, "action_switch_tab", None)
-            if action_method and callable(action_method):
-                action_method("files")
-            self.notify("Navigate to Files tab to upload", severity="information")
-        except Exception:
-            self.notify("Use the Files tab to upload files", severity="information")
-
-    def action_create_share(self) -> None:
-        """Create share action"""
-        if not self.current_identity_path:
-            self.notify("Load identity first", severity="warning")
-            return
-
-        # Switch to sharing tab
-        try:
-            action_method = getattr(self.app, "action_switch_tab", None)
-            if action_method and callable(action_method):
-                action_method("sharing")
-            self.notify(
-                "Navigate to Sharing tab to create shares", severity="information"
-            )
-        except Exception:
-            self.notify("Use the Sharing tab to create shares", severity="information")
-
-    def action_view_logs(self) -> None:
-        """View logs action"""
-        # TODO: Implement logs viewer
-        self.notify("Logs viewer coming soon", severity="information")
-
     def update_system_status(self, status_info: Dict[str, Any]) -> None:
         """Update system status with CPU, memory, disk info"""
         self._system_info = status_info
@@ -293,6 +196,16 @@ class DashboardScreen(Widget):
     def update_storage_status(self, status_info: Dict[str, Any]) -> None:
         """Update storage/files status"""
         self.update_status()
+
+    def update_server_stats(self) -> None:
+        """Update server statistics display"""
+        # Refresh the quick stats widget
+        try:
+            stats_widget = self.query_one("#quick-stats", QuickStats)
+            stats_widget.refresh()
+        except Exception:
+            # Widget may not be mounted yet
+            pass
 
     def check_api_connection(self) -> bool:
         """Check API connection status"""
@@ -331,17 +244,50 @@ class QuickStats(Widget):
         table = Table(title="QUICK STATS", border_style="cyan")
         table.add_column("Metric", style="bold")
         table.add_column("Value", justify="right", style="cyan")
-        table.add_column("Change", justify="right")
+        table.add_column("Status", justify="right")
 
-        table.add_row("Files Encrypted", "1,247", "+23")
-        table.add_row("Shares Active", "89", "+5")
-        table.add_row("Keys Generated", "156", "+2")
-        table.add_row("Data Processed", "45.2GB", "+2.1GB")
+        # Get server health data from app if connected
+        server_health = getattr(self.app, "server_health_data", None)
+
+        if (
+            server_health
+            and getattr(self.app, "connection_status", "disconnected") == "connected"
+        ):
+            # Show server statistics when connected
+            stats = server_health.get("statistics", {})
+            version = server_health.get("version", "Unknown")
+            service = server_health.get("service", "dCypher")
+
+            table.add_row("Server Version", version, "[green]✓[/green]")
+            table.add_row("Service", service, "[green]ACTIVE[/green]")
+            table.add_row(
+                "Total Accounts", str(stats.get("accounts", 0)), "[cyan]LIVE[/cyan]"
+            )
+            table.add_row(
+                "Total Files", str(stats.get("files", 0)), "[cyan]LIVE[/cyan]"
+            )
+
+            # Add server uptime if available
+            uptime = getattr(self.app, "server_uptime", None)
+            if uptime:
+                table.add_row("Server Uptime", uptime, "[green]RUNNING[/green]")
+
+            title_color = "green"
+            border_color = "green"
+        else:
+            # Show disconnected state
+            table.add_row("Server Status", "DISCONNECTED", "[red]✗[/red]")
+            table.add_row("Data Source", "N/A", "[red]OFFLINE[/red]")
+            table.add_row("Statistics", "Unavailable", "[red]NO DATA[/red]")
+            table.add_row("Connection", "Required", "[yellow]CONNECT[/yellow]")
+
+            title_color = "red"
+            border_color = "red"
 
         return Panel(
             table,
-            border_style="cyan",
-            title="[bold cyan]◢STATS◣[/bold cyan]",
+            border_style=border_color,
+            title=f"[bold {title_color}]◢SERVER STATS◣[/bold {title_color}]",
             title_align="center",
         )
 

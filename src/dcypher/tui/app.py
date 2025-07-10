@@ -213,8 +213,9 @@ class DCypherTUI(App[None]):
         # Track application start time for uptime calculation
         self.start_time = time.time()
 
-        # Track server uptime
+        # Track server uptime and health data
         self.server_uptime: Optional[str] = None
+        self.server_health_data: Optional[Dict[str, Any]] = None
 
         # Track connection start time for connection uptime calculation
         self.connection_start_time: Optional[float] = None
@@ -278,6 +279,9 @@ class DCypherTUI(App[None]):
             # Notify all screens about identity change
             self.broadcast_identity_change()
 
+            # Update client status bar
+            self.update_client_status_bar()
+
     def watch_api_url(self, old_url: str, new_url: str) -> None:
         """React to API URL changes"""
         if new_url != old_url:
@@ -287,6 +291,8 @@ class DCypherTUI(App[None]):
             )
             # Check connection
             self.check_api_connection()
+            # Update client status bar
+            self.update_client_status_bar()
 
     def load_identity_info(self, identity_path: str) -> None:
         """Load identity information from file"""
@@ -334,42 +340,43 @@ class DCypherTUI(App[None]):
         """Create the main UI layout"""
         yield DCypherHeader(self)
 
-        # Use a simple Vertical container to maintain layout structure for widgets
-        with Vertical(id="main-content"):
-            # CPU usage divider - positioned under header
-            self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
-            yield self.cpu_divider
+        # CPU usage divider - positioned under header
+        self.cpu_divider = ProcessCPUDivider(id="cpu-divider")
+        yield self.cpu_divider
 
-            # ASCII Banner
-            yield ASCIIBanner()
+        # ASCII Banner
+        yield ASCIIBanner()
 
-            # Main content area with tabs - Each tab gets proper screen widgets
-            with TabbedContent(
-                "Dashboard",
-                "Identity",
-                "Crypto",
-                "Accounts",
-                "Files",
-                "Sharing",
-                id="main-tabs",
-            ):
-                # Dashboard - Use proper DashboardScreen
-                yield DashboardScreen(id="dashboard")
+        # Client Status Bar
+        yield Static("", id="client-status-bar")
 
-                # Identity Management - Use proper IdentityScreen with API URL
-                yield IdentityScreen(id="identity")
+        # Main content area with tabs - Each tab gets proper screen widgets
+        with TabbedContent(
+            "Dashboard",
+            "Identity",
+            "Crypto",
+            "Accounts",
+            "Files",
+            "Sharing",
+            id="main-tabs",
+        ):
+            # Dashboard - Use proper DashboardScreen
+            yield DashboardScreen(id="dashboard")
 
-                # Crypto Operations - Use proper CryptoScreen
-                yield CryptoScreen(id="crypto")
+            # Identity Management - Use proper IdentityScreen with API URL
+            yield IdentityScreen(id="identity")
 
-                # Accounts Management - Use proper AccountsScreen
-                yield AccountsScreen(id="accounts")
+            # Crypto Operations - Use proper CryptoScreen
+            yield CryptoScreen(id="crypto")
 
-                # File Operations - Use proper FilesScreen
-                yield FilesScreen(id="files")
+            # Accounts Management - Use proper AccountsScreen
+            yield AccountsScreen(id="accounts")
 
-                # Sharing & Collaboration - Use proper SharingScreen
-                yield SharingScreen(id="sharing")
+            # File Operations - Use proper FilesScreen
+            yield FilesScreen(id="files")
+
+            # Sharing & Collaboration - Use proper SharingScreen
+            yield SharingScreen(id="sharing")
 
         # Memory usage divider - positioned above footer
         self.memory_divider = ProcessCPU15MinDivider(id="memory-divider")
@@ -393,6 +400,43 @@ class DCypherTUI(App[None]):
 
         # Initialize matrix background based on connection status
         self.update_matrix_for_connection_status()
+
+        # Initialize client status bar
+        self.update_client_status_bar()
+
+    @profile("DCypherTUI.update_client_status_bar")
+    def update_client_status_bar(self) -> None:
+        """Update the client status bar with connection and identity information"""
+        try:
+            status_bar = self.query_one("#client-status-bar", Static)
+
+            # Build status text with colors
+            status_text = Text()
+            status_text.append("CLIENT STATUS: ", style="bold bright_white")
+
+            # Connection status
+            if self.connection_status == "connected":
+                status_text.append("● CONNECTED", style="bold bright_green")
+            else:
+                status_text.append("● DISCONNECTED", style="bold bright_red")
+
+            # Identity status
+            status_text.append(" | IDENTITY: ", style="bold bright_white")
+            if self.current_identity_path:
+                identity_name = Path(self.current_identity_path).stem
+                status_text.append(f"● {identity_name}", style="bold bright_cyan")
+            else:
+                status_text.append("● NONE", style="bold bright_yellow")
+
+            # API URL
+            status_text.append(" | API: ", style="bold bright_white")
+            api_display = self.api_url.replace("http://", "").replace("https://", "")
+            status_text.append(api_display, style="bold bright_magenta")
+
+            status_bar.update(status_text)
+
+        except Exception as e:
+            self.log.warning(f"Failed to update client status bar: {e}")
 
     @profile("DCypherTUI.update_system_status")
     def update_system_status(self) -> None:
@@ -432,11 +476,15 @@ class DCypherTUI(App[None]):
                     self.connection_status = "disconnected"
                     self.connection_start_time = None
                     self.server_uptime = None
+                    self.server_health_data = None
             except Exception:
                 # If connection fails, mark as disconnected
                 self.connection_status = "disconnected"
                 self.connection_start_time = None
                 self.server_uptime = None
+                self.server_health_data = None
+                # Update dashboard to show disconnected state
+                self.update_dashboard_server_stats()
                 # Only clear the API client if we're not manually connecting
                 # This prevents clearing during manual connect attempts
 
@@ -444,19 +492,25 @@ class DCypherTUI(App[None]):
             # Update matrix background if connection status changed
             if old_status != self.connection_status:
                 self.update_matrix_for_connection_status()
+                self.update_client_status_bar()
 
     @profile("DCypherTUI.fetch_server_uptime")
     def fetch_server_uptime(self) -> None:
-        """Fetch server uptime from the API"""
+        """Fetch server uptime and health data from the API"""
         try:
             if self._api_client:
-                # Get server health information including uptime
+                # Get server health information including uptime and stats
                 health_data = self._api_client.get_health()
                 uptime_seconds = health_data.get("uptime_seconds", 0)
                 self.server_uptime = self.format_uptime_seconds(uptime_seconds)
+                self.server_health_data = health_data
+
+                # Update dashboard server stats
+                self.update_dashboard_server_stats()
         except Exception:
             # If health endpoint doesn't exist or fails, just set to None
             self.server_uptime = None
+            self.server_health_data = None
 
     def format_uptime_seconds(self, uptime_seconds: int) -> str:
         """Format uptime seconds into HH:MM:SS format"""
@@ -466,6 +520,15 @@ class DCypherTUI(App[None]):
         seconds = uptime_seconds % 60
 
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    def update_dashboard_server_stats(self) -> None:
+        """Update dashboard server statistics display"""
+        try:
+            dashboard = self.query_one("#dashboard", DashboardScreen)
+            dashboard.update_server_stats()
+        except Exception:
+            # Dashboard may not be mounted yet
+            pass
 
     def action_toggle_dark(self) -> None:
         """Toggle dark mode"""
@@ -565,14 +628,19 @@ class DCypherTUI(App[None]):
 
             # Update matrix background for connection
             self.update_matrix_for_connection_status()
+            # Update client status bar
+            self.update_client_status_bar()
 
         except Exception as e:
             self.connection_status = "disconnected"
             self.connection_start_time = None
             self.server_uptime = None
+            self.server_health_data = None
             self.notify(f"Failed to connect to server: {e}", severity="error")
             # Update matrix background for disconnection
             self.update_matrix_for_connection_status()
+            # Update client status bar
+            self.update_client_status_bar()
 
     def action_disconnect(self) -> None:
         """Disconnect from the server"""
@@ -584,11 +652,14 @@ class DCypherTUI(App[None]):
             self.connection_status = "disconnected"
             self.connection_start_time = None
             self.server_uptime = None
+            self.server_health_data = None
 
             self.notify("Disconnected from server", severity="information")
 
             # Update matrix background for disconnection
             self.update_matrix_for_connection_status()
+            # Update client status bar
+            self.update_client_status_bar()
 
         except Exception as e:
             self.notify(f"Error during disconnect: {e}", severity="warning")
@@ -662,31 +733,10 @@ class DCypherTUI(App[None]):
                 except Exception as e:
                     self.log.warning(f"Could not delegate to identity screen: {e}")
 
-            # Handle dashboard buttons directly (since they're part of main app)
-            elif button_id in [
-                "load-identity-btn",
-                "generate-keys-btn",
-                "system-info-btn",
-                "help-btn",
-            ]:
-                self.handle_dashboard_button(button_id)
+            # No dashboard buttons to handle anymore
 
         except Exception as e:
             self.log.warning(f"Error in global button handler: {e}")
-
-    def handle_dashboard_button(self, button_id: str) -> None:
-        """Handle dashboard-specific button presses"""
-        if button_id == "load-identity-btn":
-            # TODO: Implement dashboard identity loading
-            pass
-        elif button_id == "generate-keys-btn":
-            # TODO: Implement key generation from dashboard
-            pass
-        elif button_id == "system-info-btn":
-            # TODO: Show system information
-            pass
-        elif button_id == "help-btn":
-            self.action_show_help()
 
     def update_matrix_for_connection_status(self) -> None:
         """Update matrix background based on connection status"""
