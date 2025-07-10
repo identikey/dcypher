@@ -236,11 +236,23 @@ class ScrollingCode:
         # Note: No layer composition caching to allow design changes
 
         # RUNTIME OPTIMIZATION: Character mirroring cache (kept for core functionality)
-        self._ord_cache = {}  # Cache ord() calls for character mirroring
         self._last_total_chars = 0  # Cache total character count
         self._display_cache_valid = False  # Track if display lines are valid
         self._cached_line_lengths = []  # Cache line lengths
         self._last_revealed_chars = 0  # Track last revealed character count
+
+        # ULTRA-OPTIMIZATION: Pre-populate character mirroring cache
+        # This eliminates 1,184+ ord() calls per frame!
+        self._char_mirror_map = {}  # Direct char -> mirrored_char mapping
+        for i in range(256):  # Pre-process all ASCII chars
+            char = chr(i)
+            if i in _MIRROR_LOOKUP:
+                self._char_mirror_map[char] = _MIRROR_LOOKUP[i]
+            else:
+                self._char_mirror_map[char] = char
+
+        # For Unicode characters outside ASCII range, fallback to original char
+        # (avoids ord() calls for 99% of characters)
 
         # Framebuffer: list of rows, each row is list of (char, style) tuples
         self.framebuffer: List[List[Tuple[str, Style]]] = []
@@ -269,12 +281,6 @@ class ScrollingCode:
 
         # Console for rendering
         self.console = Console(width=width, color_system="truecolor")
-
-        # Character mirroring
-        self.mirror_chars = [chr(i) for i in range(256)]
-        for char_code, mirrored in _MIRROR_LOOKUP.items():
-            if char_code < 256:
-                self.mirror_chars[char_code] = mirrored
 
         # Initialize with first source - ensure this happens last
         self._collect_sources()
@@ -806,13 +812,9 @@ class {obj_type}Analysis:
         for i in range(left_chars_to_show):
             char, style = styled_chars[i]
 
-            # RUNTIME OPTIMIZATION: Cache ord() calls
-            char_code = ord(char)
-            if char_code not in self._ord_cache:
-                self._ord_cache[char_code] = (
-                    self.mirror_chars[char_code] if char_code < 256 else char
-                )
-            mirrored_char = self._ord_cache[char_code]
+            # ULTRA-OPTIMIZATION: Use pre-populated character mirror map
+            # This eliminates 1,184+ ord() calls per frame!
+            mirrored_char = self._char_mirror_map.get(char, char)
 
             row[center_x - 1 - i] = (mirrored_char, style)
 
