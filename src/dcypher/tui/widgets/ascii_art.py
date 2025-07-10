@@ -103,7 +103,7 @@ class ASCIIBanner(Widget):
 """
 
     # Subtitle text
-    SUBTITLE = "QUANTUM-RESISTANT ENCRYPTION • REPLICANT TERMINAL v2.1.0"
+    SUBTITLE = "HOMOMORPHIC RECRYPTION PROXY • BY IDENTIKEY"
 
     def __init__(self, compact=False, **kwargs):
         super().__init__(**kwargs)

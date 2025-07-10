@@ -3,7 +3,7 @@ Dashboard Screen
 Main overview screen with system status and quick actions
 """
 
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import Static, DataTable, ProgressBar
 from textual.widget import Widget
 from textual.reactive import reactive
@@ -57,7 +57,7 @@ class DashboardScreen(Widget):
 
     def compose(self):
         """Compose the dashboard interface"""
-        with Container(id="dashboard-container"):
+        with ScrollableContainer(id="dashboard-container"):
             # Status panels row (removed system-status)
             with Horizontal(id="status-row"):
                 yield Static(id="identity-status")
