@@ -152,6 +152,11 @@ class ASCIIBanner(Widget):
             None  # Only cache static panels
         )
 
+        # DISPLAY-SYNCHRONIZED ANIMATION: Only update when visually needed
+        self._last_animation_update: float = 0.0
+        self._animation_update_interval: float = 1.0  # Match slowest effect (1 FPS)
+        self._visual_frame_counter: int = 0
+
     def on_mount(self) -> None:
         """Start animation timer when mounted"""
         self.set_interval(0.5, self.animate_banner)
@@ -295,6 +300,10 @@ class ASCIIBanner(Widget):
         self._render_cache_timestamp = 0.0
         self._frame_skip_counter = 0  # Reset frame counter
 
+        # DISPLAY-SYNCHRONIZED ANIMATION: Reset animation timing
+        self._last_animation_update = 0.0
+        self._visual_frame_counter = 0
+
     def _get_cached_ascii_lines(self) -> List[str]:
         """PERFORMANCE: Get cached ASCII lines to avoid repeated string splitting"""
         if self._ascii_lines_cache is None:
@@ -425,11 +434,25 @@ class ASCIIBanner(Widget):
             # Clear static cache when effects are active
             self._static_panel_cache = None
 
+            # DISPLAY-SYNCHRONIZED ANIMATION: Only update when visually needed
+            should_update_animations = (
+                current_time - self._last_animation_update
+                >= self._animation_update_interval
+            )
+
             with profile_block("ASCIIBanner.render.animation_updates"):
-                # Update animations with synchronized timing
-                self.matrix_rain.update(current_time)
-                self.scrolling_code_controller.update(current_time)
-                self.frame_count += 1
+                if should_update_animations:
+                    # Update animations with synchronized timing - ONLY when visually needed
+                    self.matrix_rain.update(current_time)
+                    self.scrolling_code_controller.update(current_time)
+                    self.frame_count += 1
+                    self._last_animation_update = current_time
+                    self._visual_frame_counter += 1
+
+                    # Invalidate layer cache when animations actually update
+                    self._layer_cache_key = None
+                    self._layer_cache_result = None
+                # ELSE: Skip animation updates - use cached visual state
 
             with profile_block("ASCIIBanner.render.layered_effects"):
                 # Create layered content with scrolling code, matrix rain, and ASCII overlay
@@ -492,7 +515,7 @@ class ASCIIBanner(Widget):
             cache_key = (
                 width,
                 height,
-                self.frame_count // 8,  # Less cache sensitivity
+                self._visual_frame_counter,  # Use visual frame counter instead of raw frame_count
                 self.show_subtitle,
                 self.scrolling_code_controller.enabled,
                 self.matrix_rain.enabled,
@@ -508,18 +531,15 @@ class ASCIIBanner(Widget):
         with profile_block(
             "ASCIIBanner._render_with_layered_effects.framebuffer_fetch"
         ):
-            current_time = time.time()
-
-            # Get all framebuffers simultaneously
+            # Get all framebuffers simultaneously - NO REDUNDANT UPDATES
+            # Animation updates are now handled centrally in render()
             scrolling_framebuffer = None
             matrix_framebuffer = None
 
             if self.scrolling_code_controller.enabled:
-                self.scrolling_code_controller.update(current_time)
                 scrolling_framebuffer = self.scrolling_code_controller.get_framebuffer()
 
             if self.matrix_rain.enabled:
-                self.matrix_rain.update(current_time)
                 matrix_framebuffer = self.matrix_rain.get_framebuffer()
 
         # ASCII PROCESSING: Pre-compute ASCII positioning
@@ -648,6 +668,10 @@ class ASCIIBanner(Widget):
         self._render_cache_timestamp = 0.0
         self._frame_skip_counter = 0
 
+        # DISPLAY-SYNCHRONIZED ANIMATION: Reset animation timing
+        self._last_animation_update = 0.0
+        self._visual_frame_counter = 0
+
     def toggle_scrolling_code(self) -> None:
         """Toggle scrolling code effect"""
         self.scrolling_code = not self.scrolling_code
@@ -701,6 +725,17 @@ class ASCIIBanner(Widget):
             self.notify("Matrix rain activated - Server connected", timeout=2.0)
         else:
             self.notify("Matrix rain deactivated - Server disconnected", timeout=2.0)
+
+    def set_animation_fps(self, fps: float) -> None:
+        """Set animation FPS for display-synchronized updates"""
+        self._animation_update_interval = 1.0 / max(
+            0.5, min(10.0, fps)
+        )  # 0.5-10 FPS range
+        self._invalidate_layer_cache()  # Force immediate update with new timing
+        self.notify(
+            f"Animation FPS: {fps:.1f} (interval: {self._animation_update_interval:.3f}s)",
+            timeout=1.0,
+        )
 
 
 class CyberpunkBorder(Widget):

@@ -245,7 +245,7 @@ class MatrixRain:
 
         # Timing control
         self.last_update = 0.0  # Initialize as float
-        self.update_interval = 0.5  # 2 FPS default - controlled by global keybindings
+        self.update_interval = 1.0  # 1 FPS default - controlled by global keybindings
 
         # Character management
         self.hex_chars = np.array(list("0123456789ABCDEF"))
