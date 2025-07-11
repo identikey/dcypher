@@ -10,7 +10,7 @@ from textual.widgets import Header, Footer, Static, TabbedContent, Tabs, Button
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 import json
 import time
@@ -310,6 +310,75 @@ class DCypherTUI(App[None]):
             self.identity_info = None
             self.notify(f"Failed to load identity: {e}", severity="error")
 
+    def create_identity_file(
+        self, identity_name: str, key_dir: Path, overwrite: bool = False
+    ) -> Tuple[str, Path]:
+        """Create a new identity file using the API client"""
+        try:
+            client = self.get_or_create_api_client()
+            return client.create_identity_file(identity_name, key_dir, overwrite)
+        except Exception as e:
+            self.notify(f"Failed to create identity: {e}", severity="error")
+            raise
+
+    def rotate_identity_keys(
+        self, identity_path: str, reason: str = "manual"
+    ) -> Dict[str, Any]:
+        """Rotate keys in the current identity file"""
+        try:
+            from dcypher.lib.key_manager import KeyManager
+
+            rotation_info = KeyManager.rotate_keys_in_identity(
+                Path(identity_path), reason
+            )
+
+            # Reload identity info after rotation
+            self.load_identity_info(identity_path)
+            self.broadcast_identity_change()
+
+            return rotation_info
+        except Exception as e:
+            self.notify(f"Failed to rotate keys: {e}", severity="error")
+            raise
+
+    def initialize_pre_for_identity(self, identity_path: str) -> None:
+        """Initialize PRE capabilities for the identity"""
+        try:
+            client = self.get_or_create_api_client()
+            # Temporarily set the identity path on the client
+            old_path = client.keys_path
+            client.keys_path = identity_path
+
+            try:
+                client.initialize_pre_for_identity()
+
+                # Reload identity info after PRE initialization
+                self.load_identity_info(identity_path)
+                self.broadcast_identity_change()
+
+            finally:
+                # Restore original path
+                client.keys_path = old_path
+
+        except Exception as e:
+            self.notify(f"Failed to initialize PRE: {e}", severity="error")
+            raise
+
+    def create_backup_of_identity(self, identity_path: str) -> Path:
+        """Create a backup of the identity file"""
+        try:
+            import shutil
+
+            identity_file = Path(identity_path)
+            backup_name = f"{identity_file.stem}_backup_{int(time.time())}.json"
+            backup_path = identity_file.parent / backup_name
+
+            shutil.copy2(identity_file, backup_path)
+            return backup_path
+        except Exception as e:
+            self.notify(f"Failed to create backup: {e}", severity="error")
+            raise
+
     def broadcast_identity_change(self) -> None:
         """Notify all screens about identity change"""
         # Update dashboard screen
@@ -322,6 +391,21 @@ class DCypherTUI(App[None]):
                     "info": self.identity_info,
                 }
             )
+        except Exception:
+            pass
+
+        # Update identity screen
+        try:
+            identity_screen = self.query_one("#identity")
+            update_method = getattr(identity_screen, "update_identity_status", None)
+            if update_method and callable(update_method):
+                update_method(
+                    {
+                        "loaded": self.current_identity_path is not None,
+                        "path": self.current_identity_path,
+                        "info": self.identity_info,
+                    }
+                )
         except Exception:
             pass
 

@@ -57,22 +57,96 @@ class IdentityScreen(Widget):
     def compose(self):
         """Compose the identity management interface"""
         with Container(id="identity-container"):
-            # Expanded identity information panel
+            # Identity information panel with integrated buttons
             with Container(id="identity-main-section"):
                 with ScrollableContainer(id="identity-info-panel"):
-                    yield Static(id="identity-info-content")
+                    # Basic info section
+                    with Container(id="basic-info-section"):
+                        yield Static(id="basic-info-content")
+
+                    # Classic keys section
+                    with Container(id="classic-keys-section"):
+                        yield Static(id="classic-keys-content")
+                        with Horizontal(id="classic-keys-buttons"):
+                            yield Button(
+                                "Rotate Classic",
+                                id="rotate-classic-btn",
+                                variant="primary",
+                                compact=True,
+                            )
+                            yield Button(
+                                "Export Classic",
+                                id="export-classic-btn",
+                                variant="default",
+                                compact=True,
+                            )
+
+                    # Post-quantum keys section
+                    with Container(id="pq-keys-section"):
+                        yield Static(id="pq-keys-content")
+                        # Add PQ button at top of section
+                        with Horizontal(id="pq-add-button"):
+                            yield Button(
+                                "Add PQ Key",
+                                id="add-pq-btn",
+                                variant="success",
+                                compact=True,
+                            )
+                        # Container for individual PQ key entries with their buttons
+                        with Container(id="pq-entries-container"):
+                            # Dynamic PQ key entries will be created here
+                            pass
+
+                    # PRE keys section
+                    with Container(id="pre-keys-section"):
+                        yield Static(id="pre-keys-content")
+                        with Horizontal(id="pre-keys-buttons"):
+                            yield Button(
+                                "Init PRE",
+                                id="init-pre-btn",
+                                variant="success",
+                                compact=True,
+                            )
+                            yield Button(
+                                "Rotate PRE",
+                                id="rotate-pre-btn",
+                                variant="primary",
+                                compact=True,
+                            )
+                            yield Button(
+                                "Export PRE",
+                                id="export-pre-btn",
+                                variant="default",
+                                compact=True,
+                            )
+                            yield Button(
+                                "Remove PRE",
+                                id="remove-pre-btn",
+                                variant="warning",
+                                compact=True,
+                            )
+
+                    # Crypto context section
+                    with Container(id="crypto-context-section"):
+                        yield Static(id="crypto-context-content")
+
+                    # Security info section
+                    with Container(id="security-info-section"):
+                        yield Static(id="security-info-content")
 
             # Compact management controls section
             with Container(id="management-controls"):
                 # Action buttons (compact single row)
                 with Horizontal(id="identity-actions-row"):
                     yield Button(
-                        "Unload Identity", id="unload-identity-btn", variant="error"
+                        "Unload Identity",
+                        id="unload-identity-btn",
+                        variant="error",
+                        compact=True,
                     )
-                    yield Button("Rotate Keys", id="rotate-keys-btn")
-                    yield Button("Create Backup", id="create-backup-btn")
-                    yield Button("Export Keys", id="export-keys-btn")
-                    yield Button("Initialize PRE", id="init-pre-btn")
+                    yield Button("Rotate All Keys", id="rotate-keys-btn", compact=True)
+                    yield Button("Create Backup", id="create-backup-btn", compact=True)
+                    yield Button("Export All Keys", id="export-keys-btn", compact=True)
 
                 # Directory and creation controls (compact)
                 with Horizontal(id="controls-row"):
@@ -81,19 +155,98 @@ class IdentityScreen(Widget):
                         placeholder="dCypher directory path",
                         id="dcypher-home-input",
                     )
-                    yield Button("LOAD", id="load-selected-btn", variant="success")
+                    yield Button(
+                        "LOAD",
+                        id="load-selected-btn",
+                        variant="success",
+                    )
                     yield Button("↻ ", id="refresh-files-btn")
                     yield Input(placeholder="Identity name", id="new-identity-name")
-                    yield Button("Create", id="create-identity-btn", variant="primary")
+                    yield Button(
+                        "CREATE",
+                        id="create-identity-btn",
+                        variant="success",
+                    )
 
                 # Identity files (compact) - constrained height
                 with Container(id="files-table-container"):
                     yield DataTable(id="identity-files-table")
 
     def on_mount(self) -> None:
-        """Initialize identity screen"""
-        # Ensure selected_file_path is properly initialized
-        self.selected_file_path = None
+        """Set up the identity screen after mounting"""
+        self.setup_identity_files_table()
+
+        # Set up main container for proper vertical layout
+        main_container = self.query_one("#identity-container")
+        main_container.styles.layout = "vertical"
+
+        # Identity section expands to fill remaining space
+        identity_section = self.query_one("#identity-main-section")
+        identity_section.styles.height = "1fr"  # Fill remaining space after management
+
+        # Make the identity panel expand to fill available height with contained scrolling
+        info_panel = self.query_one("#identity-info-panel")
+        info_panel.styles.height = "100%"  # Expand to full height
+        info_panel.styles.overflow_y = (
+            "scroll"  # Enable vertical scrolling within the panel
+        )
+        info_panel.styles.overflow_x = "hidden"  # Hide horizontal scrollbar
+
+        # Style button containers to be compact
+        for button_container_id in [
+            "classic-keys-buttons",
+            "pq-add-button",
+            "pre-keys-buttons",
+        ]:
+            try:
+                container = self.query_one(f"#{button_container_id}")
+                container.styles.height = "auto"  # Let buttons determine height
+                container.styles.margin = (0, 0)  # No margin
+                container.styles.padding = (0, 0)  # No padding
+            except:
+                pass
+
+        # Style the section containers to ensure proper layout
+        for section_id in [
+            "basic-info-section",
+            "classic-keys-section",
+            "pq-keys-section",
+            "pre-keys-section",
+            "crypto-context-section",
+            "security-info-section",
+        ]:
+            try:
+                section = self.query_one(f"#{section_id}")
+                section.styles.layout = "vertical"
+                section.styles.height = "auto"
+                section.styles.margin = (0, 0)  # Remove all margins for tighter spacing
+                section.styles.padding = (0, 0)
+            except:
+                pass
+
+        # Ensure Static widgets don't take up all the space in their sections
+        for static_id in [
+            "basic-info-content",
+            "classic-keys-content",
+            "pq-keys-content",
+            "pre-keys-content",
+            "crypto-context-content",
+            "security-info-content",
+        ]:
+            try:
+                static_widget = self.query_one(f"#{static_id}")
+                static_widget.styles.height = "auto"
+                static_widget.styles.margin = (0, 0)
+                static_widget.styles.padding = (
+                    0,
+                    0,
+                )  # Remove padding for tighter spacing
+            except:
+                pass
+
+        # Management controls take up minimal space
+        mgmt_controls = self.query_one("#management-controls")
+        mgmt_controls.styles.height = "auto"  # Only as much as needed
 
         # Set border title for the home directory input and constrain its width
         home_input = self.query_one("#dcypher-home-input", Input)
@@ -115,33 +268,6 @@ class IdentityScreen(Widget):
         create_btn = self.query_one("#create-identity-btn")
         create_btn.styles.min_width = "8"  # Create button
 
-        # Remove excess padding from action buttons
-        rotate_btn = self.query_one("#rotate-keys-btn")
-        rotate_btn.styles.padding = (0, 0)  # No padding at all
-
-        export_btn = self.query_one("#export-keys-btn")
-        export_btn.styles.padding = (0, 0)  # No padding at all
-
-        # Set up main container for proper vertical layout
-        main_container = self.query_one("#identity-container")
-        main_container.styles.layout = "vertical"
-
-        # Identity section expands to fill remaining space
-        identity_section = self.query_one("#identity-main-section")
-        identity_section.styles.height = "1fr"  # Fill remaining space after management
-
-        # Make the identity panel expand to fill available height
-        info_panel = self.query_one("#identity-info-panel")
-        info_panel.styles.height = "100%"  # Expand to full height
-
-        # Management controls sit tight at the very bottom
-        management_controls = self.query_one("#management-controls")
-        management_controls.styles.height = "auto"  # Size to content with constraints
-        management_controls.styles.min_height = "9"  # Tighter minimum height
-        management_controls.styles.max_height = "12"  # Tighter maximum height
-        management_controls.styles.margin = (0, 0)  # No margins
-        management_controls.styles.padding = (0, 0)  # No padding
-
         # Remove vertical spacing between rows for tighter layout
         actions_row = self.query_one("#identity-actions-row")
         actions_row.styles.margin = (0, 0)  # No margins at all
@@ -160,7 +286,6 @@ class IdentityScreen(Widget):
         table_container.styles.margin = (0, 0)  # No margins
         table_container.styles.padding = (0, 0)  # No padding
 
-        self.setup_identity_files_table()
         self.update_identity_display()
         self.refresh_identity_files()
 
@@ -271,158 +396,341 @@ class IdentityScreen(Widget):
 
     def update_identity_display(self) -> None:
         """Update the current identity display"""
-        info_panel = self.query_one("#identity-info-content", Static)
+        # Update each section
+        self.update_basic_info_section()
+        self.update_classic_keys_section()
+        self.update_pq_keys_section()
+        self.update_pre_keys_section()
+        self.update_crypto_context_section()
+        self.update_security_info_section()
 
-        if self.current_identity_path and self.identity_info:
-            # Show loaded identity info
-            info_content = self.create_identity_info_panel()
-        else:
-            # Show no identity loaded
-            info_content = self.create_no_identity_panel()
-
-        info_panel.update(info_content)
-
-    def create_identity_info_panel(self) -> Panel:
-        """Create the comprehensive identity information panel"""
-        if not self.identity_info:
-            return self.create_no_identity_panel()
+    def update_basic_info_section(self) -> None:
+        """Update the basic information section"""
+        basic_info = self.query_one("#basic-info-content", Static)
 
         content = Text()
-        content.append("IDENTITY DETAILS\n\n", style="bold green")
+        content.append("═══ IDENTITY DETAILS ═══\n", style="bold green")
 
-        # Basic information
-        content.append(f"Path: {self.current_identity_path}\n", style="dim")
-        content.append(
-            f"Version: {self.identity_info.get('version', 'unknown')}\n", style="white"
-        )
-        content.append(
-            f"Derivable: {self.identity_info.get('derivable', False)}\n", style="white"
-        )
-        content.append(
-            f"Rotation Count: {self.identity_info.get('rotation_count', 0)}\n",
-            style="white",
-        )
-
-        # Mnemonic information (without showing the actual mnemonic for security)
-        if "mnemonic" in self.identity_info:
-            mnemonic_words = self.identity_info["mnemonic"].split()
+        if self.current_identity_path and self.identity_info:
+            content.append(f"Path: {self.current_identity_path}\n", style="dim")
             content.append(
-                f"Mnemonic: {len(mnemonic_words)} words (hidden for security)\n",
-                style="yellow",
-            )
-
-        # Timestamps
-        if "created_at" in self.identity_info:
-            content.append(
-                f"Created: {self.identity_info['created_at']}\n", style="dim"
-            )
-        if "last_rotation" in self.identity_info:
-            import datetime
-
-            last_rotation = datetime.datetime.fromtimestamp(
-                self.identity_info["last_rotation"]
+                f"Version: {self.identity_info.get('version', 'unknown')}\n",
+                style="white",
             )
             content.append(
-                f"Last Rotation: {last_rotation.strftime('%Y-%m-%d %H:%M:%S')}\n",
-                style="dim",
+                f"Derivable: {self.identity_info.get('derivable', False)}\n",
+                style="white",
             )
-
-        # Rotation reason if available
-        if "rotation_reason" in self.identity_info:
             content.append(
-                f"Last Rotation Reason: {self.identity_info['rotation_reason']}\n",
-                style="dim",
+                f"Rotation Count: {self.identity_info.get('rotation_count', 0)}\n",
+                style="white",
             )
 
-        content.append("\n")
-
-        # Crypto context information
-        if "crypto_context" in self.identity_info:
-            content.append("CRYPTO CONTEXT:\n", style="bold magenta")
-            crypto_ctx = self.identity_info["crypto_context"]
-            if "context_source" in crypto_ctx:
+            # Mnemonic information (without showing the actual mnemonic for security)
+            if "mnemonic" in self.identity_info:
+                mnemonic_words = self.identity_info["mnemonic"].split()
                 content.append(
-                    f"  Source: {crypto_ctx['context_source']}\n", style="white"
+                    f"Mnemonic: {len(mnemonic_words)} words (hidden for security)\n",
+                    style="yellow",
                 )
-            if "context_size" in crypto_ctx:
-                size_kb = crypto_ctx["context_size"] / 1024
-                content.append(f"  Size: {size_kb:.1f} KB\n", style="white")
-            if "context_bytes_hex" in crypto_ctx:
-                context_hex = crypto_ctx["context_bytes_hex"]
+
+            # Timestamps
+            if "created_at" in self.identity_info:
                 content.append(
-                    f"  Context Hash: {context_hex[:16]}...{context_hex[-16:]}\n",
+                    f"Created: {self.identity_info['created_at']}\n", style="dim"
+                )
+            if "last_rotation" in self.identity_info:
+                import datetime
+
+                last_rotation = datetime.datetime.fromtimestamp(
+                    self.identity_info["last_rotation"]
+                )
+                content.append(
+                    f"Last Rotation: {last_rotation.strftime('%Y-%m-%d %H:%M:%S')}\n",
                     style="dim",
                 )
-            content.append("\n")
 
-        # Key information
-        auth_keys = self.identity_info.get("auth_keys", {})
+            # Rotation reason if available
+            if "rotation_reason" in self.identity_info:
+                content.append(
+                    f"Last Rotation Reason: {self.identity_info['rotation_reason']}\n",
+                    style="dim",
+                )
+        else:
+            content.append("NO IDENTITY LOADED\n", style="yellow")
+            content.append(
+                "Create a new identity or load an existing one\n", style="dim"
+            )
+            content.append("to begin using dCypher operations.\n", style="dim")
 
-        if "classic" in auth_keys:
-            content.append("CLASSIC KEYS (ECDSA SECP256K1):\n", style="bold cyan")
-            classic_key = auth_keys["classic"]
+        basic_info.update(content)
+
+    def update_classic_keys_section(self) -> None:
+        """Update the classic keys section"""
+        classic_keys = self.query_one("#classic-keys-content", Static)
+
+        content = Text()
+        content.append("═══ CLASSIC KEYS (ECDSA SECP256K1) ═══\n", style="bold cyan")
+
+        if (
+            self.identity_info
+            and "auth_keys" in self.identity_info
+            and "classic" in self.identity_info["auth_keys"]
+        ):
+            classic_key = self.identity_info["auth_keys"]["classic"]
             pk_hex = classic_key.get("pk_hex", "")
             content.append(
-                f"  Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
+                f"Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
                 style="white",
             )
             if "sk_hex" in classic_key:
-                content.append("  Private Key: [PROTECTED]\n", style="red")
-            content.append("\n")
+                content.append("Private Key: [PROTECTED]\n", style="red")
+            content.append("Status: Available\n", style="green")
+        else:
+            content.append("Status: Not available\n", style="red")
+            content.append(
+                "Classic keys are required for authentication\n", style="dim"
+            )
 
-        if "pq" in auth_keys:
-            content.append("POST-QUANTUM KEYS:\n", style="bold cyan")
-            for i, pq_key in enumerate(auth_keys["pq"]):
+        classic_keys.update(content)
+
+    def update_pq_keys_section(self) -> None:
+        """Update the post-quantum keys section"""
+        self.log("update_pq_keys_section called")
+        pq_keys = self.query_one("#pq-keys-content", Static)
+
+        content = Text()
+        content.append("═══ POST-QUANTUM KEYS ═══\n", style="bold cyan")
+
+        if (
+            self.identity_info
+            and "auth_keys" in self.identity_info
+            and "pq" in self.identity_info["auth_keys"]
+        ):
+            pq_key_list = self.identity_info["auth_keys"]["pq"]
+            if pq_key_list:
                 content.append(
-                    f"  {i + 1}. Algorithm: {pq_key.get('alg', 'unknown')}\n",
-                    style="white",
+                    f"Found {len(pq_key_list)} quantum-safe algorithms:\n",
+                    style="green",
                 )
-                pk_hex = pq_key.get("pk_hex", "")
+            else:
+                content.append("No PQ keys available\n", style="red")
                 content.append(
-                    f"     Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
+                    "Click 'Add PQ Key' above to add quantum-safe algorithms\n",
                     style="dim",
                 )
-                if "sk_hex" in pq_key:
-                    content.append("     Private Key: [PROTECTED]\n", style="red")
-            content.append("\n")
+        else:
+            content.append("Status: Not available\n", style="red")
+            content.append(
+                "Post-quantum keys provide quantum-safe security\n", style="dim"
+            )
 
-        if "pre" in auth_keys and auth_keys["pre"]:
-            content.append("PRE KEYS (PROXY RE-ENCRYPTION):\n", style="bold green")
-            pre_key = auth_keys["pre"]
-            if "pk_hex" in pre_key and pre_key["pk_hex"]:
+        pq_keys.update(content)
+
+        # Clear and rebuild the PQ entries container with individual buttons
+        try:
+            entries_container = self.query_one("#pq-entries-container")
+            self.log(f"Found entries container: {entries_container}")
+            entries_container.remove_children()
+
+            # Style the main entries container for tight spacing
+            entries_container.styles.height = "auto"
+            entries_container.styles.margin = (0, 0)
+            entries_container.styles.padding = (0, 0)
+
+            if (
+                self.identity_info
+                and "auth_keys" in self.identity_info
+                and "pq" in self.identity_info["auth_keys"]
+            ):
+                pq_key_list = self.identity_info["auth_keys"]["pq"]
+                self.log(f"PQ key list: {pq_key_list}")
+                if pq_key_list:
+                    self.log(f"Creating buttons for {len(pq_key_list)} PQ keys")
+                    for i, pq_key in enumerate(pq_key_list):
+                        # Create entry container with tight spacing
+                        entry_container = Container()
+
+                        # Mount the entry container to the parent FIRST
+                        entries_container.mount(entry_container)
+
+                        # Style entry container for tight spacing
+                        entry_container.styles.height = "auto"
+                        entry_container.styles.margin = (0, 0)
+                        entry_container.styles.padding = (0, 0)
+
+                        # Algorithm info
+                        alg_info = Text()
+                        alg_info.append(
+                            f"[{i + 1}] {pq_key.get('alg', 'unknown')}\n",
+                            style="white bold",
+                        )
+                        pk_hex = pq_key.get("pk_hex", "")
+                        alg_info.append(
+                            f"    Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
+                            style="dim",
+                        )
+                        if "sk_hex" in pq_key:
+                            alg_info.append(
+                                "    Private Key: [PROTECTED]\n", style="red"
+                            )
+
+                        info_static = Static(alg_info)
+                        entry_container.mount(info_static)
+
+                        # Style info static for tight spacing
+                        info_static.styles.height = "auto"
+                        info_static.styles.margin = (0, 0)
+                        info_static.styles.padding = (0, 0)
+
+                        # Individual buttons for this PQ key
+                        buttons_container = Horizontal()
+
+                        # Mount the buttons_container to entry_container FIRST
+                        entry_container.mount(buttons_container)
+
+                        # Style buttons container for tight spacing
+                        buttons_container.styles.height = "auto"
+                        buttons_container.styles.margin = (0, 0)
+                        buttons_container.styles.padding = (0, 0)
+
+                        rotate_btn = Button(
+                            "Rotate",
+                            id=f"rotate-pq-{i}",
+                            variant="primary",
+                            compact=True,
+                        )
+                        view_btn = Button(
+                            "View", id=f"view-pq-{i}", variant="default", compact=True
+                        )
+                        export_btn = Button(
+                            "Export",
+                            id=f"export-pq-{i}",
+                            variant="default",
+                            compact=True,
+                        )
+                        remove_btn = Button(
+                            "Remove",
+                            id=f"remove-pq-{i}",
+                            variant="warning",
+                            compact=True,
+                        )
+
+                        buttons_container.mount(rotate_btn)
+                        buttons_container.mount(view_btn)
+                        buttons_container.mount(export_btn)
+                        buttons_container.mount(remove_btn)
+
+                        self.log(f"Mounted PQ key {i} with buttons")
+
+                    self.log(
+                        f"Entries container now has {len(entries_container.children)} children"
+                    )
+                else:
+                    self.log("No PQ keys found in list")
+            else:
+                self.log("No PQ keys or auth_keys section found")
+
+        except Exception as e:
+            # Fallback if dynamic creation fails
+            import traceback
+
+            self.log(f"Error creating individual PQ entries: {e}")
+            self.log(f"Full error: {traceback.format_exc()}")
+            self.notify(
+                f"Error creating individual PQ entries: {e}", severity="warning"
+            )
+
+    def update_pre_keys_section(self) -> None:
+        """Update the PRE keys section"""
+        pre_keys = self.query_one("#pre-keys-content", Static)
+
+        content = Text()
+        content.append("═══ PRE KEYS (PROXY RE-ENCRYPTION) ═══\n", style="bold green")
+
+        if (
+            self.identity_info
+            and "auth_keys" in self.identity_info
+            and "pre" in self.identity_info["auth_keys"]
+        ):
+            pre_key = self.identity_info["auth_keys"]["pre"]
+            if pre_key and "pk_hex" in pre_key and pre_key["pk_hex"]:
                 pk_hex = pre_key["pk_hex"]
                 content.append(
-                    f"  Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
+                    f"Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
                     style="white",
                 )
                 if "sk_hex" in pre_key:
-                    content.append("  Private Key: [PROTECTED]\n", style="red")
+                    content.append("Private Key: [PROTECTED]\n", style="red")
+                content.append("Status: Initialized\n", style="green")
             else:
-                content.append("  Not initialized\n", style="yellow")
-            content.append("\n")
+                content.append("Status: Not initialized\n", style="yellow")
+                content.append(
+                    "Click 'Init PRE' to enable proxy re-encryption\n", style="dim"
+                )
         else:
-            content.append("PRE KEYS: Not initialized\n", style="yellow")
-            content.append("\n")
+            content.append("Status: Not available\n", style="red")
+            content.append(
+                "PRE enables secure data sharing without key exposure\n", style="dim"
+            )
 
-        # Derivation paths (if available)
-        if "derivation_paths" in self.identity_info:
-            content.append("DERIVATION PATHS (HD WALLET):\n", style="bold yellow")
-            paths = self.identity_info["derivation_paths"]
-            for key_type, path in paths.items():
-                content.append(f"  {key_type.title()}: {path}\n", style="dim")
-            content.append("\n")
+        pre_keys.update(content)
 
-        # Security information
-        content.append("SECURITY INFO:\n", style="bold red")
-        content.append("  • Private keys are encrypted in identity file\n", style="dim")
-        content.append("  • Mnemonic allows full key recovery\n", style="dim")
-        content.append("  • Compatible with server crypto context\n", style="dim")
-        if self.identity_info.get("derivable", False):
-            content.append("  • Keys can be rotated using mnemonic\n", style="dim")
+    def update_crypto_context_section(self) -> None:
+        """Update the crypto context section"""
+        crypto_context = self.query_one("#crypto-context-content", Static)
 
-        return Panel(
-            content, title="[bold green]◢IDENTITY◣[/bold green]", border_style="green"
+        content = Text()
+        content.append("═══ CRYPTO CONTEXT ═══\n", style="bold magenta")
+
+        if self.identity_info and "crypto_context" in self.identity_info:
+            crypto_ctx = self.identity_info["crypto_context"]
+            if "context_source" in crypto_ctx:
+                content.append(
+                    f"Source: {crypto_ctx['context_source']}\n", style="white"
+                )
+            if "context_size" in crypto_ctx:
+                size_kb = crypto_ctx["context_size"] / 1024
+                content.append(f"Size: {size_kb:.1f} KB\n", style="white")
+            if "context_bytes_hex" in crypto_ctx:
+                context_hex = crypto_ctx["context_bytes_hex"]
+                content.append(
+                    f"Context Hash: {context_hex[:16]}...{context_hex[-16:]}\n",
+                    style="dim",
+                )
+            content.append("Status: Available\n", style="green")
+        else:
+            content.append("Status: Not available\n", style="red")
+            content.append(
+                "Crypto context is required for PRE operations\n", style="dim"
+            )
+
+        crypto_context.update(content)
+
+    def update_security_info_section(self) -> None:
+        """Update the security information section"""
+        security_info = self.query_one("#security-info-content", Static)
+
+        content = Text()
+        content.append("═══ SECURITY INFORMATION ═══\n", style="bold red")
+        content.append("• Private keys are encrypted in identity file\n", style="dim")
+        content.append("• Mnemonic allows full key recovery\n", style="dim")
+        content.append("• Compatible with server crypto context\n", style="dim")
+
+        if self.identity_info and self.identity_info.get("derivable", False):
+            content.append("• Keys can be rotated using mnemonic\n", style="dim")
+
+        content.append(
+            "\nAlways backup your identity file and mnemonic securely!\n",
+            style="yellow",
         )
+        security_info.update(content)
+
+    def create_identity_info_panel(self) -> Panel:
+        """Create the comprehensive identity information panel"""
+        # This method is now replaced by individual section updates
+        # Keeping for backward compatibility
+        return self.create_no_identity_panel()
 
     def create_no_identity_panel(self) -> Panel:
         """Create panel for when no identity is loaded"""
@@ -457,8 +765,59 @@ class IdentityScreen(Widget):
             self.action_create_backup()
         elif button_id == "export-keys-btn":
             self.action_export_keys()
+        # Individual key management buttons
+        elif button_id == "rotate-classic-btn":
+            self.action_rotate_classic_key()
+        elif button_id == "rotate-pq-btn":
+            self.action_rotate_pq_keys()
+        elif button_id == "rotate-pre-btn":
+            self.action_rotate_pre_key()
         elif button_id == "init-pre-btn":
             self.action_initialize_pre()
+        elif button_id == "export-classic-btn":
+            self.action_export_classic_key()
+        elif button_id == "export-pq-btn":
+            self.action_export_pq_keys()
+        elif button_id == "export-pre-btn":
+            self.action_export_pre_key()
+        # New key management buttons
+        elif button_id == "add-pq-btn":
+            self.action_add_pq_key()
+        elif button_id == "remove-pq-btn":
+            self.action_remove_pq_key()
+        elif button_id == "rotate-pq-btn":
+            self.action_rotate_pq_keys()
+        elif button_id == "view-pq-btn":
+            self.action_view_pq_key()
+        elif button_id == "export-pq-btn":
+            self.action_export_pq_keys()
+        elif button_id == "remove-pre-btn":
+            self.action_remove_pre_key()
+        # Handle individual PQ key operations
+        elif button_id and button_id.startswith("rotate-pq-"):
+            try:
+                pq_index = int(button_id.split("-")[-1])
+                self.action_rotate_individual_pq_key(pq_index)
+            except (ValueError, IndexError):
+                self.notify("Invalid PQ key rotation button", severity="error")
+        elif button_id and button_id.startswith("view-pq-"):
+            try:
+                pq_index = int(button_id.split("-")[-1])
+                self.action_view_individual_pq_key(pq_index)
+            except (ValueError, IndexError):
+                self.notify("Invalid PQ key view button", severity="error")
+        elif button_id and button_id.startswith("export-pq-"):
+            try:
+                pq_index = int(button_id.split("-")[-1])
+                self.action_export_individual_pq_key(pq_index)
+            except (ValueError, IndexError):
+                self.notify("Invalid PQ key export button", severity="error")
+        elif button_id and button_id.startswith("remove-pq-"):
+            try:
+                pq_index = int(button_id.split("-")[-1])
+                self.action_remove_individual_pq_key(pq_index)
+            except (ValueError, IndexError):
+                self.notify("Invalid PQ key remove button", severity="error")
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input field changes"""
@@ -474,16 +833,6 @@ class IdentityScreen(Widget):
         name = name_input.value or "default"
 
         try:
-            # Use the centralized API client
-            client = self.api_client
-            if not client:
-                self.notify(
-                    "API client not initialized. Cannot create identity.",
-                    severity="error",
-                )
-                return
-
-            # Use DCypherClient to create identity - it handles crypto context internally
             self.notify(
                 "Creating identity with server context...", severity="information"
             )
@@ -491,8 +840,8 @@ class IdentityScreen(Widget):
             # Create the directory if it doesn't exist
             dcypher_home.mkdir(parents=True, exist_ok=True)
 
-            # Type checker doesn't know client is DCypherClient, but we checked it's not None
-            mnemonic, file_path = client.create_identity_file(  # type: ignore
+            # Use the app's unified identity creation method
+            mnemonic, file_path = self.app.create_identity_file(  # type: ignore
                 name, dcypher_home, overwrite=False
             )
 
@@ -649,28 +998,35 @@ class IdentityScreen(Widget):
         if current_path == str(expected_path):
             if identity_info:
                 self.notify(
-                    f"✓ Identity loaded successfully: {expected_path.name}",
+                    f"Identity loaded successfully: {expected_path.name}",
                     severity="information",
                 )
-                self.update_identity_display()
+                # Display will be updated automatically by the watchers
             else:
                 self.notify(
                     "⚠ Identity path set but info not loaded", severity="warning"
                 )
         else:
             self.notify(
-                f"✗ Identity path not updated. Expected: {expected_path}, Got: {current_path}",
+                f"Identity path not updated. Expected: {expected_path}, Got: {current_path}",
                 severity="error",
             )
 
     def action_unload_identity(self) -> None:
         """Unload the current identity"""
         if self.current_identity_path:
-            # Clear the identity from app state
+            # Clear the identity from app state - this will trigger reactive updates
             self.app.current_identity_path = None  # type: ignore
             self.notify("Identity unloaded", severity="information")
         else:
             self.notify("No identity loaded", severity="warning")
+
+    def update_identity_status(
+        self, status_info: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Update identity status from external source (called by app)"""
+        # This method is called by the app's broadcast_identity_change method
+        self.update_identity_display()
 
     def action_rotate_keys(self) -> None:
         """Rotate keys in the current identity"""
@@ -679,8 +1035,6 @@ class IdentityScreen(Widget):
             return
 
         try:
-            identity_path = Path(self.current_identity_path)
-
             # Check if identity is derivable
             if not self.identity_info or not self.identity_info.get("derivable", False):
                 self.notify(
@@ -690,11 +1044,10 @@ class IdentityScreen(Widget):
 
             self.notify("Rotating keys...", severity="information")
 
-            # Use KeyManager to rotate keys
-            rotation_info = KeyManager.rotate_keys_in_identity(identity_path)
-
-            # Reload the identity info to show updated keys
-            self.app.load_identity_info(self.current_identity_path)  # type: ignore
+            # Use the app's unified key rotation method
+            rotation_info = self.app.rotate_identity_keys(  # type: ignore
+                self.current_identity_path, "manual"
+            )
 
             self.notify(
                 f"Keys rotated successfully! Rotation count: {rotation_info.get('rotation_count', 'unknown')}",
@@ -711,14 +1064,8 @@ class IdentityScreen(Widget):
             return
 
         try:
-            identity_path = Path(self.current_identity_path)
-            backup_name = (
-                f"{identity_path.stem}_backup_{int(__import__('time').time())}.json"
-            )
-            backup_path = identity_path.parent / backup_name
-
-            # Copy the identity file
-            shutil.copy2(identity_path, backup_path)
+            # Use the app's unified backup creation method
+            backup_path = self.app.create_backup_of_identity(self.current_identity_path)  # type: ignore
 
             self.notify(f"Backup created: {backup_path.name}", severity="information")
             self.refresh_identity_files()
@@ -747,32 +1094,19 @@ class IdentityScreen(Widget):
             return
 
         try:
-            client = self.api_client
-            if not client:
-                self.notify("API client not initialized", severity="error")
-                return
-
             # Check if PRE is already initialized
             if self.identity_info and "pre" in self.identity_info.get("auth_keys", {}):
-                self.notify(
-                    "PRE already initialized for this identity", severity="warning"
-                )
-                return
+                pre_keys = self.identity_info["auth_keys"]["pre"]
+                if "pk_hex" in pre_keys and pre_keys["pk_hex"]:
+                    self.notify(
+                        "PRE already initialized for this identity", severity="warning"
+                    )
+                    return
 
             self.notify("Initializing PRE capabilities...", severity="information")
 
-            # Use the API client to initialize PRE
-            initialize_method = getattr(client, "initialize_pre_for_identity", None)
-            if initialize_method and callable(initialize_method):
-                initialize_method()
-            else:
-                self.notify(
-                    "API client does not support PRE initialization", severity="error"
-                )
-                return
-
-            # Reload the identity info to show PRE keys
-            self.app.load_identity_info(self.current_identity_path)  # type: ignore
+            # Use the app's unified PRE initialization method
+            self.app.initialize_pre_for_identity(self.current_identity_path)  # type: ignore
 
             self.notify(
                 "PRE capabilities initialized successfully!", severity="information"
@@ -822,3 +1156,404 @@ class IdentityScreen(Widget):
             self.notify(
                 "DEBUG: No valid row data in selection event", severity="information"
             )
+
+    def action_rotate_classic_key(self) -> None:
+        """Rotate only the classic key"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # Check if identity is derivable
+            if not self.identity_info or not self.identity_info.get("derivable", False):
+                self.notify(
+                    "Cannot rotate keys in non-derivable identity", severity="error"
+                )
+                return
+
+            self.notify("Rotating classic key...", severity="information")
+
+            # Use the KeyManager to rotate all keys (KeyManager doesn't have individual rotation methods)
+            # TODO: Implement individual key rotation in KeyManager
+            from dcypher.lib.key_manager import KeyManager
+
+            rotation_info = KeyManager.rotate_keys_in_identity(
+                Path(self.current_identity_path), "classic_rotation"
+            )
+
+            # Reload identity info
+            load_identity_info = getattr(self.app, "load_identity_info", None)
+            if load_identity_info:
+                load_identity_info(self.current_identity_path)
+            broadcast_identity_change = getattr(
+                self.app, "broadcast_identity_change", None
+            )
+            if broadcast_identity_change:
+                broadcast_identity_change()
+
+            self.notify(
+                "Classic key rotated successfully! (Note: All keys were rotated)",
+                severity="information",
+            )
+
+        except Exception as e:
+            self.notify(f"Failed to rotate classic key: {e}", severity="error")
+
+    def action_rotate_pq_keys(self) -> None:
+        """Rotate only the post-quantum keys"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # Check if identity is derivable
+            if not self.identity_info or not self.identity_info.get("derivable", False):
+                self.notify(
+                    "Cannot rotate keys in non-derivable identity", severity="error"
+                )
+                return
+
+            self.notify("Rotating post-quantum keys...", severity="information")
+
+            # Use the KeyManager to rotate all keys (KeyManager doesn't have individual rotation methods)
+            # TODO: Implement individual key rotation in KeyManager
+            from dcypher.lib.key_manager import KeyManager
+
+            rotation_info = KeyManager.rotate_keys_in_identity(
+                Path(self.current_identity_path), "pq_rotation"
+            )
+
+            # Reload identity info
+            load_identity_info = getattr(self.app, "load_identity_info", None)
+            if load_identity_info:
+                load_identity_info(self.current_identity_path)
+            broadcast_identity_change = getattr(
+                self.app, "broadcast_identity_change", None
+            )
+            if broadcast_identity_change:
+                broadcast_identity_change()
+
+            self.notify(
+                "Post-quantum keys rotated successfully! (Note: All keys were rotated)",
+                severity="information",
+            )
+
+        except Exception as e:
+            self.notify(f"Failed to rotate post-quantum keys: {e}", severity="error")
+
+    def action_rotate_pre_key(self) -> None:
+        """Rotate only the PRE key"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # Check if identity is derivable
+            if not self.identity_info or not self.identity_info.get("derivable", False):
+                self.notify(
+                    "Cannot rotate keys in non-derivable identity", severity="error"
+                )
+                return
+
+            # Check if PRE is initialized
+            if not self.identity_info or "pre" not in self.identity_info.get(
+                "auth_keys", {}
+            ):
+                self.notify(
+                    "PRE not initialized. Use 'Init PRE' first.", severity="error"
+                )
+                return
+
+            self.notify("Rotating PRE key...", severity="information")
+
+            # For PRE keys, we need to regenerate them with the same crypto context
+            # This is more complex than the other keys because PRE keys depend on crypto context
+            try:
+                # Get the current crypto context from the identity
+                crypto_context = self.identity_info.get("crypto_context", {})
+                if not crypto_context:
+                    self.notify("No crypto context found in identity", severity="error")
+                    return
+
+                # For now, just notify that PRE rotation is not yet implemented
+                self.notify(
+                    "PRE key rotation not yet implemented - use 'Rotate All Keys' instead",
+                    severity="information",
+                )
+
+            except Exception as e:
+                self.notify(f"Failed to rotate PRE key: {e}", severity="error")
+
+        except Exception as e:
+            self.notify(f"Failed to rotate PRE key: {e}", severity="error")
+
+    def action_export_classic_key(self) -> None:
+        """Export classic key"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # TODO: Implement classic key export
+            self.notify(
+                "Classic key export not yet implemented", severity="information"
+            )
+        except Exception as e:
+            self.notify(f"Failed to export classic key: {e}", severity="error")
+
+    def action_export_pq_keys(self) -> None:
+        """Export post-quantum keys"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # TODO: Implement PQ key export
+            self.notify("PQ key export not yet implemented", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to export PQ keys: {e}", severity="error")
+
+    def action_export_pre_key(self) -> None:
+        """Export PRE key"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # TODO: Implement PRE key export
+            self.notify("PRE key export not yet implemented", severity="information")
+        except Exception as e:
+            self.notify(f"Failed to export PRE key: {e}", severity="error")
+
+    def action_add_pq_key(self) -> None:
+        """Add a new post-quantum key algorithm to the identity"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # TODO: Implement PQ key addition functionality
+            # This would show a dialog to select algorithm and add to identity
+            self.notify(
+                "Add PQ key functionality not yet implemented", severity="information"
+            )
+            self.notify(
+                "This will allow adding additional quantum-safe algorithms",
+                severity="information",
+            )
+        except Exception as e:
+            self.notify(f"Failed to add PQ key: {e}", severity="error")
+
+    def action_remove_pq_key(self) -> None:
+        """Remove a post-quantum key algorithm from the identity"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # TODO: Implement PQ key removal functionality
+            # This would show a dialog to select which algorithm to remove
+            self.notify(
+                "Remove PQ key functionality not yet implemented",
+                severity="information",
+            )
+            self.notify(
+                "This will allow removing quantum-safe algorithms",
+                severity="information",
+            )
+        except Exception as e:
+            self.notify(f"Failed to remove PQ key: {e}", severity="error")
+
+    def action_view_pq_key(self) -> None:
+        """View details of post-quantum keys"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            if (
+                self.identity_info
+                and "auth_keys" in self.identity_info
+                and "pq" in self.identity_info["auth_keys"]
+            ):
+                pq_key_list = self.identity_info["auth_keys"]["pq"]
+                if pq_key_list:
+                    details = f"Found {len(pq_key_list)} PQ algorithms:\n"
+                    for i, pq_key in enumerate(pq_key_list):
+                        alg = pq_key.get("alg", "unknown")
+                        pk_len = (
+                            len(pq_key.get("pk_hex", "")) // 2
+                        )  # Convert hex to bytes
+                        sk_len = (
+                            len(pq_key.get("sk_hex", "")) // 2
+                        )  # Convert hex to bytes
+                        details += f"  [{i + 1}] {alg} - PK: {pk_len} bytes, SK: {sk_len} bytes\n"
+                    self.notify(details, severity="information")
+                else:
+                    self.notify("No PQ keys found in identity", severity="warning")
+            else:
+                self.notify("No PQ keys available", severity="warning")
+        except Exception as e:
+            self.notify(f"Failed to view PQ keys: {e}", severity="error")
+
+    def action_remove_pre_key(self) -> None:
+        """Remove PRE capabilities from the identity"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # Check if PRE is initialized
+            if not self.identity_info or "pre" not in self.identity_info.get(
+                "auth_keys", {}
+            ):
+                self.notify(
+                    "PRE not initialized, nothing to remove", severity="warning"
+                )
+                return
+
+            # TODO: Implement PRE key removal functionality
+            # This would remove the PRE keys from the identity file
+            self.notify(
+                "Remove PRE functionality not yet implemented", severity="information"
+            )
+            self.notify(
+                "This will remove proxy re-encryption capabilities",
+                severity="information",
+            )
+        except Exception as e:
+            self.notify(f"Failed to remove PRE key: {e}", severity="error")
+
+    def action_rotate_individual_pq_key(self, pq_index: int) -> None:
+        """Rotate a specific PQ key by index"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            # Check if identity is derivable
+            if not self.identity_info or not self.identity_info.get("derivable", False):
+                self.notify(
+                    "Cannot rotate keys in non-derivable identity", severity="error"
+                )
+                return
+
+            # Check if the PQ key index is valid
+            if not self.identity_info or "auth_keys" not in self.identity_info:
+                self.notify("No PQ keys available", severity="error")
+                return
+
+            pq_keys = self.identity_info["auth_keys"].get("pq", [])
+            if pq_index >= len(pq_keys) or pq_index < 0:
+                self.notify(f"Invalid PQ key index: {pq_index}", severity="error")
+                return
+
+            algorithm = pq_keys[pq_index].get("alg", "unknown")
+            self.notify(
+                f"Rotating PQ key [{pq_index + 1}] {algorithm}...",
+                severity="information",
+            )
+
+            # TODO: Implement individual PQ key rotation
+            # This would rotate only the specified PQ key using the KeyManager
+            self.notify(
+                f"Individual PQ key rotation not yet implemented",
+                severity="information",
+            )
+            self.notify(f"Would rotate: {algorithm}", severity="information")
+
+        except Exception as e:
+            self.notify(f"Failed to rotate PQ key {pq_index}: {e}", severity="error")
+
+    def action_view_individual_pq_key(self, pq_index: int) -> None:
+        """View details of a specific PQ key by index"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            if not self.identity_info or "auth_keys" not in self.identity_info:
+                self.notify("No PQ keys available", severity="error")
+                return
+
+            pq_keys = self.identity_info["auth_keys"].get("pq", [])
+            if pq_index >= len(pq_keys) or pq_index < 0:
+                self.notify(f"Invalid PQ key index: {pq_index}", severity="error")
+                return
+
+            pq_key = pq_keys[pq_index]
+            algorithm = pq_key.get("alg", "unknown")
+            pk_hex = pq_key.get("pk_hex", "")
+            sk_hex = pq_key.get("sk_hex", "")
+
+            pk_len = len(pk_hex) // 2  # Convert hex to bytes
+            sk_len = len(sk_hex) // 2  # Convert hex to bytes
+
+            details = f"PQ Key [{pq_index + 1}] Details:\n"
+            details += f"Algorithm: {algorithm}\n"
+            details += f"Public Key: {pk_len} bytes\n"
+            details += f"Private Key: {sk_len} bytes\n"
+            details += f"Key Preview: {pk_hex[:16]}...{pk_hex[-16:] if len(pk_hex) > 32 else ''}"
+
+            self.notify(details, severity="information")
+
+        except Exception as e:
+            self.notify(f"Failed to view PQ key {pq_index}: {e}", severity="error")
+
+    def action_export_individual_pq_key(self, pq_index: int) -> None:
+        """Export a specific PQ key by index"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            if not self.identity_info or "auth_keys" not in self.identity_info:
+                self.notify("No PQ keys available", severity="error")
+                return
+
+            pq_keys = self.identity_info["auth_keys"].get("pq", [])
+            if pq_index >= len(pq_keys) or pq_index < 0:
+                self.notify(f"Invalid PQ key index: {pq_index}", severity="error")
+                return
+
+            algorithm = pq_keys[pq_index].get("alg", "unknown")
+
+            # TODO: Implement individual PQ key export
+            self.notify(
+                f"Individual PQ key export not yet implemented", severity="information"
+            )
+            self.notify(
+                f"Would export: [{pq_index + 1}] {algorithm}", severity="information"
+            )
+
+        except Exception as e:
+            self.notify(f"Failed to export PQ key {pq_index}: {e}", severity="error")
+
+    def action_remove_individual_pq_key(self, pq_index: int) -> None:
+        """Remove a specific PQ key by index"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            if not self.identity_info or "auth_keys" not in self.identity_info:
+                self.notify("No PQ keys available", severity="error")
+                return
+
+            pq_keys = self.identity_info["auth_keys"].get("pq", [])
+            if pq_index >= len(pq_keys) or pq_index < 0:
+                self.notify(f"Invalid PQ key index: {pq_index}", severity="error")
+                return
+
+            algorithm = pq_keys[pq_index].get("alg", "unknown")
+
+            # TODO: Implement individual PQ key removal
+            self.notify(
+                f"Individual PQ key removal not yet implemented", severity="information"
+            )
+            self.notify(
+                f"Would remove: [{pq_index + 1}] {algorithm}", severity="information"
+            )
+
+        except Exception as e:
+            self.notify(f"Failed to remove PQ key {pq_index}: {e}", severity="error")

@@ -314,23 +314,7 @@ SystemMonitor {
     padding: 1;
 }
 
-/* Button styling */
-Button {
-    background: $bg-dark;
-    color: $primary;
-    border: solid $primary;
-    text-style: bold;
-}
 
-Button:hover {
-    background: $primary;
-    color: $bg-dark;
-}
-
-Button.-primary {
-    background: $primary;
-    color: $bg-dark;
-}
 
 /* Input styling */
 Input {
@@ -539,15 +523,7 @@ SystemMonitor {
     background: transparent;
 }
 
-Button {
-    background: transparent;
-    border: solid $primary;
-}
 
-Button:hover {
-    background: $primary;
-    color: #000000;
-}
 
 Input {
     background: transparent;
