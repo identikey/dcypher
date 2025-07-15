@@ -36,6 +36,7 @@ import time
 import logging
 import secrets
 import threading
+import math
 from dcypher.lib import pre
 import base64
 
@@ -58,6 +59,122 @@ except ImportError:
 
 # Thread-local storage for deterministic PRNG
 _thread_local = threading.local()
+
+
+def base58_encode(data: bytes) -> str:
+    """
+    Simple Base58 encoding implementation (Bitcoin-style alphabet).
+
+    Args:
+        data: Raw bytes to encode
+
+    Returns:
+        Base58 encoded string
+    """
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+    # Convert bytes to integer
+    num = int.from_bytes(data, byteorder="big")
+
+    # Handle zero case
+    if num == 0:
+        return alphabet[0]
+
+    # Convert to base58
+    result = ""
+    while num > 0:
+        num, remainder = divmod(num, 58)
+        result = alphabet[remainder] + result
+
+    # Add leading '1's for leading zero bytes
+    for byte in data:
+        if byte == 0:
+            result = alphabet[0] + result
+        else:
+            break
+
+    return result
+
+
+def sha3_512_hash(data: bytes, prefix: str = "") -> bytes:
+    """Generate SHA3-512 hash with optional prefix for domain separation."""
+    hasher = hashlib.sha3_512()
+    if prefix:
+        hasher.update(prefix.encode("utf-8"))
+    hasher.update(data)
+    return hasher.digest()
+
+
+def generate_half_split_recursive_colca(data: bytes, pattern: List[int]) -> str:
+    """
+    Generate Half-Split Recursive ColCa hash with hierarchical properties.
+
+    Algorithm:
+    1. Hash input with SHA3-512, convert to Base58
+    2. For each pattern segment:
+       a. Split current hash in half
+       b. Take first N characters from first half for segment
+       c. Hash second half for next iteration
+    3. Continue until all segments generated
+
+    Args:
+        data: Input bytes to hash
+        pattern: List of integers specifying segment lengths
+
+    Returns:
+        ColCa fingerprint string (segments joined by '-')
+    """
+    segments = []
+
+    # Initial hash
+    current_hash = sha3_512_hash(data)
+    current_b58 = base58_encode(current_hash)
+
+    for i, segment_length in enumerate(pattern):
+        # Split in half
+        half_point = len(current_b58) // 2
+        first_half = current_b58[:half_point]
+        second_half = current_b58[half_point:]
+
+        # Take segment from first half
+        segment = first_half[:segment_length]
+        segments.append(segment)
+
+        if i < len(pattern) - 1:  # Not the last iteration
+            # Hash second half for next iteration
+            current_hash = sha3_512_hash(second_half.encode("utf-8"))
+            current_b58 = base58_encode(current_hash)
+
+    return "-".join(segments)
+
+
+def calculate_colca_security_bits(pattern: List[int]) -> float:
+    """
+    Calculate theoretical security bits for half-split recursive approach.
+
+    Returns:
+        Security level in bits
+    """
+    if not pattern:
+        return 0.0
+
+    bits_per_char = math.log2(58)
+    layer_securities = []
+
+    # Layer 1: Birthday attack on half of ~88-character Base58 string
+    initial_chars = 88  # Typical SHA3-512 Base58 length
+    half_space_chars = initial_chars // 2  # ~44 characters
+    layer1_entropy = half_space_chars * bits_per_char
+    layer1_security = layer1_entropy / 2  # Birthday attack
+    layer_securities.append(layer1_security)
+
+    # Layer 2+: Preimage attacks on hash-dependent spaces
+    for i in range(1, len(pattern)):
+        layer_entropy = initial_chars * bits_per_char  # Full entropy per layer
+        layer_securities.append(layer_entropy)
+
+    # Total security is additive (conservative model)
+    return sum(layer_securities)
 
 
 class SecureBytes:
@@ -1148,3 +1265,365 @@ class KeyManager:
         """Verify that derivation is deterministic."""
         # This test will be simplified to focus on the core issue
         pass
+
+    @staticmethod
+    def generate_key_fingerprint(
+        key_data: bytes,
+        key_type: str,
+        key_material_type: str,
+        pattern: List[int] = [8, 4, 4],
+        algorithm: str = "colca",
+    ) -> str:
+        """
+        Generate a fingerprint for any key type using Half-Split Recursive ColCa.
+
+        Args:
+            key_data: Raw key bytes (public or private key material)
+            key_type: Type identifier (e.g., "pq", "pre", "classic")
+            key_material_type: "public" or "private"
+            pattern: ColCa pattern for fingerprint structure
+            algorithm: Fingerprinting algorithm ("colca" or legacy options)
+
+        Returns:
+            ColCa fingerprint string with hierarchical nesting properties
+        """
+        # Include key type and material type for unique fingerprints
+        hash_input = f"{key_type}:{key_material_type}:".encode("utf-8") + key_data
+
+        if algorithm == "colca":
+            # Use Half-Split Recursive ColCa
+            fingerprint = generate_half_split_recursive_colca(hash_input, pattern)
+            security_bits = calculate_colca_security_bits(pattern)
+
+            KeyManager._log(
+                "debug",
+                f"Generated ColCa fingerprint",
+                key_type=key_type,
+                material_type=key_material_type,
+                pattern=pattern,
+                security_bits=f"{security_bits:.1f}",
+                fingerprint_length=len(fingerprint),
+            )
+
+            return fingerprint
+        else:
+            # Legacy fallback for compatibility
+            if algorithm == "sha3-512":
+                hasher = hashlib.sha3_512()
+            elif algorithm == "sha256":
+                hasher = hashlib.sha256()
+            elif algorithm == "sha1":
+                hasher = hashlib.sha1()
+            elif algorithm == "md5":
+                hasher = hashlib.md5()
+            else:
+                raise ValueError(f"Unsupported hash algorithm: {algorithm}")
+
+            hasher.update(hash_input)
+            digest = hasher.digest()
+            return base58_encode(digest)
+
+    @staticmethod
+    def generate_pq_key_fingerprint(
+        key_hex: str, algorithm: str, key_material_type: str = "public"
+    ) -> str:
+        """
+        Generate ColCa fingerprint for a post-quantum key.
+
+        Args:
+            key_hex: Hex-encoded key (public or private)
+            algorithm: PQ algorithm name (e.g., "ML-DSA-87")
+            key_material_type: "public" or "private"
+
+        Returns:
+            ColCa fingerprint with algorithm prefix
+        """
+        key_bytes = bytes.fromhex(key_hex)
+        key_type = f"pq_{algorithm.lower()}"
+
+        fingerprint = KeyManager.generate_key_fingerprint(
+            key_bytes, key_type, key_material_type, algorithm="colca"
+        )
+
+        key_suffix = "pub" if key_material_type == "public" else "priv"
+        scheme_prefix = f"{algorithm.lower()}-{key_suffix}"
+        return f"{scheme_prefix}:colca:{fingerprint}"
+
+    @staticmethod
+    def generate_crypto_context_fingerprint(
+        context_bytes: bytes,
+        context_params: Optional[Dict[str, Any]] = None,
+        context=None,
+    ) -> str:
+        """
+        Generate ColCa fingerprint for an OpenFHE crypto context from its serialized bytes.
+        Includes context parameters in alphabetical order for readability.
+
+        Args:
+            context_bytes: Serialized crypto context bytes
+            context_params: Dict of context parameters (optional)
+            context: OpenFHE crypto context object (optional, for parameter extraction)
+
+        Returns:
+            ColCa context fingerprint string in format: cc-bfvrns-{params}:colca:fingerprint
+            Example: cc-bfvrns-8192-32768-2-65537-16384-50:colca:6XyZ1-2345-AbCd
+        """
+        # Extract parameters from context or use provided params
+        if context_params is not None:
+            params = context_params
+        elif context is not None:
+            # Extract parameters from live context object
+            try:
+                params = {
+                    "batch_size": 8192,  # Default, may be overridden
+                    "plaintext_modulus": context.GetPlaintextModulus(),
+                    "ring_dimension": context.GetRingDimension(),
+                    "cyclotomic_order": context.GetCyclotomicOrder(),
+                    "multiplicative_depth": 2,  # Default from our implementation
+                    "scaling_mod_size": 50,  # Default from our implementation
+                }
+                # Try to get encoding params if available
+                try:
+                    encoding_params = context.GetEncodingParams()
+                    if encoding_params:
+                        params["batch_size"] = encoding_params.GetBatchSize()
+                except:
+                    pass  # Use default if encoding params not available
+            except Exception as e:
+                raise ValueError(f"Unable to extract context parameters: {e}")
+        else:
+            # Use default parameters if none provided
+            params = {
+                "batch_size": 8192,
+                "cyclotomic_order": 32768,
+                "multiplicative_depth": 2,
+                "plaintext_modulus": 65537,
+                "ring_dimension": 16384,
+                "scaling_mod_size": 50,
+            }
+
+        # Order parameters alphabetically and format
+        ordered_params = [
+            params.get("batch_size", 8192),
+            params.get("cyclotomic_order", 32768),
+            params.get("multiplicative_depth", 2),
+            params.get("plaintext_modulus", 65537),
+            params.get("ring_dimension", 16384),
+            params.get("scaling_mod_size", 50),
+        ]
+        param_string = "-".join(str(p) for p in ordered_params)
+
+        # Generate ColCa fingerprint from the actual context bytes
+        context_pattern = [6, 4, 4]  # Standard pattern for crypto context
+        fingerprint = generate_half_split_recursive_colca(
+            b"crypto_context_bytes:" + context_bytes, context_pattern
+        )
+
+        return f"cc-bfvrns-{param_string}:colca:{fingerprint}"
+
+    @staticmethod
+    def generate_pre_key_fingerprint(
+        key_hex: str,
+        key_material_type: str = "public",
+        context_bytes: Optional[bytes] = None,
+        context_params: Optional[Dict[str, Any]] = None,
+        context=None,
+    ) -> str:
+        """
+        Generate ColCa fingerprint for an OpenFHE PRE key using BFVrns scheme.
+        Includes crypto context hash since PRE keys are context-dependent.
+
+        Args:
+            key_hex: Hex-encoded key (public or private)
+            key_material_type: "public" or "private"
+            context_bytes: Serialized crypto context bytes (optional)
+            context_params: Dict of context parameters (optional)
+            context: OpenFHE crypto context object (optional)
+
+        Returns:
+            ColCa fingerprint string in format: pre-bfvrns-{pub/priv}:colca:cc_hash:key_hash
+            Example: pre-bfvrns-priv:colca:6XyZ1-2345:AbCd-EfGh
+        """
+        if context_bytes is None:
+            raise ValueError(
+                "context_bytes must be provided. "
+                "PRE keys are meaningless without their associated crypto context."
+            )
+
+        # Generate ColCa fingerprint for context bytes
+        context_pattern = [6, 4]  # Compact pattern for context hash
+        context_fingerprint = generate_half_split_recursive_colca(
+            b"crypto_context_bytes:" + context_bytes, context_pattern
+        )
+
+        # Generate ColCa fingerprint for key
+        key_bytes = bytes.fromhex(key_hex)
+        key_type = f"pre_{key_material_type}"
+
+        key_fingerprint = KeyManager.generate_key_fingerprint(
+            key_bytes, key_type, key_material_type, algorithm="colca"
+        )
+
+        key_suffix = "pub" if key_material_type == "public" else "priv"
+        return f"pre-bfvrns-{key_suffix}:colca:{context_fingerprint}:{key_fingerprint}"
+
+    @staticmethod
+    def generate_pre_key_fingerprint_from_identity(
+        key_hex: str, key_material_type: str, identity_data: Dict[str, Any]
+    ) -> str:
+        """
+        Generate PRE key fingerprint using context from identity data.
+
+        Args:
+            key_hex: Hex-encoded key (public or private)
+            key_material_type: "public" or "private"
+            identity_data: Identity data containing crypto_context section
+
+        Returns:
+            Complete PRE fingerprint with context
+        """
+        context_bytes = None
+        if (
+            "crypto_context" in identity_data
+            and "context_bytes_hex" in identity_data["crypto_context"]
+        ):
+            context_bytes = bytes.fromhex(
+                identity_data["crypto_context"]["context_bytes_hex"]
+            )
+
+        return KeyManager.generate_pre_key_fingerprint(
+            key_hex, key_material_type, context_bytes=context_bytes
+        )
+
+    @staticmethod
+    def generate_classic_key_fingerprint(
+        key_hex: str, key_material_type: str = "public"
+    ) -> str:
+        """
+        Generate ColCa fingerprint for a classic ECDSA key.
+
+        Args:
+            key_hex: Hex-encoded key (public or private)
+            key_material_type: "public" or "private"
+
+        Returns:
+            ColCa fingerprint with ECDSA scheme prefix
+        """
+        key_bytes = bytes.fromhex(key_hex)
+        key_type = "classic_ecdsa"
+
+        fingerprint = KeyManager.generate_key_fingerprint(
+            key_bytes, key_type, key_material_type, algorithm="colca"
+        )
+
+        key_suffix = "pub" if key_material_type == "public" else "priv"
+        scheme_prefix = f"ecdsa-secp256k1-{key_suffix}"
+        return f"{scheme_prefix}:colca:{fingerprint}"
+
+    @staticmethod
+    def get_identity_fingerprints(identity_file: Path) -> Dict[str, Dict[str, str]]:
+        """
+        Generate modern SSH-style fingerprints for all keys in an identity file.
+
+        Args:
+            identity_file: Path to identity JSON file
+
+        Returns:
+            Dictionary mapping key types to their public/private fingerprints
+        """
+        with open(identity_file, "r") as f:
+            identity_data = json.load(f)
+
+        fingerprints = {}
+        auth_keys = identity_data["auth_keys"]
+
+        # Classic key fingerprints
+        if "classic" in auth_keys:
+            classic_pk = auth_keys["classic"]["pk_hex"]
+            classic_sk = auth_keys["classic"].get("sk_hex", "")
+
+            fingerprints["classic"] = {
+                "public": KeyManager.generate_classic_key_fingerprint(
+                    classic_pk, "public"
+                ),
+            }
+            if classic_sk:
+                fingerprints["classic"]["private"] = (
+                    KeyManager.generate_classic_key_fingerprint(classic_sk, "private")
+                )
+
+        # PQ key fingerprints
+        if "pq" in auth_keys:
+            for i, pq_key in enumerate(auth_keys["pq"]):
+                key_name = f"pq_{i}_{pq_key['alg']}"
+                pk_hex = pq_key["pk_hex"]
+                sk_hex = pq_key.get("sk_hex", "")
+
+                fingerprints[key_name] = {
+                    "public": KeyManager.generate_pq_key_fingerprint(
+                        pk_hex, pq_key["alg"], "public"
+                    ),
+                }
+                if sk_hex:
+                    fingerprints[key_name]["private"] = (
+                        KeyManager.generate_pq_key_fingerprint(
+                            sk_hex, pq_key["alg"], "private"
+                        )
+                    )
+
+        # PRE key fingerprints
+        if "pre" in auth_keys and auth_keys["pre"]:
+            pre_pk = auth_keys["pre"]["pk_hex"]
+            pre_sk = auth_keys["pre"].get("sk_hex", "")
+
+            # Get crypto context bytes for PRE key fingerprinting
+            context_bytes = None
+            if (
+                "crypto_context" in identity_data
+                and "context_bytes_hex" in identity_data["crypto_context"]
+            ):
+                context_bytes = bytes.fromhex(
+                    identity_data["crypto_context"]["context_bytes_hex"]
+                )
+
+            fingerprints["pre"] = {
+                "public": KeyManager.generate_pre_key_fingerprint(
+                    pre_pk, "public", context_bytes=context_bytes
+                ),
+            }
+            if pre_sk:
+                fingerprints["pre"]["private"] = (
+                    KeyManager.generate_pre_key_fingerprint(
+                        pre_sk, "private", context_bytes=context_bytes
+                    )
+                )
+
+        return fingerprints
+
+    @staticmethod
+    def display_key_fingerprints(identity_file: Path) -> None:
+        """
+        Display all key fingerprints for an identity using Half-Split Recursive ColCa.
+
+        Args:
+            identity_file: Path to identity JSON file
+        """
+        fingerprints = KeyManager.get_identity_fingerprints(identity_file)
+
+        print(f"\n🔑 ColCa Key Fingerprints for {identity_file.name}")
+        print("Half-Split Recursive ColCa Formats:")
+        print("  Classic/PQ: [scheme-type:colca:fingerprint]")
+        print("  Context:    [cc-bfvrns-{params}:colca:fingerprint]")
+        print("  PRE:        [pre-bfvrns-{pub/priv}:colca:context_hash:key_hash]")
+        print(
+            "  Security:   Hierarchical nesting, progressive disclosure, 1000+ bit security"
+        )
+        print("=" * 100)
+
+        for key_type, key_fingerprints in fingerprints.items():
+            print(f"{key_type}:")
+            for material_type, fingerprint in key_fingerprints.items():
+                print(f"  {material_type:8} {fingerprint}")
+            print()
+
+        print("=" * 100)

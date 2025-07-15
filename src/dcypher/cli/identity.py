@@ -262,18 +262,100 @@ def identity_info(identity_path):
         # Show key information
         auth_keys = identity_data.get("auth_keys", {})
         if "classic" in auth_keys:
+            classic_pk = auth_keys["classic"]["pk_hex"]
             click.echo(
-                f"  Classic Public Key: {auth_keys['classic']['pk_hex'][:16]}...",
+                f"  Classic Public Key: {classic_pk[:16]}...",
                 err=True,
             )
+            # Add classic key fingerprint
+            try:
+                fingerprint = KeyManager.generate_classic_key_fingerprint(
+                    classic_pk, "public"
+                )
+                click.echo(f"    Public Key Fingerprint: {fingerprint}", err=True)
+            except Exception as e:
+                click.echo(f"    Public Key Fingerprint: [Error: {e}]", err=True)
+
+            # Add private key fingerprint if available
+            if "sk_hex" in auth_keys["classic"]:
+                sk_hex = auth_keys["classic"]["sk_hex"]
+                try:
+                    sk_fingerprint = KeyManager.generate_classic_key_fingerprint(
+                        sk_hex, "private"
+                    )
+                    click.echo(
+                        f"    Private Key Fingerprint: {sk_fingerprint}", err=True
+                    )
+                except Exception as e:
+                    click.echo(f"    Private Key Fingerprint: [Error: {e}]", err=True)
 
         if "pq" in auth_keys:
             click.echo(f"  Post-Quantum Keys:", err=True)
             for i, pq_key in enumerate(auth_keys["pq"]):
+                pk_hex = pq_key["pk_hex"]
+                algorithm = pq_key["alg"]
                 click.echo(
-                    f"    {i + 1}. {pq_key['alg']}: {pq_key['pk_hex'][:16]}...",
+                    f"    {i + 1}. {algorithm}: {pk_hex[:16]}...",
                     err=True,
                 )
+                # Add PQ key fingerprint
+                try:
+                    fingerprint = KeyManager.generate_pq_key_fingerprint(
+                        pk_hex, algorithm, "public"
+                    )
+                    click.echo(
+                        f"       Public Key Fingerprint: {fingerprint}", err=True
+                    )
+                except Exception as e:
+                    click.echo(f"       Public Key Fingerprint: [Error: {e}]", err=True)
+
+                # Add private key fingerprint if available
+                if "sk_hex" in pq_key:
+                    sk_hex = pq_key["sk_hex"]
+                    try:
+                        sk_fingerprint = KeyManager.generate_pq_key_fingerprint(
+                            sk_hex, algorithm, "private"
+                        )
+                        click.echo(
+                            f"       Private Key Fingerprint: {sk_fingerprint}",
+                            err=True,
+                        )
+                    except Exception as e:
+                        click.echo(
+                            f"       Private Key Fingerprint: [Error: {e}]", err=True
+                        )
+
+        # Show PRE key information if available
+        if "pre" in auth_keys and auth_keys["pre"]:
+            pre_key = auth_keys["pre"]
+            if "pk_hex" in pre_key and pre_key["pk_hex"]:
+                pk_hex = pre_key["pk_hex"]
+                click.echo(f"  PRE Public Key: {pk_hex[:16]}...", err=True)
+                # Add PRE key fingerprint
+                try:
+                    fingerprint = KeyManager.generate_pre_key_fingerprint(
+                        pk_hex, "public"
+                    )
+                    click.echo(f"    Public Key Fingerprint: {fingerprint}", err=True)
+                except Exception as e:
+                    click.echo(f"    Public Key Fingerprint: [Error: {e}]", err=True)
+
+                # Add private key fingerprint if available
+                if "sk_hex" in pre_key:
+                    sk_hex = pre_key["sk_hex"]
+                    try:
+                        sk_fingerprint = KeyManager.generate_pre_key_fingerprint(
+                            sk_hex, "private"
+                        )
+                        click.echo(
+                            f"    Private Key Fingerprint: {sk_fingerprint}", err=True
+                        )
+                    except Exception as e:
+                        click.echo(
+                            f"    Private Key Fingerprint: [Error: {e}]", err=True
+                        )
+            else:
+                click.echo(f"  PRE Keys: Not initialized", err=True)
 
         # Show rotation history if available
         if "rotation_history" in identity_data and identity_data["rotation_history"]:

@@ -365,15 +365,14 @@ class DCypherTUI(App[None]):
             raise
 
     def create_backup_of_identity(self, identity_path: str) -> Path:
-        """Create a backup of the identity file"""
+        """Create a backup of the current identity file"""
         try:
-            import shutil
+            from dcypher.lib.key_manager import KeyManager
 
             identity_file = Path(identity_path)
-            backup_name = f"{identity_file.stem}_backup_{int(time.time())}.json"
-            backup_path = identity_file.parent / backup_name
+            backup_dir = identity_file.parent / "backups"
+            backup_path = KeyManager.backup_identity_securely(identity_file, backup_dir)
 
-            shutil.copy2(identity_file, backup_path)
             return backup_path
         except Exception as e:
             self.notify(f"Failed to create backup: {e}", severity="error")

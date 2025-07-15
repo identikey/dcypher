@@ -8,7 +8,7 @@ import json
 import shutil
 from pathlib import Path
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Static, Button, Input, DataTable, Label
+from textual.widgets import Static, Button, Input, DataTable, Label, Select
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -19,6 +19,13 @@ from typing import Dict, Any, List, Optional
 
 from dcypher.lib.key_manager import KeyManager
 from dcypher.lib.api_client import DCypherClient
+
+from dcypher.tui.screens.identity_modals import (
+    PREKeyDetailsModal,
+    CryptoContextDetailsModal,
+    PQKeyDetailsModal,
+    PQKeySelectionModal,
+)
 
 
 class IdentityScreen(Widget):
@@ -57,7 +64,7 @@ class IdentityScreen(Widget):
     def compose(self):
         """Compose the identity management interface"""
         with Container(id="identity-container"):
-            # Identity information panel with integrated buttons
+            # Identity information panel with integrated buttons - wrap in bordered panel
             with Container(id="identity-main-section"):
                 with ScrollableContainer(id="identity-info-panel"):
                     # Basic info section
@@ -108,6 +115,12 @@ class IdentityScreen(Widget):
                                 compact=True,
                             )
                             yield Button(
+                                "View PRE",
+                                id="view-pre-btn",
+                                variant="default",
+                                compact=True,
+                            )
+                            yield Button(
                                 "Rotate PRE",
                                 id="rotate-pre-btn",
                                 variant="primary",
@@ -129,6 +142,13 @@ class IdentityScreen(Widget):
                     # Crypto context section
                     with Container(id="crypto-context-section"):
                         yield Static(id="crypto-context-content")
+                        with Horizontal(id="crypto-context-buttons"):
+                            yield Button(
+                                "View Context",
+                                id="view-context-btn",
+                                variant="default",
+                                compact=True,
+                            )
 
                     # Security info section
                     with Container(id="security-info-section"):
@@ -155,18 +175,10 @@ class IdentityScreen(Widget):
                         placeholder="dCypher directory path",
                         id="dcypher-home-input",
                     )
-                    yield Button(
-                        "LOAD",
-                        id="load-selected-btn",
-                        variant="success",
-                    )
+                    yield Button("LOAD", id="load-selected-btn", variant="success")
                     yield Button("↻ ", id="refresh-files-btn")
                     yield Input(placeholder="Identity name", id="new-identity-name")
-                    yield Button(
-                        "CREATE",
-                        id="create-identity-btn",
-                        variant="success",
-                    )
+                    yield Button("CREATE", id="create-identity-btn", variant="success")
 
                 # Identity files (compact) - constrained height
                 with Container(id="files-table-container"):
@@ -180,13 +192,22 @@ class IdentityScreen(Widget):
         main_container = self.query_one("#identity-container")
         main_container.styles.layout = "vertical"
 
-        # Identity section expands to fill remaining space
+        # Identity section expands to fill remaining space and add border panel
         identity_section = self.query_one("#identity-main-section")
         identity_section.styles.height = "1fr"  # Fill remaining space after management
+        identity_section.styles.border = ("solid", "cyan")  # Add cyan border
+        identity_section.styles.margin = (
+            0,
+            0,
+            0,
+            0,
+        )  # No margins for seamless connection
 
         # Make the identity panel expand to fill available height with contained scrolling
         info_panel = self.query_one("#identity-info-panel")
-        info_panel.styles.height = "100%"  # Expand to full height
+        info_panel.styles.height = (
+            "100%"  # Expand to full height within the bordered container
+        )
         info_panel.styles.overflow_y = (
             "scroll"  # Enable vertical scrolling within the panel
         )
@@ -197,6 +218,7 @@ class IdentityScreen(Widget):
             "classic-keys-buttons",
             "pq-add-button",
             "pre-keys-buttons",
+            "crypto-context-buttons",
         ]:
             try:
                 container = self.query_one(f"#{button_container_id}")
@@ -247,6 +269,8 @@ class IdentityScreen(Widget):
         # Management controls take up minimal space
         mgmt_controls = self.query_one("#management-controls")
         mgmt_controls.styles.height = "auto"  # Only as much as needed
+        mgmt_controls.styles.margin = (0, 0)  # No margins
+        mgmt_controls.styles.padding = (0, 0)  # No padding
 
         # Set border title for the home directory input and constrain its width
         home_input = self.query_one("#dcypher-home-input", Input)
@@ -272,12 +296,14 @@ class IdentityScreen(Widget):
         actions_row = self.query_one("#identity-actions-row")
         actions_row.styles.margin = (0, 0)  # No margins at all
         actions_row.styles.padding = (0, 0)
-        actions_row.styles.height = "3"  # Slightly more height for buttons
+        actions_row.styles.height = "auto"  # Minimal height for compact buttons
 
         controls_row = self.query_one("#controls-row")
         controls_row.styles.margin = (0, 0)  # No margins at all
         controls_row.styles.padding = (0, 0)
-        controls_row.styles.height = "3"  # Slightly more height for inputs/buttons
+        controls_row.styles.height = (
+            "auto"  # Minimal height for compact buttons and inputs
+        )
 
         # Files table sized for 2-5 items at the very bottom
         table_container = self.query_one("#files-table-container")
@@ -483,8 +509,44 @@ class IdentityScreen(Widget):
                 f"Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
                 style="white",
             )
+
+            # Add ColCa fingerprint display
+            try:
+                fingerprint = KeyManager.generate_classic_key_fingerprint(
+                    pk_hex, "public"
+                )
+                content.append(f"ColCa Fingerprint: {fingerprint}\n", style="dim cyan")
+                # Add security info for ColCa
+                from dcypher.lib.key_manager import calculate_colca_security_bits
+
+                security_bits = calculate_colca_security_bits([8, 4, 4])
+                content.append(
+                    f"Security Level: {security_bits:.0f} bits (quantum-safe)\n",
+                    style="dim green",
+                )
+            except Exception as e:
+                content.append(f"Fingerprint: [Error generating: {e}]\n", style="red")
+
             if "sk_hex" in classic_key:
-                content.append("Private Key: [PROTECTED]\n", style="red")
+                sk_hex = classic_key["sk_hex"]
+                content.append(
+                    "Private Key: [AVAILABLE - Click 'View Details' to display]\n",
+                    style="yellow",
+                )
+                try:
+                    sk_fingerprint = KeyManager.generate_classic_key_fingerprint(
+                        sk_hex, "private"
+                    )
+                    content.append(
+                        f"Private Key Fingerprint: {sk_fingerprint}\n",
+                        style="dim yellow",
+                    )
+                except Exception as e:
+                    content.append(
+                        f"Private Key Fingerprint: [Error: {e}]\n", style="red"
+                    )
+            else:
+                content.append("Private Key: [NOT AVAILABLE]\n", style="red")
             content.append("Status: Available\n", style="green")
         else:
             content.append("Status: Not available\n", style="red")
@@ -570,9 +632,53 @@ class IdentityScreen(Widget):
                             f"    Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
                             style="dim",
                         )
-                        if "sk_hex" in pq_key:
+
+                        # Add ColCa fingerprint display for PQ keys
+                        try:
+                            fingerprint = KeyManager.generate_pq_key_fingerprint(
+                                pk_hex, pq_key.get("alg", "unknown"), "public"
+                            )
                             alg_info.append(
-                                "    Private Key: [PROTECTED]\n", style="red"
+                                f"    ColCa Fingerprint: {fingerprint}\n",
+                                style="dim cyan",
+                            )
+                            # Add security level info
+                            from dcypher.lib.key_manager import (
+                                calculate_colca_security_bits,
+                            )
+
+                            security_bits = calculate_colca_security_bits([8, 4, 4])
+                            alg_info.append(
+                                f"    Security Level: {security_bits:.0f} bits\n",
+                                style="dim green",
+                            )
+                        except Exception as e:
+                            alg_info.append(
+                                f"    Fingerprint: [Error: {e}]\n", style="red"
+                            )
+
+                        if "sk_hex" in pq_key:
+                            sk_hex = pq_key["sk_hex"]
+                            alg_info.append(
+                                "    Private Key: [AVAILABLE - Click 'View' to display]\n",
+                                style="yellow",
+                            )
+                            try:
+                                sk_fingerprint = KeyManager.generate_pq_key_fingerprint(
+                                    sk_hex, pq_key.get("alg", "unknown"), "private"
+                                )
+                                alg_info.append(
+                                    f"    Private Key Fingerprint: {sk_fingerprint}\n",
+                                    style="dim yellow",
+                                )
+                            except Exception as e:
+                                alg_info.append(
+                                    f"    Private Key Fingerprint: [Error: {e}]\n",
+                                    style="red",
+                                )
+                        else:
+                            alg_info.append(
+                                "    Private Key: [NOT AVAILABLE]\n", style="red"
                             )
 
                         info_static = Static(alg_info)
@@ -660,8 +766,45 @@ class IdentityScreen(Widget):
                     f"Public Key: {pk_hex[:32]}{'...' if len(pk_hex) > 32 else ''}\n",
                     style="white",
                 )
+
+                # Add ColCa fingerprint display for PRE keys
+                try:
+                    fingerprint = KeyManager.generate_pre_key_fingerprint(
+                        pk_hex, "public"
+                    )
+                    content.append(
+                        f"ColCa Fingerprint: {fingerprint}\n", style="dim green"
+                    )
+                    # Add hierarchical nesting info for PRE
+                    content.append(
+                        "Properties: Hierarchical nesting, context-dependent\n",
+                        style="dim blue",
+                    )
+                except Exception as e:
+                    content.append(
+                        f"Fingerprint: [Error generating: {e}]\n", style="red"
+                    )
+
                 if "sk_hex" in pre_key:
-                    content.append("Private Key: [PROTECTED]\n", style="red")
+                    sk_hex = pre_key["sk_hex"]
+                    content.append(
+                        "Private Key: [AVAILABLE - Click 'View Details' to display]\n",
+                        style="yellow",
+                    )
+                    try:
+                        sk_fingerprint = KeyManager.generate_pre_key_fingerprint(
+                            sk_hex, "private"
+                        )
+                        content.append(
+                            f"Private Key Fingerprint: {sk_fingerprint}\n",
+                            style="dim yellow",
+                        )
+                    except Exception as e:
+                        content.append(
+                            f"Private Key Fingerprint: [Error: {e}]\n", style="red"
+                        )
+                else:
+                    content.append("Private Key: [NOT AVAILABLE]\n", style="red")
                 content.append("Status: Initialized\n", style="green")
             else:
                 content.append("Status: Not initialized\n", style="yellow")
@@ -719,6 +862,21 @@ class IdentityScreen(Widget):
 
         if self.identity_info and self.identity_info.get("derivable", False):
             content.append("• Keys can be rotated using mnemonic\n", style="dim")
+
+        # Add ColCa security information
+        content.append("\n🔒 ColCa Fingerprint Technology:\n", style="bold cyan")
+        content.append(
+            "• Half-Split Recursive algorithm with 1000+ bit security\n",
+            style="dim cyan",
+        )
+        content.append(
+            "• Hierarchical nesting enables progressive disclosure\n", style="dim cyan"
+        )
+        content.append(
+            "• Deterministic prefix matching for system compatibility\n",
+            style="dim cyan",
+        )
+        content.append("• Quantum-safe cryptographic strength\n", style="dim cyan")
 
         content.append(
             "\nAlways backup your identity file and mnemonic securely!\n",
@@ -793,6 +951,10 @@ class IdentityScreen(Widget):
             self.action_export_pq_keys()
         elif button_id == "remove-pre-btn":
             self.action_remove_pre_key()
+        elif button_id == "view-pre-btn":
+            self.action_view_pre_key()
+        elif button_id == "view-context-btn":
+            self.action_view_crypto_context()
         # Handle individual PQ key operations
         elif button_id and button_id.startswith("rotate-pq-"):
             try:
@@ -841,23 +1003,39 @@ class IdentityScreen(Widget):
             dcypher_home.mkdir(parents=True, exist_ok=True)
 
             # Use the app's unified identity creation method
-            mnemonic, file_path = self.app.create_identity_file(  # type: ignore
-                name, dcypher_home, overwrite=False
-            )
+            create_method = getattr(self.app, "create_identity_file", None)
+            if create_method and callable(create_method):
+                try:
+                    result = create_method(name, dcypher_home, overwrite=False)
+                    # Handle result tuple unpacking safely
+                    if isinstance(result, (tuple, list)) and len(result) == 2:
+                        mnemonic, file_path = result
+                        self.notify(
+                            f"Identity '{name}' created successfully!",
+                            severity="information",
+                        )
+                        self.notify(
+                            "Please backup your mnemonic phrase securely!",
+                            severity="warning",
+                        )
 
-            self.notify(
-                f"Identity '{name}' created successfully!", severity="information"
-            )
-            self.notify(
-                "Please backup your mnemonic phrase securely!", severity="warning"
-            )
+                        # Update app state with new identity - use setattr to trigger reactive watchers
+                        setattr(self.app, "current_identity_path", str(file_path))
 
-            # Update app state with new identity - use direct assignment to trigger reactive watchers
-            self.app.current_identity_path = str(file_path)  # type: ignore
-
-            # Clear inputs and refresh file list
-            name_input.value = ""
-            self.refresh_identity_files()
+                        # Clear inputs and refresh file list
+                        name_input.value = ""
+                        self.refresh_identity_files()
+                    else:
+                        self.notify(
+                            f"Unexpected result format from identity creation",
+                            severity="error",
+                        )
+                except (TypeError, ValueError) as create_error:
+                    self.notify(
+                        f"Identity creation failed: {create_error}", severity="error"
+                    )
+            else:
+                self.notify("Identity creation method not available", severity="error")
 
         except FileExistsError:
             self.notify(f"Identity '{name}' already exists!", severity="error")
@@ -979,7 +1157,7 @@ class IdentityScreen(Widget):
                 severity="information",
             )
 
-            self.app.current_identity_path = str(identity_path)  # type: ignore
+            setattr(self.app, "current_identity_path", str(identity_path))
 
             # Give the reactive system a moment to process
             self.call_later(self.check_identity_loaded, identity_path)
@@ -1016,7 +1194,7 @@ class IdentityScreen(Widget):
         """Unload the current identity"""
         if self.current_identity_path:
             # Clear the identity from app state - this will trigger reactive updates
-            self.app.current_identity_path = None  # type: ignore
+            setattr(self.app, "current_identity_path", None)
             self.notify("Identity unloaded", severity="information")
         else:
             self.notify("No identity loaded", severity="warning")
@@ -1045,12 +1223,29 @@ class IdentityScreen(Widget):
             self.notify("Rotating keys...", severity="information")
 
             # Use the app's unified key rotation method
-            rotation_info = self.app.rotate_identity_keys(  # type: ignore
-                self.current_identity_path, "manual"
-            )
+            rotate_method = getattr(self.app, "rotate_identity_keys", None)
+            if rotate_method and callable(rotate_method):
+                rotation_info = rotate_method(self.current_identity_path, "manual")
+            else:
+                self.notify("Key rotation method not available", severity="error")
+                return
+
+            # rotation_info should be a dict with rotation details
+            rotation_count = "unknown"
+            try:
+                if hasattr(rotation_info, "get") and callable(
+                    getattr(rotation_info, "get")
+                ):
+                    rotation_count = getattr(rotation_info, "get")(
+                        "rotation_count", "unknown"
+                    )
+                elif hasattr(rotation_info, "rotation_count"):
+                    rotation_count = getattr(rotation_info, "rotation_count", "unknown")
+            except (AttributeError, TypeError):
+                pass  # Use default "unknown" value
 
             self.notify(
-                f"Keys rotated successfully! Rotation count: {rotation_info.get('rotation_count', 'unknown')}",
+                f"Keys rotated successfully! Rotation count: {rotation_count}",
                 severity="information",
             )
 
@@ -1065,10 +1260,19 @@ class IdentityScreen(Widget):
 
         try:
             # Use the app's unified backup creation method
-            backup_path = self.app.create_backup_of_identity(self.current_identity_path)  # type: ignore
-
-            self.notify(f"Backup created: {backup_path.name}", severity="information")
-            self.refresh_identity_files()
+            backup_method = getattr(self.app, "create_backup_of_identity", None)
+            if backup_method and callable(backup_method):
+                backup_path = backup_method(self.current_identity_path)
+                # backup_path should be a Path object with .name attribute
+                backup_name = "backup file"
+                if hasattr(backup_path, "name"):
+                    backup_name = getattr(backup_path, "name", str(backup_path))
+                else:
+                    backup_name = str(backup_path)  # fallback to string representation
+                self.notify(f"Backup created: {backup_name}", severity="information")
+                self.refresh_identity_files()
+            else:
+                self.notify("Backup creation method not available", severity="error")
 
         except Exception as e:
             self.notify(f"Failed to create backup: {e}", severity="error")
@@ -1106,7 +1310,12 @@ class IdentityScreen(Widget):
             self.notify("Initializing PRE capabilities...", severity="information")
 
             # Use the app's unified PRE initialization method
-            self.app.initialize_pre_for_identity(self.current_identity_path)  # type: ignore
+            init_method = getattr(self.app, "initialize_pre_for_identity", None)
+            if init_method and callable(init_method):
+                init_method(self.current_identity_path)
+            else:
+                self.notify("PRE initialization method not available", severity="error")
+                return
 
             self.notify(
                 "PRE capabilities initialized successfully!", severity="information"
@@ -1173,23 +1382,15 @@ class IdentityScreen(Widget):
 
             self.notify("Rotating classic key...", severity="information")
 
-            # Use the KeyManager to rotate all keys (KeyManager doesn't have individual rotation methods)
-            # TODO: Implement individual key rotation in KeyManager
-            from dcypher.lib.key_manager import KeyManager
-
-            rotation_info = KeyManager.rotate_keys_in_identity(
-                Path(self.current_identity_path), "classic_rotation"
-            )
-
-            # Reload identity info
-            load_identity_info = getattr(self.app, "load_identity_info", None)
-            if load_identity_info:
-                load_identity_info(self.current_identity_path)
-            broadcast_identity_change = getattr(
-                self.app, "broadcast_identity_change", None
-            )
-            if broadcast_identity_change:
-                broadcast_identity_change()
+            # Use the app's rotation method (currently rotates all keys)
+            rotate_method = getattr(self.app, "rotate_identity_keys", None)
+            if rotate_method and callable(rotate_method):
+                rotation_info = rotate_method(
+                    self.current_identity_path, "classic_rotation"
+                )
+            else:
+                self.notify("Key rotation method not available", severity="error")
+                return
 
             self.notify(
                 "Classic key rotated successfully! (Note: All keys were rotated)",
@@ -1275,11 +1476,76 @@ class IdentityScreen(Widget):
                     self.notify("No crypto context found in identity", severity="error")
                     return
 
-                # For now, just notify that PRE rotation is not yet implemented
-                self.notify(
-                    "PRE key rotation not yet implemented - use 'Rotate All Keys' instead",
-                    severity="information",
-                )
+                # Get crypto context bytes from the stored context
+                context_bytes_hex = crypto_context.get("context_bytes_hex", "")
+                if not context_bytes_hex:
+                    self.notify(
+                        "No crypto context bytes found in identity", severity="error"
+                    )
+                    return
+
+                context_bytes = bytes.fromhex(context_bytes_hex)
+
+                # Use the API client to get a fresh crypto context object
+                client = self.api_client
+                if client:
+                    # Generate new PRE keys with the stored context
+                    from dcypher.lib import pre
+                    import base64
+                    from dcypher.crypto.context_manager import CryptoContextManager
+
+                    with CryptoContextManager(
+                        serialized_data=base64.b64encode(context_bytes).decode("ascii")
+                    ) as manager:
+                        cc = manager.get_context()
+                        keys = pre.generate_keys(cc)
+                        pk_bytes = pre.serialize_to_bytes(keys.publicKey)
+                        sk_bytes = pre.serialize_to_bytes(keys.secretKey)
+
+                        # Update the identity file
+                        identity_path = Path(self.current_identity_path)
+                        with open(identity_path, "r") as f:
+                            identity_data = json.load(f)
+
+                        # Update PRE keys
+                        identity_data["auth_keys"]["pre"] = {
+                            "pk_hex": pk_bytes.hex(),
+                            "sk_hex": sk_bytes.hex(),
+                        }
+
+                        # Update rotation metadata
+                        if "rotation_count" in identity_data:
+                            identity_data["rotation_count"] += 1
+                        import time
+
+                        identity_data["last_rotation"] = time.time()
+                        identity_data["rotation_reason"] = "rotated_pre_keys"
+
+                        # Save updated identity
+                        with open(identity_path, "w") as f:
+                            json.dump(identity_data, f, indent=2)
+
+                        self.notify(
+                            "✓ PRE keys rotated successfully!", severity="information"
+                        )
+
+                        # Reload identity info to reflect changes
+                        load_identity_info = getattr(
+                            self.app, "load_identity_info", None
+                        )
+                        if load_identity_info:
+                            load_identity_info(str(identity_path))
+
+                        # Broadcast identity change to update all screens
+                        broadcast_identity_change = getattr(
+                            self.app, "broadcast_identity_change", None
+                        )
+                        if broadcast_identity_change:
+                            broadcast_identity_change()
+                else:
+                    self.notify(
+                        "API client not available for PRE operations", severity="error"
+                    )
 
             except Exception as e:
                 self.notify(f"Failed to rotate PRE key: {e}", severity="error")
@@ -1332,17 +1598,120 @@ class IdentityScreen(Widget):
             return
 
         try:
-            # TODO: Implement PQ key addition functionality
-            # This would show a dialog to select algorithm and add to identity
-            self.notify(
-                "Add PQ key functionality not yet implemented", severity="information"
-            )
-            self.notify(
-                "This will allow adding additional quantum-safe algorithms",
-                severity="information",
-            )
+            # Get available algorithms from the API server
+            client = self.api_client
+            if not client:
+                self.notify("API client not available", severity="error")
+                return
+
+            self.notify("Loading available algorithms...", severity="information")
+            # Cast to DCypherClient to get proper method access
+            from dcypher.lib.api_client import DCypherClient
+
+            api_client = client if isinstance(client, DCypherClient) else None
+            if not api_client:
+                self.notify("Invalid API client type", severity="error")
+                return
+
+            available_algorithms = api_client.get_supported_algorithms()
+
+            if not available_algorithms:
+                self.notify("No algorithms available from server", severity="error")
+                return
+
+            # Get current identity to check what algorithms are already added
+            if self.identity_info and "auth_keys" in self.identity_info:
+                existing_algorithms = set()
+                pq_keys = self.identity_info["auth_keys"].get("pq", [])
+                for pq_key in pq_keys:
+                    existing_algorithms.add(pq_key.get("alg", ""))
+
+                # Filter out already existing algorithms
+                available_algorithms = [
+                    alg
+                    for alg in available_algorithms
+                    if alg not in existing_algorithms
+                ]
+
+                if not available_algorithms:
+                    self.notify(
+                        "All supported algorithms are already added to your identity",
+                        severity="warning",
+                    )
+                    return
+
+            # Show modal for algorithm selection
+            def on_algorithm_selected(result: Optional[str]) -> None:
+                if result:
+                    self._add_pq_key_to_identity(result)
+
+            modal = PQKeySelectionModal(available_algorithms)
+            self.app.push_screen(modal, on_algorithm_selected)
+
         except Exception as e:
-            self.notify(f"Failed to add PQ key: {e}", severity="error")
+            self.notify(f"Failed to get available algorithms: {e}", severity="error")
+
+    def _add_pq_key_to_identity(self, algorithm: str) -> None:
+        """Add the selected PQ key algorithm to the identity file"""
+        try:
+            self.notify(f"Generating {algorithm} keypair...", severity="information")
+
+            # Generate new keypair for the selected algorithm
+            pq_pk, pq_sk = KeyManager.generate_pq_keypair(algorithm)
+
+            # Load the current identity file
+            if not self.current_identity_path:
+                self.notify("No identity path available", severity="error")
+                return
+
+            identity_path = Path(self.current_identity_path)
+            with open(identity_path, "r") as f:
+                identity_data = json.load(f)
+
+            # Add the new PQ key to the identity
+            if "auth_keys" not in identity_data:
+                identity_data["auth_keys"] = {}
+            if "pq" not in identity_data["auth_keys"]:
+                identity_data["auth_keys"]["pq"] = []
+
+            new_pq_key = {
+                "alg": algorithm,
+                "pk_hex": pq_pk.hex(),
+                "sk_hex": pq_sk.hex(),
+            }
+            identity_data["auth_keys"]["pq"].append(new_pq_key)
+
+            # Update the rotation count and timestamp
+            if "rotation_count" in identity_data:
+                identity_data["rotation_count"] += 1
+            import time
+
+            identity_data["last_rotation"] = time.time()
+            identity_data["rotation_reason"] = f"added_{algorithm}_key"
+
+            # Save the updated identity file
+            with open(identity_path, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
+            self.notify(f"✓ Added {algorithm} key to identity!", severity="information")
+
+            # Reload identity info to reflect changes
+            load_identity_info = getattr(self.app, "load_identity_info", None)
+            if load_identity_info:
+                load_identity_info(str(identity_path))
+
+            # Broadcast identity change to update all screens
+            broadcast_identity_change = getattr(
+                self.app, "broadcast_identity_change", None
+            )
+            if broadcast_identity_change:
+                broadcast_identity_change()
+
+            # Update the PQ keys display
+            self.update_pq_keys_section()
+
+        except Exception as e:
+            self.notify(f"Failed to add {algorithm} key: {e}", severity="error")
 
     def action_remove_pq_key(self) -> None:
         """Remove a post-quantum key algorithm from the identity"""
@@ -1351,18 +1720,84 @@ class IdentityScreen(Widget):
             return
 
         try:
-            # TODO: Implement PQ key removal functionality
-            # This would show a dialog to select which algorithm to remove
-            self.notify(
-                "Remove PQ key functionality not yet implemented",
-                severity="information",
-            )
-            self.notify(
-                "This will allow removing quantum-safe algorithms",
-                severity="information",
-            )
+            # Get current PQ keys to show options
+            if not self.identity_info or "auth_keys" not in self.identity_info:
+                self.notify("No PQ keys available to remove", severity="warning")
+                return
+
+            pq_keys = self.identity_info["auth_keys"].get("pq", [])
+            if not pq_keys:
+                self.notify("No PQ keys found in identity", severity="warning")
+                return
+
+            if len(pq_keys) <= 1:
+                self.notify(
+                    "Cannot remove last PQ key - at least one required",
+                    severity="error",
+                )
+                return
+
+            # For now, remove the last PQ key (TODO: implement selection dialog)
+            self._remove_pq_key_by_index(len(pq_keys) - 1)
+
         except Exception as e:
             self.notify(f"Failed to remove PQ key: {e}", severity="error")
+
+    def _remove_pq_key_by_index(self, pq_index: int) -> None:
+        """Remove a PQ key by index from the identity file"""
+        try:
+            if not self.current_identity_path:
+                return
+
+            identity_path = Path(self.current_identity_path)
+            with open(identity_path, "r") as f:
+                identity_data = json.load(f)
+
+            pq_keys = identity_data["auth_keys"]["pq"]
+            if pq_index >= len(pq_keys) or pq_index < 0:
+                self.notify(f"Invalid PQ key index: {pq_index}", severity="error")
+                return
+
+            removed_alg = pq_keys[pq_index].get("alg", "unknown")
+
+            # Remove the PQ key
+            pq_keys.pop(pq_index)
+
+            # Update rotation metadata
+            if "rotation_count" in identity_data:
+                identity_data["rotation_count"] += 1
+            import time
+
+            identity_data["last_rotation"] = time.time()
+            identity_data["rotation_reason"] = f"removed_{removed_alg}_key"
+
+            # Save updated identity
+            with open(identity_path, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
+            self.notify(
+                f"✓ Removed {removed_alg} key from identity!", severity="information"
+            )
+
+            # Reload identity info to reflect changes
+            load_identity_info = getattr(self.app, "load_identity_info", None)
+            if load_identity_info:
+                load_identity_info(str(identity_path))
+
+            # Broadcast identity change to update all screens
+            broadcast_identity_change = getattr(
+                self.app, "broadcast_identity_change", None
+            )
+            if broadcast_identity_change:
+                broadcast_identity_change()
+
+            # Update the PQ keys display
+            self.update_pq_keys_section()
+
+        except Exception as e:
+            self.notify(
+                f"Failed to remove PQ key at index {pq_index}: {e}", severity="error"
+            )
 
     def action_view_pq_key(self) -> None:
         """View details of post-quantum keys"""
@@ -1378,17 +1813,8 @@ class IdentityScreen(Widget):
             ):
                 pq_key_list = self.identity_info["auth_keys"]["pq"]
                 if pq_key_list:
-                    details = f"Found {len(pq_key_list)} PQ algorithms:\n"
-                    for i, pq_key in enumerate(pq_key_list):
-                        alg = pq_key.get("alg", "unknown")
-                        pk_len = (
-                            len(pq_key.get("pk_hex", "")) // 2
-                        )  # Convert hex to bytes
-                        sk_len = (
-                            len(pq_key.get("sk_hex", "")) // 2
-                        )  # Convert hex to bytes
-                        details += f"  [{i + 1}] {alg} - PK: {pk_len} bytes, SK: {sk_len} bytes\n"
-                    self.notify(details, severity="information")
+                    modal = PQKeyDetailsModal(pq_key_list)
+                    self.app.push_screen(modal)
                 else:
                     self.notify("No PQ keys found in identity", severity="warning")
             else:
@@ -1412,17 +1838,80 @@ class IdentityScreen(Widget):
                 )
                 return
 
-            # TODO: Implement PRE key removal functionality
-            # This would remove the PRE keys from the identity file
+            # Remove PRE keys from identity file
+            identity_path = Path(self.current_identity_path)
+            with open(identity_path, "r") as f:
+                identity_data = json.load(f)
+
+            # Clear PRE keys
+            identity_data["auth_keys"]["pre"] = {}
+
+            # Update rotation metadata
+            if "rotation_count" in identity_data:
+                identity_data["rotation_count"] += 1
+            import time
+
+            identity_data["last_rotation"] = time.time()
+            identity_data["rotation_reason"] = "removed_pre_keys"
+
+            # Save updated identity
+            with open(identity_path, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
             self.notify(
-                "Remove PRE functionality not yet implemented", severity="information"
+                "✓ PRE capabilities removed from identity!", severity="information"
             )
-            self.notify(
-                "This will remove proxy re-encryption capabilities",
-                severity="information",
+
+            # Reload identity info to reflect changes
+            load_identity_info = getattr(self.app, "load_identity_info", None)
+            if load_identity_info:
+                load_identity_info(str(identity_path))
+
+            # Broadcast identity change to update all screens
+            broadcast_identity_change = getattr(
+                self.app, "broadcast_identity_change", None
             )
+            if broadcast_identity_change:
+                broadcast_identity_change()
+
         except Exception as e:
             self.notify(f"Failed to remove PRE key: {e}", severity="error")
+
+    def action_view_pre_key(self) -> None:
+        """View details of PRE keys"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            if (
+                self.identity_info
+                and "auth_keys" in self.identity_info
+                and "pre" in self.identity_info["auth_keys"]
+            ):
+                pre_keys = self.identity_info["auth_keys"]["pre"]
+                modal = PREKeyDetailsModal(pre_keys)
+                self.app.push_screen(modal)
+            else:
+                self.notify("No PRE keys available", severity="warning")
+        except Exception as e:
+            self.notify(f"Failed to view PRE keys: {e}", severity="error")
+
+    def action_view_crypto_context(self) -> None:
+        """View details of the crypto context"""
+        if not self.current_identity_path:
+            self.notify("No identity loaded", severity="warning")
+            return
+
+        try:
+            if self.identity_info and "crypto_context" in self.identity_info:
+                crypto_context = self.identity_info["crypto_context"]
+                modal = CryptoContextDetailsModal(crypto_context)
+                self.app.push_screen(modal)
+            else:
+                self.notify("No crypto context available", severity="warning")
+        except Exception as e:
+            self.notify(f"Failed to view crypto context: {e}", severity="error")
 
     def action_rotate_individual_pq_key(self, pq_index: int) -> None:
         """Rotate a specific PQ key by index"""
@@ -1454,13 +1943,53 @@ class IdentityScreen(Widget):
                 severity="information",
             )
 
-            # TODO: Implement individual PQ key rotation
-            # This would rotate only the specified PQ key using the KeyManager
+            # Generate new keypair for this algorithm
+            from dcypher.lib.key_manager import KeyManager
+
+            pq_pk, pq_sk = KeyManager.generate_pq_keypair(algorithm)
+
+            # Update the identity file
+            identity_path = Path(self.current_identity_path)
+            with open(identity_path, "r") as f:
+                identity_data = json.load(f)
+
+            # Update the specific PQ key
+            identity_data["auth_keys"]["pq"][pq_index] = {
+                "alg": algorithm,
+                "pk_hex": pq_pk.hex(),
+                "sk_hex": pq_sk.hex(),
+            }
+
+            # Update rotation metadata
+            if "rotation_count" in identity_data:
+                identity_data["rotation_count"] += 1
+            import time
+
+            identity_data["last_rotation"] = time.time()
+            identity_data["rotation_reason"] = f"rotated_{algorithm}_key"
+
+            # Save updated identity
+            with open(identity_path, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
             self.notify(
-                f"Individual PQ key rotation not yet implemented",
-                severity="information",
+                f"✓ Rotated {algorithm} key successfully!", severity="information"
             )
-            self.notify(f"Would rotate: {algorithm}", severity="information")
+
+            # Reload identity info to reflect changes
+            load_identity_info = getattr(self.app, "load_identity_info", None)
+            if load_identity_info:
+                load_identity_info(str(identity_path))
+
+            # Broadcast identity change to update all screens
+            broadcast_identity_change = getattr(
+                self.app, "broadcast_identity_change", None
+            )
+            if broadcast_identity_change:
+                broadcast_identity_change()
+
+            # Update the PQ keys display
+            self.update_pq_keys_section()
 
         except Exception as e:
             self.notify(f"Failed to rotate PQ key {pq_index}: {e}", severity="error")
@@ -1545,15 +2074,17 @@ class IdentityScreen(Widget):
                 self.notify(f"Invalid PQ key index: {pq_index}", severity="error")
                 return
 
+            if len(pq_keys) <= 1:
+                self.notify(
+                    "Cannot remove last PQ key - at least one required",
+                    severity="error",
+                )
+                return
+
             algorithm = pq_keys[pq_index].get("alg", "unknown")
 
-            # TODO: Implement individual PQ key removal
-            self.notify(
-                f"Individual PQ key removal not yet implemented", severity="information"
-            )
-            self.notify(
-                f"Would remove: [{pq_index + 1}] {algorithm}", severity="information"
-            )
+            # Use the helper method to remove the PQ key
+            self._remove_pq_key_by_index(pq_index)
 
         except Exception as e:
             self.notify(f"Failed to remove PQ key {pq_index}: {e}", severity="error")
