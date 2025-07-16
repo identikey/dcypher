@@ -1,6 +1,6 @@
 """
 Sharing Management Screen
-Handles proxy re-encryption sharing operations
+Handles proxy recryption sharing operations
 """
 
 import json
@@ -94,7 +94,7 @@ class SharingScreen(Widget):
             return
 
         with Container(id="sharing-container"):
-            yield Static("◢ PROXY RE-ENCRYPTION SHARING ◣", classes="title")
+            yield Static("◢ PROXY RECRYPTION SHARING ◣", classes="title")
 
             # Configuration row
             with Horizontal(id="config-row"):
@@ -278,7 +278,7 @@ class SharingScreen(Widget):
             )
             client.initialize_pre_for_identity()
 
-            self.operation_results = "✓ PRE keys added to identity file!\n  Your identity now supports proxy re-encryption operations."
+            self.operation_results = "✓ PRE keys added to identity file!\n  Your identity now supports proxy recryption operations."
             self.update_results_display()
             self.notify(
                 "PRE initialization completed successfully", severity="information"
@@ -335,8 +335,8 @@ class SharingScreen(Widget):
                 )
                 return
 
-            # Generate re-encryption key using Bob's PRE public key
-            self.notify("Generating re-encryption key...", severity="information")
+            # Generate recryption key using Bob's PRE public key
+            self.notify("Generating recryption key...", severity="information")
             re_key_hex = client.generate_re_encryption_key(bob_pre_pk_hex)
 
             # Create the share

@@ -665,7 +665,7 @@ def test_decrypt_with_inconsistent_merkle_roots(crypto_setup):
 
 def test_create_and_verify_re_encrypted_message(crypto_setup):
     """
-    Tests the creation and verification of re-encrypted IDK messages with self-contained verification.
+    Tests the creation and verification of recrypted IDK messages with self-contained verification.
     """
     cc = crypto_setup["cc"]
     keys = crypto_setup["keys"]
@@ -676,12 +676,12 @@ def test_create_and_verify_re_encrypted_message(crypto_setup):
     proxy_vk = proxy_sk.get_verifying_key()
 
     # Create test data and encrypt it
-    original_data = b"Hello, this is a test message for re-encryption!"
+    original_data = b"Hello, this is a test message for recryption!"
     slot_count = pre.get_slot_count(cc)
     pt_coeffs = pre.bytes_to_coefficients(original_data, slot_count)
     alice_ciphertexts = pre.encrypt(cc, keys.publicKey, pt_coeffs)
 
-    # Create re-encrypted message parts using proxy's signing key
+    # Create recrypted message parts using proxy's signing key
     alice_public_key_hex = sk.get_verifying_key().to_string().hex()
     proxy_public_key_hex = proxy_vk.to_string().hex()
     bob_public_key_hex = "04" + "b" * 126  # Mock Bob's public key
@@ -704,11 +704,11 @@ def test_create_and_verify_re_encrypted_message(crypto_setup):
     parsed = idk_message.parse_idk_message_part(first_part)
     headers = parsed["headers"]
 
-    # Check re-encryption specific headers
-    assert headers["ReEncrypted"] == "true"
+    # Check recryption specific headers
+    assert headers["Recrypted"] == "true"
     assert headers["OriginalSender"] == alice_public_key_hex
     assert headers["ProxyPublicKey"] == proxy_public_key_hex
-    assert headers["ReEncryptedFor"] == bob_public_key_hex
+    assert headers["RecryptedFor"] == bob_public_key_hex
     assert "ProxySignature" in headers
 
     # Should NOT have regular message headers
@@ -720,7 +720,7 @@ def test_create_and_verify_re_encrypted_message(crypto_setup):
 
 def test_re_encrypted_message_format_conformance(crypto_setup):
     """
-    Tests that re-encrypted messages conform to the specification format.
+    Tests that recrypted messages conform to the specification format.
     """
     # 1. Setup
     cc = crypto_setup["cc"]
@@ -732,7 +732,7 @@ def test_re_encrypted_message_format_conformance(crypto_setup):
     pt_coeffs = pre.bytes_to_coefficients(original_data, slot_count)
     ciphertexts = pre.encrypt(cc, keys.publicKey, pt_coeffs)
 
-    # 2. Create re-encrypted message
+    # 2. Create recrypted message
     re_encrypted_parts = idk_message.create_re_encrypted_idk_message_parts(
         re_encrypted_ciphertexts=ciphertexts,
         original_sender_public_key="04" + "a" * 126,
@@ -761,13 +761,13 @@ def test_re_encrypted_message_format_conformance(crypto_setup):
 
     header_keys = [line.split(": ")[0] for line in header_lines]
 
-    # Check required re-encryption headers
+    # Check required recryption headers
     required_headers = {
-        "ReEncrypted",
+        "Recrypted",
         "OriginalSender",
-        "ReEncryptedBy",
-        "ReEncryptedFor",
-        "ReEncryptionTimestamp",
+        "RecryptedBy",
+        "RecryptedFor",
+        "RecryptionTimestamp",
         "ProxySignature",
         "ProxyPublicKey",
     }

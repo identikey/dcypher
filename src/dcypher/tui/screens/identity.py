@@ -752,7 +752,7 @@ class IdentityScreen(Widget):
         pre_keys = self.query_one("#pre-keys-content", Static)
 
         content = Text()
-        content.append("═══ PRE KEYS (PROXY RE-ENCRYPTION) ═══\n", style="bold green")
+        content.append("═══ PRE KEYS (PROXY RECRYPTION) ═══\n", style="bold green")
 
         if (
             self.identity_info
@@ -809,7 +809,7 @@ class IdentityScreen(Widget):
             else:
                 content.append("Status: Not initialized\n", style="yellow")
                 content.append(
-                    "Click 'Init PRE' to enable proxy re-encryption\n", style="dim"
+                    "Click 'Init PRE' to enable proxy recryption\n", style="dim"
                 )
         else:
             content.append("Status: Not available\n", style="red")

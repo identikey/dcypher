@@ -376,18 +376,16 @@ class TestTUIIntegration:
 
     @pytest.mark.crypto
     @pytest.mark.asyncio
-    async def test_complete_tui_reencryption_workflow(
-        self, api_base_url: str, tmp_path
-    ):
+    async def test_complete_tui_recryption_workflow(self, api_base_url: str, tmp_path):
         """
-        Test the complete TUI re-encryption workflow - mirrors CLI test_complete_cli_reencryption_workflow.
+        Test the complete TUI recryption workflow - mirrors CLI test_complete_cli_recryption_workflow.
 
         This test demonstrates the full end-to-end workflow through the TUI:
         1. Alice creates identity, initializes PRE, and creates account
         2. Bob creates identity, initializes PRE, and creates account
         3. Alice uploads an encrypted file via TUI
-        4. Alice shares the file with Bob using proxy re-encryption via TUI
-        5. Bob downloads the re-encrypted file via TUI
+        4. Alice shares the file with Bob using proxy recryption via TUI
+        5. Bob downloads the recrypted file via TUI
         6. Alice revokes Bob's access via TUI
 
         This ensures TUI has feature parity with CLI for the core workflow.
@@ -469,7 +467,7 @@ class TestTUIIntegration:
         cc = alice_client.get_crypto_context_object()
 
         # Generate different PRE keys for Alice and Bob from the SAME context instance
-        # This ensures proper proxy re-encryption while maintaining crypto context consistency
+        # This ensures proper proxy recryption while maintaining crypto context consistency
         print("🔑 Generating compatible Alice and Bob keys from server context...")
         alice_keys = pre.generate_keys(cc)
         bob_keys = pre.generate_keys(cc)
@@ -570,8 +568,8 @@ class TestTUIIntegration:
         # === Step 6b: Alice creates a real share via API ===
         print("🤝 Alice creating share with Bob...")
 
-        # Generate re-encryption key from Alice to Bob using context-compatible keys
-        print("🔐 Generating re-encryption key from Alice to Bob...")
+        # Generate recryption key from Alice to Bob using context-compatible keys
+        print("🔐 Generating recryption key from Alice to Bob...")
         re_key = pre.generate_re_encryption_key(cc, alice_sk_enc, bob_pk_enc)
         re_key_bytes = pre.serialize_to_bytes(re_key)
         re_key_hex = re_key_bytes.hex()
@@ -620,9 +618,9 @@ class TestTUIIntegration:
         # === Step 7b: Bob downloads the real shared file via API ===
         print("📥 Bob downloading shared file...")
 
-        # Bob downloads the shared file (server applies re-encryption)
+        # Bob downloads the shared file (server applies recryption)
         shared_file_data = bob_client.download_shared_file(actual_share_id)
-        print(f"✅ Bob downloaded {len(shared_file_data)} bytes of re-encrypted data")
+        print(f"✅ Bob downloaded {len(shared_file_data)} bytes of recrypted data")
 
         # Save downloaded file for verification
         downloaded_file_path = tmp_path / "bob_downloaded_file.gz"
@@ -630,7 +628,7 @@ class TestTUIIntegration:
             f.write(shared_file_data)
 
         # === Step 7c: Bob decrypts and verifies content ===
-        print("🔓 Bob decrypting the re-encrypted content...")
+        print("🔓 Bob decrypting the recrypted content...")
 
         # Decompress the gzip data
         if isinstance(shared_file_data, bytes):
@@ -661,11 +659,11 @@ class TestTUIIntegration:
                 f"Bob received: {decrypted_content!r}"
             )
             print("🎉 SUCCESS: Bob received exactly the same content Alice uploaded!")
-            print("✅ Proxy re-encryption is working correctly!")
+            print("✅ Proxy recryption is working correctly!")
 
         except Exception as e:
             print(f"❌ FAILED: Bob could not decrypt the shared content: {e}")
-            raise AssertionError(f"Proxy re-encryption verification failed: {e}")
+            raise AssertionError(f"Proxy recryption verification failed: {e}")
 
         # === Step 7d: Test TUI Crypto screen (UI verification) ===
         bob_app_crypto = DCypherTUI(
@@ -765,20 +763,20 @@ class TestTUIIntegration:
 
         # Summary of what we've proven:
         # ✅ Alice successfully uploaded encrypted file
-        # ✅ Alice successfully shared file with Bob via re-encryption key
-        # ✅ Bob successfully downloaded re-encrypted file from server
+        # ✅ Alice successfully shared file with Bob via recryption key
+        # ✅ Bob successfully downloaded recrypted file from server
         # ✅ Bob successfully decrypted content using his PRE secret key
         # ✅ Decrypted content exactly matches Alice's original content
         # ✅ All TUI screens load and navigate correctly
 
-        print("🎉 COMPLETE TUI re-encryption workflow FULLY VERIFIED!")
+        print("🎉 COMPLETE TUI recryption workflow FULLY VERIFIED!")
         print("✅ TUI has complete feature parity with CLI for core operations!")
         print(
             "✅ All major TUI screens tested: Identity, Accounts, Files, Sharing, Crypto"
         )
         print("✅ END-TO-END CONTENT VERIFICATION: Bob received Alice's exact content!")
         print("✅ Server PRE transformation is working correctly!")
-        print("✅ Proxy re-encryption cryptographic workflow is complete and verified!")
+        print("✅ Proxy recryption cryptographic workflow is complete and verified!")
 
 
 class TestTUIWorkflowEdgeCases:

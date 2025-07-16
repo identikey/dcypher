@@ -25,7 +25,7 @@ SERVER_PUBLIC_KEY: str = SERVER_VK.to_string("uncompressed").hex()
 router = APIRouter()
 
 
-@router.post("/reencryption/share")
+@router.post("/recryption/share")
 async def create_share(
     alice_public_key: str = Form(...),
     bob_public_key: str = Form(...),
@@ -37,7 +37,7 @@ async def create_share(
 ):
     """
     Alice creates a sharing policy that allows Bob to access her file.
-    Alice generates the re-encryption key locally and sends it to the server.
+    Alice generates the recryption key locally and sends it to the server.
 
     Message to sign: f"SHARE:{alice_pk}:{bob_pk}:{file_hash}:{nonce}"
     """
@@ -121,7 +121,7 @@ async def create_share(
     }
 
 
-@router.get("/reencryption/shares/{public_key}")
+@router.get("/recryption/shares/{public_key}")
 async def list_shares(public_key: str):
     """
     List all shares involving the given public key (both as sender and receiver).
@@ -158,7 +158,7 @@ async def list_shares(public_key: str):
     }
 
 
-@router.post("/reencryption/download/{share_id}")
+@router.post("/recryption/download/{share_id}")
 async def download_shared_file(
     share_id: str,
     bob_public_key: str = Form(...),
@@ -168,7 +168,7 @@ async def download_shared_file(
 ):
     """
     Bob downloads a file that Alice has shared with him.
-    The server applies re-encryption on-the-fly before returning the data.
+    The server applies recryption on-the-fly before returning the data.
 
     Message to sign: f"DOWNLOAD-SHARED:{bob_pk}:{share_id}:{nonce}"
     """
@@ -235,7 +235,7 @@ async def download_shared_file(
     if not __import__("os").path.exists(concatenated_file_path):
         raise HTTPException(status_code=404, detail="Original file not found")
 
-    # Apply re-encryption using the stored re-encryption key
+    # Apply recryption using the stored recryption key
     try:
         # Import here to avoid circular imports
         from dcypher.lib import pre
@@ -278,7 +278,7 @@ async def download_shared_file(
         # CRITICAL: All operations must use the SAME context instance from the singleton
         # This includes deserialization of keys and ciphertexts
 
-        # Deserialize the re-encryption key using the server's context
+        # Deserialize the recryption key using the server's context
         re_key_bytes = share_policy["re_encryption_key"]
         re_key = pre.deserialize_re_encryption_key(re_key_bytes)
 
@@ -308,7 +308,7 @@ async def download_shared_file(
                 full_part = parts_with_empties[i] + parts_with_empties[i + 1]
                 message_parts.append(full_part.strip())
 
-        # Extract Alice's ciphertexts and apply re-encryption
+        # Extract Alice's ciphertexts and apply recryption
         import base64
 
         re_encrypted_parts = []
@@ -324,28 +324,28 @@ async def download_shared_file(
             # This ensures context consistency across all operations
             alice_ciphertext = pre.deserialize_ciphertext(payload_bytes)
 
-            # Apply re-encryption transformation using the same context instance
+            # Apply recryption transformation using the same context instance
             # All objects (ciphertext, re-key, context) are now consistent
             bob_ciphertexts = pre.re_encrypt(server_context, re_key, [alice_ciphertext])
             bob_ciphertext = bob_ciphertexts[0]
 
-            # Serialize the re-encrypted ciphertext
+            # Serialize the recrypted ciphertext
             bob_payload_bytes = pre.serialize_to_bytes(bob_ciphertext)
             bob_payload_b64 = base64.b64encode(bob_payload_bytes).decode("ascii")
 
-            # Create new headers following the re-encryption specification
+            # Create new headers following the recryption specification
             new_headers = parsed_part["headers"].copy()
 
-            # Update required headers for re-encrypted messages
+            # Update required headers for recrypted messages
             new_headers["ChunkHash"] = hashlib.blake2b(bob_payload_bytes).hexdigest()
-            new_headers["ReEncrypted"] = "true"
+            new_headers["Recrypted"] = "true"
             new_headers["OriginalSender"] = alice_public_key
-            new_headers["ReEncryptedBy"] = SERVER_PUBLIC_KEY
-            new_headers["ReEncryptedFor"] = bob_public_key
-            new_headers["ReEncryptionTimestamp"] = datetime.utcnow().isoformat() + "Z"
+            new_headers["RecryptedBy"] = SERVER_PUBLIC_KEY
+            new_headers["RecryptedFor"] = bob_public_key
+            new_headers["RecryptionTimestamp"] = datetime.utcnow().isoformat() + "Z"
             new_headers["ProxyPublicKey"] = SERVER_PUBLIC_KEY  # Required by new spec
 
-            # Remove headers that are invalidated by re-encryption
+            # Remove headers that are invalidated by recryption
             new_headers.pop("Signature", None)  # Original signature no longer valid
             new_headers.pop(
                 "SignerPublicKey", None
@@ -373,7 +373,7 @@ async def download_shared_file(
             proxy_signature = SERVER_SK.sign_digest(canonical_hash)
             new_headers["ProxySignature"] = proxy_signature.hex()
 
-            # Reconstruct the IDK part with re-encrypted payload and new headers
+            # Reconstruct the IDK part with recrypted payload and new headers
             header_block = ""
             for key in sorted(new_headers.keys()):
                 if key in ["PartNum", "TotalParts"]:
@@ -398,10 +398,10 @@ async def download_shared_file(
 
             re_encrypted_parts.append(re_encrypted_part)
 
-        # Combine all re-encrypted parts
+        # Combine all recrypted parts
         re_encrypted_message = "\n".join(re_encrypted_parts)
 
-        # Compress the re-encrypted content
+        # Compress the recrypted content
         import gzip
 
         re_encrypted_bytes = gzip.compress(re_encrypted_message.encode("utf-8"))
@@ -415,15 +415,15 @@ async def download_shared_file(
                 "Content-Disposition": f"attachment; filename=shared_{file_hash}.chunks.gz",
                 "X-Share-ID": share_id,
                 "X-Original-Owner": alice_public_key,
-                "X-Re-Encrypted": "true",  # Indicate this content has been re-encrypted
+                "X-Recrypted": "true",  # Indicate this content has been recrypted
             },
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Re-encryption failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Recryption failed: {e}")
 
 
-@router.delete("/reencryption/share/{share_id}")
+@router.delete("/recryption/share/{share_id}")
 async def revoke_share(
     share_id: str,
     alice_public_key: str = Form(...),

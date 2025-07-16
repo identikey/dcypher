@@ -36,7 +36,7 @@ from dcypher.tui_main import tui_command
 
 @click.group()
 def cli():
-    """A CLI tool for demonstrating proxy re-encryption."""
+    """A CLI tool for demonstrating proxy recryption."""
     pass
 
 

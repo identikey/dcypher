@@ -29,7 +29,7 @@ import base64
 
 def test_full_workflow(cli_test_env):
     """
-    Tests the full PRE workflow from key generation to re-encryption.
+    Tests the full PRE workflow from key generation to recryption.
     This test now uses the spec-compliant IDK message format.
     """
     run_command, test_dir = cli_test_env
@@ -101,7 +101,7 @@ def test_full_workflow(cli_test_env):
     with open(decrypted_file_alice, "rb") as f:
         assert f.read() == original_data
 
-    # 6. Generate re-encryption key from Alice to Bob
+    # 6. Generate recryption key from Alice to Bob
     run_command(
         [
             "gen-rekey",
@@ -117,15 +117,15 @@ def test_full_workflow(cli_test_env):
     )
     assert (test_dir / "rekey_alice_to_bob.json").exists()
 
-    # Note: The CLI re-encrypt command is not compatible with IDK message format
-    # Modern workflow uses server-side re-encryption as demonstrated in test_complete_cli_reencryption_workflow
-    # The encrypt command creates IDK messages (.idk), but re-encrypt expects JSON format (.json)
-    # For actual proxy re-encryption, use the upload → share → download-shared workflow
+    # Note: The CLI recrypt command is not compatible with IDK message format
+    # Modern workflow uses server-side recryption as demonstrated in test_complete_cli_recryption_workflow
+    # The encrypt command creates IDK messages (.idk), but recrypt expects JSON format (.json)
+    # For actual proxy recryption, use the upload → share → download-shared workflow
 
 
 def test_cli_sharing_commands(cli_test_env, api_base_url):
     """
-    Tests the CLI sharing commands that work with server-side re-encryption.
+    Tests the CLI sharing commands that work with server-side recryption.
 
     This test demonstrates the sharing commands work properly:
     1. Alice and Bob create identities and accounts
@@ -261,16 +261,16 @@ def test_cli_sharing_commands(cli_test_env, api_base_url):
 
 
 @pytest.mark.crypto
-def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
+def test_complete_cli_recryption_workflow(cli_test_env, api_base_url):
     """
-    Tests the complete CLI re-encryption workflow against a live API server.
+    Tests the complete CLI recryption workflow against a live API server.
 
     This test demonstrates the full end-to-end workflow:
     1. Alice creates identity, initializes PRE, and creates account
     2. Bob creates identity, initializes PRE, and creates account
     3. Alice uploads an encrypted file using the updated upload command
-    4. Alice shares the file with Bob using proxy re-encryption
-    5. Bob downloads the re-encrypted file and decrypts it
+    4. Alice shares the file with Bob using proxy recryption
+    5. Bob downloads the recrypted file and decrypts it
     6. Alice revokes Bob's access
 
     This uses the refactored upload command that works with identity files.
@@ -405,7 +405,7 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     assert "Shares you've received (1)" in bob_shares_result.stderr
     click.echo("✅ Bob can see the shared file", err=True)
 
-    # === Step 10: Bob downloads the shared file (server applies re-encryption) ===
+    # === Step 10: Bob downloads the shared file (server applies recryption) ===
     shared_file_path = test_dir / "shared_file.gz"
     download_result = run_command(
         [
@@ -422,10 +422,10 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     )
     assert download_result.returncode == 0, f"Download failed: {download_result.stderr}"
     assert shared_file_path.exists()
-    click.echo("✅ Bob downloaded the re-encrypted file", err=True)
+    click.echo("✅ Bob downloaded the recrypted file", err=True)
 
     # === Step 10b: Bob decrypts the downloaded file and verifies content ===
-    click.echo("🔓 Bob decrypting the re-encrypted content...", err=True)
+    click.echo("🔓 Bob decrypting the recrypted content...", err=True)
 
     # Use the DCypherClient's built-in context management instead of manual singleton manipulation
     import gzip
@@ -437,7 +437,7 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     # No need to manually manage the singleton - let the client handle context synchronization
 
     # CRITICAL: Use Bob's actual PRE secret key from his identity (not generated keys)
-    # The server used Bob's real PRE public key for re-encryption, so we need the corresponding secret key
+    # The server used Bob's real PRE public key for recryption, so we need the corresponding secret key
     with open(bob_identity_file, "r") as f:
         bob_identity_data = json.load(f)
 
@@ -485,13 +485,13 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
             "🎉 SUCCESS: Bob received exactly the same content Alice uploaded!",
             err=True,
         )
-        click.echo("✅ Proxy re-encryption is working correctly!", err=True)
+        click.echo("✅ Proxy recryption is working correctly!", err=True)
 
     except Exception as e:
         click.echo(
             f"❌ FAILED: Bob could not decrypt the shared content: {e}", err=True
         )
-        raise AssertionError(f"Proxy re-encryption verification failed: {e}")
+        raise AssertionError(f"Proxy recryption verification failed: {e}")
 
     # === Step 11: Alice revokes the share ===
     revoke_result = run_command(
@@ -533,7 +533,7 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
         # Expected - the download should fail
         click.echo("✅ Bob correctly cannot access revoked share", err=True)
 
-    click.echo("🎉 Complete CLI re-encryption workflow successful!", err=True)
+    click.echo("🎉 Complete CLI recryption workflow successful!", err=True)
     click.echo(
         "✅ Upload → Share → Download → Decrypt → Verify → Revoke all work via CLI!",
         err=True,
@@ -544,7 +544,7 @@ def test_complete_cli_reencryption_workflow(cli_test_env, api_base_url):
     )
     click.echo("✅ Server PRE transformation is working correctly!", err=True)
     click.echo(
-        "✅ Proxy re-encryption cryptographic workflow is complete and verified!",
+        "✅ Proxy recryption cryptographic workflow is complete and verified!",
         err=True,
     )
 
@@ -615,7 +615,7 @@ def test_full_workflow_with_string(cli_test_env):
     with open(decrypted_file_alice, "rb") as f:
         assert f.read() == original_data.encode("utf-8")
 
-    # Generate re-encryption key from Alice to Bob
+    # Generate recryption key from Alice to Bob
     run_command(
         [
             "gen-rekey",
@@ -631,7 +631,7 @@ def test_full_workflow_with_string(cli_test_env):
     )
     assert (test_dir / "rekey_alice_to_bob.json").exists()
 
-    # Note: The CLI re-encrypt command is not compatible with IDK message format
-    # Modern workflow uses server-side re-encryption as demonstrated in test_complete_cli_reencryption_workflow
-    # The encrypt command creates IDK messages (.idk), but re-encrypt expects JSON format (.json)
-    # For actual proxy re-encryption, use the upload → share → download-shared workflow
+    # Note: The CLI recrypt command is not compatible with IDK message format
+    # Modern workflow uses server-side recryption as demonstrated in test_complete_cli_recryption_workflow
+    # The encrypt command creates IDK messages (.idk), but recrypt expects JSON format (.json)
+    # For actual proxy recryption, use the upload → share → download-shared workflow

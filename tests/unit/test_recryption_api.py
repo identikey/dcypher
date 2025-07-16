@@ -149,15 +149,15 @@ class TestPRECryptographicOperations:
         alice_public_key = pre.deserialize_public_key(alice_pk_bytes_from_id)
         alice_ciphertext = pre.encrypt(shared_cc, alice_public_key, coeffs)
 
-        # Alice creates a re-encryption key for Bob
+        # Alice creates a recryption key for Bob
         re_key = pre.generate_re_encryption_key(
             shared_cc, alice_secret_key, bob_public_key
         )
 
-        # Proxy applies re-encryption
+        # Proxy applies recryption
         bob_ciphertext = pre.re_encrypt(shared_cc, re_key, alice_ciphertext)
 
-        # Bob decrypts the re-encrypted data
+        # Bob decrypts the recrypted data
         decrypted_coeffs_bob = pre.decrypt(
             shared_cc, bob_secret_key, bob_ciphertext, len(coeffs)
         )

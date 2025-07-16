@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from dcypher.routers import accounts as accounts_router
 from dcypher.routers import storage as storage_router
 from dcypher.routers import system as system_router
-from dcypher.routers import reencryption as reencryption_router
+from dcypher.routers import recryption as recryption_router
 from dcypher.routers import crypto as crypto_router
 
 
@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="IDK Server",
-        description="Identity Key Distribution server with proxy re-encryption",
+        description="Identity Key Distribution server with proxy recryption",
         version="1.0.0",
         lifespan=lifespan,
     )
@@ -45,7 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(accounts_router.router, tags=["accounts"])
     app.include_router(storage_router.router, tags=["storage"])
     app.include_router(system_router.router, tags=["system"])
-    app.include_router(reencryption_router.router, tags=["reencryption"])
+    app.include_router(recryption_router.router, tags=["recryption"])
     app.include_router(crypto_router.router, tags=["crypto"])
 
     return app

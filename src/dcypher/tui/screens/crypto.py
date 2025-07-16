@@ -1,6 +1,6 @@
 """
 Crypto Operations Screen
-Handles encryption, decryption, key generation, and re-encryption
+Handles encryption, decryption, key generation, and recryption
 """
 
 import json
@@ -28,7 +28,7 @@ except ImportError:
 class CryptoScreen(Widget):
     """
     Cryptographic operations screen with CLI feature parity
-    Supports: gen-cc, gen-keys, encrypt, decrypt, gen-rekey, re-encrypt
+    Supports: gen-cc, gen-keys, encrypt, decrypt, gen-rekey, recrypt
     """
 
     # Reactive state
@@ -78,14 +78,14 @@ class CryptoScreen(Widget):
                         yield Button("Encrypt", id="encrypt-btn", variant="success")
                         yield Button("Decrypt", id="decrypt-btn", variant="warning")
 
-            # Re-encryption panel
+            # Recryption panel
             with Horizontal():
-                with Vertical(id="reencrypt-panel"):
-                    yield Label("Proxy Re-Encryption")
+                with Vertical(id="recrypt-panel"):
+                    yield Label("Proxy Recryption")
                     yield Input(placeholder="Alice secret key path", id="alice-sk-path")
                     yield Input(placeholder="Bob public key path", id="bob-pk-path")
                     yield Button("Generate Re-key", id="gen-rekey-btn")
-                    yield Button("Re-encrypt", id="re-encrypt-btn")
+                    yield Button("Recrypt", id="recrypt-btn")
 
                 # File paths panel
                 with Vertical(id="file-paths-panel"):
@@ -137,7 +137,7 @@ class CryptoScreen(Widget):
             ("key.sec", "Secret Key"),
             ("idk_signing.pub", "Signing Public Key"),
             ("idk_signing.sec", "Signing Secret Key"),
-            ("rekey.json", "Re-encryption Key"),
+            ("rekey.json", "Recryption Key"),
             ("ciphertext.idk", "IDK Message"),
         ]
 
@@ -189,7 +189,7 @@ class CryptoScreen(Widget):
             self.action_decrypt()
         elif button_id == "gen-rekey-btn":
             self.action_generate_rekey()
-        elif button_id == "re-encrypt-btn":
+        elif button_id == "recrypt-btn":
             self.action_re_encrypt()
 
     def action_generate_crypto_context(self) -> None:
@@ -425,7 +425,7 @@ class CryptoScreen(Widget):
             self.notify(f"Decryption failed: {e}", severity="error")
 
     def action_generate_rekey(self) -> None:
-        """Generate re-encryption key (equivalent to CLI gen-rekey)"""
+        """Generate recryption key (equivalent to CLI gen-rekey)"""
         try:
             alice_sk_path = self.query_one("#alice-sk-path", Input).value
             bob_pk_path = self.query_one("#bob-pk-path", Input).value
@@ -448,7 +448,7 @@ class CryptoScreen(Widget):
                     self.notify(f"{name} file not found: {path}", severity="error")
                     return
 
-            self.notify("Generating re-encryption key...", severity="information")
+            self.notify("Generating recryption key...", severity="information")
 
             # Load crypto context
             with open(cc_path, "r") as f:
@@ -465,7 +465,7 @@ class CryptoScreen(Widget):
                 pk_data = json.load(f)
             pk_bob = pre.deserialize_public_key(base64.b64decode(pk_data["key"]))
 
-            # Generate re-encryption key
+            # Generate recryption key
             rekey = pre.generate_re_encryption_key(cc, sk_alice, pk_bob)
             serialized_rekey = pre.serialize(rekey)
 
@@ -473,32 +473,32 @@ class CryptoScreen(Widget):
             with open(output_path, "w") as f:
                 json.dump({"rekey": serialized_rekey}, f)
 
-            self.operation_results = f"✓ Re-encryption key generated: {output_path}"
+            self.operation_results = f"✓ Recryption key generated: {output_path}"
             self.update_results_display()
             self.refresh_crypto_files()
-            self.notify("Re-encryption key generated successfully", severity="success")
+            self.notify("Recryption key generated successfully", severity="success")
 
         except Exception as e:
-            self.notify(f"Failed to generate re-encryption key: {e}", severity="error")
+            self.notify(f"Failed to generate recryption key: {e}", severity="error")
 
     def action_re_encrypt(self) -> None:
-        """Re-encrypt ciphertext (equivalent to CLI re-encrypt)"""
+        """Recrypt ciphertext (equivalent to CLI recrypt)"""
         try:
             cc_path = self.query_one("#cc-output-path", Input).value or "cc.json"
             rekey_path = "rekey.json"
             ciphertext_path = "ciphertext.json"  # Note: needs JSON format, not IDK
 
-            self.notify("Re-encrypting ciphertext...", severity="information")
+            self.notify("Recrypting ciphertext...", severity="information")
             self.notify(
-                "Note: Re-encryption requires JSON ciphertext format, not IDK messages",
+                "Note: Recryption requires JSON ciphertext format, not IDK messages",
                 severity="warning",
             )
 
-            self.operation_results = "⚠️ Re-encryption requires JSON format ciphertext.\nIDK message re-encryption not yet supported in TUI."
+            self.operation_results = "⚠️ Recryption requires JSON format ciphertext.\nIDK message recryption not yet supported in TUI."
             self.update_results_display()
 
         except Exception as e:
-            self.notify(f"Re-encryption failed: {e}", severity="error")
+            self.notify(f"Recryption failed: {e}", severity="error")
 
     def watch_operation_results(self, results: str) -> None:
         """Update display when results change"""

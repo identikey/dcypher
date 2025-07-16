@@ -504,7 +504,7 @@ class TestDCypherClient:
         # Verify the HTTP request
         mock_post.assert_called_once()
         call_args = mock_post.call_args
-        assert call_args[0][0] == "http://localhost:8000/reencryption/share"
+        assert call_args[0][0] == "http://localhost:8000/recryption/share"
         form_data = call_args[1]["data"]
         assert form_data["alice_public_key"] == "alice_pk_hex"
         assert form_data["bob_public_key"] == "bob_pk_hex"
@@ -559,7 +559,7 @@ class TestDCypherClient:
         assert result["shares_received"][0]["from"] == "alice_pk"
 
         mock_get.assert_called_once_with(
-            "http://localhost:8000/reencryption/shares/test_pk"
+            "http://localhost:8000/recryption/shares/test_pk"
         )
 
     @patch("requests.get")
@@ -584,7 +584,7 @@ class TestDCypherClient:
         assert result["shares_received"] == []
 
         mock_get.assert_called_once_with(
-            "http://localhost:8000/reencryption/shares/test_pk"
+            "http://localhost:8000/recryption/shares/test_pk"
         )
 
     @patch("requests.get")
@@ -660,8 +660,7 @@ class TestDCypherClient:
         mock_post.assert_called_once()
         call_args = mock_post.call_args
         assert (
-            call_args[0][0]
-            == "http://localhost:8000/reencryption/download/test_share_id"
+            call_args[0][0] == "http://localhost:8000/recryption/download/test_share_id"
         )
         form_data = call_args[1]["data"]
         assert form_data["bob_public_key"] == "bob_pk_hex"

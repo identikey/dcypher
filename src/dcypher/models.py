@@ -25,7 +25,7 @@ class CreateAccountRequest(BaseModel):
     )
     nonce: str = Field(..., description="Time-based nonce provided by the server.")
     pre_public_key_hex: Optional[str] = Field(
-        None, description="Optional hex-encoded public key for Proxy Re-Encryption."
+        None, description="Optional hex-encoded public key for Proxy Recryption."
     )
 
 

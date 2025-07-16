@@ -1,8 +1,8 @@
 """
-TUI End-to-End Proxy Re-Encryption Sharing Tests
+TUI End-to-End Proxy Recryption Sharing Tests
 
 REAL End-to-End tests that drive the TUI to test complete file sharing workflows
-between two users (Alice and Bob) using proxy re-encryption.
+between two users (Alice and Bob) using proxy recryption.
 
 Tests complete scenarios:
 1. Alice creates identity and account, initializes PRE, uploads file
@@ -17,9 +17,9 @@ AUDIT DOCUMENTATION:
 PURPOSE:
 --------
 This test suite provides comprehensive end-to-end validation of the proxy
-re-encryption sharing system through the TUI interface. It ensures that:
+recryption sharing system through the TUI interface. It ensures that:
 - Two independent users can create separate identities and accounts
-- Each user can initialize proxy re-encryption capabilities independently
+- Each user can initialize proxy recryption capabilities independently
 - File sharing between users works correctly through the TUI
 - Downloaded files match the original plaintext content
 - The complete workflow functions as intended for end users
@@ -102,10 +102,10 @@ from tests.helpers.tui_test_helpers import (
 @pytest.mark.e2e
 async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
     """
-    COMPREHENSIVE PROXY RE-ENCRYPTION SHARING TEST
+    COMPREHENSIVE PROXY RECRYPTION SHARING TEST
 
     This test validates the complete file sharing workflow between two users
-    (Alice and Bob) using proxy re-encryption through the TUI interface.
+    (Alice and Bob) using proxy recryption through the TUI interface.
 
     WORKFLOW:
     1. Alice creates identity, account, and initializes PRE
@@ -145,7 +145,7 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
     alice_file = alice_dir / "secret_document.txt"
     create_test_file(alice_file, test_content)
 
-    print("🚀 Starting Alice-Bob proxy re-encryption sharing workflow")
+    print("🚀 Starting Alice-Bob proxy recryption sharing workflow")
     print("=" * 70)
 
     # PHASE 1: Bob creates identity first (needed for Alice's sharing)
@@ -538,12 +538,12 @@ async def test_alice_bob_complete_sharing_workflow(api_base_url: str, tmp_path):
     print(f"   ✅ Downloaded: '{bob_content}'")
 
     print("\n" + "=" * 70)
-    print("🎉 ALICE-BOB PROXY RE-ENCRYPTION SHARING: SUCCESS!")
+    print("🎉 ALICE-BOB PROXY RECRYPTION SHARING: SUCCESS!")
     print("✅ Bob identity & account creation: SUCCESS")
     print("✅ Alice identity, account, upload & sharing: SUCCESS")
     print("✅ File download by Bob: SUCCESS")
     print("✅ Content integrity verification: SUCCESS")
-    print("🔐 Complete proxy re-encryption workflow validated!")
+    print("🔐 Complete proxy recryption workflow validated!")
 
 
 @pytest.mark.asyncio
@@ -614,7 +614,7 @@ if __name__ == "__main__":
     # Run the comprehensive test
     import sys
 
-    print("🚀 Starting TUI End-to-End Proxy Re-Encryption Sharing Tests")
+    print("🚀 Starting TUI End-to-End Proxy Recryption Sharing Tests")
     print("=" * 70)
 
     # This would typically be run via pytest, but can also be run directly

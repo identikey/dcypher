@@ -3,7 +3,7 @@ This library handles the creation, parsing, and verification of IdentiKey (IDK)
 messages, as defined in the specification.
 
 An IDK message is a chunkable, verifiable, and secure format for transmitting
-data, such as ciphertexts from the proxy re-encryption library.
+data, such as ciphertexts from the proxy recryption library.
 """
 
 import json
@@ -387,26 +387,26 @@ def decrypt_idk_message(
             # Decode payload first as it's needed by both message types
             payload_bytes = base64.b64decode(payload_b64, validate=True)
 
-            # Check if this is a re-encrypted message first
-            is_re_encrypted = headers.get("ReEncrypted", "false").lower() == "true"
+            # Check if this is a recrypted message first
+            is_re_encrypted = headers.get("Recrypted", "false").lower() == "true"
 
             if is_re_encrypted:
-                # Handle re-encrypted messages according to new specification
-                # Re-encrypted messages don't have SignerPublicKey, they have ProxyPublicKey
+                # Handle recrypted messages according to new specification
+                # Recrypted messages don't have SignerPublicKey, they have ProxyPublicKey
 
-                # Verify required re-encryption headers are present
+                # Verify required recryption headers are present
                 required_re_headers = [
                     "OriginalSender",
-                    "ReEncryptedBy",
-                    "ReEncryptedFor",
-                    "ReEncryptionTimestamp",
+                    "RecryptedBy",
+                    "RecryptedFor",
+                    "RecryptionTimestamp",
                     "ProxySignature",
                     "ProxyPublicKey",
                 ]
                 for req_header in required_re_headers:
                     if req_header not in headers:
                         raise ValueError(
-                            f"Re-encrypted message missing required header: {req_header}"
+                            f"Recrypted message missing required header: {req_header}"
                         )
 
                 # Verify proxy signature using the ProxyPublicKey from the message
@@ -436,17 +436,17 @@ def decrypt_idk_message(
                     bytes.fromhex(proxy_signature_hex), canonical_hash
                 )
 
-                # Skip Merkle verification for re-encrypted messages
+                # Skip Merkle verification for recrypted messages
                 print(
-                    f"📝 Processing re-encrypted message part {headers.get('Part', '?')}"
+                    f"📝 Processing recrypted message part {headers.get('Part', '?')}"
                 )
                 print(f"   Original sender: {headers['OriginalSender'][:16]}...")
-                print(f"   Re-encrypted by: {headers['ReEncryptedBy'][:16]}...")
-                print(f"   Re-encrypted for: {headers['ReEncryptedFor'][:16]}...")
-                print(f"   Timestamp: {headers['ReEncryptionTimestamp']}")
+                print(f"   Recrypted by: {headers['RecryptedBy'][:16]}...")
+                print(f"   Recrypted for: {headers['RecryptedFor'][:16]}...")
+                print(f"   Timestamp: {headers['RecryptionTimestamp']}")
 
             else:
-                # Handle original (non-re-encrypted) messages with full verification
+                # Handle original (non-recrypted) messages with full verification
                 # Original messages must have SignerPublicKey
 
                 # Get the signer's public key from the message headers for self-contained verification
@@ -536,7 +536,7 @@ def decrypt_idk_message(
                 elif headers["MerkleRoot"] != merkle_root:
                     raise ValueError("Inconsistent Merkle roots across message parts")
             else:
-                # For re-encrypted messages, use BytesTotal directly
+                # For recrypted messages, use BytesTotal directly
                 if not total_bytes:
                     total_bytes = int(headers["BytesTotal"])
 
@@ -570,10 +570,10 @@ def create_re_encrypted_idk_message_parts(
     optional_headers: Optional[Dict[str, str]] = None,
 ) -> List[str]:
     """
-    Creates re-encrypted IDK message parts according to the new specification.
+    Creates recrypted IDK message parts according to the new specification.
 
     Args:
-        re_encrypted_ciphertexts: List of re-encrypted ciphertext objects.
+        re_encrypted_ciphertexts: List of recrypted ciphertext objects.
         original_sender_public_key: Hex-encoded public key of the original sender (Alice).
         proxy_public_key: Hex-encoded public key of the proxy service.
         recipient_public_key: Hex-encoded public key of the intended recipient (Bob).
@@ -583,11 +583,11 @@ def create_re_encrypted_idk_message_parts(
         optional_headers: Optional additional headers.
 
     Returns:
-        A list of strings, where each string is a fully formatted re-encrypted IDK message part.
+        A list of strings, where each string is a fully formatted recrypted IDK message part.
     """
     from datetime import datetime, timezone
 
-    # Serialize each re-encrypted ciphertext piece
+    # Serialize each recrypted ciphertext piece
     serialized_pieces_bytes = [
         pre.serialize_to_bytes(ct) for ct in re_encrypted_ciphertexts
     ]
@@ -596,7 +596,7 @@ def create_re_encrypted_idk_message_parts(
     message_parts = []
     slot_count = pre.get_slot_count(cc)
 
-    # Generate re-encryption timestamp
+    # Generate recryption timestamp
     re_encryption_timestamp = (
         datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     )
@@ -605,14 +605,14 @@ def create_re_encrypted_idk_message_parts(
         part_num = i + 1
 
         # Calculate slots used for this part
-        # For re-encrypted messages, we use the full slot count per part
+        # For recrypted messages, we use the full slot count per part
         part_slots_total = slot_count
         part_slots_used = min(slot_count, (original_bytes_total + 1) // 2)
 
         # Base64-encode the payload
         payload_b64 = base64.b64encode(piece_bytes).decode("ascii")
 
-        # Prepare re-encrypted message headers
+        # Prepare recrypted message headers
         headers = {
             "Version": IDK_VERSION,
             "PartSlotsTotal": str(part_slots_total),
@@ -620,12 +620,12 @@ def create_re_encrypted_idk_message_parts(
             "BytesTotal": str(original_bytes_total),
             "Part": f"{part_num}/{total_parts}",
             "ChunkHash": hashlib.blake2b(piece_bytes).hexdigest(),
-            # Re-encryption specific headers
-            "ReEncrypted": "true",
+            # Recryption specific headers
+            "Recrypted": "true",
             "OriginalSender": original_sender_public_key,
-            "ReEncryptedBy": proxy_public_key,
-            "ReEncryptedFor": recipient_public_key,
-            "ReEncryptionTimestamp": re_encryption_timestamp,
+            "RecryptedBy": proxy_public_key,
+            "RecryptedFor": recipient_public_key,
+            "RecryptionTimestamp": re_encryption_timestamp,
             "ProxyPublicKey": proxy_public_key,
         }
 

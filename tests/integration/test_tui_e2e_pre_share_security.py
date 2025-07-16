@@ -1,5 +1,5 @@
 """
-TUI End-to-End Security & Error Condition Tests for Proxy Re-Encryption
+TUI End-to-End Security & Error Condition Tests for Proxy Recryption
 
 AUDIT FOCUS: TUI client security validation, error handling, and edge cases
 that complement the main sharing workflow test.

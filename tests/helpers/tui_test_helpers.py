@@ -1306,9 +1306,9 @@ async def create_share_direct_action(
                 # Try the share creation directly via API to get exact error
                 print("   🔍 Testing direct API share creation...")
                 try:
-                    # Generate re-encryption key
+                    # Generate recryption key
                     re_key_hex = alice_client.generate_re_encryption_key(bob_pre_key)
-                    print(f"   ✅ Generated re-encryption key: {re_key_hex[:16]}...")
+                    print(f"   ✅ Generated recryption key: {re_key_hex[:16]}...")
 
                     # Attempt direct share creation
                     share_result = alice_client.create_share(

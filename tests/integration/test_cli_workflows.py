@@ -101,9 +101,9 @@ def test_full_workflow_with_string(cli_test_env):
     with open(decrypted_file_alice, "rb") as f:
         assert f.read() == original_data
 
-    # Re-encryption is disabled because the re-encrypt command does not
+    # Recryption is disabled because the recrypt command does not
     # support the IDK message format.
-    # # 6. Generate re-encryption key from Alice to Bob
+    # # 6. Generate recryption key from Alice to Bob
     # run_command(
     #     [
     #         "gen-rekey",
@@ -119,10 +119,10 @@ def test_full_workflow_with_string(cli_test_env):
     # )
     # assert (test_dir / "rekey_alice_to_bob.json").exists()
 
-    # # 7. Re-encrypt ciphertext for Bob
+    # # 7. Recrypt ciphertext for Bob
     # run_command(
     #     [
-    #         "re-encrypt",
+    #         "recrypt",
     #         "--cc-path",
     #         "cc.json",
     #         "--rekey-path",
@@ -224,9 +224,9 @@ def test_full_workflow_with_random_bytes(cli_test_env):
     with open(decrypted_file_alice, "rb") as f:
         assert f.read() == original_data
 
-    # Re-encryption is disabled because the re-encrypt command does not
+    # Recryption is disabled because the recrypt command does not
     # support the IDK message format.
-    # # 6. Generate re-encryption key from Alice to Bob
+    # # 6. Generate recryption key from Alice to Bob
     # run_command(
     #     [
     #         "gen-rekey",
@@ -242,10 +242,10 @@ def test_full_workflow_with_random_bytes(cli_test_env):
     # )
     # assert (test_dir / "rekey_alice_to_bob.json").exists()
 
-    # # 7. Re-encrypt ciphertext for Bob
+    # # 7. Recrypt ciphertext for Bob
     # run_command(
     #     [
-    #         "re-encrypt",
+    #         "recrypt",
     #         "--cc-path",
     #         "cc.json",
     #         "--rekey-path",
@@ -282,7 +282,7 @@ def test_large_file_workflow(cli_test_env):
     """
     Tests the PRE workflow with a file larger than the crypto context's slot count.
     This test has been simplified to focus on the encrypt/decrypt cycle with the
-    new IDK message format, as re-encryption is not currently compatible.
+    new IDK message format, as recryption is not currently compatible.
     """
     run_command, test_dir = cli_test_env
 
@@ -362,8 +362,8 @@ def test_large_file_workflow(cli_test_env):
     with open(decrypted_file_alice, "rb") as f:
         assert f.read() == original_data
 
-    # Re-encryption workflow is disabled.
-    # # 4. Generate re-encryption key and re-encrypt
+    # Recryption workflow is disabled.
+    # # 4. Generate recryption key and recrypt
     # rekey_path = test_dir / "rekey.json"
     # run_command(
     #     [
@@ -379,10 +379,10 @@ def test_large_file_workflow(cli_test_env):
     #     ]
     # )
     # reciphertext_path = test_dir / "reciphertext.json"
-    # # This part needs to be re-thought as re-encrypt expects a different format
+    # # This part needs to be re-thought as recrypt expects a different format
     # # run_command(
     # #     [
-    # #         "re-encrypt",
+    # #         "recrypt",
     # #         "--cc-path",
     # #         str(cc_path),
     # #         "--rekey-path",

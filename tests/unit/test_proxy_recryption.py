@@ -1,5 +1,5 @@
 """
-This file tests the proxy re-encryption (PRE) library.
+This file tests the proxy recryption (PRE) library.
 """
 
 import base64
@@ -28,12 +28,12 @@ def crypto_setup():
 
 
 def test_full_workflow(crypto_setup):
-    """Tests the end-to-end proxy re-encryption workflow.
+    """Tests the end-to-end proxy recryption workflow.
 
     This test covers the entire standard PRE lifecycle:
     1. Alice encrypts data with her public key.
-    2. Alice generates a re-encryption key for Bob.
-    3. A proxy uses the re-encryption key to transform the ciphertext.
+    2. Alice generates a recryption key for Bob.
+    3. A proxy uses the recryption key to transform the ciphertext.
     4. Bob decrypts the transformed ciphertext with his secret key.
 
     It serves as a high-level integration test to ensure the core components
@@ -44,7 +44,7 @@ def test_full_workflow(crypto_setup):
     bob_keys = crypto_setup["bob_keys"]
 
     # 1. Encrypt data with Alice's key
-    original_data = b"This is a test string for proxy re-encryption."
+    original_data = b"This is a test string for proxy recryption."
     slot_count = pre.get_slot_count(cc)
     coeffs = pre.bytes_to_coefficients(original_data, slot_count)
     ciphertext_alice = pre.encrypt(cc, alice_keys.publicKey, coeffs)
@@ -58,15 +58,15 @@ def test_full_workflow(crypto_setup):
     )
     assert decrypted_data_alice == original_data
 
-    # 2. Generate re-encryption key for Bob
+    # 2. Generate recryption key for Bob
     re_encryption_key = pre.generate_re_encryption_key(
         cc, alice_keys.secretKey, bob_keys.publicKey
     )
 
-    # 3. Re-encrypt the ciphertext for Bob
+    # 3. Recrypt the ciphertext for Bob
     ciphertext_bob = pre.re_encrypt(cc, re_encryption_key, ciphertext_alice)
 
-    # 4. Decrypt the re-encrypted message with Bob's key
+    # 4. Decrypt the recrypted message with Bob's key
     decrypted_coeffs_bob = pre.decrypt(
         cc, bob_keys.secretKey, ciphertext_bob, len(coeffs)
     )
@@ -192,7 +192,7 @@ def test_secret_key_serialization_behavior(crypto_setup):
     serialization. It's particularly important to confirm that a deserialized
     secret key remains fully functional for both:
     a) Decrypting ciphertexts.
-    b) Generating re-encryption keys.
+    b) Generating recryption keys.
     """
     cc = crypto_setup["cc"]
     alice_keys = crypto_setup["alice_keys"]
@@ -354,7 +354,7 @@ def test_workflow_with_deserialized_objects(crypto_setup):
     ser_re_key_bytes = pre.serialize_to_bytes(re_key)
     deser_re_key = pre.deserialize_re_encryption_key(ser_re_key_bytes)
 
-    # Re-encrypt with deserialized re-key
+    # Recrypt with deserialized re-key
     ciphertext_bob = pre.re_encrypt(cc, deser_re_key, ciphertext_alice)
 
     # Decrypt with deserialized Bob SK
@@ -392,7 +392,7 @@ def test_workflow_with_multi_chunk_data(crypto_setup):
     The library is designed to handle data of arbitrary size by splitting it
     into multiple chunks, each encrypted in a separate ciphertext. This test
     verifies that this chunking mechanism works correctly and that the data
-    can be fully reconstructed after a multi-chunk re-encryption and
+    can be fully reconstructed after a multi-chunk recryption and
     decryption cycle.
     """
     cc = crypto_setup["cc"]

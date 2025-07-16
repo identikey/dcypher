@@ -1,12 +1,12 @@
 """
-Integration tests for proxy re-encryption workflows with comprehensive content verification.
+Integration tests for proxy recryption workflows with comprehensive content verification.
 
-This test suite validates the complete end-to-end proxy re-encryption functionality:
+This test suite validates the complete end-to-end proxy recryption functionality:
 
-1. **Complete Workflow Test (test_complete_reencryption_workflow_live_server)**:
+1. **Complete Workflow Test (test_complete_recryption_workflow_live_server)**:
    - Alice creates an account and uploads an encrypted file
-   - Alice shares the file with Bob using proxy re-encryption
-   - Bob downloads the re-encrypted file and decrypts it
+   - Alice shares the file with Bob using proxy recryption
+   - Bob downloads the recrypted file and decrypts it
    - VERIFIES: Bob receives exactly the same content Alice uploaded
    - Alice revokes Bob's access and verifies revocation works
 
@@ -19,7 +19,7 @@ This test suite validates the complete end-to-end proxy re-encryption functional
 3. **Key Management Test (test_pre_key_management_with_live_server)**:
    - Tests PRE key initialization and management
    - Verifies account creation with PRE capabilities
-   - Tests re-encryption key generation
+   - Tests recryption key generation
 
 4. **Error Handling Test (test_error_handling_with_live_server)**:
    - Tests proper error handling for invalid operations
@@ -105,12 +105,12 @@ def bob_identity(temp_dir, api_base_url):
     }
 
 
-def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
+def test_complete_recryption_workflow_live_server(api_base_url, temp_dir):
     """
-    Test the complete proxy re-encryption workflow against a live API server:
+    Test the complete proxy recryption workflow against a live API server:
     1. Alice and Bob create accounts with PRE capabilities using CLI commands
     2. Alice uploads an encrypted file using CLI
-    3. Alice shares the file with Bob using proxy re-encryption using CLI
+    3. Alice shares the file with Bob using proxy recryption using CLI
     4. Bob downloads and decrypts the shared file using CLI
     5. Verify Bob received the exact same content Alice uploaded
     6. Alice revokes Bob's access using CLI
@@ -272,7 +272,7 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     print(f"✅ File uploaded successfully with hash: {file_hash[:16]}...")
 
-    print("🔗 Alice shares the file with Bob using proxy re-encryption...")
+    print("🔗 Alice shares the file with Bob using proxy recryption...")
 
     # Get Bob's public key for sharing using CLI
     with open(bob_identity_file, "r") as f:
@@ -374,7 +374,7 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
         print(f"✅ Bob decrypted {len(received_content)} bytes of content")
     except Exception as e:
         print(f"❌ FAILED: Bob could not decrypt the shared content: {e}")
-        raise AssertionError(f"Proxy re-encryption verification failed: {e}")
+        raise AssertionError(f"Proxy recryption verification failed: {e}")
 
     print(f"📝 Original content: {secret_message[:50]}...")
     print(f"📝 Received content: {received_content[:50]}...")
@@ -385,7 +385,7 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
         f"Bob received: {received_content!r}"
     )
     print("🎉 SUCCESS: Bob received exactly the same content Alice uploaded!")
-    print("✅ Proxy re-encryption is working correctly!")
+    print("✅ Proxy recryption is working correctly!")
 
     print("🚫 Testing share revocation...")
 
@@ -430,9 +430,7 @@ def test_complete_reencryption_workflow_live_server(api_base_url, temp_dir):
 
     print("✅ Verified share revocation workflow")
 
-    print(
-        "🎉 Complete proxy re-encryption workflow successful with content verification!"
-    )
+    print("🎉 Complete proxy recryption workflow successful with content verification!")
 
 
 def test_pre_key_management_with_live_server(api_base_url, temp_dir):
@@ -552,14 +550,14 @@ def test_error_handling_with_live_server(alice_identity, bob_identity, api_base_
 
 if __name__ == "__main__":
     """
-    Run this file directly to see the proxy re-encryption workflow in action!
+    Run this file directly to see the proxy recryption workflow in action!
     
     Usage:
-        python -m pytest tests/integration/test_reencryption_workflows.py -v -s
+        python -m pytest tests/integration/test_recryption_workflows.py -v -s
     
     Or run individual tests:
-        python -m pytest tests/integration/test_reencryption_workflows.py::test_complete_reencryption_workflow_live_server -v -s
+        python -m pytest tests/integration/test_recryption_workflows.py::test_complete_recryption_workflow_live_server -v -s
     """
-    print("🚀 Proxy Re-Encryption Integration Tests (Live Server)")
+    print("🚀 Proxy Recryption Integration Tests (Live Server)")
     print("=" * 60)
-    print("Run with: pytest tests/integration/test_reencryption_workflows.py -v -s")
+    print("Run with: pytest tests/integration/test_recryption_workflows.py -v -s")

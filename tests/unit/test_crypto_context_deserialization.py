@@ -1,7 +1,7 @@
 """
 Tests for OpenFHE CryptoContext deserialization behavior.
 
-This file documents critical OpenFHE behaviors that affect proxy re-encryption
+This file documents critical OpenFHE behaviors that affect proxy recryption
 in distributed systems.
 """
 
@@ -84,7 +84,7 @@ class TestCryptoContextDeserialization:
             alice_keys = pre.generate_keys(shared_cc)
             bob_keys = pre.generate_keys(shared_cc)
 
-            # Generate re-encryption key - this should work because all objects
+            # Generate recryption key - this should work because all objects
             # were created with the same context instance
             re_key = pre.generate_re_encryption_key(
                 shared_cc, alice_keys.secretKey, bob_keys.publicKey
@@ -99,7 +99,7 @@ class TestCryptoContextDeserialization:
             # Encrypt with Alice's key
             alice_ciphertext = pre.encrypt(shared_cc, alice_keys.publicKey, coeffs)
 
-            # Re-encrypt for Bob
+            # Recrypt for Bob
             bob_ciphertexts = pre.re_encrypt(shared_cc, re_key, alice_ciphertext)
 
             # Decrypt with Bob's key

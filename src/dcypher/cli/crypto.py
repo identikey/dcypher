@@ -208,11 +208,9 @@ def decrypt(cc_path, sk_path, verifying_key_path, ciphertext_path, output_file):
     help="Path to the public key file of the 'to' party (e.g., Bob).",
     required=True,
 )
-@click.option(
-    "--output", default="rekey.json", help="Path to save the re-encryption key."
-)
+@click.option("--output", default="rekey.json", help="Path to save the recryption key.")
 def gen_rekey(cc_path, sk_path_from, pk_path_to, output):
-    """Generates a re-encryption key."""
+    """Generates a recryption key."""
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
@@ -228,20 +226,20 @@ def gen_rekey(cc_path, sk_path_from, pk_path_to, output):
         pk_data = json.load(f)
     pk_to = pre.deserialize_public_key(base64.b64decode(pk_data["key"]))
 
-    click.echo("Generating re-encryption key...", err=True)
+    click.echo("Generating recryption key...", err=True)
     rekey = pre.generate_re_encryption_key(cc, sk_from, pk_to)
     serialized_rekey = pre.serialize(rekey)
 
     with open(output, "w") as f:
         json.dump({"rekey": serialized_rekey}, f)
 
-    click.echo(f"Re-encryption key saved to {output}", err=True)
+    click.echo(f"Recryption key saved to {output}", err=True)
 
 
-@click.command("re-encrypt")
+@click.command("recrypt")
 @click.option("--cc-path", default="cc.json", help="Path to the crypto context file.")
 @click.option(
-    "--rekey-path", default="rekey.json", help="Path to the re-encryption key file."
+    "--rekey-path", default="rekey.json", help="Path to the recryption key file."
 )
 @click.option(
     "--ciphertext-path", help="Path to the original ciphertext file.", required=True
@@ -249,16 +247,16 @@ def gen_rekey(cc_path, sk_path_from, pk_path_to, output):
 @click.option(
     "--output",
     default="reciphertext.json",
-    help="Path to save the re-encrypted ciphertext.",
+    help="Path to save the recrypted ciphertext.",
 )
 def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
-    """Re-encrypts a ciphertext."""
+    """Recrypts a ciphertext."""
     click.echo(f"Loading crypto context from {cc_path}...", err=True)
     with open(cc_path, "r") as f:
         cc_data = json.load(f)
     cc = pre.deserialize_cc(base64.b64decode(cc_data["cc"]))
 
-    click.echo(f"Loading re-encryption key from {rekey_path}...", err=True)
+    click.echo(f"Loading recryption key from {rekey_path}...", err=True)
     with open(rekey_path, "r") as f:
         rekey_data = json.load(f)
     rekey = pre.deserialize_re_encryption_key(base64.b64decode(rekey_data["rekey"]))
@@ -271,14 +269,14 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
 
     if "ciphertexts" not in ciphertext_data:
         raise click.ClickException(
-            "Invalid or legacy ciphertext format. Re-encryption requires a JSON file "
+            "Invalid or legacy ciphertext format. Recryption requires a JSON file "
             "with a 'ciphertexts' key. The IDK message format is not supported."
         )
 
     serialized_items = ciphertext_data["ciphertexts"]
     ciphertexts = [pre.deserialize_ciphertext(s_item) for s_item in serialized_items]
 
-    click.echo("Re-encrypting ciphertext...", err=True)
+    click.echo("Recrypting ciphertext...", err=True)
     re_ciphertexts = pre.re_encrypt(cc, rekey, ciphertexts)
     serialized_re_ciphertexts = [pre.serialize(ct) for ct in re_ciphertexts]
 
@@ -289,4 +287,4 @@ def re_encrypt(cc_path, rekey_path, ciphertext_path, output):
     with open(output, "w") as f:
         json.dump(output_data, f)
 
-    click.echo(f"Re-encrypted ciphertext saved to {output}", err=True)
+    click.echo(f"Recrypted ciphertext saved to {output}", err=True)

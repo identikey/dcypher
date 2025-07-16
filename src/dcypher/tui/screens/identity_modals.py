@@ -439,7 +439,7 @@ class PREKeyDetailsModal(HexDataModal):
             metadata = (
                 f"PRE Key Information\n"
                 f"Status: Not initialized\n"
-                f"Use 'Init PRE' to create proxy re-encryption keys."
+                f"Use 'Init PRE' to create proxy recryption keys."
             )
             hex_data = ""
 

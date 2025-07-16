@@ -52,9 +52,7 @@ def init_pre(identity_path, api_url):
         client.initialize_pre_for_identity()
 
         click.echo("✓ PRE keys added to identity file!", err=True)
-        click.echo(
-            "Your identity now supports proxy re-encryption operations.", err=True
-        )
+        click.echo("Your identity now supports proxy recryption operations.", err=True)
 
     except DCypherAPIError as e:
         raise click.ClickException(f"Failed to initialize PRE: {e}")
@@ -109,8 +107,8 @@ def create_share(identity_path, bob_public_key, file_hash, api_url):
         except Exception as e:
             raise click.ClickException(f"Failed to get recipient's account info: {e}")
 
-        # Generate re-encryption key using Bob's PRE public key
-        click.echo("Generating re-encryption key...", err=True)
+        # Generate recryption key using Bob's PRE public key
+        click.echo("Generating recryption key...", err=True)
         re_key_hex = client.generate_re_encryption_key(bob_pre_pk_hex)
 
         # Create the share
@@ -210,7 +208,7 @@ def download_shared(identity_path, share_id, output_path, api_url):
 
         click.echo(f"Downloading shared file with share ID: {share_id}...", err=True)
 
-        # Download the shared file (re-encrypted)
+        # Download the shared file (recrypted)
         shared_content = client.download_shared_file(share_id)
 
         # Save the content
@@ -221,7 +219,7 @@ def download_shared(identity_path, share_id, output_path, api_url):
             f"✓ Shared file downloaded successfully to '{output_path}'", err=True
         )
         click.echo(
-            f"Note: This is a re-encrypted version. You'll need to decrypt it with your PRE secret key.",
+            f"Note: This is a recrypted version. You'll need to decrypt it with your PRE secret key.",
             err=True,
         )
 

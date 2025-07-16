@@ -830,7 +830,7 @@ class DCypherClient:
         Args:
             bob_public_key: Bob's classic public key
             file_hash: Hash of the file to share
-            re_encryption_key_hex: Hex-encoded re-encryption key (Alice -> Bob)
+            re_encryption_key_hex: Hex-encoded recryption key (Alice -> Bob)
 
         Returns:
             API response with share_id
@@ -858,7 +858,7 @@ class DCypherClient:
         }
 
         try:
-            response = requests.post(f"{self.api_url}/reencryption/share", data=data)
+            response = requests.post(f"{self.api_url}/recryption/share", data=data)
             return self._handle_response(response)
         except requests.exceptions.RequestException as e:
             raise DCypherAPIError(f"Failed to create share: {e}")
@@ -874,7 +874,7 @@ class DCypherClient:
             Dict with shares_sent and shares_received lists
         """
         try:
-            response = requests.get(f"{self.api_url}/reencryption/shares/{public_key}")
+            response = requests.get(f"{self.api_url}/recryption/shares/{public_key}")
             return self._handle_response(response)
         except requests.exceptions.RequestException as e:
             raise DCypherAPIError(f"Failed to list shares: {e}")
@@ -887,7 +887,7 @@ class DCypherClient:
             share_id: ID of the share to download
 
         Returns:
-            Re-encrypted file content as bytes
+            Recrypted file content as bytes
         """
         bob_public_key = self.get_classic_public_key()
 
@@ -910,7 +910,7 @@ class DCypherClient:
 
         try:
             response = requests.post(
-                f"{self.api_url}/reencryption/download/{share_id}", data=data
+                f"{self.api_url}/recryption/download/{share_id}", data=data
             )
             return self._handle_response(response)
         except requests.exceptions.RequestException as e:
@@ -947,7 +947,7 @@ class DCypherClient:
 
         try:
             response = requests.delete(
-                f"{self.api_url}/reencryption/share/{share_id}", data=data
+                f"{self.api_url}/recryption/share/{share_id}", data=data
             )
             return self._handle_response(response)
         except requests.exceptions.RequestException as e:
@@ -955,13 +955,13 @@ class DCypherClient:
 
     def generate_re_encryption_key(self, bob_public_key_hex: str) -> str:
         """
-        Generate a re-encryption key from Alice's PRE secret key to Bob's PRE public key.
+        Generate a recryption key from Alice's PRE secret key to Bob's PRE public key.
 
         Args:
             bob_public_key_hex: Bob's PRE public key in hex format
 
         Returns:
-            Hex-encoded re-encryption key
+            Hex-encoded recryption key
         """
         if not self.keys_path:
             raise AuthenticationError("No identity file configured")
@@ -993,7 +993,7 @@ class DCypherClient:
         bob_pk_bytes = bytes.fromhex(bob_public_key_hex)
         bob_pk = pre.deserialize_public_key(bob_pk_bytes)
 
-        # Generate the re-encryption key
+        # Generate the recryption key
         re_key = pre.generate_re_encryption_key(cc, alice_sk, bob_pk)
 
         # Serialize and return as hex

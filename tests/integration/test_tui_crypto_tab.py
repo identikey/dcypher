@@ -1,6 +1,6 @@
 """
 Comprehensive tests for the Crypto tab in the TUI.
-Tests all crypto operations including encrypt, decrypt, key generation, and re-encryption.
+Tests all crypto operations including encrypt, decrypt, key generation, and recryption.
 """
 
 import pytest
@@ -226,8 +226,8 @@ class TestCryptoTabOperations:
             Path("ciphertext.idk").unlink()
 
     @pytest.mark.asyncio
-    async def test_generate_reencryption_key(self, tmp_path):
-        """Test generating a re-encryption key through the TUI"""
+    async def test_generate_recryption_key(self, tmp_path):
+        """Test generating a recryption key through the TUI"""
         with tempfile.TemporaryDirectory() as temp_dir:
             app = DCypherTUI()
             async with app.run_test(size=(160, 60)) as pilot:
@@ -252,17 +252,17 @@ class TestCryptoTabOperations:
                 await pilot.click("#gen-keys-btn")
                 await wait_for_notification(pilot, "Key pair generated successfully")
 
-                # Set paths for re-encryption key generation
+                # Set paths for recryption key generation
                 alice_sk = pilot.app.query_one("#alice-sk-path")
                 alice_sk.value = f"{temp_dir}/alice.sec"
 
                 bob_pk = pilot.app.query_one("#bob-pk-path")
                 bob_pk.value = f"{temp_dir}/bob.pub"
 
-                # Generate re-encryption key
+                # Generate recryption key
                 await pilot.click("#gen-rekey-btn")
                 await wait_for_notification(
-                    pilot, "Re-encryption key generated successfully"
+                    pilot, "Recryption key generated successfully"
                 )
 
                 # Verify rekey file created
@@ -332,25 +332,25 @@ class TestCryptoTabOperations:
             )
 
     @pytest.mark.asyncio
-    async def test_reencrypt_warning(self):
-        """Test that re-encryption shows proper warning about IDK format"""
+    async def test_recrypt_warning(self):
+        """Test that recryption shows proper warning about IDK format"""
         app = DCypherTUI()
         async with app.run_test(size=(160, 60)) as pilot:
             # Navigate to Crypto tab
             await pilot.press("3")
             await pilot.pause(0.5)
 
-            # Click re-encrypt button
-            await pilot.click("#re-encrypt-btn")
+            # Click recrypt button
+            await pilot.click("#recrypt-btn")
 
             # Should show warning about IDK format not supported
             await wait_for_notification(
-                pilot, "Re-encryption requires JSON format", severity="warning"
+                pilot, "Recryption requires JSON format", severity="warning"
             )
 
             # Check results display
             crypto_screen = pilot.app.query_one(CryptoScreen)
             assert (
-                "IDK message re-encryption not yet supported"
+                "IDK message recryption not yet supported"
                 in crypto_screen.operation_results
             )

@@ -25,7 +25,7 @@ def get_pre_crypto_context():
     NOTE: This endpoint is deprecated and should be replaced with /pre-crypto-params
     for proper client-server architecture. Keeping for backward compatibility.
     """
-    # Use the same context manager that the crypto router and re-encryption use
+    # Use the same context manager that the crypto router and recryption use
     # This ensures complete consistency across all server operations
     context_manager = CryptoContextManager()
 
