@@ -1,6 +1,6 @@
 ================================================================================
                  IDENTIKEY HPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION
-                       Run: 2025-07-15 19:05:00
+                       Run: 2025-07-15 19:35:48
 ================================================================================
 
 CRYPTOGRAPHIC AUDIT: SAME IDENTITY ACROSS ALL SIZES + ERROR CORRECTION
@@ -281,67 +281,67 @@ VALIDATION TEST 1: Checksum Generation
    Success rate: 100.0%
    <ASSERTION>: Generation success rate meets 85.0% threshold
    Sample checksums:
-     qqbwegr:HE8evp
-     cw9rz6e:zSC8DZ
-     fxcyzd1:1MbL85
-     cfan74i:nkYjU5
-     ixspf11:jF8QRK
+     kaa3n5n:pcVb4Q
+     6enix1t:opGAhG
+     nifies1:Gesfn7
+     i41vzqj:FY4MV8
+     5z65wn6:SsFSLJ
 
 VALIDATION TEST 2: Error Correction Capability
 ----------------------------------------
-   Testing fingerprint 1: 7MhAc7
-   Original checksum: nqku1d5
-     Pos 0: n→1 | <PASS>
-     Pos 0: n→2 | <PASS>
-     Pos 0: n→3 | <PASS>
-     Pos 1: q→1 | <PASS>
-     Pos 1: q→2 | <PASS>
-     Pos 1: q→3 | <PASS>
+   Testing fingerprint 1: GfShGZ
+   Original checksum: c3rb3fb
+     Pos 0: c→1 | <PASS>
+     Pos 0: c→2 | <PASS>
+     Pos 0: c→3 | <PASS>
+     Pos 1: 3→1 | <PASS>
+     Pos 1: 3→2 | <PASS>
+     Pos 1: 3→4 | <PASS>
+     Pos 2: r→1 | <PASS>
+     Pos 2: r→2 | <PASS>
+     Pos 2: r→3 | <PASS>
+     Pos 3: b→1 | <PASS>
+     Pos 3: b→2 | <PASS>
+     Pos 3: b→3 | <PASS>
+     Pos 4: 3→1 | <PASS>
+     Pos 4: 3→2 | <PASS>
+     Pos 4: 3→4 | <PASS>
+
+   Testing fingerprint 2: eNfrWN
+   Original checksum: 9pirb96
+     Pos 0: 9→1 | <PASS>
+     Pos 0: 9→2 | <PASS>
+     Pos 0: 9→3 | <PASS>
+     Pos 1: p→1 | <PASS>
+     Pos 1: p→2 | <PASS>
+     Pos 1: p→3 | <PASS>
+     Pos 2: i→1 | <PASS>
+     Pos 2: i→2 | <PASS>
+     Pos 2: i→3 | <PASS>
+     Pos 3: r→1 | <PASS>
+     Pos 3: r→2 | <PASS>
+     Pos 3: r→3 | <PASS>
+     Pos 4: b→1 | <PASS>
+     Pos 4: b→2 | <PASS>
+     Pos 4: b→3 | <PASS>
+
+   Testing fingerprint 3: RDMyRc
+   Original checksum: kkk6f6u
+     Pos 0: k→1 | <PASS>
+     Pos 0: k→2 | <PASS>
+     Pos 0: k→3 | <PASS>
+     Pos 1: k→1 | <PASS>
+     Pos 1: k→2 | <PASS>
+     Pos 1: k→3 | <PASS>
      Pos 2: k→1 | <PASS>
      Pos 2: k→2 | <PASS>
      Pos 2: k→3 | <PASS>
-     Pos 3: u→1 | <PASS>
-     Pos 3: u→2 | <PASS>
-     Pos 3: u→3 | <PASS>
-     Pos 4: 1→2 | <PASS>
-     Pos 4: 1→3 | <PASS>
-     Pos 4: 1→4 | <PASS>
-
-   Testing fingerprint 2: ASb16R
-   Original checksum: q16m9sw
-     Pos 0: q→1 | <PASS>
-     Pos 0: q→2 | <PASS>
-     Pos 0: q→3 | <PASS>
-     Pos 1: 1→2 | <PASS>
-     Pos 1: 1→3 | <PASS>
-     Pos 1: 1→4 | <PASS>
-     Pos 2: 6→1 | <PASS>
-     Pos 2: 6→2 | <PASS>
-     Pos 2: 6→3 | <PASS>
-     Pos 3: m→1 | <PASS>
-     Pos 3: m→2 | <PASS>
-     Pos 3: m→3 | <PASS>
-     Pos 4: 9→1 | <PASS>
-     Pos 4: 9→2 | <PASS>
-     Pos 4: 9→3 | <PASS>
-
-   Testing fingerprint 3: 4PhyoA
-   Original checksum: sf3tmgr
-     Pos 0: s→1 | <PASS>
-     Pos 0: s→2 | <PASS>
-     Pos 0: s→3 | <PASS>
-     Pos 1: f→1 | <PASS>
-     Pos 1: f→2 | <PASS>
-     Pos 1: f→3 | <PASS>
-     Pos 2: 3→1 | <PASS>
-     Pos 2: 3→2 | <PASS>
-     Pos 2: 3→4 | <PASS>
-     Pos 3: t→1 | <PASS>
-     Pos 3: t→2 | <PASS>
-     Pos 3: t→3 | <PASS>
-     Pos 4: m→1 | <PASS>
-     Pos 4: m→2 | <PASS>
-     Pos 4: m→3 | <PASS>
+     Pos 3: 6→1 | <PASS>
+     Pos 3: 6→2 | <PASS>
+     Pos 3: 6→3 | <PASS>
+     Pos 4: f→1 | <PASS>
+     Pos 4: f→2 | <PASS>
+     Pos 4: f→3 | <PASS>
 
    Error correction success rate: 100.0% (45/45)
    <ASSERTION>: Correction success rate meets 80.0% threshold
@@ -538,28 +538,28 @@ REFERENCE IMPLEMENTATION:
 STEP 1: HIERARCHICAL FINGERPRINT GENERATION
 --------------------------------------------------
 Using the same public key to show identity scaling and error correction:
-Fixed public key: dc5b4b3d4965a7e00041cddd59954c1b2da604e6e05607a9f986f54c12b0fb4f
-Key fingerprint: dc5b4b3d4965a7e0...
+Fixed public key: f74db2a7f9b9db30c919922451891cba3febdd09559b51211815b16571e95d1c
+Key fingerprint: f74db2a7f9b9db30...
 
-TINY  : kwqrn71_3W7vBy
-      Lowercase: 3w7vby
-      Case bits: 1010
-      Alpha chars: 4
+TINY  : 5dmeq6j_9hWPzS
+      Lowercase: 9hwpzs
+      Case bits: 01101
+      Alpha chars: 5
 
-SMALL : heuda57_3W7vBy_ge3T3rLo
-      Lowercase: 3w7vby_ge3t3rlo
-      Case bits: 1010001010
-      Alpha chars: 10
+SMALL : dztr1n2_9hWPzS_MCHDtZyD
+      Lowercase: 9hwpzs_mchdtzyd
+      Case bits: 0110111110101
+      Alpha chars: 13
 
-MEDIUM: 2gh468k_3W7vBy_ge3T3rLo_aQBKbfRs
-      Lowercase: 3w7vby_ge3t3rlo_aqbkbfrs
-      Case bits: 101000101001110010
-      Alpha chars: 18
+MEDIUM: 6dq8q7s_9hWPzS_MCHDtZyD_uP4yMtiX
+      Lowercase: 9hwpzs_mchdtzyd_up4ymtix
+      Case bits: 01101111101010101001
+      Alpha chars: 20
 
-RACK  : 28afnbh_3W7vBy_ge3T3rLo_aQBKbfRs_VasrQhYu
-      Lowercase: 3w7vby_ge3t3rlo_aqbkbfrs_vasrqhyu
-      Case bits: 10100010100111001010001010
-      Alpha chars: 26
+RACK  : rtge6y1_9hWPzS_MCHDtZyD_uP4yMtiX_EKiYtuZs
+      Lowercase: 9hwpzs_mchdtzyd_up4ymtix_ekiytuzs
+      Case bits: 0110111110101010100111010010
+      Alpha chars: 28
 
 <ASSERTION>: All 4 identity sizes generated successfully
 STEP 2: DETAILED ERROR CORRECTION DEMONSTRATION
@@ -574,75 +574,70 @@ DEMO 1: TINY SIZE ANALYSIS
 SCENARIO: User provides lowercase input with 1 character flip
 GOAL: Validate and restore proper case through error correction
 
-USER INPUT (corrupted + case-lost): kw1rn71_3w7vby
-  Input checksum (corrupted): kw1rn71
-  Input hprint (case-lost):   3w7vby
-  Character flip: position 2 ('q' → '1')
+USER INPUT (corrupted + case-lost): 5d1eq6j_9hwpzs
+  Input checksum (corrupted): 5d1eq6j
+  Input hprint (case-lost):   9hwpzs
+  Character flip: position 2 ('m' → '1')
   Challenge: Checksum has error + case information lost
 
 REFERENCE VALUES (what system should produce):
-  Correct checksum:         kwqrn71
-  Original hprint (case-recovered): 3W7vBy
-  Target output: kwqrn71_3W7vBy
+  Correct checksum:         5dmeq6j
+  Original hprint (case-recovered): 9hWPzS
+  Target output: 5dmeq6j_9hWPzS
 
 STEP 2a.1: EXPECTED CHECKSUM GENERATION (TINY)
 ........................................
-Generate expected checksum for lowercase fingerprint: 3w7vby
+Generate expected checksum for lowercase fingerprint: 9hwpzs
 
-BCH Code 1: 2314fe937e975b71... → ECC: 23
-BCH Code 2: 839a53da4760de6b... → ECC: 1a
-BCH Code 3: dea91a92ae027844... → ECC: 1a
-BCH Code 4: 0630a1c0ea647b82... → ECC: 40
-BCH Code 5: 0d1967fef0da67ad... → ECC: 70
+BCH Code 1: 5ff828d6e6e2251b... → ECC: 5f
+BCH Code 2: a7bc5243dc445a98... → ECC: 3c
+BCH Code 3: fe183ed1f11cc521... → ECC: 3e
+BCH Code 4: a77ab667f4beee31... → ECC: 67
+BCH Code 5: ce6e3b7d67b6e5ec... → ECC: 67
 
 Bit interleaving process:
-ECC 1 bits: 0100011
-ECC 2 bits: 0011010
-ECC 3 bits: 0011010
-ECC 4 bits: 1000000
-ECC 5 bits: 1110000
-Interleaved: 00011100010110101100000001110010000
+ECC 1 bits: 1011111
+ECC 2 bits: 0111100
+ECC 3 bits: 0111110
+ECC 4 bits: 1100111
+ECC 5 bits: 1100111
+Interleaved: 10011011111110011100111111011110011
 Total bits: 35
-Expected checksum (for lowercase): jbcmp76
+Expected checksum (for lowercase): 2f36dgu
 
 STEP 2b.1: CHECKSUM VALIDATION & ERROR DETECTION (TINY)
 ........................................
 Compare user input checksum with expected (for lowercase):
-  User input:  kw1rn71
-  Expected:    jbcmp76
+  User input:  5d1eq6j
+  Expected:    2f36dgu
   Match:       <NO>
   Error detected: <YES>
 
 <ERROR> DETAILS:
-  Position 2: 'q' → '1' (character flip)
+  Position 2: 'm' → '1' (character flip)
   This requires BCH error correction
 
 STEP 2c.1: BIT-LEVEL ERROR ANALYSIS (TINY)
 ........................................
-Expected bits:  10110000001101111100011111101011100
-User input bits: 10111111010010001011001111111000011
-Bit errors at positions: [4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 21, 27, 30, 31, 32, 33, 34]
-Total bit errors: 21
+Expected bits:  00001101101110010011001100110001100
+User input bits: 00101001111111011100101111000001011
+Bit errors at positions: [2, 5, 9, 13, 16, 17, 18, 19, 20, 24, 25, 26, 27, 32, 33, 34]
+Total bit errors: 16
 
 Impact on BCH codes:
-  Bit 4 → BCH code 5, bit 1
+  Bit 2 → BCH code 3, bit 1
   Bit 5 → BCH code 1, bit 2
-  Bit 6 → BCH code 2, bit 2
-  Bit 7 → BCH code 3, bit 2
   Bit 9 → BCH code 5, bit 2
-  Bit 10 → BCH code 1, bit 3
-  Bit 11 → BCH code 2, bit 3
-  Bit 12 → BCH code 3, bit 3
   Bit 13 → BCH code 4, bit 3
-  Bit 14 → BCH code 5, bit 3
-  Bit 15 → BCH code 1, bit 4
+  Bit 16 → BCH code 2, bit 4
   Bit 17 → BCH code 3, bit 4
   Bit 18 → BCH code 4, bit 4
   Bit 19 → BCH code 5, bit 4
-  Bit 21 → BCH code 2, bit 5
+  Bit 20 → BCH code 1, bit 5
+  Bit 24 → BCH code 5, bit 5
+  Bit 25 → BCH code 1, bit 6
+  Bit 26 → BCH code 2, bit 6
   Bit 27 → BCH code 3, bit 6
-  Bit 30 → BCH code 1, bit 7
-  Bit 31 → BCH code 2, bit 7
   Bit 32 → BCH code 3, bit 7
   Bit 33 → BCH code 4, bit 7
   Bit 34 → BCH code 5, bit 7
@@ -650,44 +645,44 @@ Impact on BCH codes:
 STEP 2d.1: BCH ERROR CORRECTION PROCESS (TINY)
 ........................................
 BCH Code 1 correction:
-  Original data: 2314fe937e975b71...
-  User input ECC: 68
+  Original data: 5ff828d6e6e2251b...
+  User input ECC: 6a
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 68
-  Corrected bits: 1101000
+  Corrected ECC: 6a
+  Corrected bits: 1101010
 
 BCH Code 2 correction:
-  Original data: 839a53da4760de6b...
-  User input ECC: 59
+  Original data: a7bc5243dc445a98...
+  User input ECC: 63
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 59
-  Corrected bits: 1011001
+  Corrected ECC: 63
+  Corrected bits: 1100011
 
 BCH Code 3 correction:
-  Original data: dea91a92ae027844...
-  User input ECC: 48
+  Original data: fe183ed1f11cc521...
+  User input ECC: 05
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 48
-  Corrected bits: 1001000
+  Corrected ECC: 05
+  Corrected bits: 0000101
 
 BCH Code 4 correction:
-  Original data: 0630a1c0ea647b82...
-  User input ECC: 35
+  Original data: a77ab667f4beee31...
+  User input ECC: 42
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 35
-  Corrected bits: 0110101
+  Corrected ECC: 42
+  Corrected bits: 1000010
 
 BCH Code 5 correction:
-  Original data: 0d1967fef0da67ad...
-  User input ECC: 12
+  Original data: ce6e3b7d67b6e5ec...
+  User input ECC: 49
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 12
-  Corrected bits: 0010010
+  Corrected ECC: 49
+  Corrected bits: 1001001
 
 STEP 2e.1: CHECKSUM RECONSTRUCTION (TINY)
 ........................................
@@ -696,14 +691,14 @@ Step 1: Take corrected BCH codes from error correction
 Step 2: Reinterleave corrected bits
 Step 3: Convert to Base58L encoding
 
-Expected (for lowercase):  jbcmp76
-User input checksum:       kw1rn71
-Reconstructed checksum:    jbcmp76
+Expected (for lowercase):  2f36dgu
+User input checksum:       5d1eq6j
+Reconstructed checksum:    2f36dgu
 Reconstruction: <SUCCESS>
 
 BIT-LEVEL RECONSTRUCTION VERIFICATION:
-Expected bits:      10110000001101111100011111101011100
-Reconstructed bits: 10110000001101111100011111101011100
+Expected bits:      00001101101110010011001100110001100
+Reconstructed bits: 00001101101110010011001100110001100
 Bits match: <YES>
 
 BCH ERROR CORRECTION PIPELINE COMPLETE:
@@ -714,8 +709,8 @@ BCH ERROR CORRECTION PIPELINE COMPLETE:
    5. Valid Base58L checksum reconstructed
 
 RECONSTRUCTION DETAILS:
-   Input (corrupted):   kw1rn71
-   Output (corrected):  jbcmp76
+   Input (corrupted):   5d1eq6j
+   Output (corrected):  2f36dgu
    Character flip:      Position corrected through BCH
    Verification:        Matches expected lowercase checksum
 
@@ -724,33 +719,33 @@ STEP 2e.1.1: DETAILED CASE RECOVERY ANALYSIS (TINY)
 GOAL: Trace the exact process of attempting case recovery with corrected checksum
 This exposes the fundamental limitation: corrected checksum ≠ original case pattern
 
-Input for analysis: jbcmp76:3w7vby
+Input for analysis: 2f36dgu:9hwpzs
 
 STEP 1: Base58L Decode
-Corrected checksum: jbcmp76
-  Position 0: 'j' -> index 18
-  Position 1: 'b' -> index 10
-  Position 2: 'c' -> index 11
-  Position 3: 'm' -> index 20
-  Position 4: 'p' -> index 22
-  Position 5: '7' -> index 6
-  Position 6: '6' -> index 5
-  Final decoded value: 23651565404
-  Binary: 0b10110000001101111100011111101011100
+Corrected checksum: 2f36dgu
+  Position 0: '2' -> index 1
+  Position 1: 'f' -> index 14
+  Position 2: '3' -> index 2
+  Position 3: '6' -> index 5
+  Position 4: 'd' -> index 12
+  Position 5: 'g' -> index 15
+  Position 6: 'u' -> index 27
+  Final decoded value: 1841928588
+  Binary: 0b00001101101110010011001100110001100
 
 STEP 2: Bit De-interleaving
-  35-bit array: 10110000001101111100011111101011100
+  35-bit array: 00001101101110010011001100110001100
   De-interleaved BCH codes:
-    BCH Code 1: 1011011
-    BCH Code 2: 0011111
-    BCH Code 3: 1001101
-    BCH Code 4: 1010110
-    BCH Code 5: 0010100
+    BCH Code 1: 0111000
+    BCH Code 2: 0010011
+    BCH Code 3: 0110111
+    BCH Code 4: 0101100
+    BCH Code 5: 1001000
 
 STEP 3: Case Pattern Analysis
   The corrected checksum was generated for lowercase fingerprint
   It encodes case pattern: ALL LOWERCASE
-  Original case pattern:   1010
+  Original case pattern:   01101
   These are DIFFERENT patterns!
 
 STEP 4: What the corrected checksum can actually do
@@ -761,47 +756,47 @@ STEP 4: What the corrected checksum can actually do
 
 STEP 5: Proof by contradiction
   If we decode the case pattern from corrected checksum:
-  Letter count in fingerprint: 4
-  All-lowercase pattern: 0000
-  Original mixed pattern:  1010
+  Letter count in fingerprint: 5
+  All-lowercase pattern: 00000
+  Original mixed pattern:  01101
 
 STEP 6: The fundamental limitation
   The corrected checksum is:
-    - CORRECT for lowercase '3w7vby'
-    - INCORRECT for mixed case '3W7vBy'
+    - CORRECT for lowercase '9hwpzs'
+    - INCORRECT for mixed case '9hWPzS'
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
   Testing if corrected checksum verifies against original hprint
-  Corrected checksum: jbcmp76
-  Original hprint: 3W7vBy
+  Corrected checksum: 2f36dgu
+  Original hprint: 9hWPzS
   Expected: VERIFICATION FAILURE
 
   Test 1: BCH Verification (corrected checksum vs original hprint)
-    Input: jbcmp76:3W7vBy
-    Expected checksum for original hprint: kwqrn71
-    Actual corrected checksum: jbcmp76
+    Input: 2f36dgu:9hWPzS
+    Expected checksum for original hprint: 5dmeq6j
+    Actual corrected checksum: 2f36dgu
     Checksums match: <NO>
     BCH verification: <FAIL>
 
   Test 2: BCH Verification (corrected checksum vs lowercase hprint)
-    Input: jbcmp76:3w7vby
-    Expected checksum for lowercase hprint: jbcmp76
-    Actual corrected checksum: jbcmp76
+    Input: 2f36dgu:9hwpzs
+    Expected checksum for lowercase hprint: 2f36dgu
+    Actual corrected checksum: 2f36dgu
     Checksums match: <YES>
     BCH verification: <PASS>
 
 STEP 8: SIGNATURE VERIFICATION RESULTS
-  Original signature: kwqrn71:3W7vBy
-  Corrected signature: jbcmp76:3W7vBy
-  Lowercase signature: jbcmp76:3w7vby
+  Original signature: 5dmeq6j:9hWPzS
+  Corrected signature: 2f36dgu:9hWPzS
+  Lowercase signature: 2f36dgu:9hwpzs
 
   Verification against original: <FAIL>
   Verification against lowercase: <PASS>
 
 STEP 9: What would be needed for case recovery
-  To recover '3W7vBy' you need:
-    - The ORIGINAL checksum: kwqrn71
+  To recover '9hWPzS' you need:
+    - The ORIGINAL checksum: 5dmeq6j
     - Which encodes the ORIGINAL case pattern
   The corrected checksum is for a DIFFERENT fingerprint!
 
@@ -813,17 +808,17 @@ The system works as designed - different case = different checksum
 STEP 2f.1: CASE RESTORATION DEMONSTRATION (TINY)
 ........................................
 CASE RESTORATION:
-  Input hprint (case-lost):      3w7vby
-  Case pattern extracted:        1010
-  Output hprint (case-recovered): 3W7vBy
+  Input hprint (case-lost):      9hwpzs
+  Case pattern extracted:        01101
+  Output hprint (case-recovered): 9hWPzS
   Restoration status:            <SUCCESS>
 
 COMPLETE RESTORATION:
-  USER INPUT:    kw1rn71_3w7vby
-  SYSTEM OUTPUT: kwqrn71_3W7vBy
+  USER INPUT:    5d1eq6j_9hwpzs
+  SYSTEM OUTPUT: 5dmeq6j_9hWPzS
                  └── corrected ──┘ └─── case-recovered ────┘
 
-Final verification checksum: kwqrn71
+Final verification checksum: 5dmeq6j
 Final verification: <PASS>
 
 STEP 2g.1: CRYPTOGRAPHIC AUDIT SUMMARY (TINY)
@@ -832,7 +827,7 @@ CORRUPTION & CORRECTION SUMMARY:
 Character flip detected: position 2
 BCH error correction: <SUCCESS>
 Checksum reconstruction: <SUCCESS>
-Case restoration: 3W7vBy
+Case restoration: 9hWPzS
 Final verification: <PASS>
 
 Overall system performance: <SUCCESS>
@@ -852,115 +847,123 @@ DEMO 2: MEDIUM SIZE ANALYSIS
 SCENARIO: User provides lowercase input with 1 character flip
 GOAL: Validate and restore proper case through error correction
 
-USER INPUT (corrupted + case-lost): 2g1468k_3w7vby_ge3t3rlo_aqbkbfrs
-  Input checksum (corrupted): 2g1468k
-  Input hprint (case-lost):   3w7vby_ge3t3rlo_aqbkbfrs
-  Character flip: position 2 ('h' → '1')
+USER INPUT (corrupted + case-lost): 6d18q7s_9hwpzs_mchdtzyd_up4ymtix
+  Input checksum (corrupted): 6d18q7s
+  Input hprint (case-lost):   9hwpzs_mchdtzyd_up4ymtix
+  Character flip: position 2 ('q' → '1')
   Challenge: Checksum has error + case information lost
 
 REFERENCE VALUES (what system should produce):
-  Correct checksum:         2gh468k
-  Original hprint (case-recovered): 3W7vBy_ge3T3rLo_aQBKbfRs
-  Target output: 2gh468k_3W7vBy_ge3T3rLo_aQBKbfRs
+  Correct checksum:         6dq8q7s
+  Original hprint (case-recovered): 9hWPzS_MCHDtZyD_uP4yMtiX
+  Target output: 6dq8q7s_9hWPzS_MCHDtZyD_uP4yMtiX
 
 STEP 2a.2: EXPECTED CHECKSUM GENERATION (MEDIUM)
 ........................................
-Generate expected checksum for lowercase fingerprint: 3w7vby_ge3t3rlo_aqbkbfrs
+Generate expected checksum for lowercase fingerprint: 9hwpzs_mchdtzyd_up4ymtix
 
-BCH Code 1: 81cc40618fbc833b... → ECC: 01
-BCH Code 2: e233f847db61b33b... → ECC: 33
-BCH Code 3: 9e8d547151d1929e... → ECC: 54
-BCH Code 4: b46142324649fa0a... → ECC: 32
-BCH Code 5: ffa5838e4e55f86e... → ECC: 4e
+BCH Code 1: 0257d28e40d6801e... → ECC: 02
+BCH Code 2: 1908b1391843b55a... → ECC: 08
+BCH Code 3: 8485e0c6ca820560... → ECC: 60
+BCH Code 4: b27b55dd584a7899... → ECC: 5d
+BCH Code 5: f58dd0c29d095c3a... → ECC: 1d
 
 Bit interleaving process:
-ECC 1 bits: 0000001
-ECC 2 bits: 0110011
-ECC 3 bits: 1010100
-ECC 4 bits: 0110010
-ECC 5 bits: 1001110
-Interleaved: 00101010100111000001001010101111000
+ECC 1 bits: 0000010
+ECC 2 bits: 0001000
+ECC 3 bits: 1100000
+ECC 4 bits: 1011101
+ECC 5 bits: 0011101
+Interleaved: 00110001000001101011000111000000011
 Total bits: 35
-Expected checksum (for lowercase): 3fpmfsi
+Expected checksum (for lowercase): q4yq28w
 
 STEP 2b.2: CHECKSUM VALIDATION & ERROR DETECTION (MEDIUM)
 ........................................
 Compare user input checksum with expected (for lowercase):
-  User input:  2g1468k
-  Expected:    3fpmfsi
+  User input:  6d18q7s
+  Expected:    q4yq28w
   Match:       <NO>
   Error detected: <YES>
 
 <ERROR> DETAILS:
-  Position 2: 'h' → '1' (character flip)
+  Position 2: 'q' → '1' (character flip)
   This requires BCH error correction
 
 STEP 2c.2: BIT-LEVEL ERROR ANALYSIS (MEDIUM)
 ........................................
-Expected bits:  00010111100001101100000001111010010
-User input bits: 00001101111111110010101100110010010
-Bit errors at positions: [3, 4, 6, 9, 10, 11, 12, 15, 16, 17, 18, 20, 22, 23, 25, 28]
-Total bit errors: 16
+Expected bits:  11011110011101110001000100011010101
+User input bits: 00110011100111001010101000010101110
+Bit errors at positions: [0, 1, 2, 4, 5, 7, 8, 9, 10, 12, 14, 15, 16, 18, 19, 20, 22, 23, 28, 29, 30, 31, 33, 34]
+Total bit errors: 24
 
 Impact on BCH codes:
-  Bit 3 → BCH code 4, bit 1
+  Bit 0 → BCH code 1, bit 1
+  Bit 1 → BCH code 2, bit 1
+  Bit 2 → BCH code 3, bit 1
   Bit 4 → BCH code 5, bit 1
-  Bit 6 → BCH code 2, bit 2
+  Bit 5 → BCH code 1, bit 2
+  Bit 7 → BCH code 3, bit 2
+  Bit 8 → BCH code 4, bit 2
   Bit 9 → BCH code 5, bit 2
   Bit 10 → BCH code 1, bit 3
-  Bit 11 → BCH code 2, bit 3
   Bit 12 → BCH code 3, bit 3
+  Bit 14 → BCH code 5, bit 3
   Bit 15 → BCH code 1, bit 4
   Bit 16 → BCH code 2, bit 4
-  Bit 17 → BCH code 3, bit 4
   Bit 18 → BCH code 4, bit 4
+  Bit 19 → BCH code 5, bit 4
   Bit 20 → BCH code 1, bit 5
   Bit 22 → BCH code 3, bit 5
   Bit 23 → BCH code 4, bit 5
-  Bit 25 → BCH code 1, bit 6
   Bit 28 → BCH code 4, bit 6
+  Bit 29 → BCH code 5, bit 6
+  Bit 30 → BCH code 1, bit 7
+  Bit 31 → BCH code 2, bit 7
+  Bit 33 → BCH code 4, bit 7
+  Bit 34 → BCH code 5, bit 7
 
 STEP 2d.2: BCH ERROR CORRECTION PROCESS (MEDIUM)
 ........................................
 BCH Code 1 correction:
-  Original data: 81cc40618fbc833b...
-  User input ECC: 35
+  Original data: 0257d28e40d6801e...
+  User input ECC: 60
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 35
-  Corrected bits: 0110101
+  Corrected ECC: 60
+  Corrected bits: 1100000
 
 BCH Code 2 correction:
-  Original data: e233f847db61b33b...
-  User input ECC: 46
+  Original data: 1908b1391843b55a...
+  User input ECC: 65
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 46
-  Corrected bits: 1000110
+  Corrected ECC: 65
+  Corrected bits: 1100101
 
 BCH Code 3 correction:
-  Original data: 9e8d547151d1929e...
-  User input ECC: 31
+  Original data: 8485e0c6ca820560...
+  User input ECC: 0f
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 31
-  Corrected bits: 0110001
+  Corrected ECC: 0f
+  Corrected bits: 0001111
 
 BCH Code 4 correction:
-  Original data: b46142324649fa0a...
-  User input ECC: 03
+  Original data: b27b55dd584a7899...
+  User input ECC: 18
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 03
-  Corrected bits: 0000011
+  Corrected ECC: 18
+  Corrected bits: 0011000
 
 BCH Code 5 correction:
-  Original data: ffa5838e4e55f86e...
-  User input ECC: 71
+  Original data: f58dd0c29d095c3a...
+  User input ECC: 27
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 71
-  Corrected bits: 1110001
+  Corrected ECC: 27
+  Corrected bits: 0100111
 
 STEP 2e.2: CHECKSUM RECONSTRUCTION (MEDIUM)
 ........................................
@@ -969,14 +972,14 @@ Step 1: Take corrected BCH codes from error correction
 Step 2: Reinterleave corrected bits
 Step 3: Convert to Base58L encoding
 
-Expected (for lowercase):  3fpmfsi
-User input checksum:       2g1468k
-Reconstructed checksum:    3fpmfsi
+Expected (for lowercase):  q4yq28w
+User input checksum:       6d18q7s
+Reconstructed checksum:    q4yq28w
 Reconstruction: <SUCCESS>
 
 BIT-LEVEL RECONSTRUCTION VERIFICATION:
-Expected bits:      00010111100001101100000001111010010
-Reconstructed bits: 00010111100001101100000001111010010
+Expected bits:      11011110011101110001000100011010101
+Reconstructed bits: 11011110011101110001000100011010101
 Bits match: <YES>
 
 BCH ERROR CORRECTION PIPELINE COMPLETE:
@@ -987,8 +990,8 @@ BCH ERROR CORRECTION PIPELINE COMPLETE:
    5. Valid Base58L checksum reconstructed
 
 RECONSTRUCTION DETAILS:
-   Input (corrupted):   2g1468k
-   Output (corrected):  3fpmfsi
+   Input (corrupted):   6d18q7s
+   Output (corrected):  q4yq28w
    Character flip:      Position corrected through BCH
    Verification:        Matches expected lowercase checksum
 
@@ -997,33 +1000,33 @@ STEP 2e.2.1: DETAILED CASE RECOVERY ANALYSIS (MEDIUM)
 GOAL: Trace the exact process of attempting case recovery with corrected checksum
 This exposes the fundamental limitation: corrected checksum ≠ original case pattern
 
-Input for analysis: 3fpmfsi:3w7vby_ge3t3rlo_aqbkbfrs
+Input for analysis: q4yq28w:9hwpzs_mchdtzyd_up4ymtix
 
 STEP 1: Base58L Decode
-Corrected checksum: 3fpmfsi
-  Position 0: '3' -> index 2
-  Position 1: 'f' -> index 14
-  Position 2: 'p' -> index 22
-  Position 3: 'm' -> index 20
-  Position 4: 'f' -> index 14
-  Position 5: 's' -> index 25
-  Position 6: 'i' -> index 17
-  Final decoded value: 3157656530
-  Binary: 0b00010111100001101100000001111010010
+Corrected checksum: q4yq28w
+  Position 0: 'q' -> index 23
+  Position 1: '4' -> index 3
+  Position 2: 'y' -> index 31
+  Position 3: 'q' -> index 23
+  Position 4: '2' -> index 1
+  Position 5: '8' -> index 7
+  Position 6: 'w' -> index 29
+  Final decoded value: 29858760917
+  Binary: 0b11011110011101110001000100011010101
 
 STEP 2: Bit De-interleaving
-  35-bit array: 00010111100001101100000001111010010
+  35-bit array: 11011110011101110001000100011010101
   De-interleaved BCH codes:
-    BCH Code 1: 0100011
-    BCH Code 2: 0101010
-    BCH Code 3: 0101010
-    BCH Code 4: 1110011
-    BCH Code 5: 0010000
+    BCH Code 1: 1111001
+    BCH Code 2: 1110000
+    BCH Code 3: 0000011
+    BCH Code 4: 1010110
+    BCH Code 5: 1111001
 
 STEP 3: Case Pattern Analysis
   The corrected checksum was generated for lowercase fingerprint
   It encodes case pattern: ALL LOWERCASE
-  Original case pattern:   101000101001110010
+  Original case pattern:   01101111101010101001
   These are DIFFERENT patterns!
 
 STEP 4: What the corrected checksum can actually do
@@ -1034,47 +1037,47 @@ STEP 4: What the corrected checksum can actually do
 
 STEP 5: Proof by contradiction
   If we decode the case pattern from corrected checksum:
-  Letter count in fingerprint: 18
-  All-lowercase pattern: 000000000000000000
-  Original mixed pattern:  101000101001110010
+  Letter count in fingerprint: 20
+  All-lowercase pattern: 00000000000000000000
+  Original mixed pattern:  01101111101010101001
 
 STEP 6: The fundamental limitation
   The corrected checksum is:
-    - CORRECT for lowercase '3w7vby_ge3t3rlo_aqbkbfrs'
-    - INCORRECT for mixed case '3W7vBy_ge3T3rLo_aQBKbfRs'
+    - CORRECT for lowercase '9hwpzs_mchdtzyd_up4ymtix'
+    - INCORRECT for mixed case '9hWPzS_MCHDtZyD_uP4yMtiX'
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
   Testing if corrected checksum verifies against original hprint
-  Corrected checksum: 3fpmfsi
-  Original hprint: 3W7vBy_ge3T3rLo_aQBKbfRs
+  Corrected checksum: q4yq28w
+  Original hprint: 9hWPzS_MCHDtZyD_uP4yMtiX
   Expected: VERIFICATION FAILURE
 
   Test 1: BCH Verification (corrected checksum vs original hprint)
-    Input: 3fpmfsi:3W7vBy_ge3T3rLo_aQBKbfRs
-    Expected checksum for original hprint: 2gh468k
-    Actual corrected checksum: 3fpmfsi
+    Input: q4yq28w:9hWPzS_MCHDtZyD_uP4yMtiX
+    Expected checksum for original hprint: 6dq8q7s
+    Actual corrected checksum: q4yq28w
     Checksums match: <NO>
     BCH verification: <FAIL>
 
   Test 2: BCH Verification (corrected checksum vs lowercase hprint)
-    Input: 3fpmfsi:3w7vby_ge3t3rlo_aqbkbfrs
-    Expected checksum for lowercase hprint: 3fpmfsi
-    Actual corrected checksum: 3fpmfsi
+    Input: q4yq28w:9hwpzs_mchdtzyd_up4ymtix
+    Expected checksum for lowercase hprint: q4yq28w
+    Actual corrected checksum: q4yq28w
     Checksums match: <YES>
     BCH verification: <PASS>
 
 STEP 8: SIGNATURE VERIFICATION RESULTS
-  Original signature: 2gh468k:3W7vBy_ge3T3rLo_aQBKbfRs
-  Corrected signature: 3fpmfsi:3W7vBy_ge3T3rLo_aQBKbfRs
-  Lowercase signature: 3fpmfsi:3w7vby_ge3t3rlo_aqbkbfrs
+  Original signature: 6dq8q7s:9hWPzS_MCHDtZyD_uP4yMtiX
+  Corrected signature: q4yq28w:9hWPzS_MCHDtZyD_uP4yMtiX
+  Lowercase signature: q4yq28w:9hwpzs_mchdtzyd_up4ymtix
 
   Verification against original: <FAIL>
   Verification against lowercase: <PASS>
 
 STEP 9: What would be needed for case recovery
-  To recover '3W7vBy_ge3T3rLo_aQBKbfRs' you need:
-    - The ORIGINAL checksum: 2gh468k
+  To recover '9hWPzS_MCHDtZyD_uP4yMtiX' you need:
+    - The ORIGINAL checksum: 6dq8q7s
     - Which encodes the ORIGINAL case pattern
   The corrected checksum is for a DIFFERENT fingerprint!
 
@@ -1086,17 +1089,17 @@ The system works as designed - different case = different checksum
 STEP 2f.2: CASE RESTORATION DEMONSTRATION (MEDIUM)
 ........................................
 CASE RESTORATION:
-  Input hprint (case-lost):      3w7vby_ge3t3rlo_aqbkbfrs
-  Case pattern extracted:        101000101001110010
-  Output hprint (case-recovered): 3W7vBy_ge3T3rLo_aQBKbfRs
+  Input hprint (case-lost):      9hwpzs_mchdtzyd_up4ymtix
+  Case pattern extracted:        01101111101010101001
+  Output hprint (case-recovered): 9hWPzS_MCHDtZyD_uP4yMtiX
   Restoration status:            <SUCCESS>
 
 COMPLETE RESTORATION:
-  USER INPUT:    2g1468k_3w7vby_ge3t3rlo_aqbkbfrs
-  SYSTEM OUTPUT: 2gh468k_3W7vBy_ge3T3rLo_aQBKbfRs
+  USER INPUT:    6d18q7s_9hwpzs_mchdtzyd_up4ymtix
+  SYSTEM OUTPUT: 6dq8q7s_9hWPzS_MCHDtZyD_uP4yMtiX
                  └── corrected ──┘ └─── case-recovered ────┘
 
-Final verification checksum: 2gh468k
+Final verification checksum: 6dq8q7s
 Final verification: <PASS>
 
 STEP 2g.2: CRYPTOGRAPHIC AUDIT SUMMARY (MEDIUM)
@@ -1105,7 +1108,7 @@ CORRUPTION & CORRECTION SUMMARY:
 Character flip detected: position 2
 BCH error correction: <SUCCESS>
 Checksum reconstruction: <SUCCESS>
-Case restoration: 3W7vBy_ge3T3rLo_aQBKbfRs
+Case restoration: 9hWPzS_MCHDtZyD_uP4yMtiX
 Final verification: <PASS>
 
 Overall system performance: <SUCCESS>
