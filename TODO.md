@@ -57,7 +57,7 @@
 | Encrypt | `encrypt` | Crypto → `action_encrypt()` | - | ✅ NEW: test_tui_crypto_tab.py |
 | Decrypt | `decrypt` | Crypto → `action_decrypt()` | - | ✅ NEW: test_tui_crypto_tab.py |
 | Generate Rekey | `gen-rekey` | Crypto → `action_generate_rekey()` | `generate_re_encryption_key()` | ✅ NEW: test_tui_crypto_tab.py |
-| Re-encrypt | `re-encrypt` | Crypto → `action_re_encrypt()` | - | ⚠️ Partial (IDK format not supported) |
+| Recrypt | `recrypt` | Crypto → `action_re_encrypt()` | - | ⚠️ Partial (IDK format not supported) |
 
 ## Critical Tasks (MUST land before audit)
 
@@ -72,7 +72,7 @@
 - [ ] **Implement Crypto screen** (Tab 3 - currently has no tests):
   - [ ] Encrypt/decrypt operations using loaded identity
   - [ ] Key generation workflows
-  - [ ] Re-encryption key generation
+  - [ ] Recryption key generation
 - [ ] **Fix Identity screen browse dialog** (line 270)
 - [ ] **Implement help screen** (F1 binding)
 - [ ] **Implement logs screen** (F2 binding)
@@ -391,7 +391,7 @@ Current coverage: **69.56%** ✅ (requirement: 50%)
 | File Upload/Download | ✅ | ✅ | ✅ | Complete |
 | Account Management | ✅ | ✅ | ✅ | Complete |
 | Graveyard/Retired Keys | ⚠️ | ⚠️ | ✅ | Partial |
-| Re-encryption | ✅ | ✅ | ✅ | Complete |
+| Recryption | ✅ | ✅ | ✅ | Complete |
 | Large Files (>100MB) | ✅ | N/A | ✅ | Complete |
 | Error Handling | ✅ | ✅ | ✅ | Complete |
 

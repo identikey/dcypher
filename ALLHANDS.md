@@ -123,7 +123,7 @@ Based on [AllHands/OpenHands documentation](https://docs.all-hands.dev/):
 ## 💡 Tips for Working with AllHands
 
 1. **Be Specific**: Reference file paths and commands explicitly
-2. **Use Project Context**: AllHands now knows about proxy re-encryption and OpenFHE
+2. **Use Project Context**: AllHands now knows about proxy recryption and OpenFHE
 3. **Test Incrementally**: Ask for small changes and test them before proceeding
 4. **Security First**: AllHands understands this is a crypto project requiring care
 

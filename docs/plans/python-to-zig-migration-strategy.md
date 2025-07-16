@@ -7,11 +7,12 @@ This document outlines the high-level strategy for migrating functionality from 
 ## Current State Analysis
 
 ### Python Implementation
+
 - **FastAPI Server**: Complete web API with multiple routers
   - `/crypto` - Crypto context management
   - `/accounts` - User account operations  
   - `/storage` - File storage and management
-  - `/reencryption` - Proxy re-encryption operations
+  - `/recryption` - Proxy recryption operations
   - `/system` - System status and health checks
 - **OpenFHE Integration**: Python bindings for homomorphic encryption
 - **Thread-Safe Context Management**: Singleton pattern for crypto context sharing
@@ -19,6 +20,7 @@ This document outlines the high-level strategy for migrating functionality from 
 - **Post-Quantum Crypto**: liboqs integration for quantum-resistant algorithms
 
 ### Zig Specification
+
 - **Complete CLI Structure**: Well-designed command-line interface with stub implementations
 - **OpenFHE C++ Wrapper**: C-compatible interface for Zig integration
 - **Library Architecture**: Modular design with clear separation of concerns
@@ -28,16 +30,19 @@ This document outlines the high-level strategy for migrating functionality from 
 ## Migration Strategy
 
 ### Phase 1: Core Crypto Library (Zig → Python FFI)
+
 **Timeline**: 2-3 weeks  
 **Goal**: Create a high-performance Zig shared library that Python can call via FFI
 
 #### Objectives
+
 - Replace performance-critical crypto operations with Zig implementations
 - Maintain full API compatibility with existing Python code
 - Achieve better memory management and performance
 - Simplify C/C++ library integration
 
 #### Key Tasks
+
 1. **Complete OpenFHE Zig Integration**
    - Replace all `[STUB]` implementations in `src/crypto.zig`
    - Implement proper error handling and memory management
@@ -62,21 +67,25 @@ This document outlines the high-level strategy for migrating functionality from 
    - Add comprehensive error handling and type conversion
 
 #### Success Criteria
+
 - All existing Python tests pass with Zig backend
 - Performance improvement of 2-5x for crypto operations
 - Memory usage reduction of 20-30%
 - Zero breaking changes to Python API
 
 ### Phase 2: CLI and Standalone Tools
+
 **Timeline**: 1-2 weeks  
 **Goal**: Complete standalone Zig CLI implementation for deployment and testing
 
 #### Objectives
+
 - Provide feature-complete CLI tools independent of Python
 - Enable lightweight deployments for specific use cases
 - Create reference implementation for server components
 
 #### Key Tasks
+
 1. **Complete CLI Implementation**
    - Implement all crypto operations in `src/main.zig`
    - Add proper file I/O, JSON parsing, and error handling
@@ -96,21 +105,25 @@ This document outlines the high-level strategy for migrating functionality from 
    - Performance benchmarking against Python implementation
 
 #### Success Criteria
+
 - CLI can perform all operations available in Python version
 - Output formats are identical and interoperable
 - Performance is significantly better than Python equivalent
 - Standalone deployment works without Python dependencies
 
 ### Phase 3: Hybrid Server Architecture
+
 **Timeline**: 3-4 weeks  
 **Goal**: Gradually migrate server components while maintaining full API compatibility
 
 #### Objectives
+
 - Reduce latency for crypto-intensive operations
 - Improve resource utilization and scalability
 - Maintain zero-downtime migration path
 
 #### Key Tasks
+
 1. **Core Server Components**
    - Implement production-ready HTTP server in Zig
    - Add middleware for logging, authentication, CORS
@@ -119,7 +132,7 @@ This document outlines the high-level strategy for migrating functionality from 
 
 2. **Gradual Endpoint Migration**
    - **Phase 3a**: Migrate `/crypto` endpoints to Zig
-   - **Phase 3b**: Move `/reencryption` operations to Zig  
+   - **Phase 3b**: Move `/recryption` operations to Zig  
    - **Phase 3c**: Evaluate `/storage` and `/accounts` migration
    - Maintain Python endpoints as fallback during transition
 
@@ -130,21 +143,25 @@ This document outlines the high-level strategy for migrating functionality from 
    - Create deployment strategies for mixed architecture
 
 #### Success Criteria
+
 - API response times improve by 50-70% for crypto operations
 - System can handle 3-5x more concurrent requests
 - Zero API breaking changes during migration
 - Rollback capability at each migration step
 
 ### Phase 4: Full Integration and Optimization
+
 **Timeline**: 2-3 weeks  
 **Goal**: Complete migration and implement advanced optimizations
 
 #### Objectives
+
 - Achieve maximum performance and efficiency
 - Implement advanced features not possible in Python
 - Create production-ready, fully optimized system
 
 #### Key Tasks
+
 1. **Complete Migration** (Optional)
    - Evaluate remaining Python components for migration value
    - Implement any remaining endpoints in Zig if beneficial
@@ -169,6 +186,7 @@ This document outlines the high-level strategy for migrating functionality from 
    - Documentation and deployment guides
 
 #### Success Criteria
+
 - Overall system performance improves by 5-10x
 - Memory usage reduced by 50-70%
 - Support for 10x more concurrent operations
@@ -177,18 +195,21 @@ This document outlines the high-level strategy for migrating functionality from 
 ## Implementation Priorities
 
 ### Immediate Next Steps (Week 1)
+
 1. **Fix OpenFHE Integration**: Complete the Zig wrapper and test basic operations
 2. **Design C API**: Define the interface that Python will call
 3. **Build System**: Ensure shared library builds correctly
 4. **Basic FFI**: Create minimal Python wrapper for testing
 
 ### Short Term (Weeks 2-4)
+
 1. **Complete Phase 1**: Full crypto library with Python integration
 2. **Testing Infrastructure**: Comprehensive test suite for Zig components
 3. **Performance Benchmarking**: Establish baseline metrics
 4. **Documentation**: API documentation and integration guides
 
 ### Medium Term (Weeks 5-8)
+
 1. **Phase 2 Completion**: Standalone CLI and basic server
 2. **Phase 3 Planning**: Detailed migration plan for server components
 3. **Production Considerations**: Deployment, monitoring, and operations planning
@@ -196,11 +217,13 @@ This document outlines the high-level strategy for migrating functionality from 
 ## Risk Mitigation
 
 ### Technical Risks
+
 - **OpenFHE Integration Complexity**: Mitigated by incremental testing and C++ wrapper
 - **Memory Management**: Addressed through Zig's built-in safety and comprehensive testing
 - **API Compatibility**: Prevented by maintaining existing interfaces and extensive testing
 
 ### Operational Risks
+
 - **Migration Complexity**: Reduced by gradual, phase-based approach with rollback capability
 - **Performance Regression**: Prevented by continuous benchmarking and testing
 - **Deployment Issues**: Addressed by hybrid architecture and gradual rollout
@@ -208,12 +231,14 @@ This document outlines the high-level strategy for migrating functionality from 
 ## Success Metrics
 
 ### Performance Targets
+
 - **Crypto Operations**: 2-5x faster than Python implementation
 - **Memory Usage**: 20-50% reduction in memory footprint
 - **Concurrent Requests**: 3-10x improvement in throughput
 - **Startup Time**: 50-80% faster application startup
 
 ### Quality Targets
+
 - **Test Coverage**: Maintain >90% test coverage throughout migration
 - **API Compatibility**: Zero breaking changes during migration phases
 - **Documentation**: Complete API documentation and migration guides

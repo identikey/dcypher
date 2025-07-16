@@ -7,6 +7,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 1.1 OpenFHE Zig Integration
 
 #### 1.1.1 Fix Build System
+
 - [ ] **Update build.zig to link OpenFHE libraries**
   - [ ] Add OpenFHE include paths
   - [ ] Link OpenFHE static/shared libraries
@@ -21,6 +22,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: C wrapper compiles and basic operations work
 
 #### 1.1.2 Replace Crypto Stubs
+
 - [ ] **Implement generateKeyPair() in crypto.zig**
   - [ ] Replace stub with real OpenFHE key generation
   - [ ] Add proper error handling
@@ -28,11 +30,11 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - [ ] Add memory cleanup
   - **Acceptance**: Generated keys work with OpenFHE operations
 
-- [ ] **Implement generateReEncryptionKey() in crypto.zig**
+- [ ] **Implement generaterecryptionKey() in crypto.zig**
   - [ ] Load source and target keys from files
-  - [ ] Generate re-encryption key using OpenFHE
-  - [ ] Serialize and save re-encryption key
-  - **Acceptance**: Re-encryption keys enable successful re-encryption
+  - [ ] Generate recryption key using OpenFHE
+  - [ ] Serialize and save recryption key
+  - **Acceptance**: Recryption keys enable successful recryption
 
 - [ ] **Implement encrypt() in crypto.zig**
   - [ ] Load public key from file
@@ -41,19 +43,20 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - [ ] Save ciphertext with metadata
   - **Acceptance**: Encrypted data can be decrypted correctly
 
-- [ ] **Implement reEncrypt() in crypto.zig**
-  - [ ] Load re-encryption key and ciphertext
-  - [ ] Perform proxy re-encryption
-  - [ ] Save re-encrypted ciphertext
-  - **Acceptance**: Re-encrypted data decrypts correctly with target key
+- [ ] **Implement recrypt() in crypto.zig**
+  - [ ] Load recryption key and ciphertext
+  - [ ] Perform proxy recryption
+  - [ ] Save recrypted ciphertext
+  - **Acceptance**: Recrypted data decrypts correctly with target key
 
 - [ ] **Implement decrypt() in crypto.zig**
   - [ ] Load private key and ciphertext
   - [ ] Perform decryption
-  - [ ] Handle both original and re-encrypted ciphertexts
+  - [ ] Handle both original and recrypted ciphertexts
   - **Acceptance**: Decryption produces original plaintext
 
 #### 1.1.3 Context Management
+
 - [ ] **Add context serialization support**
   - [ ] Implement context serialization to bytes
   - [ ] Add base64 encoding for transport
@@ -69,6 +72,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 1.2 C API Design
 
 #### 1.2.1 Define C Interface
+
 - [ ] **Design C API header (dcypher_ffi.h)**
   - [ ] Define opaque types for keys, contexts, ciphertexts
   - [ ] Create function signatures matching Python operations
@@ -84,6 +88,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: C API functions work from simple C test program
 
 #### 1.2.2 Memory Management
+
 - [ ] **Implement resource cleanup**
   - [ ] Add destructor functions for all opaque types
   - [ ] Implement reference counting where needed
@@ -99,6 +104,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 1.3 Shared Library Build
 
 #### 1.3.1 Build Configuration
+
 - [ ] **Configure shared library build**
   - [ ] Update build.zig for shared library target
   - [ ] Set up proper symbol visibility
@@ -112,6 +118,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: Library installs to system locations correctly
 
 #### 1.3.2 Testing Infrastructure
+
 - [ ] **Create C test suite**
   - [ ] Write basic functionality tests in C
   - [ ] Add memory leak testing
@@ -121,6 +128,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 1.4 Python FFI Integration
 
 #### 1.4.1 Python Wrapper
+
 - [ ] **Create ctypes wrapper (src/lib/zig_crypto.py)**
   - [ ] Define ctypes structures matching C API
   - [ ] Implement Python wrapper functions
@@ -135,6 +143,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: All existing Python tests pass
 
 #### 1.4.2 Integration Testing
+
 - [ ] **Test Python-Zig integration**
   - [ ] Run existing Python test suite with Zig backend
   - [ ] Add specific FFI integration tests
@@ -152,6 +161,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 2.1 CLI Implementation
 
 #### 2.1.1 Complete main.zig
+
 - [ ] **Implement argument parsing**
   - [ ] Add comprehensive argument validation
   - [ ] Implement help system
@@ -165,6 +175,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: CLI handles all file operations gracefully
 
 #### 2.1.2 Server Implementation
+
 - [ ] **Implement basic HTTP server (server.zig)**
   - [ ] Add HTTP request parsing
   - [ ] Implement routing system
@@ -180,6 +191,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 2.2 Testing and Validation
 
 #### 2.2.1 CLI Testing
+
 - [ ] **Create CLI test suite**
   - [ ] Test all command combinations
   - [ ] Test error conditions and edge cases
@@ -187,6 +199,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: CLI produces identical output to Python version
 
 #### 2.2.2 Performance Testing
+
 - [ ] **Benchmark CLI operations**
   - [ ] Measure key generation performance
   - [ ] Test encryption/decryption speed
@@ -198,6 +211,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 3.1 Core Server Components
 
 #### 3.1.1 Production HTTP Server
+
 - [ ] **Implement production-ready server**
   - [ ] Add middleware support (logging, CORS, auth)
   - [ ] Implement connection pooling
@@ -205,21 +219,23 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: Server handles production load
 
 #### 3.1.2 Endpoint Migration
+
 - [ ] **Migrate /crypto endpoints**
   - [ ] Port crypto router to Zig
   - [ ] Maintain API compatibility
   - [ ] Add comprehensive testing
   - **Acceptance**: /crypto endpoints work identically
 
-- [ ] **Migrate /reencryption endpoints**
-  - [ ] Port reencryption router to Zig
+- [ ] **Migrate /recryption endpoints**
+  - [ ] Port recryption router to Zig
   - [ ] Test with existing clients
   - [ ] Performance validation
-  - **Acceptance**: /reencryption endpoints are faster and compatible
+  - **Acceptance**: /recryption endpoints are faster and compatible
 
 ### 3.2 Integration Architecture
 
 #### 3.2.1 Hybrid Deployment
+
 - [ ] **Design communication protocol**
   - [ ] Define interface between Python and Zig components
   - [ ] Implement health checks
@@ -231,6 +247,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ### 4.1 Advanced Features
 
 #### 4.1.1 Performance Optimization
+
 - [ ] **Implement batch operations**
   - [ ] Add batch encryption/decryption
   - [ ] Implement parallel processing
@@ -238,6 +255,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: Batch operations show significant speedup
 
 #### 4.1.2 Production Features
+
 - [ ] **Add comprehensive logging**
   - [ ] Implement structured logging
   - [ ] Add performance metrics
@@ -247,6 +265,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
 ## Ongoing Tasks
 
 ### Documentation
+
 - [ ] **API Documentation**
   - [ ] Document C API
   - [ ] Create Python integration guide
@@ -254,6 +273,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: Documentation is complete and accurate
 
 ### Testing
+
 - [ ] **Continuous Integration**
   - [ ] Set up automated testing
   - [ ] Add performance regression testing
@@ -261,6 +281,7 @@ This document provides a detailed, actionable checklist for the Python to Zig mi
   - **Acceptance**: CI catches all regressions
 
 ### Maintenance
+
 - [ ] **Code Quality**
   - [ ] Regular code reviews
   - [ ] Performance monitoring

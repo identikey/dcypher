@@ -1,6 +1,6 @@
-# dCypher: A Quantum-Resistant Recryption Proxy
+# dCypher: FHE Quantum-Resistant Recryption Proxy
 
-**dCypher** is an open-source, easy-to-deploy, production-ready recryption proxy that enables private, shareable, and revocable cloud storage.
+**dCypher** is an open-source, easy-to-deploy, production-ready **Recryption** (recryption) proxy that enables private, shareable, and revocable cloud storage.
 
 The goal of dCypher is to fundamentally change how we interact with cloud storage. It flips the game board so you can store your data on any cloud provider, **without that provider ever having access to the unencrypted data**. At the same time, you can securely share that data with any other individual or group and revoke their access at any time.
 
@@ -8,7 +8,7 @@ This project solves a major missing component in decentralized systems, bringing
 
 ### How It Works
 
-dCypher acts as a proxy that can take ciphertext encrypted for a specific private key and re-encrypt it for a different private key, without ever decrypting the data itself. This technique, known as Proxy Re-Encryption (PRE), allows a storage provider to serve data to authorized users on behalf of the data owner, without having access to the plaintext or the owner's private keys.
+dCypher acts as a proxy that can take ciphertext encrypted for a specific private key and recrypt it for a different private key, without ever decrypting the data itself. This technique, known as Proxy Recryption (PRE), allows a storage provider to serve data to authorized users on behalf of the data owner, without having access to the plaintext or the owner's private keys.
 
 We use the excellent OpenFHE library to implement lattice-based cryptography, making the system quantum-resistant.
 
@@ -88,7 +88,7 @@ RACK    38qhkje_zF1tjX_hhdbg5W6_fJN8yZJV_D9UMe8J6
 * **QR Code Content:** Remains scannable even with minor visual damage
 * **CLI Tools:** Forgiving input processing for manually-entered identifiers
 
-This identifier system is particularly valuable in dCypher's proxy re-encryption context, where users need to reliably reference and share cryptographic keys and encrypted data objects.
+This identifier system is particularly valuable in dCypher's proxy recryption context, where users need to reliably reference and share cryptographic keys and encrypted data objects.
 
 ## Development
 
@@ -196,17 +196,17 @@ just docker-cli --help
 # Generate another key pair
 ./zig-out/bin/dcypher keygen --output bob_keys.json
 
-# Generate re-encryption key from Alice to Bob
+# Generate recryption key from Alice to Bob
 ./zig-out/bin/dcypher rekey --from alice_keys.json --to bob_keys.json --output alice_to_bob.json
 
 # Encrypt data with Alice's key
 ./zig-out/bin/dcypher encrypt --key alice_keys.json --input message.txt --output encrypted.bin
 
-# Re-encrypt data for Bob using the re-encryption key
-./zig-out/bin/dcypher reencrypt --rekey alice_to_bob.json --input encrypted.bin --output reencrypted.bin
+# Recrypt data for Bob using the recryption key
+./zig-out/bin/dcypher recrypt --rekey alice_to_bob.json --input encrypted.bin --output recrypted.bin
 
 # Bob decrypts the data with his key
-./zig-out/bin/dcypher decrypt --key bob_keys.json --input reencrypted.bin --output message_decrypted.txt
+./zig-out/bin/dcypher decrypt --key bob_keys.json --input recrypted.bin --output message_decrypted.txt
 
 # Start the HTTP server
 ./zig-out/bin/dcypher serve --port 8080
@@ -224,9 +224,9 @@ Available endpoints:
 
 * `GET /health` - Health check
 * `POST /api/keygen` - Generate key pair
-* `POST /api/rekey` - Generate re-encryption key  
+* `POST /api/rekey` - Generate recryption key  
 * `POST /api/encrypt` - Encrypt data
-* `POST /api/reencrypt` - Re-encrypt data
+* `POST /api/recrypt` - Recrypt data
 * `POST /api/decrypt` - Decrypt data
 
 Example request:
@@ -271,7 +271,7 @@ dcypher/
 
 * ✅ Docker containerization
 * ✅ Basic CLI interface
-* ✅ Proxy re-encryption example
+* ✅ Proxy recryption example
 
 ### Zig Implementation  
 
@@ -281,7 +281,7 @@ dcypher/
 * ✅ HTTP server with REST endpoints
 * ✅ File I/O operations
 * ✅ JSON serialization/deserialization
-* ❌ Actual proxy re-encryption cryptography implementation
+* ❌ Actual proxy recryption cryptography implementation
 * ❌ Integration with OpenFHE via C++ wrapper
 * ❌ Production-ready error handling
 

@@ -5,6 +5,7 @@ A quantum-resistant encryption Terminal User Interface (TUI) inspired by cyberpu
 ## 🎨 Design Philosophy
 
 The dCypher TUI combines:
+
 - **Cyberpunk/Cipherpunk** aesthetics with @repligate styling
 - **btop-inspired** real-time system monitoring
 - **Art Deco** design influences for elegant borders and layouts
@@ -14,6 +15,7 @@ The dCypher TUI combines:
 ## 🚀 Features
 
 ### Core Functionality
+
 - ✅ **Full CLI Feature Parity** - All CLI commands available in interactive form
 - ✅ **Real-time Monitoring** - System resources and crypto operations
 - ✅ **Interactive Dashboard** - Quick access to common operations
@@ -21,6 +23,7 @@ The dCypher TUI combines:
 - ✅ **Rich Widgets** - Advanced terminal UI components
 
 ### Visual Design
+
 - 🎨 **Cyberpunk Color Scheme** - Matrix green, neon colors, dark backgrounds
 - 🖥️ **ASCII Art Banners** - dCypher branding with multiple styles
 - 🔲 **Custom Borders** - Art deco and cyberpunk patterns
@@ -28,22 +31,25 @@ The dCypher TUI combines:
 - 🌈 **Matrix Rain Effects** - Animated background elements
 
 ### Screens & Operations
+
 - **Dashboard** - System overview and quick actions
 - **Identity** - Identity management, creation, loading, rotation
 - **Crypto** - Encryption, decryption, key generation operations
 - **Accounts** - Account management and post-quantum key operations
 - **Files** - File upload, download, and management
-- **Sharing** - Proxy re-encryption sharing operations
+- **Sharing** - Proxy recryption sharing operations
 
 ## 🛠️ Installation & Usage
 
 ### Prerequisites
+
 ```bash
 # Install with textual support
 uv add textual[syntax]
 ```
 
 ### Launch TUI
+
 ```bash
 # From CLI
 dcypher tui
@@ -58,6 +64,7 @@ uv run python -m src.tui_main
 ```
 
 ### Key Bindings
+
 - `Ctrl+C` - Exit application
 - `Ctrl+D` - Toggle dark mode
 - `F1` - Help screen
@@ -68,6 +75,7 @@ uv run python -m src.tui_main
 ## 🎯 Architecture
 
 ### Project Structure
+
 ```
 src/tui/
 ├── app.py              # Main TUI application
@@ -87,12 +95,14 @@ src/tui/
 ### Key Components
 
 #### Main Application (`app.py`)
+
 - Textual-based application framework
 - Tab management and navigation
 - Real-time updates and monitoring
 - State management across screens
 
 #### Cyberpunk Theme (`theme.py`)
+
 - Complete CSS theme with cyberpunk colors
 - Matrix green (#00ff41) primary color
 - Replicant amber (#ffb000) accents
@@ -100,6 +110,7 @@ src/tui/
 - Dark backgrounds with neon highlights
 
 #### Widgets (`widgets/`)
+
 - **ASCIIBanner** - dCypher branding with animations
 - **SystemMonitor** - btop-inspired system monitoring
 - **CryptoMonitor** - Real-time crypto operation tracking
@@ -107,7 +118,9 @@ src/tui/
 - **MatrixRain** - Animated background effects
 
 #### Screens (`screens/`)
+
 Each screen provides full feature parity with CLI commands:
+
 - Interactive forms and controls
 - Real-time status updates
 - Data tables and visualizations
@@ -130,6 +143,7 @@ Each screen provides full feature parity with CLI commands:
 ## 🧪 Testing
 
 ### Run Tests
+
 ```bash
 # Simple component tests
 uv run python test_tui_simple.py
@@ -139,6 +153,7 @@ uv run pytest tests/tui/ -v
 ```
 
 ### Demo
+
 ```bash
 # Interactive demo
 uv run python demo_tui.py
@@ -147,6 +162,7 @@ uv run python demo_tui.py
 ## 🔧 Development
 
 ### Adding New Screens
+
 1. Create screen class in `src/tui/screens/`
 2. Inherit from `Widget` or `Screen`
 3. Implement `compose()` method for layout
@@ -154,6 +170,7 @@ uv run python demo_tui.py
 5. Register in main app tabs
 
 ### Custom Widgets
+
 1. Create widget class in `src/tui/widgets/`
 2. Inherit from appropriate Textual widget
 3. Implement `render()` or `compose()` methods
@@ -161,6 +178,7 @@ uv run python demo_tui.py
 5. Include in theme CSS if needed
 
 ### Theme Customization
+
 - Edit `src/tui/theme.py`
 - Follow cyberpunk color scheme
 - Use CSS variables for consistency
@@ -169,12 +187,14 @@ uv run python demo_tui.py
 ## 📊 Performance
 
 ### System Requirements
+
 - Python 3.8+
 - Terminal with 256+ colors
 - Minimum 80x24 terminal size
 - ~10MB RAM for TUI components
 
 ### Optimization
+
 - Efficient widget updates (2-5 second intervals)
 - Lazy loading of heavy operations
 - Minimal CPU usage when idle
@@ -183,12 +203,14 @@ uv run python demo_tui.py
 ## 🎪 Features in Detail
 
 ### Dashboard Screen
+
 - **System Monitor** - Real-time CPU, memory, disk, network
 - **Crypto Monitor** - Active operations, completion rates
 - **Status Panels** - Identity, API connection, file counts
 - **Quick Actions** - Load identity, upload files, create shares
 
 ### Identity Management
+
 - **Create Identity** - New quantum-safe identities
 - **Load Identity** - Browse and load existing identities
 - **Identity Info** - View keys, algorithms, capabilities
@@ -196,13 +218,15 @@ uv run python demo_tui.py
 - **Backup** - Secure identity backups
 
 ### Crypto Operations
+
 - **Key Generation** - Classic and post-quantum keys
 - **Encryption** - File and data encryption
 - **Decryption** - Decrypt with proper keys
-- **Re-encryption** - Proxy re-encryption operations
+- **Recryption** - Proxy recryption operations
 - **Algorithm Support** - Multiple PQ algorithms
 
 ### File Management
+
 - **Upload** - Secure file upload with progress
 - **Download** - File retrieval and verification
 - **Chunked Operations** - Large file support
@@ -210,7 +234,8 @@ uv run python demo_tui.py
 - **Metadata** - File information and sharing status
 
 ### Sharing Operations
-- **PRE Initialization** - Set up proxy re-encryption
+
+- **PRE Initialization** - Set up proxy recryption
 - **Create Shares** - Share files with specific recipients
 - **Manage Shares** - View, modify, revoke shares
 - **Share Browser** - Browse available shared files
@@ -219,6 +244,7 @@ uv run python demo_tui.py
 ## 🔮 Future Enhancements
 
 ### Planned Features
+
 - [ ] **Matrix Rain Animation** - Full-screen background effects
 - [ ] **Sound Effects** - Cyberpunk audio feedback
 - [ ] **Plugin System** - Extensible widget architecture
@@ -229,6 +255,7 @@ uv run python demo_tui.py
 - [ ] **Mobile Support** - Responsive design for small screens
 
 ### Technical Improvements
+
 - [ ] **Performance Profiling** - Optimize rendering
 - [ ] **Memory Management** - Reduce resource usage
 - [ ] **Error Handling** - Comprehensive error recovery
@@ -240,6 +267,7 @@ uv run python demo_tui.py
 ## 🤝 Contributing
 
 ### Development Setup
+
 ```bash
 # Clone and setup
 git clone <repository>
@@ -257,6 +285,7 @@ uv run python -m src.tui_main
 ```
 
 ### Code Style
+
 - Follow existing cyberpunk aesthetic
 - Use descriptive variable names
 - Add docstrings for all classes/methods
@@ -264,6 +293,7 @@ uv run python -m src.tui_main
 - Test all new components
 
 ### Pull Requests
+
 - Include screenshots of UI changes
 - Test on multiple terminal types
 - Update documentation

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document specifies the discovery mechanism for dCypher proxy re-encryption services using a Distributed Hash Table (DHT). The system enables clients to discover which proxies can perform ciphertext transformations (CT_A → CT_B) for specific data and recipients while preserving privacy of both the plaintext and social graph.
+This document specifies the discovery mechanism for dCypher proxy recryption services using a Distributed Hash Table (DHT). The system enables clients to discover which proxies can perform ciphertext transformations (CT_A → CT_B) for specific data and recipients while preserving privacy of both the plaintext and social graph.
 
 ## Design Analysis
 
@@ -32,6 +32,7 @@ This specification addresses the fundamental challenge of proxy discovery in a p
 ## 2. THREAT MODEL (RELEVANT TO DISCOVERY)
 
 Adversary controls any number of DHT nodes, can collect all queries and stored records, and attempts:
+
 - **A.** Plaintext recovery or guessing via the discovery namespace
 - **B.** Mapping relationships between _data_, _owner_ and _recipient_ ("social graph" leakage)
 - **C.** Denial-of-service or poisoning of the discovery tables
@@ -39,26 +40,33 @@ Adversary controls any number of DHT nodes, can collect all queries and stored r
 ## 3. IDENTIFIER CHOICE
 
 ### 3.1 "Capability-Scoped Content ID" (CIDᶜ)
+
 ```
 CIDᶜ = BLAKE2b(ciphertext_root ∥ owner_nonce)
 ```
+
 where:
+
 - `ciphertext_root` = MerkleRoot already present in the IDK
 - `owner_nonce` = 128-bit random, stored encrypted in the ciphertext header and revealed only to authorised proxies
 
 **Properties:**
 • One-way binding to specific ciphertext instance (there can be many encryptions of the same plaintext)
 • Offline dictionary attacks impossible without seeing the ciphertext anyway
-• Owner can rotate CIDᶜ by re-encrypting the same plaintext with a new nonce; revokes previous discovery entries
+• Owner can rotate CIDᶜ by recrypting the same plaintext with a new nonce; revokes previous discovery entries
 
 ### 3.2 RECIPIENT BLINDING
+
 Do **not** put the raw recipient public key in the DHT key (otherwise a passive observer immediately learns who wants what). Instead use:
+
 ```
 R_tag = SHA256(recipient_pk || CIDᶜ || "dcypher-tag")
 ```
+
 Any holder of `recipient_pk` can compute R_tag offline. Anyone else cannot invert it, so the social graph is hidden.
 
 ### 3.3 FINAL 256-bit DHT KEY
+
 ```
 DHT_key = SHA256(CIDᶜ || R_tag)
 ```
@@ -71,7 +79,7 @@ DHT_key = SHA256(CIDᶜ || R_tag)
   "recipient_pk": "<compressed ECC/LWE pk>",
   "proxy_endpoint": ["/dns4/proxy1.example/tcp/4444", "…"],
   "proxy_pubkey": "<Ed25519-pk>",
-  "capability_tok": "<Re-Encryption Capability Token>",
+  "capability_tok": "<Recryption Capability Token>",
   "ttl": "<unix_seconds>",
   "sig_owner": "<Ed25519 signature over all above fields>"
 }
@@ -91,18 +99,19 @@ The capability token is a JWT-like structure containing:
   "exp": 1720281470,
   "iat": 1720195070,
   "jti": "<unique_token_id>",
-  "capabilities": ["re-encrypt"],
+  "capabilities": ["recrypt"],
   "proxy_pubkey": "<Ed25519-pk>"
 }
 ```
 
 **Fields:**
+
 - `sub` (subject): The CIDᶜ this token authorizes access to
 - `aud` (audience): The recipient public key
 - `exp` (expiry): Unix timestamp when token expires
 - `iat` (issued at): Unix timestamp when token was created
 - `jti` (JWT ID): Unique identifier for this token instance
-- `capabilities`: Array of permitted operations ("re-encrypt", "decrypt")
+- `capabilities`: Array of permitted operations ("recrypt", "decrypt")
 - `proxy_pubkey`: The proxy's public key authorized to use this token
 
 **Signature**: The entire JSON payload is signed with the data owner's private key using Ed25519.
@@ -110,17 +119,19 @@ The capability token is a JWT-like structure containing:
 ## 5. WORKFLOWS
 
 ### 5.1 REGISTRATION (proxy side)
+
 1. Proxy receives `(cid_c, capability_tok)` from the data owner
 2. Validates token. Determines `ttl = min(token.expiry, 24h)`
 3. Computes `R_tag` and `DHT_key`
 4. Stores value record under `DHT_key` with ttl, periodically re-publishes until token expires
 
 ### 5.2 LOOKUP (client side)
+
 1. Given ciphertext → extract `cid_c`
 2. Compute `R_tag` from own `recipient_pk`
 3. Compute `DHT_key`, perform `FIND_VALUE`
 4. Verify `sig_owner` and that `recipient_pk` matches self
-5. Connect to any listed `proxy_endpoint`, present `capability_tok` in TLS-like handshake, obtain re-encrypted shards
+5. Connect to any listed `proxy_endpoint`, present `capability_tok` in TLS-like handshake, obtain recrypted shards
 
 ## 6. SECURITY PROPERTIES
 
@@ -150,10 +161,12 @@ The capability token is a JWT-like structure containing:
 ## 8. OPEN INTERFACES
 
 ### 8.1 Libp2p "Discovery-PRE/1.0.0" protocol
+
 • Message type PUT, GET, RESPONSE (CBOR)
 • Uses libp2p‐records with `authoritative=true`, sequence = exp
 
 ### 8.2 REST bootstrap endpoint (optional)
+
 • For mobile / firewalled clients a bootstrap server can echo the same DHT API over HTTPS; same record schema
 
 ## 9. EXAMPLE (human-readable)
@@ -211,11 +224,13 @@ For scenarios where data is shared with multiple recipients, the current design 
 ```
 
 **Benefits:**
+
 - Reduces DHT storage requirements for group shares
 - Maintains privacy through probabilistic membership testing
 - Scales efficiently with group size
 
 **Trade-offs:**
+
 - Small false positive rate may cause unnecessary proxy queries
 - Requires capability tokens to handle multiple recipients
 - More complex validation logic
@@ -244,4 +259,4 @@ For production deployments, additional DoS protection mechanisms may be benefici
 • **TTL-bound records + token expiry** give revocation without global CRLs
 • **Same design works** atop libp2p-Kademlia, IPFS DHT, or custom overlay
 
-This specification integrates with the existing IdentiKey Message Spec and keeps the discovery layer privacy-preserving and robust for a true mesh proxy-re-encryption network.
+This specification integrates with the existing IdentiKey Message Spec and keeps the discovery layer privacy-preserving and robust for a true mesh proxy-recryption network.

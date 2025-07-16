@@ -54,7 +54,7 @@ The headers are in `Key: Value` format.
 
 The raw message data is first encrypted using the proxy Recryption library. The encryption process produces a list of serializable ciphertext objects. Each of these objects is then serialized into a byte array. These byte arrays are the fundamental "pieces" of the message.
 
-The `BytesTotal` header must be set to the size in bytes of the original, pre-encryption data. The `PartSlotsUsed` header must be set to the number of coefficients in the vector that was encrypted. The `PartSlotsTotal` header must be set to the value returned by `get_slot_count()` for the `CryptoContext`.
+The `BytesTotal` header must be set to the size in bytes of the original, precryption data. The `PartSlotsUsed` header must be set to the number of coefficients in the vector that was encrypted. The `PartSlotsTotal` header must be set to the value returned by `get_slot_count()` for the `CryptoContext`.
 
 ### Payload
 
@@ -232,78 +232,78 @@ Version: "0.1"
 ----- END IDK MESSAGE PART 8/8 -----
 ```
 
-## Proxy Re-encryption Extensions
+## Proxy Recryption Extensions
 
-When an IDK message undergoes proxy re-encryption, the ciphertext payloads are transformed for a new recipient, but the original message structure and metadata must be preserved for auditability and verification.
+When an IDK message undergoes proxy recryption, the ciphertext payloads are transformed for a new recipient, but the original message structure and metadata must be preserved for auditability and verification.
 
-### Re-encrypted Message Format
+### Recrypted Message Format
 
-A re-encrypted IDK message maintains the same basic structure but includes additional headers to indicate the transformation:
+A recrypted IDK message maintains the same basic structure but includes additional headers to indicate the transformation:
 
 ```text
 ----- BEGIN IDK MESSAGE PART <part_num>/<total_parts> -----
 <original_headers>
-<re-encryption_headers>
+<recryption_headers>
 
 <base64_encoded_re_encrypted_payload>
 ----- END IDK MESSAGE PART <part_num>/<total_parts> -----
 ```
 
-### Additional Headers for Re-encrypted Messages
+### Additional Headers for Recrypted Messages
 
-#### Mandatory Re-encryption Headers
+#### Mandatory Recryption Headers
 
-* `ReEncrypted`: Set to `"true"` to indicate this message has undergone proxy re-encryption.
+* `recrypted`: Set to `"true"` to indicate this message has undergone proxy recryption.
 * `OriginalSender`: The public key or identifier of the original message creator (Alice).
-* `ReEncryptedBy`: The public key or identifier of the re-encryption service/proxy.
-* `ReEncryptedFor`: The public key or identifier of the intended recipient (Bob).
-* `ReEncryptionTimestamp`: ISO 8601 timestamp when re-encryption was performed.
-* `ProxySignature`: ECDSA signature of the re-encrypted headers by the proxy service.
+* `recryptedBy`: The public key or identifier of the recryption service/proxy.
+* `recryptedFor`: The public key or identifier of the intended recipient (Bob).
+* `recryptionTimestamp`: ISO 8601 timestamp when recryption was performed.
+* `ProxySignature`: ECDSA signature of the recrypted headers by the proxy service.
 * `ProxyPublicKey`: The hex-encoded public key of the proxy service, enabling self-contained verification of the proxy signature.
 
-#### Modified Headers in Re-encrypted Messages
+#### Modified Headers in Recrypted Messages
 
-* `ChunkHash`: Updated to reflect the hash of the re-encrypted payload.
+* `ChunkHash`: Updated to reflect the hash of the recrypted payload.
 * `Signature`: **Removed** - The original sender's signature is no longer valid for the modified payload.
 * `SignerPublicKey`: **Removed** - The original signer's public key is no longer relevant for payload verification.
-* `AuthPath`: **Removed** - Merkle verification cannot work across re-encryption.
+* `AuthPath`: **Removed** - Merkle verification cannot work across recryption.
 * `MerkleRoot`: **Removed** - The original Merkle tree is invalidated by payload changes.
 
-### Re-encryption Process
+### Recryption Process
 
 1. **Extract Original Ciphertexts**: Parse the original IDK message parts to extract Alice's ciphertexts.
-2. **Apply Re-encryption**: Transform each ciphertext using the re-encryption key (Alice → Bob).
-3. **Update Payload**: Replace the original ciphertext with the re-encrypted version.
+2. **Apply Recryption**: Transform each ciphertext using the recryption key (Alice → Bob).
+3. **Update Payload**: Replace the original ciphertext with the recrypted version.
 4. **Update Headers**:
-   * Set `ReEncrypted` to `"true"`
+   * Set `recrypted` to `"true"`
    * Update `ChunkHash` to reflect the new payload
-   * Add re-encryption metadata headers
+   * Add recryption metadata headers
    * Remove invalidated verification headers (`Signature`, `AuthPath`, `MerkleRoot`)
-5. **Sign Re-encrypted Message**: The proxy service signs the new headers with `ProxySignature`.
+5. **Sign Recrypted Message**: The proxy service signs the new headers with `ProxySignature`.
 
-### Verification of Re-encrypted Messages
+### Verification of Recrypted Messages
 
-Recipients of re-encrypted messages follow a modified verification process:
+Recipients of recrypted messages follow a modified verification process:
 
-1. **Check Re-encryption Status**: Verify the `ReEncrypted` header is set to `"true"`.
+1. **Check Recryption Status**: Verify the `recrypted` header is set to `"true"`.
 2. **Verify Proxy Signature**: Validate the `ProxySignature` using the `ProxyPublicKey` from the message headers.
 3. **Verify Payload Integrity**: Check that the `ChunkHash` matches the hash of the base64-decoded payload.
-4. **Skip Merkle Verification**: Re-encrypted messages cannot maintain Merkle tree integrity.
-5. **Audit Trail Verification**: Verify the re-encryption metadata (`OriginalSender`, `ReEncryptedFor`, etc.) matches expected values.
-6. **Decrypt Content**: Use the recipient's private key to decrypt the re-encrypted ciphertexts.
+4. **Skip Merkle Verification**: Recrypted messages cannot maintain Merkle tree integrity.
+5. **Audit Trail Verification**: Verify the recryption metadata (`OriginalSender`, `recryptedFor`, etc.) matches expected values.
+6. **Decrypt Content**: Use the recipient's private key to decrypt the recrypted ciphertexts.
 
 ### Trust Model
 
-Re-encrypted messages operate under a modified trust model:
+Recrypted messages operate under a modified trust model:
 
 1. **Self-Contained Verification**: Messages include all necessary verification keys (`SignerPublicKey`, `ProxyPublicKey`) for independent validation.
-2. **Proxy Trust**: Recipients must trust the proxy service to perform re-encryption correctly and honestly.
-3. **Metadata Integrity**: The proxy service guarantees the accuracy of re-encryption metadata.
-4. **Payload Authenticity**: The `ProxySignature` ensures the re-encrypted payload hasn't been tampered with after re-encryption.
+2. **Proxy Trust**: Recipients must trust the proxy service to perform recryption correctly and honestly.
+3. **Metadata Integrity**: The proxy service guarantees the accuracy of recryption metadata.
+4. **Payload Authenticity**: The `ProxySignature` ensures the recrypted payload hasn't been tampered with after recryption.
 5. **Origin Traceability**: The `OriginalSender` field provides cryptographic proof of the message's origin.
-6. **No Merkle Verification**: Recipients cannot verify the original Merkle tree structure due to the nature of re-encryption.
+6. **No Merkle Verification**: Recipients cannot verify the original Merkle tree structure due to the nature of recryption.
 
-### Example Re-encrypted Message
+### Example Recrypted Message
 
 ```text
 ----- BEGIN IDK MESSAGE PART 1/1 -----
@@ -315,10 +315,10 @@ PartSlotsTotal: "8192"
 PartSlotsUsed: "33"
 ProxyPublicKey: "04server5678abcd..."
 ProxySignature: "3041021f2a8b9c7d..."
-ReEncrypted: "true"
-ReEncryptedBy: "04server5678abcd..."
-ReEncryptedFor: "04e2bd394b1f6d3a..."
-ReEncryptionTimestamp: "2024-01-15T10:30:00Z"
+recrypted: "true"
+recryptedBy: "04server5678abcd..."
+recryptedFor: "04e2bd394b1f6d3a..."
+recryptionTimestamp: "2024-01-15T10:30:00Z"
 Version: "0.1"
 
 <base64_encoded_re_encrypted_payload>
@@ -327,7 +327,7 @@ Version: "0.1"
 
 ### Security Considerations
 
-1. **Proxy Trust**: The security of re-encrypted messages depends on trusting the proxy service.
-2. **Audit Trail**: All re-encryption operations are logged in the message headers for accountability.
+1. **Proxy Trust**: The security of recrypted messages depends on trusting the proxy service.
+2. **Audit Trail**: All recryption operations are logged in the message headers for accountability.
 3. **Temporal Verification**: Timestamps help detect replay attacks and verify recency.
-4. **Selective Verification**: Recipients can choose to accept or reject re-encrypted messages based on policy.
+4. **Selective Verification**: Recipients can choose to accept or reject recrypted messages based on policy.
