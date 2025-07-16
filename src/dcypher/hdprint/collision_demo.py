@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-IDK_HPRINT Collision Finding Demo
+HDPRINT Collision Finding Demo
 
 Demonstration script that shows collision finding capabilities
-for the IDK_HPRINT HMAC-per-character approach.
+for the HDPRINT HMAC-per-character approach.
 
 This script demonstrates:
 - Quick 2-character collision finding
@@ -20,29 +20,29 @@ import math
 import secrets
 from typing import List, Tuple, Optional
 
-# Add the parent directory to import the IDK_HPRINT library
+# Add the parent directory to import the HDPRINT library
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 try:
-    from dcypher.idk_hprint import (
+    from dcypher.hdprint import (
         generate_hierarchical_fingerprint,
         calculate_security_bits,
     )
 
-    print("IDK_HPRINT library loaded successfully")
+    print("HDPRINT library loaded successfully")
     library_available = True
 except ImportError as e:
-    print(f"Could not import IDK_HPRINT library: {e}")
+    print(f"Could not import HDPRINT library: {e}")
     library_available = False
 
     # Define dummy functions to avoid unbound errors
     def generate_hierarchical_fingerprint(
         public_key: bytes, pattern: Optional[List[int]] = None
     ) -> str:
-        raise ImportError("IDK_HPRINT library not available")
+        raise ImportError("HDPRINT library not available")
 
     def calculate_security_bits(pattern: List[int]) -> Tuple[float, List[float]]:
-        raise ImportError("IDK_HPRINT library not available")
+        raise ImportError("HDPRINT library not available")
 
 
 def generate_fingerprint(key: bytes, num_chars: int) -> str:
@@ -178,7 +178,7 @@ def performance_test(num_chars: int, iterations: int = 1000):
 
 def main():
     """Main demo function."""
-    print("IDK_HPRINT COLLISION FINDING DEMO")
+    print("HDPRINT COLLISION FINDING DEMO")
     print("=" * 60)
     print()
     print("This demo showcases collision finding with the")
@@ -187,7 +187,7 @@ def main():
     print()
 
     if not library_available:
-        print("IDK_HPRINT library not available")
+        print("HDPRINT library not available")
         return
 
     try:

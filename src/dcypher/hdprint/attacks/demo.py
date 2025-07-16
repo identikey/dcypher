@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IDK_HPRINT Advanced Collision Finding Demo
+HDPRINT Advanced Collision Finding Demo
 
 This script demonstrates the advanced collision finding capabilities that have been
 backported from test_collision_comparison.py to the attacks module.
@@ -13,7 +13,7 @@ Features demonstrated:
 - Performance benchmarking
 
 Run this script to see the advanced collision finding in action:
-    python -m dcypher.idk_hprint.attacks.demo
+    python -m dcypher.hdprint.attacks.demo
 """
 
 import sys
@@ -23,7 +23,7 @@ import argparse
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from dcypher.idk_hprint.attacks import (
+from dcypher.hdprint.attacks import (
     # Advanced collision finding
     find_collision_advanced,
     collect_collision_samples,
@@ -38,7 +38,7 @@ from dcypher.idk_hprint.attacks import (
     run_security_demonstrations,
 )
 
-from dcypher.idk_hprint.attacks.collision_finding import (
+from dcypher.hdprint.attacks.collision_finding import (
     CollisionResult,
     CollisionStats,
     CollisionSample,
@@ -72,12 +72,12 @@ def demo_single_collision_finding():
             print(f"   Key 2: {key2.hex()}")
 
             # Verify the collision
-            from dcypher.idk_hprint.attacks.collision_finding import (
-                generate_idk_hprint_fingerprint,
+            from dcypher.hdprint.attacks.collision_finding import (
+                generate_hdprint_fingerprint,
             )
 
-            fp1 = generate_idk_hprint_fingerprint(key1, 2)
-            fp2 = generate_idk_hprint_fingerprint(key2, 2)
+            fp1 = generate_hdprint_fingerprint(key1, 2)
+            fp2 = generate_hdprint_fingerprint(key2, 2)
             print(f"   Verification: {fp1} == {fp2} -> {fp1 == fp2}")
     else:
         print(f"No collision found in {result.collision_time:.1f}s")
@@ -97,7 +97,7 @@ def demo_statistical_sampling():
     # Collect samples for 2-character pattern
     print("Collecting 15 collision samples for 2-character pattern...")
     stats = collect_collision_samples(
-        num_chars=2, num_samples=15, max_time_per_sample=10.0, method="IDK_HPRINT"
+        num_chars=2, num_samples=15, max_time_per_sample=10.0, method="HDPRINT"
     )
 
     print(f"\nStatistical Analysis Results:")
@@ -172,7 +172,7 @@ def demo_comprehensive_audit():
             num_chars=chars,
             num_samples=5,
             max_time_per_sample=15.0,
-            method="IDK_HPRINT",
+            method="HDPRINT",
         )
         all_stats.append(stats)
 
@@ -187,7 +187,7 @@ def demo_security_progression():
     print("=" * 60)
     print()
     print("This demonstrates how security scales with")
-    print("pattern length in the IDK_HPRINT algorithm.")
+    print("pattern length in the HDPRINT algorithm.")
     print()
 
     # Test progression from 2 to 4 characters
@@ -231,7 +231,7 @@ def demo_security_progression():
 def main():
     """Main demo function with argument parsing."""
     parser = argparse.ArgumentParser(
-        description="IDK_HPRINT Advanced Collision Finding Demo"
+        description="HDPRINT Advanced Collision Finding Demo"
     )
     parser.add_argument(
         "--demo",
@@ -242,7 +242,7 @@ def main():
 
     args = parser.parse_args()
 
-    print("IDK_HPRINT ADVANCED COLLISION FINDING DEMO")
+    print("HDPRINT ADVANCED COLLISION FINDING DEMO")
     print("=" * 70)
     print()
 

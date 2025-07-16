@@ -1,6 +1,6 @@
-# IDK_HPRINT Cipheranalysis Tools
+# HDPRINT Cipheranalysis Tools
 
-Comprehensive security analysis and attack demonstration tools for the IDK_HPRINT HMAC-per-character approach.
+Comprehensive security analysis and attack demonstration tools for the HDPRINT HMAC-per-character approach.
 
 ## Overview
 
@@ -56,7 +56,7 @@ HMAC-specific security analysis for the chain approach.
 ### Quick Start
 
 ```python
-from dcypher.idk_hprint.attacks import run_idk_analysis
+from dcypher.hdprint.attacks import run_idk_analysis
 
 # Run comprehensive IDK pattern analysis
 run_idk_analysis()
@@ -65,7 +65,7 @@ run_idk_analysis()
 ### Individual Demonstrations
 
 ```python
-from dcypher.idk_hprint.attacks import (
+from dcypher.hdprint.attacks import (
     demonstrate_pattern_vulnerability,
     demonstrate_hmac_per_character_security,
     analyze_hmac_chain_security,
@@ -84,7 +84,7 @@ analyze_hmac_chain_security()
 ### Complete Analysis Suite
 
 ```python
-from dcypher.idk_hprint.attacks import (
+from dcypher.hdprint.attacks import (
     run_security_demonstrations,
     run_idk_analysis,
     run_hmac_analysis,
@@ -100,7 +100,7 @@ run_hmac_analysis()
 
 ```bash
 # Run the complete demonstration
-uv run python3 -m src.dcypher.idk_hprint.attacks.demo
+uv run python3 -m src.dcypher.hdprint.attacks.demo
 ```
 
 ## Security Analysis Features
@@ -169,7 +169,7 @@ uv run python3 -m src.dcypher.idk_hprint.attacks.demo
 
 ## Dependencies
 
-- `dcypher.idk_hprint`: Core IDK_HPRINT library
+- `dcypher.hdprint`: Core HDPRINT library
 - `based58`: Base58 encoding library
 - `hashlib`: SHA3-512 hashing
 - `hmac`: HMAC operations

@@ -1,5 +1,5 @@
 """
-IDK_HPRINT Documentation Generators Module
+HDPRINT Documentation Generators Module
 
 This module orchestrates the complete technical documentation generation
 by coordinating all validation, configuration, and demonstration modules.
@@ -41,10 +41,10 @@ PRIORITY 2 (High Impact, High Effort):
     - Complete sweep validation with 556+ combinations tested
 
 [ ] WORKING EXAMPLES SECTION (examples_analysis.py)
-    - Actual checksum:hprint pairs for testing
+    - Actual checksum:hdprint pairs for testing
     - 10+ working examples with correction demonstrations
     - Position-by-position error correction testing
-    - Format specification (checksum:hprint with separators)
+    - Format specification (checksum:hdprint with separators)
     - Real-world usage examples
 
 PRIORITY 3 (Medium Impact, Low-Medium Effort):
@@ -100,7 +100,7 @@ Target: Match or exceed old version's technical depth while maintaining modulari
 The old version had sections like:
 - "RADIX ENCODING CASCADE EFFECT ANALYSIS" with mathematical proofs
 - "COMPREHENSIVE PARAMETER VALIDATION" with 556 combinations tested
-- "WORKING EXAMPLES" with 10+ checksum:hprint pairs
+- "WORKING EXAMPLES" with 10+ checksum:hdprint pairs
 - "PERFORMANCE SUMMARY & BCH CONFIGURATION RECOMMENDATIONS"
 - Detailed sweep statistics and efficiency analysis
 - Real fingerprint pattern analysis with statistics
@@ -149,7 +149,7 @@ class SpecificationViolationError(Exception):
 def print_technical_header():
     """Print the technical documentation header"""
     print("=" * 80)
-    print("                 IDENTIKEY HPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION")
+    print("                 IDENTIKEY HDPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION")
     print(f"                       Run: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
     print()

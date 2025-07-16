@@ -1,8 +1,8 @@
 """
-IDK_HPRINT Configuration Module
+HDPRINT Configuration Module
 
 This module handles the discovery and validation of optimal BCH configurations
-for the IDK_HPRINT checksum system. It performs comprehensive parameter sweeping
+for the HDPRINT checksum system. It performs comprehensive parameter sweeping
 to find the best configuration and validates it through extensive testing.
 
 GOLD MASTER SPECIFICATION COMPLIANCE:
@@ -41,14 +41,14 @@ class ConfigurationViolationError(Exception):
     pass
 
 
-# Import IDK-HPRINT for fingerprint generation
+# Import IDK-HDPRINT for fingerprint generation
 try:
-    from dcypher.idk_hprint import generate_hierarchical_fingerprint
+    from dcypher.hdprint import generate_hierarchical_fingerprint
 
-    hprint_available = True
+    hdprint_available = True
 except ImportError:
-    print("WARNING: IDK-HPRINT not available - using synthetic fingerprints")
-    hprint_available = False
+    print("WARNING: IDK-HDPRINT not available - using synthetic fingerprints")
+    hdprint_available = False
 
     def generate_hierarchical_fingerprint(public_key, size):
         # Generate deterministic mixed-case alphanumeric fingerprints based on the public key

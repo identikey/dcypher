@@ -1,8 +1,8 @@
 """
-IDK_HPRINT Documentation Generation Package
+HDPRINT Documentation Generation Package
 
 This package contains all the modules for generating comprehensive technical
-documentation for the IDK_HPRINT BCH checksum system.
+documentation for the HDPRINT BCH checksum system.
 
 The main readme.checksum.py file imports from this package to generate
 the complete technical specification.

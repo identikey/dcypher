@@ -123,8 +123,8 @@ class ComprehensiveBCHSweeper:
 
     @staticmethod
     def find_optimal_generators_for_size(size: str) -> List[Dict[str, Any]]:
-        """Find optimal BCH generators for a specific IDK-HPRINT size"""
-        # Size characteristics placeholder - would be imported from hprint in real usage
+        """Find optimal BCH generators for a specific IDK-HDPRINT size"""
+        # Size characteristics placeholder - would be imported from hdprint in real usage
         size_characteristics = {
             "tiny": {"max_case_bits": 6},
             "small": {"max_case_bits": 14},

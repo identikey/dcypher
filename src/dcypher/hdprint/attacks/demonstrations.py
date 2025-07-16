@@ -1,8 +1,8 @@
 """
-IDK_HPRINT Attack Demonstrations - Security Analysis and Vulnerability Assessment
+HDPRINT Attack Demonstrations - Security Analysis and Vulnerability Assessment
 
 This module provides comprehensive attack demonstrations and security analysis
-tools for IDK_HPRINT patterns, including vulnerability assessments and attack surface
+tools for HDPRINT patterns, including vulnerability assessments and attack surface
 analysis adapted for the HMAC-per-character approach.
 
 Functions:
@@ -265,7 +265,7 @@ def demonstrate_advanced_collision_finding() -> None:
     # Collect statistical samples
     print("Collecting collision samples for 2-character pattern...")
     stats = collect_collision_samples(
-        num_chars=2, num_samples=10, max_time_per_sample=10.0, method="IDK_HPRINT"
+        num_chars=2, num_samples=10, max_time_per_sample=10.0, method="HDPRINT"
     )
 
     print(f"Results:")
@@ -297,7 +297,7 @@ def demonstrate_advanced_collision_finding() -> None:
 
 def run_security_demonstrations() -> None:
     """Run all security demonstrations."""
-    print("IDK_HPRINT SECURITY DEMONSTRATIONS")
+    print("HDPRINT SECURITY DEMONSTRATIONS")
     print("=" * 70)
     print()
     print("Running comprehensive security analysis demonstrations...")

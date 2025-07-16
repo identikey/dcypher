@@ -1,5 +1,5 @@
 ================================================================================
-            IDENTIKEY HPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION
+            IDENTIKEY HDPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION
                             Run: 2025-07-14 23:06:30
 ================================================================================
 
@@ -217,21 +217,21 @@ STEP 6: The fundamental limitation
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
-  Testing if corrected checksum verifies against original hprint
+  Testing if corrected checksum verifies against original hdprint
   Corrected checksum: deacpts
-  Original hprint: 7aF3YK
+  Original hdprint: 7aF3YK
   Expected: VERIFICATION FAILURE
 
-  Test 1: BCH Verification (corrected checksum vs original hprint)
+  Test 1: BCH Verification (corrected checksum vs original hdprint)
     Input: deacpts:7aF3YK
-    Expected checksum for original hprint: dencpts
+    Expected checksum for original hdprint: dencpts
     Actual corrected checksum: deacpts
     Checksums match: NO
     BCH verification: FAIL
 
-  Test 2: BCH Verification (corrected checksum vs lowercase hprint)
+  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
     Input: deacpts:7af3yk
-    Expected checksum for lowercase hprint: h2zvb8d
+    Expected checksum for lowercase hdprint: h2zvb8d
     Actual corrected checksum: deacpts
     Checksums match: NO
     BCH verification: FAIL
@@ -251,8 +251,8 @@ STEP 9: What would be needed for case recovery
   The corrected checksum is for a DIFFERENT fingerprint!
 
 CONCLUSION: BCH Verification Proves the Point
-The corrected checksum FAILS verification against original hprint
-The corrected checksum PASSES verification against lowercase hprint
+The corrected checksum FAILS verification against original hdprint
+The corrected checksum PASSES verification against lowercase hdprint
 The system works as designed - different case = different checksum
 
 STEP 2f.1: CASE RESTORATION DEMONSTRATION (TINY)
@@ -465,21 +465,21 @@ STEP 6: The fundamental limitation
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
-  Testing if corrected checksum verifies against original hprint
+  Testing if corrected checksum verifies against original hdprint
   Corrected checksum: ghapsx8
-  Original hprint: 7aF3YK_gU49QwWd_Hg179qgK
+  Original hdprint: 7aF3YK_gU49QwWd_Hg179qgK
   Expected: VERIFICATION FAILURE
 
-  Test 1: BCH Verification (corrected checksum vs original hprint)
+  Test 1: BCH Verification (corrected checksum vs original hdprint)
     Input: ghapsx8:7aF3YK_gU49QwWd_Hg179qgK
-    Expected checksum for original hprint: ghhpsx8
+    Expected checksum for original hdprint: ghhpsx8
     Actual corrected checksum: ghapsx8
     Checksums match: NO
     BCH verification: FAIL
 
-  Test 2: BCH Verification (corrected checksum vs lowercase hprint)
+  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
     Input: ghapsx8:7af3yk_gu49qwwd_hg179qgk
-    Expected checksum for lowercase hprint: fq3djt5
+    Expected checksum for lowercase hdprint: fq3djt5
     Actual corrected checksum: ghapsx8
     Checksums match: NO
     BCH verification: FAIL
@@ -498,8 +498,8 @@ STEP 9: What would be needed for case recovery
     - Which encodes the ORIGINAL case pattern
   The corrected checksum is for a DIFFERENT fingerprint!
 
-The corrected checksum FAILS verification against original hprint
-The corrected checksum PASSES verification against lowercase hprint
+The corrected checksum FAILS verification against original hdprint
+The corrected checksum PASSES verification against lowercase hdprint
 
 STEP 2f.2: CASE RESTORATION DEMONSTRATION (MEDIUM)
 ........................................

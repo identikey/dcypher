@@ -1,5 +1,5 @@
 """
-IdkHprint Security Analysis
+HDprint Security Analysis
 
 This module provides security analysis tools for hierarchical fingerprinting,
 including entropy calculations, collision resistance analysis, and attack
@@ -17,7 +17,7 @@ def calculate_security_bits(
     racks: Optional[int] = None,
 ) -> Tuple[float, List[float]]:
     """
-    Calculate security bits for IdkHprint cyclical pattern.
+    Calculate security bits for HDprint cyclical pattern.
 
     For HMAC-based hierarchical fingerprinting with cyclical pattern [6,8,8,8]:
     - Each segment has base58 encoding (~5.86 bits per character)

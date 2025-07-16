@@ -1,7 +1,7 @@
-IdkHprint Productized Size System Demonstration
+HDprint Productized Size System Demonstration
 ======================================================================
 
-This demonstrates the productized IdkHprint library with:
+This demonstrates the productized HDprint library with:
 - Size names: tiny, small, medium, rack
 - Rack scaling: 1 rack, 2 racks, 3 racks, etc.
 - HMAC-SHA3-512 chain algorithm
@@ -261,7 +261,7 @@ Benefits of underscore format:
 - More user-friendly for manual entry when needed
 
 ======================================================================
-IdkHprint productized size system demonstration completed successfully
+HDprint productized size system demonstration completed successfully
 ======================================================================
 
 Key features:

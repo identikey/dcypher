@@ -1,8 +1,8 @@
 """
-IDK_HPRINT Attack Demonstrations and Security Analysis
+HDPRINT Attack Demonstrations and Security Analysis
 
 This module provides comprehensive attack demonstrations and security analysis
-tools for IDK_HPRINT patterns, including vulnerability assessments, attack surface
+tools for HDPRINT patterns, including vulnerability assessments, attack surface
 analysis, and security testing utilities for the HMAC-per-character approach.
 
 Main Components:
@@ -22,7 +22,7 @@ Features:
 - Comprehensive audit reports
 
 Example Usage:
-    from dcypher.idk_hprint.attacks import (
+    from dcypher.hdprint.attacks import (
         demonstrate_hmac_per_character_security,
         analyze_idk_pattern_family,
         demonstrate_pattern_vulnerability,

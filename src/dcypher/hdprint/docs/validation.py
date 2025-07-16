@@ -1,9 +1,9 @@
 """
-IDK_HPRINT Validation Module
+HDPRINT Validation Module
 
 This module contains comprehensive validation functions for verifying the
 mathematical properties, encoding behavior, and system correctness of the
-IDK_HPRINT BCH checksum system.
+HDPRINT BCH checksum system.
 
 Functions are organized by validation category:
 - Mathematical BCH properties

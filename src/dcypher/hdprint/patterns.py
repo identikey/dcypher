@@ -1,5 +1,5 @@
 """
-IdkHprint Pattern Definitions and Analysis
+HDprint Pattern Definitions and Analysis
 
 This module contains comprehensive pattern definitions for different use cases,
 from ultra-compact IoT patterns to high-security enterprise patterns, including

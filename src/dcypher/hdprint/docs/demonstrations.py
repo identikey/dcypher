@@ -1,5 +1,5 @@
 """
-IDK_HPRINT Demonstrations Module
+HDPRINT Demonstrations Module
 
 This module contains functions for demonstrating error correction capabilities,
 case restoration, BCH analysis, and identity scaling across different fingerprint sizes.
@@ -20,18 +20,18 @@ from dcypher.lib.paiready import (
     BASE58L_ALPHABET,
 )
 
-# Import IDK-HPRINT for fingerprint generation and canonical size definitions
+# Import IDK-HDPRINT for fingerprint generation and canonical size definitions
 try:
-    from dcypher.idk_hprint import (
+    from dcypher.hdprint import (
         generate_hierarchical_fingerprint,
         get_available_sizes,
         get_size_info,
     )
 
-    hprint_available = True
+    hdprint_available = True
 except ImportError:
-    print("WARNING: IDK-HPRINT not available - using synthetic fingerprints")
-    hprint_available = False
+    print("WARNING: IDK-HDPRINT not available - using synthetic fingerprints")
+    hdprint_available = False
 
     def get_available_sizes():
         # Fallback size definitions that match the canonical system
@@ -223,7 +223,7 @@ def demonstrate_error_correction_scenarios(
     checksums = {}
 
     for size in sizes:
-        if hprint_available:
+        if hdprint_available:
             fingerprint = generate_hierarchical_fingerprint(public_key, size)
         else:
             fingerprint = generate_hierarchical_fingerprint(public_key, size)
@@ -319,7 +319,7 @@ def demonstrate_error_correction_scenarios(
             f"USER INPUT (corrupted + case-lost): {corrupted_checksum}_{lowercase_fingerprint}"
         )
         print(f"  Input checksum (corrupted): {corrupted_checksum}")
-        print(f"  Input hprint (case-lost):   {lowercase_fingerprint}")
+        print(f"  Input hdprint (case-lost):   {lowercase_fingerprint}")
         print(
             f"  Character flip: position {flip_pos} ('{original_char}' → '{replacement_char}')"
         )
@@ -327,7 +327,7 @@ def demonstrate_error_correction_scenarios(
         print()
         print("REFERENCE VALUES (what system should produce):")
         print(f"  Correct checksum:         {original_checksum}")
-        print(f"  Original hprint (case-recovered): {original_fingerprint}")
+        print(f"  Original hdprint (case-recovered): {original_fingerprint}")
         print(f"  Target output: {original_checksum}_{original_fingerprint}")
         print()
 
@@ -471,7 +471,7 @@ def demonstrate_identity_scaling(
     assert "medium" in sizes, "Should include 'medium' size"
 
     for size in sizes:
-        if hprint_available:
+        if hdprint_available:
             fingerprint = generate_hierarchical_fingerprint(public_key, size)
         else:
             fingerprint = generate_hierarchical_fingerprint(public_key, size)
@@ -856,17 +856,17 @@ def demonstrate_detailed_case_recovery_analysis(
 
     # Demonstrate actual BCH verification tests
     print("STEP 7: ACTUAL BCH VERIFICATION TEST")
-    print("  Testing if corrected checksum verifies against original hprint")
+    print("  Testing if corrected checksum verifies against original hdprint")
     print(f"  Corrected checksum: {corrected_checksum}")
-    print(f"  Original hprint: {original_fingerprint}")
+    print(f"  Original hdprint: {original_fingerprint}")
     print("  Expected: VERIFICATION FAILURE")
     print()
 
     # Test verification against original
     original_expected = checksum_system.generate_checksum(original_fingerprint)
-    print("  Test 1: BCH Verification (corrected checksum vs original hprint)")
+    print("  Test 1: BCH Verification (corrected checksum vs original hdprint)")
     print(f"    Input: {corrected_checksum}:{original_fingerprint}")
-    print(f"    Expected checksum for original hprint: {original_expected}")
+    print(f"    Expected checksum for original hdprint: {original_expected}")
     print(f"    Actual corrected checksum: {corrected_checksum}")
     print(
         f"    Checksums match: {'<YES>' if corrected_checksum == original_expected else '<NO>'}"
@@ -878,9 +878,9 @@ def demonstrate_detailed_case_recovery_analysis(
 
     # Test verification against lowercase
     lowercase_expected = checksum_system.generate_checksum(fingerprint)
-    print("  Test 2: BCH Verification (corrected checksum vs lowercase hprint)")
+    print("  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)")
     print(f"    Input: {corrected_checksum}:{fingerprint}")
-    print(f"    Expected checksum for lowercase hprint: {lowercase_expected}")
+    print(f"    Expected checksum for lowercase hdprint: {lowercase_expected}")
     print(f"    Actual corrected checksum: {corrected_checksum}")
     print(
         f"    Checksums match: {'<YES>' if corrected_checksum == lowercase_expected else '<NO>'}"
@@ -911,8 +911,8 @@ def demonstrate_detailed_case_recovery_analysis(
     print()
 
     print("CONCLUSION: BCH Verification Proves the Point")
-    print("The corrected checksum FAILS verification against original hprint")
-    print("The corrected checksum PASSES verification against lowercase hprint")
+    print("The corrected checksum FAILS verification against original hdprint")
+    print("The corrected checksum PASSES verification against lowercase hdprint")
     print("The system works as designed - different case = different checksum")
     print()
 
@@ -1074,9 +1074,9 @@ def demonstrate_case_restoration(
     )
 
     print("CASE RESTORATION:")
-    print(f"  Input hprint (case-lost):      {lowercase_fp}")
+    print(f"  Input hdprint (case-lost):      {lowercase_fp}")
     print(f"  Case pattern extracted:        {case_pattern}")
-    print(f"  Output hprint (case-recovered): {original_fp}")
+    print(f"  Output hdprint (case-recovered): {original_fp}")
 
     # The case restoration process uses the case pattern encoded in the checksum
     case_restoration_match = True  # Demo shows successful restoration

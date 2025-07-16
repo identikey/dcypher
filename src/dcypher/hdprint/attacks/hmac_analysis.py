@@ -2,7 +2,7 @@
 HMAC Analysis - Specialized Security Analysis for HMAC-per-Character Approach
 
 This module provides specialized security analysis tools for the HMAC-per-character
-approach used in IDK_HPRINT, including HMAC chain analysis, character independence
+approach used in HDPRINT, including HMAC chain analysis, character independence
 testing, and base58 bias analysis.
 
 Functions:
@@ -30,7 +30,7 @@ from .. import (
 
 
 def analyze_hmac_chain_security() -> None:
-    """Analyze security properties of HMAC chaining in IDK_HPRINT."""
+    """Analyze security properties of HMAC chaining in HDPRINT."""
     print("HMAC CHAIN SECURITY ANALYSIS")
     print("=" * 60)
     print()
@@ -246,7 +246,7 @@ def demonstrate_base58_bias_analysis() -> None:
 
 def run_hmac_analysis() -> None:
     """Run comprehensive HMAC analysis suite."""
-    print("IDK_HPRINT HMAC ANALYSIS - Comprehensive HMAC Security Assessment")
+    print("HDPRINT HMAC ANALYSIS - Comprehensive HMAC Security Assessment")
     print("=" * 70)
     print()
     print("Specialized analysis for HMAC-per-character approach")

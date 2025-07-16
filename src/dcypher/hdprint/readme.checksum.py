@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IDK_HPRINT BCH Checksum Analysis - Dynamic Technical Documentation Generator
+HDPRINT BCH Checksum Analysis - Dynamic Technical Documentation Generator
 
 MODULAR ARCHITECTURE:
    - Lightweight entry point with fallback fingerprint generation
@@ -29,14 +29,14 @@ from typing import Dict, List, Any, Optional, Tuple
 # Import the PAIREADY library (minimal imports for fallback fingerprint generation)
 from dcypher.lib.paiready import BASE58L_ALPHABET
 
-# Import IDK-HPRINT for fingerprint generation
+# Import IDK-HDPRINT for fingerprint generation
 try:
-    from dcypher.idk_hprint import generate_hierarchical_fingerprint
+    from dcypher.hdprint import generate_hierarchical_fingerprint
 
-    hprint_available = True
+    hdprint_available = True
 except ImportError:
-    print("WARNING: IDK-HPRINT not available - using synthetic fingerprints")
-    hprint_available = False
+    print("WARNING: IDK-HDPRINT not available - using synthetic fingerprints")
+    hdprint_available = False
 
     def generate_hierarchical_fingerprint(public_key, size):
         # Generate dynamic mixed-case alphanumeric fingerprints based on the public key
@@ -100,7 +100,7 @@ except ImportError:
 
 if __name__ == "__main__":
     # Import the new modular documentation generator
-    from dcypher.idk_hprint.docs.generators import generate_technical_documentation
+    from dcypher.hdprint.docs.generators import generate_technical_documentation
 
     # Check if we should run specific analysis
     if len(sys.argv) > 1:

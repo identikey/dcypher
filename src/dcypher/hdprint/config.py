@@ -1,5 +1,5 @@
 """
-IdkHprint Configuration Management
+HDprint Configuration Management
 
 This module provides configuration management and benchmarking capabilities
 for hierarchical fingerprinting with cyclical pattern [6,8,8,8] and analysis.
@@ -12,7 +12,7 @@ import time
 
 
 class ConfigurationManager:
-    """Manages configuration for IdkHprint fingerprinting with cyclical pattern."""
+    """Manages configuration for HDprint fingerprinting with cyclical pattern."""
 
     def __init__(self):
         self.default_num_segments = 4  # Default [6,8,8,8] pattern

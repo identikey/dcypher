@@ -273,7 +273,7 @@ def demonstrate_idk_attack_surface() -> None:
 
 def run_idk_analysis() -> None:
     """Run comprehensive IDK pattern analysis and demonstration."""
-    print("IDK_HPRINT ATTACK ANALYSIS - Comprehensive Security Assessment")
+    print("HDPRINT ATTACK ANALYSIS - Comprehensive Security Assessment")
     print("=" * 70)
     print()
     print("HMAC-per-character approach analysis for IDK pattern family")

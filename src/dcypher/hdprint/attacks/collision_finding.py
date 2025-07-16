@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Advanced Collision Finding for IDK_HPRINT
+Advanced Collision Finding for HDPRINT
 
-This module provides sophisticated collision finding capabilities for IDK_HPRINT,
+This module provides sophisticated collision finding capabilities for HDPRINT,
 including multi-worker collision finding, statistical sampling, and comprehensive
 performance analysis. Backported from test_collision_comparison.py.
 
 Features:
 - Multi-worker collision finding with progress reporting
 - Statistical collision sampling with comprehensive analysis
-- Support for multiple hash algorithms (IDK_HPRINT, SHA3-512, BLAKE3, HMAC variants)
+- Support for multiple hash algorithms (HDPRINT, SHA3-512, BLAKE3, HMAC variants)
 - Real-time progress monitoring
 - Comprehensive audit summaries
 - Performance benchmarking and comparison
 
 Usage:
-    from dcypher.idk_hprint.attacks.collision_finding import (
+    from dcypher.hdprint.attacks.collision_finding import (
         find_collision_advanced,
         collect_collision_samples,
         CollisionStats,
@@ -47,7 +47,7 @@ try:
 except ImportError:
     blake3 = None
 
-# Import IDK_HPRINT library
+# Import HDPRINT library
 try:
     from .. import generate_hierarchical_fingerprint
 
@@ -56,7 +56,7 @@ except ImportError:
     library_available = False
 
     def generate_hierarchical_fingerprint(*args, **kwargs) -> str:
-        raise ImportError("IDK_HPRINT library not available")
+        raise ImportError("HDPRINT library not available")
 
 
 @dataclass
@@ -127,10 +127,10 @@ class PerformanceResult:
     operations_per_second: float
 
 
-def generate_idk_hprint_fingerprint(data: bytes, num_chars: int) -> str:
-    """Generate IDK_HPRINT fingerprint with specified number of characters."""
+def generate_hdprint_fingerprint(data: bytes, num_chars: int) -> str:
+    """Generate HDPRINT fingerprint with specified number of characters."""
     if not library_available:
-        raise RuntimeError("IDK_HPRINT library not available")
+        raise RuntimeError("HDPRINT library not available")
     pattern = [num_chars]  # Single segment with N characters
     return generate_hierarchical_fingerprint(data, pattern)
 
@@ -158,7 +158,7 @@ def generate_sha3_fingerprint(data: bytes, num_chars: int) -> str:
 
 
 def generate_hmac_sha3_fingerprint(
-    data: bytes, num_chars: int, key: bytes = b"idk_hprint_key"
+    data: bytes, num_chars: int, key: bytes = b"hdprint_key"
 ) -> str:
     """Generate fingerprint using single HMAC-SHA3-512 approach for comparison."""
     import hmac
@@ -253,7 +253,7 @@ def collision_worker(
             elif method == "BLAKE3":
                 fingerprint = generate_blake3_fingerprint(key, num_chars)
             else:
-                fingerprint = generate_idk_hprint_fingerprint(key, num_chars)
+                fingerprint = generate_hdprint_fingerprint(key, num_chars)
 
             total_attempts += 1
 
@@ -301,7 +301,7 @@ def collect_collision_samples(
     num_chars: int,
     num_samples: int,
     max_time_per_sample: Optional[float] = None,
-    method: str = "IDK_HPRINT",
+    method: str = "HDPRINT",
 ) -> CollisionStats:
     """Collect collision samples using multiprocessing for maximum performance."""
     print(
@@ -534,7 +534,7 @@ def find_collision_advanced(
     num_chars: int,
     max_time: Optional[float] = None,
     num_workers: Optional[int] = None,
-    method: str = "IDK_HPRINT",
+    method: str = "HDPRINT",
 ) -> CollisionResult:
     """Find a single collision using advanced multiprocessing approach."""
     if num_workers is None:
@@ -658,7 +658,7 @@ def benchmark_collision_methods(
     print(f"\nBENCHMARKING COLLISION METHODS - {num_chars} CHARACTERS")
     print("=" * 70)
 
-    methods = ["IDK_HPRINT", "HMAC-SHA3-512", "SHA3-512"]
+    methods = ["HDPRINT", "HMAC-SHA3-512", "SHA3-512"]
     if blake3 is not None:
         methods.append("BLAKE3")
 

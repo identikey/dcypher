@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-IdkHprint Library Usage Example - Productized Size System
+HDprint Library Usage Example - Productized Size System
 
-This script demonstrates how to use the IdkHprint library with the new
+This script demonstrates how to use the HDprint library with the new
 productized size system: tiny, small, medium, rack, and multiple racks.
 
-Run this script to see the productized IdkHprint library in action:
-    python -m dcypher.idk_hprint.example
+Run this script to see the productized HDprint library in action:
+    python -m dcypher.hdprint.example
 """
 
 import os
 import sys
 from typing import List
 
-# Add the parent directory to import the IdkHprint library
+# Add the parent directory to import the HDprint library
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from dcypher.idk_hprint import (
+from dcypher.hdprint import (
     generate_hierarchical_fingerprint,
     generate_hierarchical_fingerprint_with_steps,
     get_size_info,
@@ -213,7 +213,7 @@ def demonstrate_security_comparison():
         elif racks:
             pattern = [6, 8, 8, 8] * racks
         elif num_segments:
-            from dcypher.idk_hprint.algorithms import generate_cyclical_pattern
+            from dcypher.hdprint.algorithms import generate_cyclical_pattern
 
             pattern = generate_cyclical_pattern(num_segments)
         else:
@@ -327,10 +327,10 @@ def demonstrate_selection_friendliness():
 
 def main():
     """Main demonstration function."""
-    print("IdkHprint Productized Size System Demonstration")
+    print("HDprint Productized Size System Demonstration")
     print("=" * 70)
     print()
-    print("This demonstrates the productized IdkHprint library with:")
+    print("This demonstrates the productized HDprint library with:")
     print("- Size names: tiny, small, medium, rack")
     print("- Rack scaling: 1 rack, 2 racks, 3 racks, etc.")
     print("- HMAC-SHA3-512 chain algorithm")
@@ -353,7 +353,7 @@ def main():
         demonstrate_selection_friendliness()
 
         print("=" * 70)
-        print("IdkHprint productized size system demonstration completed successfully")
+        print("HDprint productized size system demonstration completed successfully")
         print("=" * 70)
         print()
         print("Key features:")

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-IDK_HPRINT Collision Comparison Benchmark - HMAC-per-Character Analysis
+HDPRINT Collision Comparison Benchmark - HMAC-per-Character Analysis
 
 This module provides comprehensive collision finding and performance benchmarking
-for the IDK_HPRINT HMAC-per-character approach, adapted from the original ColCa
+for the HDPRINT HMAC-per-character approach, adapted from the original ColCa
 benchmark but updated for the new algorithm.
 
 Features:
@@ -46,9 +46,9 @@ from dataclasses import dataclass
 
 import blake3
 
-# Add the source directory to the path to import the IDK_HPRINT library
+# Add the source directory to the path to import the HDPRINT library
 
-from dcypher.idk_hprint import (
+from dcypher.hdprint import (
     generate_hierarchical_fingerprint,
     generate_hierarchical_fingerprint_with_steps,
     calculate_security_bits,
@@ -88,7 +88,7 @@ class PerformanceResult:
 class TimingComparison:
     """Result from timing comparison between different methods."""
 
-    idk_hprint_result: PerformanceResult
+    hdprint_result: PerformanceResult
     hmac_sha3_result: PerformanceResult
     vanilla_sha3_result: PerformanceResult
     hmac_vs_idk_speedup: float
@@ -141,12 +141,12 @@ class CollisionStats:
     last_collision: Optional[CollisionSample] = None
 
 
-def generate_idk_hprint_fingerprint(data: bytes, num_chars: int) -> str:
-    """Generate IDK_HPRINT fingerprint with specified number of characters."""
+def generate_hdprint_fingerprint(data: bytes, num_chars: int) -> str:
+    """Generate HDPRINT fingerprint with specified number of characters."""
     if not library_available:
-        raise RuntimeError("IDK_HPRINT library not available")
+        raise RuntimeError("HDPRINT library not available")
     # Use num_segments=1 to get a single segment, but we need to handle custom character counts
-    # The IDK_HPRINT library uses predefined patterns, so we need to work with what's available
+    # The HDPRINT library uses predefined patterns, so we need to work with what's available
     # For now, use "tiny" which gives us a single segment of 6 characters
     if num_chars <= 6:
         return generate_hierarchical_fingerprint(data, "tiny")[:num_chars]
@@ -194,7 +194,7 @@ def generate_vanilla_hex_fingerprint(data: bytes, num_chars: int) -> str:
 
 
 def generate_hmac_sha3_fingerprint(
-    data: bytes, num_chars: int, key: bytes = b"idk_hprint_key"
+    data: bytes, num_chars: int, key: bytes = b"hdprint_key"
 ) -> str:
     """Generate fingerprint using single HMAC-SHA3-512 approach for comparison."""
     # Use HMAC-SHA3-512 to generate authenticated hash
@@ -260,7 +260,7 @@ def generate_blake3_hex_fingerprint(data: bytes, num_chars: int) -> str:
 
 
 def generate_hmac_blake3_fingerprint(
-    data: bytes, num_chars: int, key: bytes = b"idk_hprint_key_32byte_padding00"
+    data: bytes, num_chars: int, key: bytes = b"hdprint_key_32byte_padding00"
 ) -> str:
     """Generate fingerprint using HMAC-BLAKE3 approach for comparison."""
     try:
@@ -372,7 +372,7 @@ def pure_collision_worker(
                     return
                 fingerprint = generate_hmac_blake3_fingerprint(key, num_chars)
             else:
-                fingerprint = generate_idk_hprint_fingerprint(key, num_chars)
+                fingerprint = generate_hdprint_fingerprint(key, num_chars)
 
             total_attempts += 1
 
@@ -420,7 +420,7 @@ def collect_collision_samples(
     num_chars: int,
     num_samples: int,
     max_time_per_sample: Optional[float] = None,
-    method: str = "IDK_HPRINT",
+    method: str = "HDPRINT",
 ) -> CollisionStats:
     """Collect collision samples using pure multiprocessing for maximum CPU utilization."""
     print(
@@ -783,7 +783,7 @@ def print_collision_audit_summary(stats_list: List[CollisionStats]):
         # Security vs performance tradeoff
         print(f"\nSecurity vs Performance Analysis:")
         for stats in valid_stats:
-            if stats.method_name == "IDK_HPRINT":
+            if stats.method_name == "HDPRINT":
                 print(
                     f"  {stats.method_name}: HIGHEST security (per-char HMAC), LOWEST performance"
                 )
@@ -812,7 +812,7 @@ def print_collision_audit_summary(stats_list: List[CollisionStats]):
 def run_three_way_timing_comparison(
     num_chars: int, iterations: int = 10000
 ) -> TimingComparison:
-    """Run comprehensive timing comparison between IDK_HPRINT, HMAC-SHA3-512, and vanilla SHA3-512."""
+    """Run comprehensive timing comparison between HDPRINT, HMAC-SHA3-512, and vanilla SHA3-512."""
     print(f"\nTHREE-WAY TIMING COMPARISON - {num_chars} CHARACTERS")
     print("=" * 60)
 
@@ -822,32 +822,30 @@ def run_three_way_timing_comparison(
     print(f"Benchmarking {iterations:,} operations for each method...")
     print()
 
-    # 1. Benchmark IDK_HPRINT (HMAC-per-character)
-    print("Testing IDK_HPRINT (HMAC-per-character)...")
+    # 1. Benchmark HDPRINT (HMAC-per-character)
+    print("Testing HDPRINT (HMAC-per-character)...")
     idk_start_time = time.time()
 
     i = 0
     try:
         for i, key in enumerate(test_keys):
-            generate_idk_hprint_fingerprint(key, num_chars)
+            generate_hdprint_fingerprint(key, num_chars)
 
             if i % 1000 == 0 and i > 0:
                 elapsed = time.time() - idk_start_time
                 rate = i / elapsed if elapsed > 0 else 0
-                print(
-                    f"  IDK_HPRINT Progress: {i:,}/{iterations:,} ({rate:.0f} ops/sec)"
-                )
+                print(f"  HDPRINT Progress: {i:,}/{iterations:,} ({rate:.0f} ops/sec)")
 
     except KeyboardInterrupt:
-        print("\nIDK_HPRINT benchmark interrupted by user")
+        print("\nHDPRINT benchmark interrupted by user")
         iterations = i
 
     idk_total_time = time.time() - idk_start_time
     idk_avg_time = idk_total_time / iterations if iterations > 0 else 0
     idk_ops_per_sec = iterations / idk_total_time if idk_total_time > 0 else 0
 
-    idk_hprint_result = PerformanceResult(
-        method_name="IDK_HPRINT",
+    hdprint_result = PerformanceResult(
+        method_name="HDPRINT",
         iterations=iterations,
         total_time=idk_total_time,
         avg_time_per_operation=idk_avg_time,
@@ -976,7 +974,7 @@ def run_three_way_timing_comparison(
     print(f"\nTHREE-WAY TIMING COMPARISON RESULTS")
     print("=" * 60)
 
-    print(f"IDK_HPRINT (HMAC-per-character, {num_chars} chars):")
+    print(f"HDPRINT (HMAC-per-character, {num_chars} chars):")
     print(f"  Total time: {idk_total_time:.3f}s")
     print(f"  Avg per operation: {idk_avg_time * 1000:.3f}ms")
     print(f"  Operations/second: {idk_ops_per_sec:.0f}")
@@ -1009,21 +1007,21 @@ def run_three_way_timing_comparison(
     print(
         f"  Middle: HMAC-SHA3-512 is {vanilla_vs_hmac_speedup:.2f}x slower than vanilla"
     )
-    print(f"  Slowest: IDK_HPRINT is {vanilla_vs_idk_speedup:.2f}x slower than vanilla")
+    print(f"  Slowest: HDPRINT is {vanilla_vs_idk_speedup:.2f}x slower than vanilla")
     print()
     print(f"  Direct Comparisons:")
-    print(f"    HMAC-SHA3-512 vs IDK_HPRINT: {hmac_vs_idk_speedup:.2f}x faster")
-    print(f"    Vanilla SHA3 vs IDK_HPRINT: {vanilla_vs_idk_speedup:.2f}x faster")
+    print(f"    HMAC-SHA3-512 vs HDPRINT: {hmac_vs_idk_speedup:.2f}x faster")
+    print(f"    Vanilla SHA3 vs HDPRINT: {vanilla_vs_idk_speedup:.2f}x faster")
     print(f"    Vanilla SHA3 vs HMAC-SHA3: {vanilla_vs_hmac_speedup:.2f}x faster")
     print()
     print(f"  Security vs Performance Trade-offs:")
-    print(f"    IDK_HPRINT: {num_chars}x operations, per-character security")
+    print(f"    HDPRINT: {num_chars}x operations, per-character security")
     print(f"    HMAC-SHA3-512: 1x operation, authenticated hashing")
     print(f"    Vanilla SHA3-512: 1x operation, basic hashing")
     print(f"    BLAKE3-512: 1x operation, cryptographic hash")
 
     return TimingComparison(
-        idk_hprint_result=idk_hprint_result,
+        hdprint_result=hdprint_result,
         hmac_sha3_result=hmac_sha3_result,
         vanilla_sha3_result=vanilla_sha3_result,
         hmac_vs_idk_speedup=hmac_vs_idk_speedup,
@@ -1091,7 +1089,7 @@ def find_collision_worker(args):
                     )
                 fingerprint = generate_hmac_blake3_fingerprint(random_key, num_chars)
             else:
-                fingerprint = generate_idk_hprint_fingerprint(random_key, num_chars)
+                fingerprint = generate_hdprint_fingerprint(random_key, num_chars)
 
             # Check for collision
             if fingerprint in seen_fingerprints:
@@ -1192,7 +1190,7 @@ def worker_with_timeout(args):
                     )
                 fingerprint = generate_hmac_blake3_fingerprint(random_key, num_chars)
             else:
-                fingerprint = generate_idk_hprint_fingerprint(random_key, num_chars)
+                fingerprint = generate_hdprint_fingerprint(random_key, num_chars)
 
             # Check for collision
             if fingerprint in seen_fingerprints:
@@ -1240,7 +1238,7 @@ def run_collision_finding(
     num_chars: int,
     max_time: Optional[float] = None,
     num_workers: Optional[int] = None,
-    method: str = "IDK_HPRINT",
+    method: str = "HDPRINT",
 ) -> CollisionResult:
     """Run collision finding with multiple workers and simplified progress reporting."""
 
@@ -1362,9 +1360,9 @@ def run_collision_finding(
         print("HMAC-per-Character Process:")
 
         # Verify and show the collision step by step
-        if method == "IDK_HPRINT":
-            fp1 = generate_idk_hprint_fingerprint(key1, num_chars)
-            fp2 = generate_idk_hprint_fingerprint(key2, num_chars)
+        if method == "HDPRINT":
+            fp1 = generate_hdprint_fingerprint(key1, num_chars)
+            fp2 = generate_hdprint_fingerprint(key2, num_chars)
         elif method == "SHA3-512":
             fp1 = generate_sha3_fingerprint(key1, num_chars)
             fp2 = generate_sha3_fingerprint(key2, num_chars)
@@ -1384,8 +1382,8 @@ def run_collision_finding(
             fp1 = generate_hmac_blake3_fingerprint(key1, num_chars)
             fp2 = generate_hmac_blake3_fingerprint(key2, num_chars)
         else:
-            fp1 = generate_idk_hprint_fingerprint(key1, num_chars)
-            fp2 = generate_idk_hprint_fingerprint(key2, num_chars)
+            fp1 = generate_hdprint_fingerprint(key1, num_chars)
+            fp2 = generate_hdprint_fingerprint(key2, num_chars)
 
         print(f"  Input 1 → {method} → '{fp1}'")
         print(f"  Input 2 → {method} → '{fp2}'")
@@ -1412,7 +1410,7 @@ def run_collision_finding(
 def run_performance_benchmark(
     num_chars: int, iterations: int = 10000
 ) -> PerformanceResult:
-    """Run performance benchmark for IDK_HPRINT."""
+    """Run performance benchmark for HDPRINT."""
     print(f"\nPERFORMANCE BENCHMARK - {num_chars} CHARACTERS")
     print("-" * 50)
 
@@ -1426,7 +1424,7 @@ def run_performance_benchmark(
     i = 0
     try:
         for i, key in enumerate(test_keys):
-            generate_idk_hprint_fingerprint(key, num_chars)
+            generate_hdprint_fingerprint(key, num_chars)
 
             if i % 1000 == 0 and i > 0:
                 elapsed = time.time() - start_time
@@ -1450,7 +1448,7 @@ def run_performance_benchmark(
     print(f"  HMAC rate: {(iterations * num_chars) / total_time:.0f} HMAC/sec")
 
     return PerformanceResult(
-        method_name="IDK_HPRINT",
+        method_name="HDPRINT",
         iterations=iterations,
         total_time=total_time,
         avg_time_per_operation=avg_time,
@@ -1472,7 +1470,7 @@ def analyze_collision_space(num_chars: int):
     # Birthday paradox expected collisions
     birthday_expected = math.sqrt(total_space * math.pi / 2)
 
-    # Security analysis using IDK_HPRINT security model
+    # Security analysis using HDPRINT security model
     # Use "tiny" for small patterns, "medium" for larger ones
     size = "tiny" if num_chars <= 6 else "medium"
     size_info = get_size_info(size)
@@ -1484,7 +1482,7 @@ def analyze_collision_space(num_chars: int):
     print(f"Birthday expected: {birthday_expected:,.0f} attempts")
     print(f"Birthday bits: {math.log2(birthday_expected):.1f}")
     print()
-    print(f"IDK_HPRINT Security Analysis:")
+    print(f"HDPRINT Security Analysis:")
     print(f"  Size: {size}")
     print(f"  Pattern: {size_info['pattern']}")
     print(f"  Security bits: {security_bits:.1f}")
@@ -1535,7 +1533,7 @@ def demonstrate_simple_collision():
     try:
         while True:
             key = secrets.token_bytes(32)
-            fingerprint = generate_idk_hprint_fingerprint(key, num_chars)
+            fingerprint = generate_hdprint_fingerprint(key, num_chars)
             attempts += 1
 
             if fingerprint in seen:
@@ -1568,8 +1566,8 @@ def demonstrate_simple_collision():
                 print("HMAC-per-Character Process:")
 
                 # Verify the collision
-                fp1 = generate_idk_hprint_fingerprint(key1, num_chars)
-                fp2 = generate_idk_hprint_fingerprint(key2, num_chars)
+                fp1 = generate_hdprint_fingerprint(key1, num_chars)
+                fp2 = generate_hdprint_fingerprint(key2, num_chars)
 
                 print(f"  Input 1 → HMAC chain → '{fp1}'")
                 print(f"  Input 2 → HMAC chain → '{fp2}'")
@@ -1592,7 +1590,7 @@ def demonstrate_simple_collision():
 def parse_arguments():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="IDK_HPRINT Collision Comparison Benchmark",
+        description="HDPRINT Collision Comparison Benchmark",
         epilog="""
 Examples:
   %(prog)s                                        # Full benchmark - runs EVERYTHING (all methods, demos, timing, cryptanalysis)
@@ -1606,7 +1604,7 @@ Examples:
   %(prog)s --samples 50                          # STATISTICAL: Collect 50 collision samples for audit analysis
   %(prog)s --chars 3 --samples 100 --max-time 10  # STATISTICAL: 100 samples, 10s timeout per sample
 
-Note: This benchmark compares IDK_HPRINT HMAC-per-character vs SHA3-512 approaches.
+Note: This benchmark compares HDPRINT HMAC-per-character vs SHA3-512 approaches.
       DEFAULT (no flags): Runs complete benchmark suite with all methods, demonstrations, timing, and cryptanalysis.
       SWITCHES: Isolate execution to run only the specified component.
       STATISTICAL: Sampling mode is always enabled for comprehensive audit analysis.
@@ -1701,7 +1699,7 @@ Note: This benchmark compares IDK_HPRINT HMAC-per-character vs SHA3-512 approach
 
 def main():
     """Main function with command-line interface."""
-    print("IDK_HPRINT COLLISION COMPARISON BENCHMARK")
+    print("HDPRINT COLLISION COMPARISON BENCHMARK")
     print("=" * 70)
     print()
 
@@ -1709,7 +1707,7 @@ def main():
 
     # Skip library check for vanilla hex collision or provide limited functionality
     if not library_available and not args.vanilla_hex_collision:
-        print("IDK_HPRINT library not available")
+        print("HDPRINT library not available")
         print("Make sure you're running from the dcypher project root")
         print("Running with limited functionality (vanilla hex collision only)")
         print()
@@ -1734,7 +1732,7 @@ def main():
     print(f"  Collision samples: {args.samples}")
     print(f"  Sampling mode: YES (always enabled)")
     print()
-    print(f"Algorithm: IDK_HPRINT HMAC-per-character")
+    print(f"Algorithm: HDPRINT HMAC-per-character")
     print(f"  Each character from separate HMAC-SHA3-512 operation")
     print(f"  Base58 encoding with last character selection")
     print(f"  HMAC chaining for character dependencies")
@@ -1788,9 +1786,9 @@ def main():
                 # Collect collision samples for all methods
                 all_stats = []
 
-                # Run IDK_HPRINT collision sampling
+                # Run HDPRINT collision sampling
                 idk_stats = collect_collision_samples(
-                    args.chars, args.samples, max_time, method="IDK_HPRINT"
+                    args.chars, args.samples, max_time, method="HDPRINT"
                 )
                 all_stats.append(idk_stats)
 
@@ -1834,14 +1832,12 @@ def main():
                 print_collision_audit_summary(all_stats)
 
             else:
-                print(
-                    f"\nSkipping collision finding (IDK_HPRINT library not available)"
-                )
+                print(f"\nSkipping collision finding (HDPRINT library not available)")
 
         print("\nFOUR-WAY COMPARISON BENCHMARK COMPLETED SUCCESSFULLY!")
         print()
         print("ANALYSIS SUMMARY:")
-        print("IDK_HPRINT (HMAC-per-character):")
+        print("HDPRINT (HMAC-per-character):")
         print("  - Each character requires one HMAC-SHA3-512 operation")
         print("  - Provides per-character security and partial collision resistance")
         print("  - Slowest but most secure approach")
@@ -1849,7 +1845,7 @@ def main():
         print("HMAC-SHA3-512 (single operation):")
         print("  - Single authenticated hash operation")
         print("  - Good balance between security and performance")
-        print("  - Prevents key-less attacks while being faster than IDK_HPRINT")
+        print("  - Prevents key-less attacks while being faster than HDPRINT")
         print()
         print("Vanilla SHA3-512 (base58, right-side sampling):")
         print("  - Single hash operation with base58 encoding")

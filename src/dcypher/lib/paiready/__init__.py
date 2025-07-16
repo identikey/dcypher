@@ -1,5 +1,5 @@
 """
-PAIREADY - Production-ready AI checksum library for IDK-HPRINT
+PAIREADY - Production-ready AI checksum library for IDK-HDPRINT
 
 A comprehensive BCH-based error correction system for Base58L checksums.
 Provides single character flip correction with interleaved BCH codes.

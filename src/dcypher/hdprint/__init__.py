@@ -1,5 +1,5 @@
 """
-IdkHprint (IDK Hprint) Library for dcypher
+IdentiKey HDprint Library for dCypher
 
 This library provides hierarchical cryptographic fingerprinting using HMAC chains
 with base58 encoding and productized size names for deterministic,
@@ -21,7 +21,7 @@ Main Features:
 - Cipheranalysis and attack demonstration tools
 
 Example Usage:
-    from dcypher.idk_hprint import generate_hierarchical_fingerprint, get_size_info
+    from dcypher.hdprint import generate_hierarchical_fingerprint, get_size_info
 
     # Using size names
     public_key = b"your_public_key_here"
@@ -40,7 +40,7 @@ Example Usage:
     print(f"Pattern: {size_info['pattern']}")
 
     # Run security analysis
-    from dcypher.idk_hprint.attacks import run_idk_analysis
+    from dcypher.hdprint.attacks import run_idk_analysis
     run_idk_analysis()
 
 Note: This algorithm uses HMAC-SHA3-512 chains with blake3 preprocessing for
@@ -97,8 +97,8 @@ from .config import (
     get_security_levels,
 )
 
-# Note: attacks module is available as dcypher.idk_hprint.attacks
-# Example: from dcypher.idk_hprint.attacks import run_idk_analysis
+# Note: attacks module is available as dcypher.hdprint.attacks
+# Example: from dcypher.hdprint.attacks import run_idk_analysis
 
 # Public API
 __all__ = [
@@ -138,4 +138,4 @@ __all__ = [
 
 __version__ = "0.1.0-alpha"
 __author__ = "dcypher team"
-__description__ = "IdkHprint hierarchical cryptographic fingerprinting library with productized size system"
+__description__ = "IdentiKey HDprint hierarchical cryptographic fingerprinting library with productized size system"

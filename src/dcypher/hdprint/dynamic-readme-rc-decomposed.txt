@@ -1,5 +1,5 @@
 ================================================================================
-                 IDENTIKEY HPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION
+                 IDENTIKEY HDPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION
                        Run: 2025-07-15 19:35:48
 ================================================================================
 
@@ -576,13 +576,13 @@ GOAL: Validate and restore proper case through error correction
 
 USER INPUT (corrupted + case-lost): 5d1eq6j_9hwpzs
   Input checksum (corrupted): 5d1eq6j
-  Input hprint (case-lost):   9hwpzs
+  Input hdprint (case-lost):   9hwpzs
   Character flip: position 2 ('m' → '1')
   Challenge: Checksum has error + case information lost
 
 REFERENCE VALUES (what system should produce):
   Correct checksum:         5dmeq6j
-  Original hprint (case-recovered): 9hWPzS
+  Original hdprint (case-recovered): 9hWPzS
   Target output: 5dmeq6j_9hWPzS
 
 STEP 2a.1: EXPECTED CHECKSUM GENERATION (TINY)
@@ -767,21 +767,21 @@ STEP 6: The fundamental limitation
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
-  Testing if corrected checksum verifies against original hprint
+  Testing if corrected checksum verifies against original hdprint
   Corrected checksum: 2f36dgu
-  Original hprint: 9hWPzS
+  Original hdprint: 9hWPzS
   Expected: VERIFICATION FAILURE
 
-  Test 1: BCH Verification (corrected checksum vs original hprint)
+  Test 1: BCH Verification (corrected checksum vs original hdprint)
     Input: 2f36dgu:9hWPzS
-    Expected checksum for original hprint: 5dmeq6j
+    Expected checksum for original hdprint: 5dmeq6j
     Actual corrected checksum: 2f36dgu
     Checksums match: <NO>
     BCH verification: <FAIL>
 
-  Test 2: BCH Verification (corrected checksum vs lowercase hprint)
+  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
     Input: 2f36dgu:9hwpzs
-    Expected checksum for lowercase hprint: 2f36dgu
+    Expected checksum for lowercase hdprint: 2f36dgu
     Actual corrected checksum: 2f36dgu
     Checksums match: <YES>
     BCH verification: <PASS>
@@ -801,16 +801,16 @@ STEP 9: What would be needed for case recovery
   The corrected checksum is for a DIFFERENT fingerprint!
 
 CONCLUSION: BCH Verification Proves the Point
-The corrected checksum FAILS verification against original hprint
-The corrected checksum PASSES verification against lowercase hprint
+The corrected checksum FAILS verification against original hdprint
+The corrected checksum PASSES verification against lowercase hdprint
 The system works as designed - different case = different checksum
 
 STEP 2f.1: CASE RESTORATION DEMONSTRATION (TINY)
 ........................................
 CASE RESTORATION:
-  Input hprint (case-lost):      9hwpzs
+  Input hdprint (case-lost):      9hwpzs
   Case pattern extracted:        01101
-  Output hprint (case-recovered): 9hWPzS
+  Output hdprint (case-recovered): 9hWPzS
   Restoration status:            <SUCCESS>
 
 COMPLETE RESTORATION:
@@ -849,13 +849,13 @@ GOAL: Validate and restore proper case through error correction
 
 USER INPUT (corrupted + case-lost): 6d18q7s_9hwpzs_mchdtzyd_up4ymtix
   Input checksum (corrupted): 6d18q7s
-  Input hprint (case-lost):   9hwpzs_mchdtzyd_up4ymtix
+  Input hdprint (case-lost):   9hwpzs_mchdtzyd_up4ymtix
   Character flip: position 2 ('q' → '1')
   Challenge: Checksum has error + case information lost
 
 REFERENCE VALUES (what system should produce):
   Correct checksum:         6dq8q7s
-  Original hprint (case-recovered): 9hWPzS_MCHDtZyD_uP4yMtiX
+  Original hdprint (case-recovered): 9hWPzS_MCHDtZyD_uP4yMtiX
   Target output: 6dq8q7s_9hWPzS_MCHDtZyD_uP4yMtiX
 
 STEP 2a.2: EXPECTED CHECKSUM GENERATION (MEDIUM)
@@ -1048,21 +1048,21 @@ STEP 6: The fundamental limitation
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
-  Testing if corrected checksum verifies against original hprint
+  Testing if corrected checksum verifies against original hdprint
   Corrected checksum: q4yq28w
-  Original hprint: 9hWPzS_MCHDtZyD_uP4yMtiX
+  Original hdprint: 9hWPzS_MCHDtZyD_uP4yMtiX
   Expected: VERIFICATION FAILURE
 
-  Test 1: BCH Verification (corrected checksum vs original hprint)
+  Test 1: BCH Verification (corrected checksum vs original hdprint)
     Input: q4yq28w:9hWPzS_MCHDtZyD_uP4yMtiX
-    Expected checksum for original hprint: 6dq8q7s
+    Expected checksum for original hdprint: 6dq8q7s
     Actual corrected checksum: q4yq28w
     Checksums match: <NO>
     BCH verification: <FAIL>
 
-  Test 2: BCH Verification (corrected checksum vs lowercase hprint)
+  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
     Input: q4yq28w:9hwpzs_mchdtzyd_up4ymtix
-    Expected checksum for lowercase hprint: q4yq28w
+    Expected checksum for lowercase hdprint: q4yq28w
     Actual corrected checksum: q4yq28w
     Checksums match: <YES>
     BCH verification: <PASS>
@@ -1082,16 +1082,16 @@ STEP 9: What would be needed for case recovery
   The corrected checksum is for a DIFFERENT fingerprint!
 
 CONCLUSION: BCH Verification Proves the Point
-The corrected checksum FAILS verification against original hprint
-The corrected checksum PASSES verification against lowercase hprint
+The corrected checksum FAILS verification against original hdprint
+The corrected checksum PASSES verification against lowercase hdprint
 The system works as designed - different case = different checksum
 
 STEP 2f.2: CASE RESTORATION DEMONSTRATION (MEDIUM)
 ........................................
 CASE RESTORATION:
-  Input hprint (case-lost):      9hwpzs_mchdtzyd_up4ymtix
+  Input hdprint (case-lost):      9hwpzs_mchdtzyd_up4ymtix
   Case pattern extracted:        01101111101010101001
-  Output hprint (case-recovered): 9hWPzS_MCHDtZyD_uP4yMtiX
+  Output hdprint (case-recovered): 9hWPzS_MCHDtZyD_uP4yMtiX
   Restoration status:            <SUCCESS>
 
 COMPLETE RESTORATION:

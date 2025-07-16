@@ -1,5 +1,5 @@
 """
-IdkHprint Advanced Analysis
+HDprint Advanced Analysis
 
 This module provides advanced analysis capabilities for hierarchical fingerprinting,
 including entropy distribution analysis, character bias analysis, and comprehensive

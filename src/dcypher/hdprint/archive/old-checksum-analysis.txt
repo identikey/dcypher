@@ -128,9 +128,9 @@ BASE58L CHECKSUM WORKING EXAMPLES
 Configuration: 5 × BCH(t=1,m=7)
 Checksum length: 7 characters
 Success rate: 100% single character correction
-Format: checksum:hprint (interleaved bits, no colons)
+Format: checksum:hdprint (interleaved bits, no colons)
 
-GENERATING SAMPLE CHECKSUM:HPRINT PAIRS
+GENERATING SAMPLE CHECKSUM:HDPRINT PAIRS
 --------------------------------------------------
  1. b95hz4q         : R8YAtf
  2. eik1unb         : test123
@@ -178,9 +178,9 @@ Example 3: mua1fvn:hello
 
 FORMAT SPECIFICATION
 --------------------------------------------------
-Format: <checksum>:<hprint>
+Format: <checksum>:<hdprint>
   checksum: 7-character Base58L interleaved BCH code (no colons)
-  hprint: Variable length identifier (ASCII)
+  hdprint: Variable length identifier (ASCII)
   separator: Single colon (:)
   Total overhead: 8 characters (7 + 1 separator)
 
@@ -200,7 +200,7 @@ RUNNING COMPREHENSIVE BCH ANALYSIS
 ================================================================================
 DEBUG: Running prioritized BCH sweep across all size categories
 
-IDK_HPRINT BCH CHECKSUM ANALYSIS - PRIORITIZED, TIERED, EMPIRICAL SELECTION
+HDPRINT BCH CHECKSUM ANALYSIS - PRIORITIZED, TIERED, EMPIRICAL SELECTION
 ================================================================================
 
 === TINY - Case Bitfield Recovery ===
@@ -678,7 +678,7 @@ RACK:
   Lowercase Detect: BCH(t=1,m=7) (t=1, m=7, ecc_bits=7)
   Checksum Correct: BCH(t=1,m=7) (t=1, m=7, ecc_bits=7)
 
-IDK-HPRINT BCH CHECKSUM ANALYSIS - TINY SIZE
+IDK-HDPRINT BCH CHECKSUM ANALYSIS - TINY SIZE
 ======================================================================
 
 🔍 FINDING ABSOLUTE MINIMUM GENERATORS FOR TINY
@@ -764,7 +764,7 @@ Sample 32745: X4xxZX → mie8w9cbk:X4xxZX (9 chars)
   Case pattern: 10011 | x4xxzx → X4xxZX
 
 
-IDK-HPRINT BCH CHECKSUM ANALYSIS - SMALL SIZE
+IDK-HDPRINT BCH CHECKSUM ANALYSIS - SMALL SIZE
 ======================================================================
 
 🔍 FINDING ABSOLUTE MINIMUM GENERATORS FOR SMALL
@@ -850,7 +850,7 @@ Sample 32745: asgMzJ_tgb3oFEp → f3p1asqpd:asgMzJ_tgb3oFEp (9 chars)
   Case pattern: 0001010000110 | asgmzj_tgb3ofep → asgMzJ_tgb3oFEp
 
 
-IDK-HPRINT BCH CHECKSUM ANALYSIS - MEDIUM SIZE
+IDK-HDPRINT BCH CHECKSUM ANALYSIS - MEDIUM SIZE
 ======================================================================
 
 🔍 FINDING ABSOLUTE MINIMUM GENERATORS FOR MEDIUM
@@ -939,7 +939,7 @@ Sample 32745: x2TrQp_3dpf2Ucz_teazirJJ → 4x6qnere:x2TrQp_3dpf2Ucz_teazirJJ (8 
   Case pattern: 0101000010000000011 | x2trqp_3dpf2ucz_teazirjj → x2TrQp_3dpf2Ucz_teazirJJ
 
 
-IDK-HPRINT BCH CHECKSUM ANALYSIS - RACK SIZE
+IDK-HDPRINT BCH CHECKSUM ANALYSIS - RACK SIZE
 ======================================================================
 
 🔍 FINDING ABSOLUTE MINIMUM GENERATORS FOR RACK
@@ -1129,7 +1129,7 @@ Top performers by error correction:
 2. BCH(t=7,m=6)    |  100.0% error correction | t=7 capability
 3. BCH(t=3,m=5)    |  100.0% error correction | t=3 capability
 
-Recommended BCH configurations by IDK-HPRINT size:
+Recommended BCH configurations by IDK-HDPRINT size:
 ================================================================================
 
 TINY SIZE RECOMMENDATIONS:
@@ -1493,12 +1493,12 @@ RACK:
   EFFICIENCY = 1.000
 
 Analysis complete.
-Use these specifications for your IDK-HPRINT BCH checksum implementation.
+Use these specifications for your IDK-HDPRINT BCH checksum implementation.
 ================================================================================
 DEBUG: Analyzing real fingerprint patterns
 
 ======================================================================
-REAL IDK-HPRINT FINGERPRINT ANALYSIS
+REAL IDK-HDPRINT FINGERPRINT ANALYSIS
 ======================================================================
 
 Analyzing TINY fingerprints:
@@ -1671,7 +1671,7 @@ Result: 100% success rate for single character flip recovery
 DEBUG: Generating dynamic technical documentation with live measurements
 
 ================================================================================
-                    IDK-HPRINT DYNAMIC TECHNICAL DOCUMENTATION
+                    IDK-HDPRINT DYNAMIC TECHNICAL DOCUMENTATION
                           Run: 2025-07-15 19:26:56
 ================================================================================
 
@@ -1930,21 +1930,21 @@ STEP 6: The fundamental limitation
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
-  Testing if corrected checksum verifies against original hprint
+  Testing if corrected checksum verifies against original hdprint
   Corrected checksum: f7am5v1
-  Original hprint: WAVewn
+  Original hdprint: WAVewn
   Expected: VERIFICATION FAILURE
 
-  Test 1: BCH Verification (corrected checksum vs original hprint)
+  Test 1: BCH Verification (corrected checksum vs original hdprint)
     Input: f7am5v1:WAVewn
-    Expected checksum for original hprint: f7nm5v1
+    Expected checksum for original hdprint: f7nm5v1
     Actual corrected checksum: f7am5v1
     Checksums match: NO
     BCH verification: FAIL
 
-  Test 2: BCH Verification (corrected checksum vs lowercase hprint)
+  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
     Input: f7am5v1:wavewn
-    Expected checksum for lowercase hprint: fctyt2b
+    Expected checksum for lowercase hdprint: fctyt2b
     Actual corrected checksum: f7am5v1
     Checksums match: NO
     BCH verification: FAIL
@@ -1964,8 +1964,8 @@ STEP 9: What would be needed for case recovery
   The corrected checksum is for a DIFFERENT fingerprint!
 
 CONCLUSION: BCH Verification Proves the Point
-❌ The corrected checksum FAILS verification against original hprint
-✅ The corrected checksum PASSES verification against lowercase hprint
+❌ The corrected checksum FAILS verification against original hdprint
+✅ The corrected checksum PASSES verification against lowercase hdprint
 ✅ The system works as designed - different case = different checksum
 ✅ This is not a bug - it's cryptographic correctness!
 
@@ -2185,21 +2185,21 @@ STEP 6: The fundamental limitation
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
-  Testing if corrected checksum verifies against original hprint
+  Testing if corrected checksum verifies against original hdprint
   Corrected checksum: 6vayji7
-  Original hprint: WAVewn_PhcrVcQ3_kMGiVfWa
+  Original hdprint: WAVewn_PhcrVcQ3_kMGiVfWa
   Expected: VERIFICATION FAILURE
 
-  Test 1: BCH Verification (corrected checksum vs original hprint)
+  Test 1: BCH Verification (corrected checksum vs original hdprint)
     Input: 6vayji7:WAVewn_PhcrVcQ3_kMGiVfWa
-    Expected checksum for original hprint: 6vcyji7
+    Expected checksum for original hdprint: 6vcyji7
     Actual corrected checksum: 6vayji7
     Checksums match: NO
     BCH verification: FAIL
 
-  Test 2: BCH Verification (corrected checksum vs lowercase hprint)
+  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
     Input: 6vayji7:wavewn_phcrvcq3_kmgivfwa
-    Expected checksum for lowercase hprint: 4wsqxmk
+    Expected checksum for lowercase hdprint: 4wsqxmk
     Actual corrected checksum: 6vayji7
     Checksums match: NO
     BCH verification: FAIL
@@ -2219,8 +2219,8 @@ STEP 9: What would be needed for case recovery
   The corrected checksum is for a DIFFERENT fingerprint!
 
 CONCLUSION: BCH Verification Proves the Point
-❌ The corrected checksum FAILS verification against original hprint
-✅ The corrected checksum PASSES verification against lowercase hprint
+❌ The corrected checksum FAILS verification against original hdprint
+✅ The corrected checksum PASSES verification against lowercase hdprint
 ✅ The system works as designed - different case = different checksum
 ✅ This is not a bug - it's cryptographic correctness!
 

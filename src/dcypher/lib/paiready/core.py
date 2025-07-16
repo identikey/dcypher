@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Paiready - Probabilistic Authentication with IDK-HPRINT (Ready for Production)
+Paiready - Probabilistic Authentication with IDK-HDPRINT (Ready for Production)
 
 PROVEN CAPABILITIES:
 - Base58L checksums with BCH error correction
@@ -317,7 +317,7 @@ class BCHConfigurationSweeper:
 
             # Test with real fingerprint data (like lab notebook)
             test_key = secrets.token_bytes(32)
-            from dcypher.idk_hprint import generate_hierarchical_fingerprint
+            from dcypher.hdprint import generate_hierarchical_fingerprint
 
             test_fingerprint = generate_hierarchical_fingerprint(test_key, "tiny")
 

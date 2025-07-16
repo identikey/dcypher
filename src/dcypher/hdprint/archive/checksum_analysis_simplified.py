@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IDK_HPRINT BCH Checksum Analysis - COMPREHENSIVE GENERATOR SWEEP
+HDPRINT BCH Checksum Analysis - COMPREHENSIVE GENERATOR SWEEP
 
 🎯 CONFIRMED OPTIMAL RESULT (via testing):
    - 7-character Base58L checksum
@@ -10,7 +10,7 @@ IDK_HPRINT BCH Checksum Analysis - COMPREHENSIVE GENERATOR SWEEP
    - 35 total bits with bit interleaving
 
 Sweeps ALL possible BCH generators (t, m combinations) from smallest to largest.
-Finds unified BCH generators for each IDK-HPRINT size.
+Finds unified BCH generators for each IDK-HDPRINT size.
 
 Supports 3 BCH product features:
 1. lowercase_detect - BCH parity protection on lowercase content
@@ -33,10 +33,10 @@ from typing import Dict, List, Tuple, Optional, Any, Union
 import multiprocessing
 import threading
 
-# Add the parent directory to import the IDK_HPRINT library
+# Add the parent directory to import the HDPRINT library
 sys.path.insert(0, "src")
 
-from dcypher.idk_hprint import generate_hierarchical_fingerprint
+from dcypher.hdprint import generate_hierarchical_fingerprint
 import bchlib
 
 print("bchlib available - using proper BCH implementation")
@@ -60,7 +60,7 @@ BCH_CHECKSUM_RECOVERY_MONOLITHIC = (
     "checksum_recovery_monolithic"  # BCH t=1 on concatenated result
 )
 
-# Real size characteristics from actual IDK-HPRINT library analysis
+# Real size characteristics from actual IDK-HDPRINT library analysis
 # Based on actual fingerprint generation with Base58 encoding
 SIZE_CHARACTERISTICS = {
     "tiny": {
@@ -531,7 +531,7 @@ class ComprehensiveBCHSweeper:
 
     @staticmethod
     def find_optimal_generators_for_size(size: str) -> List[BCHConfig]:
-        """Find optimal BCH generators for a specific IDK-HPRINT size"""
+        """Find optimal BCH generators for a specific IDK-HDPRINT size"""
         characteristics = SIZE_CHARACTERISTICS[size]
         min_data_bits = characteristics["max_case_bits"]
 
@@ -1171,8 +1171,8 @@ def generate_interleaved_checksum_for_fingerprint(
 
 
 def generate_and_test_checksums(size: str, count: int = 10) -> None:
-    """Generate hprints and their BCH checksums for testing"""
-    print(f"\nIDK-HPRINT BCH CHECKSUM ANALYSIS - {size.upper()} SIZE")
+    """Generate hdprints and their BCH checksums for testing"""
+    print(f"\nIDK-HDPRINT BCH CHECKSUM ANALYSIS - {size.upper()} SIZE")
     print("=" * 70)
 
     # Create optimal BCH system for this size
@@ -1206,7 +1206,7 @@ def generate_and_test_checksums(size: str, count: int = 10) -> None:
         lowercase_content = fingerprint.lower()
 
         # Generate BCH codes for SELF-CORRECTING CHECKSUM system
-        # Goal: User types checksum:hprint in all lowercase, system recovers proper case
+        # Goal: User types checksum:hdprint in all lowercase, system recovers proper case
         try:
             data_bytes = (gen["k"] + 7) // 8
 
@@ -1445,7 +1445,7 @@ def generate_comprehensive_length_table(
 
     print("-" * 100)
     print("\nKEY INSIGHTS:")
-    print("• FINGERPRINT LENGTH: Actual IDK-HPRINT fingerprint character count")
+    print("• FINGERPRINT LENGTH: Actual IDK-HDPRINT fingerprint character count")
     print("• TARGET GOAL: Desired minimal checksum length for deployment")
     print(
         "• THEORETICAL BCH CHARS: Calculated from BCH parameters (individual checksum)"
@@ -1987,9 +1987,9 @@ def generate_final_testing_summary(test_results: Dict[str, Any]) -> None:
 
 
 def analyze_real_fingerprints():
-    """Analyze real IDK-HPRINT fingerprints to validate our BCH approach"""
+    """Analyze real IDK-HDPRINT fingerprints to validate our BCH approach"""
     print("\n" + "=" * 70)
-    print("REAL IDK-HPRINT FINGERPRINT ANALYSIS")
+    print("REAL IDK-HDPRINT FINGERPRINT ANALYSIS")
     print("=" * 70)
 
     import secrets
@@ -2131,9 +2131,7 @@ def select_bch_generator_for_feature(size: str, feature_key: str, feature_label:
 
 # --- Main comprehensive sweep ---
 def run_prioritized_bch_sweep():
-    print(
-        "\nIDK_HPRINT BCH CHECKSUM ANALYSIS - PRIORITIZED, TIERED, EMPIRICAL SELECTION"
-    )
+    print("\nHDPRINT BCH CHECKSUM ANALYSIS - PRIORITIZED, TIERED, EMPIRICAL SELECTION")
     print("=" * 80)
     results = {}
     for size in ["tiny", "small", "medium", "rack"]:
@@ -2276,7 +2274,7 @@ def generate_performance_summary_and_recommendations():
         )
 
     # Generate size-specific recommendations
-    print("\nRecommended BCH configurations by IDK-HPRINT size:")
+    print("\nRecommended BCH configurations by IDK-HDPRINT size:")
     print("=" * 80)
 
     size_recommendations = {}
@@ -2382,7 +2380,7 @@ def generate_performance_summary_and_recommendations():
             print(f"  EFFICIENCY = {config['efficiency']:.3f}")
 
     print(f"\nAnalysis complete.")
-    print("Use these specifications for your IDK-HPRINT BCH checksum implementation.")
+    print("Use these specifications for your IDK-HDPRINT BCH checksum implementation.")
     print("=" * 80)
 
 
@@ -2548,7 +2546,7 @@ class InterleavedBCHChecksum:
             # STEP 1: Generate actual fingerprint data (not SHA256)
             print("STEP 1: Generating actual fingerprint data")
 
-            # Generate real fingerprint using IDK_HPRINT system
+            # Generate real fingerprint using HDPRINT system
             test_public_key = secrets.token_bytes(32)
             test_fingerprint = generate_hierarchical_fingerprint(
                 test_public_key, "tiny"
@@ -3755,7 +3753,7 @@ def bits_to_bytes(bits: List[int]) -> bytes:
 
 def demonstrate_base58l_checksum_examples():
     """
-    Demonstrate working Base58L checksum examples with checksum:hprint format.
+    Demonstrate working Base58L checksum examples with checksum:hdprint format.
     Uses proper bit interleaving and no colons in checksum.
     """
     print("\nBASE58L CHECKSUM WORKING EXAMPLES")
@@ -3779,10 +3777,10 @@ def demonstrate_base58l_checksum_examples():
     print(f"Configuration: {num_codes} × BCH(t={bch_config['t']},m={bch_config['m']})")
     print(f"Checksum length: {optimal_config['length']} characters")
     print(f"Success rate: 100% single character correction")
-    print(f"Format: checksum:hprint (interleaved bits, no colons)")
+    print(f"Format: checksum:hdprint (interleaved bits, no colons)")
 
-    # Generate sample hprints and their checksums
-    print(f"\nGENERATING SAMPLE CHECKSUM:HPRINT PAIRS")
+    # Generate sample hdprints and their checksums
+    print(f"\nGENERATING SAMPLE CHECKSUM:HDPRINT PAIRS")
     print("-" * 50)
 
     # Create BCH systems for the optimal configuration
@@ -3790,8 +3788,8 @@ def demonstrate_base58l_checksum_examples():
     for _ in range(num_codes):
         bch_systems.append(bchlib.BCH(t=bch_config["t"], m=bch_config["m"]))
 
-    # Sample hprints to test
-    sample_hprints = [
+    # Sample hdprints to test
+    sample_hdprints = [
         "R8YAtf",  # tiny example
         "test123",  # simple test
         "hello",  # basic word
@@ -3806,28 +3804,28 @@ def demonstrate_base58l_checksum_examples():
 
     generated_pairs = []
 
-    for i, hprint in enumerate(sample_hprints):
+    for i, hdprint in enumerate(sample_hdprints):
         try:
             # Generate checksum using proper bit interleaving
             checksum = generate_interleaved_base58l_checksum(
-                hprint, optimal_config, bch_systems
+                hdprint, optimal_config, bch_systems
             )
 
-            # Store the pair in checksum:hprint format
-            generated_pairs.append((checksum, hprint))
+            # Store the pair in checksum:hdprint format
+            generated_pairs.append((checksum, hdprint))
 
-            print(f"{i + 1:2d}. {checksum:<15} : {hprint}")
+            print(f"{i + 1:2d}. {checksum:<15} : {hdprint}")
 
         except Exception as e:
-            print(f"{i + 1:2d}. ERROR generating checksum for {hprint}: {e}")
+            print(f"{i + 1:2d}. ERROR generating checksum for {hdprint}: {e}")
 
     # Test error correction on a few examples
     print(f"\nTESTING ERROR CORRECTION CAPABILITY")
     print("-" * 50)
 
     # Test first 3 generated pairs
-    for i, (original_checksum, hprint) in enumerate(generated_pairs[:3]):
-        print(f"\nExample {i + 1}: {original_checksum}:{hprint}")
+    for i, (original_checksum, hdprint) in enumerate(generated_pairs[:3]):
+        print(f"\nExample {i + 1}: {original_checksum}:{hdprint}")
 
         # Test single character flips in the checksum
         corrections_tested = 0
@@ -3845,7 +3843,7 @@ def demonstrate_base58l_checksum_examples():
 
                     # Test if we can correct it
                     can_correct = test_interleaved_checksum_correction(
-                        hprint, corrupted_checksum, optimal_config, bch_systems
+                        hdprint, corrupted_checksum, optimal_config, bch_systems
                     )
 
                     corrections_tested += 1
@@ -3869,9 +3867,9 @@ def demonstrate_base58l_checksum_examples():
     # Show the format specification
     print(f"\nFORMAT SPECIFICATION")
     print("-" * 50)
-    print(f"Format: <checksum>:<hprint>")
+    print(f"Format: <checksum>:<hdprint>")
     print(f"  checksum: 7-character Base58L interleaved BCH code (no colons)")
-    print(f"  hprint: Variable length identifier (ASCII)")
+    print(f"  hdprint: Variable length identifier (ASCII)")
     print(f"  separator: Single colon (:)")
     print(f"  Total overhead: 8 characters (7 + 1 separator)")
 
@@ -3890,38 +3888,38 @@ def demonstrate_base58l_checksum_examples():
 
 
 def generate_interleaved_base58l_checksum(
-    hprint: str, config: Dict[str, Any], bch_systems: List[Any]
+    hdprint: str, config: Dict[str, Any], bch_systems: List[Any]
 ) -> str:
     """Generate Base58L checksum using proper bit interleaving."""
-    # Generate ECC data for each BCH code based on hprint
+    # Generate ECC data for each BCH code based on hdprint
     ecc_codes = []
 
     for i, bch_system in enumerate(bch_systems):
-        # Create deterministic data from hprint for this BCH code
+        # Create deterministic data from hdprint for this BCH code
         data_bytes = (config["bch_config"]["k"] + 7) // 8
 
-        # Extract data directly from hprint instead of hashing
-        hprint_bytes = hprint.encode("utf-8")
+        # Extract data directly from hdprint instead of hashing
+        hdprint_bytes = hdprint.encode("utf-8")
         test_data = bytearray(data_bytes)
 
-        # Fill with hprint data using different patterns for each BCH code
+        # Fill with hdprint data using different patterns for each BCH code
         for j in range(data_bytes):
             if i == 0:
-                # BCH Code 1: Use hprint bytes directly
-                test_data[j] = hprint_bytes[j % len(hprint_bytes)]
+                # BCH Code 1: Use hdprint bytes directly
+                test_data[j] = hdprint_bytes[j % len(hdprint_bytes)]
             elif i == 1:
-                # BCH Code 2: Use hprint bytes in reverse
-                reverse_idx = len(hprint_bytes) - 1 - (j % len(hprint_bytes))
-                test_data[j] = hprint_bytes[reverse_idx]
+                # BCH Code 2: Use hdprint bytes in reverse
+                reverse_idx = len(hdprint_bytes) - 1 - (j % len(hdprint_bytes))
+                test_data[j] = hdprint_bytes[reverse_idx]
             elif i == 2:
-                # BCH Code 3: Use hprint bytes with XOR
-                test_data[j] = hprint_bytes[j % len(hprint_bytes)] ^ (j & 0xFF)
+                # BCH Code 3: Use hdprint bytes with XOR
+                test_data[j] = hdprint_bytes[j % len(hdprint_bytes)] ^ (j & 0xFF)
             elif i == 3:
-                # BCH Code 4: Use hprint bytes with rotation
-                test_data[j] = hprint_bytes[(j + i) % len(hprint_bytes)]
+                # BCH Code 4: Use hdprint bytes with rotation
+                test_data[j] = hdprint_bytes[(j + i) % len(hdprint_bytes)]
             else:
-                # BCH Code 5+: Use hprint bytes with offset
-                test_data[j] = hprint_bytes[(j + i * 3) % len(hprint_bytes)]
+                # BCH Code 5+: Use hdprint bytes with offset
+                test_data[j] = hdprint_bytes[(j + i * 3) % len(hdprint_bytes)]
 
         test_data = bytes(test_data)
 
@@ -3957,13 +3955,16 @@ def generate_interleaved_base58l_checksum(
 
 
 def test_interleaved_checksum_correction(
-    hprint: str, corrupted_checksum: str, config: Dict[str, Any], bch_systems: List[Any]
+    hdprint: str,
+    corrupted_checksum: str,
+    config: Dict[str, Any],
+    bch_systems: List[Any],
 ) -> bool:
     """Test if corrupted checksum can be corrected using bit interleaving."""
     try:
         # Generate expected checksum
         expected_checksum = generate_interleaved_base58l_checksum(
-            hprint, config, bch_systems
+            hdprint, config, bch_systems
         )
 
         # If they match, no correction needed
@@ -3986,7 +3987,7 @@ def test_interleaved_checksum_correction(
         for i, (bch_system, bits) in enumerate(zip(bch_systems, deinterleaved_bits)):
             # Create original data for this BCH code
             data_bytes = (config["bch_config"]["k"] + 7) // 8
-            seed_data = f"{hprint}{i}".encode()
+            seed_data = f"{hdprint}{i}".encode()
             hash_data = hashlib.sha256(seed_data).digest()
             original_data = hash_data[:data_bytes]
 
@@ -4283,7 +4284,7 @@ def generate_dynamic_documentation():
 
     print(f"""
 ================================================================================
-                    IDK-HPRINT DYNAMIC TECHNICAL DOCUMENTATION
+                    IDK-HDPRINT DYNAMIC TECHNICAL DOCUMENTATION
                           Run: {current_time}
 ================================================================================
 
@@ -4431,7 +4432,7 @@ LIVE MEASUREMENTS (Computed This Run):
         except Exception as e:
             print(f"    {size.upper()}: Error - {e}")
 
-    # Show same hprint at all different sizes WITH DETAILED CHECKSUM RECOVERY AUDIT
+    # Show same hdprint at all different sizes WITH DETAILED CHECKSUM RECOVERY AUDIT
     print(f"\nCRYPTOGRAPHIC AUDIT: SAME IDENTITY ACROSS ALL SIZES + ERROR CORRECTION")
     print("=" * 80)
     print("STEP-BY-STEP DEMONSTRATION OF SINGLE CHARACTER FLIP RECOVERY")
@@ -4918,23 +4919,23 @@ LIVE MEASUREMENTS (Computed This Run):
 
                     print("STEP 7: ACTUAL BCH VERIFICATION TEST")
                     print(
-                        f"  Testing if corrected checksum verifies against original hprint"
+                        f"  Testing if corrected checksum verifies against original hdprint"
                     )
                     print(f"  Corrected checksum: {reconstructed_checksum}")
-                    print(f"  Original hprint: {demo_data['fingerprint']}")
+                    print(f"  Original hdprint: {demo_data['fingerprint']}")
                     print(f"  Expected: VERIFICATION FAILURE")
                     print()
 
-                    # Test 1: BCH verification of corrected checksum against original hprint
+                    # Test 1: BCH verification of corrected checksum against original hdprint
                     print(
-                        "  Test 1: BCH Verification (corrected checksum vs original hprint)"
+                        "  Test 1: BCH Verification (corrected checksum vs original hdprint)"
                     )
                     corrected_full = (
                         f"{reconstructed_checksum}:{demo_data['fingerprint']}"
                     )
                     print(f"    Input: {corrected_full}")
 
-                    # Generate what the checksum SHOULD be for the original hprint
+                    # Generate what the checksum SHOULD be for the original hdprint
                     expected_checksum = generate_interleaved_base58l_checksum(
                         demo_data["fingerprint"],
                         demo_data["config"],
@@ -4942,7 +4943,7 @@ LIVE MEASUREMENTS (Computed This Run):
                     )
 
                     print(
-                        f"    Expected checksum for original hprint: {expected_checksum}"
+                        f"    Expected checksum for original hdprint: {expected_checksum}"
                     )
                     print(f"    Actual corrected checksum: {reconstructed_checksum}")
                     print(
@@ -4953,16 +4954,16 @@ LIVE MEASUREMENTS (Computed This Run):
                     )
                     print()
 
-                    # Test 2: BCH verification of corrected checksum against lowercase hprint
+                    # Test 2: BCH verification of corrected checksum against lowercase hdprint
                     print(
-                        "  Test 2: BCH Verification (corrected checksum vs lowercase hprint)"
+                        "  Test 2: BCH Verification (corrected checksum vs lowercase hdprint)"
                     )
                     corrected_lowercase_full = (
                         f"{reconstructed_checksum}:{lowercase_fingerprint}"
                     )
                     print(f"    Input: {corrected_lowercase_full}")
 
-                    # Generate what the checksum SHOULD be for the lowercase hprint
+                    # Generate what the checksum SHOULD be for the lowercase hdprint
                     expected_lowercase_checksum = generate_interleaved_base58l_checksum(
                         lowercase_fingerprint,
                         demo_data["config"],
@@ -4970,7 +4971,7 @@ LIVE MEASUREMENTS (Computed This Run):
                     )
 
                     print(
-                        f"    Expected checksum for lowercase hprint: {expected_lowercase_checksum}"
+                        f"    Expected checksum for lowercase hdprint: {expected_lowercase_checksum}"
                     )
                     print(f"    Actual corrected checksum: {reconstructed_checksum}")
                     print(
@@ -5015,10 +5016,10 @@ LIVE MEASUREMENTS (Computed This Run):
 
                     print("CONCLUSION: BCH Verification Proves the Point")
                     print(
-                        "❌ The corrected checksum FAILS verification against original hprint"
+                        "❌ The corrected checksum FAILS verification against original hdprint"
                     )
                     print(
-                        "✅ The corrected checksum PASSES verification against lowercase hprint"
+                        "✅ The corrected checksum PASSES verification against lowercase hdprint"
                     )
                     print(
                         "✅ The system works as designed - different case = different checksum"
@@ -5191,7 +5192,7 @@ LIVE MEASUREMENTS (Computed This Run):
 
 def generate_comprehensive_technical_summary():
     """
-    Generate comprehensive technical summary of the IDK-HPRINT checksum system.
+    Generate comprehensive technical summary of the IDK-HDPRINT checksum system.
     Old-school C/C++ crypto library documentation style.
     This now includes DYNAMIC documentation that shows actual computed values per run.
     """
@@ -5225,7 +5226,7 @@ MEMORY LAYOUT AND DATA STRUCTURES:
     
     Input Data per BCH Code:
     - Each BCH code operates on 120 data bits (15 bytes)
-    - Data derived from hprint identifier using SHA-256 hash
+    - Data derived from hdprint identifier using SHA-256 hash
     - 5 independent data sources (one per BCH code)
     
     BCH Code Structure:
@@ -5248,7 +5249,7 @@ STEP-BY-STEP ENCODING ALGORITHM:
 
 1. DATA PREPARATION:
    For each BCH code i (0 to 4):
-   - seed_data = hprint_bytes || i  (concatenate hprint with code index)
+   - seed_data = hdprint_bytes || i  (concatenate hdprint with code index)
    - hash_data = SHA256(seed_data)
    - data[i] = hash_data[0:15]  (take first 15 bytes = 120 bits)
 
@@ -5300,7 +5301,7 @@ STEP-BY-STEP DECODING ALGORITHM:
 
 3. BCH ERROR CORRECTION:
    For each BCH code i (0 to 4):
-       - Reconstruct original data[i] from hprint (same as encoding step 1)
+       - Reconstruct original data[i] from hdprint (same as encoding step 1)
        - corrupted_ecc = pack_bits_to_byte(ecc_bits[i])
        - error_count = BCH_decode(data[i], corrupted_ecc)
        - If error_count < 0: correction failed
@@ -5347,14 +5348,14 @@ VALIDATION AND ERROR HANDLING:
 Input Validation:
     - Checksum must be exactly 7 characters
     - All characters must be in Base58L alphabet
-    - Hprint must be non-empty ASCII string
+    - HDprint must be non-empty ASCII string
     - System must support BCH(t=1, m=7) operations
 
 Error Conditions:
     - INVALID_CHECKSUM_LENGTH: checksum not 7 characters
     - INVALID_CHARACTER: character not in Base58L alphabet  
     - BCH_DECODE_FAILED: BCH error correction failed
-    - HPRINT_EMPTY: hprint identifier is empty
+    - HDPRINT_EMPTY: hdprint identifier is empty
     - MEMORY_ERROR: insufficient memory for operations
 
 Success Conditions:
@@ -5364,7 +5365,7 @@ Success Conditions:
 
  COMPLETE WORKED EXAMPLES WITH REAL COMPUTED VALUES:
 
-==== EXAMPLE 1: hprint = 'test123' ====
+==== EXAMPLE 1: hdprint = 'test123' ====
 
 Step 1 - Data Preparation:
     seed_0 = 'test123' || 0 = 'test1230'
@@ -5420,7 +5421,7 @@ Step 4 - Base58L Encoding:
     
     Result: 'kbd2cjr'
 
-==== EXAMPLE 2: hprint = 'R8YAtf' (Tiny size) ====
+==== EXAMPLE 2: hdprint = 'R8YAtf' (Tiny size) ====
 
 Step 1 - Data Preparation:
     seed_0 = 'R8YAtf0' → SHA256 → data[0] = a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef
@@ -5452,7 +5453,7 @@ Step 4 - Base58L Encoding:
     
     Result: 'm3k7x5a'
 
-==== EXAMPLE 3: hprint = 'hello_world' (Small size) ====
+==== EXAMPLE 3: hdprint = 'hello_world' (Small size) ====
 
 Step 1 - Data Preparation:
     seed_0 = 'hello_world0' → SHA256 → data[0] = f1a2b3c4d5e6f789abcdef0123456789abcdef0123456789abcd
@@ -5484,7 +5485,7 @@ Step 4 - Base58L Encoding:
     
     Result: 'p9q2w1s'
 
-==== EXAMPLE 4: hprint = 'crypto_secure' (Medium size) ====
+==== EXAMPLE 4: hdprint = 'crypto_secure' (Medium size) ====
 
 Step 1 - Data Preparation:
     seed_0 = 'crypto_secure0' → SHA256 → data[0] = e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8
@@ -5516,7 +5517,7 @@ Step 4 - Base58L Encoding:
     
     Result: 'h6j4n8b'
 
-==== EXAMPLE 5: hprint = 'blockchain_hash' (Rack size) ====
+==== EXAMPLE 5: hdprint = 'blockchain_hash' (Rack size) ====
 
 Step 1 - Data Preparation:
     seed_0 = 'blockchain_hash0' → SHA256 → data[0] = 9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0
@@ -5550,7 +5551,7 @@ Step 4 - Base58L Encoding:
 
 SUMMARY TABLE - ALL FORMATS:
 ================================================================================
-HPRINT               CHECKSUM   HEX                  BINARY
+HDPRINT               CHECKSUM   HEX                  BINARY
 --------------------------------------------------------------------------------
 test123              kbd2cjr    0x5CD6507A          0b10110011011001011111000100110011010
 R8YAtf               m3k7x5a    0x765A3E7D          0b11101100001001011110001111001111101
@@ -5587,7 +5588,7 @@ Bit positions by BCH code:
 MANUAL VERIFICATION STEPS:
 ================================================================================
 To verify by hand:
-1. Take any hprint (e.g., 'test123')
+1. Take any hdprint (e.g., 'test123')
 2. Generate SHA256 for 'test1230', 'test1231', 'test1232', 'test1233', 'test1234'
 3. Take first 15 bytes of each hash as BCH input data
 4. Compute BCH(t=1,m=7) ECC for each (7 bits output)
@@ -5600,7 +5601,7 @@ To verify by hand:
 CORRECTION VERIFICATION:
 ================================================================================
 To verify error correction by hand:
-1. Take any working checksum:hprint pair
+1. Take any working checksum:hdprint pair
 2. Change exactly 1 character in the checksum
 3. Decode back to 35 bits
 4. De-interleave into 5 groups of 7 bits each
@@ -5651,20 +5652,20 @@ Memory-Efficient Implementation:
 
 Cache-Friendly Processing:
     // Process all 5 BCH codes in single pass
-    void process_all_bch_codes(const char* hprint, uint8_t ecc_out[5]) {
+    void process_all_bch_codes(const char* hdprint, uint8_t ecc_out[5]) {
         SHA256_CTX ctx;
         uint8_t hash[32];
         
         for (int i = 0; i < 5; i++) {
             // Prepare seed data
-            size_t hprint_len = strlen(hprint);
-            uint8_t seed[hprint_len + 1];
-            memcpy(seed, hprint, hprint_len);
-            seed[hprint_len] = (uint8_t)i;
+            size_t hdprint_len = strlen(hdprint);
+            uint8_t seed[hdprint_len + 1];
+            memcpy(seed, hdprint, hdprint_len);
+            seed[hdprint_len] = (uint8_t)i;
             
             // Hash and extract data
             SHA256_Init(&ctx);
-            SHA256_Update(&ctx, seed, hprint_len + 1);
+            SHA256_Update(&ctx, seed, hdprint_len + 1);
             SHA256_Final(hash, &ctx);
             
             // BCH encode (using first 15 bytes of hash)
@@ -5762,7 +5763,7 @@ TESTING AND VALIDATION:
 Comprehensive Test Vectors:
     // Test vector structure
     typedef struct {
-        char* hprint;
+        char* hdprint;
         char* expected_checksum;
         char* corrupted_checksum;
         bool should_correct;
@@ -5772,13 +5773,13 @@ Comprehensive Test Vectors:
         {"test123", "kbd2cjr", "lbd2cjr", true},   // Single char flip
         {"hello", "a5m9n3p", "a5m9n3q", true},     // Single char flip
         {"crypto", "x7y2z4w", "x7y2z4x", true},    // Single char flip
-        {"invalid", "1234567", "1234568", false},   // Invalid hprint
+        {"invalid", "1234567", "1234568", false},   // Invalid hdprint
         // ... more test vectors
     };
 
 Stress Testing:
     // Exhaustive single-character flip testing
-    void test_all_single_flips(const char* hprint, const char* checksum) {
+    void test_all_single_flips(const char* hdprint, const char* checksum) {
         for (int pos = 0; pos < 7; pos++) {
             for (int repl = 0; repl < 33; repl++) {
                 if (BASE58L_ALPHABET[repl] == checksum[pos]) continue;
@@ -5787,7 +5788,7 @@ Stress Testing:
                 strcpy(corrupted, checksum);
                 corrupted[pos] = BASE58L_ALPHABET[repl];
                 
-                bool corrected = verify_and_correct(hprint, corrupted);
+                bool corrected = verify_and_correct(hdprint, corrupted);
                 assert(corrected && "Single character flip must be correctable");
             }
         }
@@ -5867,12 +5868,12 @@ Complete C Implementation:
     #define NUM_BCH_CODES 5
     #define BITS_PER_BCH 7
     
-    int generate_checksum(const char* hprint, char* checksum_out) {
+    int generate_checksum(const char* hdprint, char* checksum_out) {
         // Implementation follows the detailed algorithms above
         // Returns 0 on success, negative error code on failure
     }
     
-    int verify_and_correct(const char* hprint, char* checksum_inout) {
+    int verify_and_correct(const char* hdprint, char* checksum_inout) {
         // Implementation follows the detailed algorithms above
         // Returns 0 on success, negative error code on failure
         // Modifies checksum_inout in-place if correction performed
@@ -5930,8 +5931,8 @@ CHARACTER FLIP IMPACT:
 ================================================================================
 
 CHECKSUM GENERATION:
-    1. Extract hprint identifier
-    2. Generate 5 independent datasets from hprint
+    1. Extract hdprint identifier
+    2. Generate 5 independent datasets from hdprint
     3. Compute BCH(t=1,m=7) ECC for each dataset
     4. Extract 7 ECC bits from each BCH code
     5. Interleave bits: A1,B1,C1,D1,E1,A2,B2,C2,...
@@ -5978,7 +5979,7 @@ SCALABILITY:
 ================================================================================
 
 EXAMPLE 1: Simple Checksum Generation
-    Input:  hprint = "yXxusp"
+    Input:  hdprint = "yXxusp"
     Output: checksum = "cr5ip1c"
     Result: "cr5ip1c:yXxusp"
 
@@ -5988,10 +5989,10 @@ EXAMPLE 2: Error Correction
     Corrected: "cr5ip1c:yXxusp"  (100% success)
 
 EXAMPLE 3: Multiple Checksums
-    hprint1 = "R8YAtf"  → "m3k7x5a:R8YAtf"     (tiny size)
-    hprint2 = "test123" → "p9q2w1s:test123"     (generic)
-    hprint3 = "crypto"  → "h6j4n8b:crypto"      (generic)
-    hprint4 = "blockchain_hash" → "x7y2z4w:blockchain_hash" (rack size)
+    hdprint1 = "R8YAtf"  → "m3k7x5a:R8YAtf"     (tiny size)
+    hdprint2 = "test123" → "p9q2w1s:test123"     (generic)
+    hdprint3 = "crypto"  → "h6j4n8b:crypto"      (generic)
+    hdprint4 = "blockchain_hash" → "x7y2z4w:blockchain_hash" (rack size)
 
 ================================================================================
                             IMPLEMENTATION DETAILS
@@ -6064,7 +6065,7 @@ BASE58 ENCODING:
                             CONCLUSION
 ================================================================================
 
-The IDK-HPRINT checksum system successfully achieves:
+The IDK-HDPRINT checksum system successfully achieves:
 
 ✓ GOAL: Single character flip error correction
 ✓ EFFICIENCY: 7-character overhead (8 total with colon)

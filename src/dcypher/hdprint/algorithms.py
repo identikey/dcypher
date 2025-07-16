@@ -1,5 +1,5 @@
 """
-Core IdkHprint Algorithms
+Core HDprint Algorithms
 
 This module contains the main HMAC chain algorithm for generating
 hierarchical cryptographic fingerprints with base58 encoding using
