@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""
+__version__ = "0.0"
+f"""
 HDPRINT BCH Checksum Analysis - Dynamic Technical Documentation Generator
+
+Author: IdentiKey Cryptography Team
+Date: 2025-07-15
+Version: {__version__}
 
 MODULAR ARCHITECTURE:
    - Lightweight entry point with fallback fingerprint generation
@@ -17,9 +22,6 @@ MODULES:
 - docs/configuration.py: Configuration discovery and validation
 - docs/generators.py: Main documentation generation orchestration
 
-Author: Cryptography Team
-Date: 2024
-Version: 13.0 (MODULAR ARCHITECTURE)
 """
 
 import sys

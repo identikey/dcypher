@@ -127,6 +127,8 @@ from .demonstrations import (
     demonstrate_error_correction_scenarios,
     demonstrate_identity_scaling,
 )
+from .readme_hdprint import __version__ as hdprint_version
+from .readme_paiready import __version__ as paiready_version
 
 # Gold master production readiness requirements
 PRODUCTION_READINESS_CONFIG = {
@@ -149,8 +151,9 @@ class SpecificationViolationError(Exception):
 def print_technical_header():
     """Print the technical documentation header"""
     print("=" * 80)
-    print("                 IDENTIKEY HDPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION")
+    print("                 IDENTIKEY PAIREADY DYNAMIC TECHNICAL SPECIFICATION")
     print(f"                       Run: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"                       Version: {paiready_version}")
     print("=" * 80)
     print()
 
