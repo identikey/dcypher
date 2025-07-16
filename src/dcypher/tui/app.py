@@ -30,6 +30,7 @@ from dcypher.tui.screens.crypto import CryptoScreen
 from dcypher.tui.screens.accounts import AccountsScreen
 from dcypher.tui.screens.files import FilesScreen
 from dcypher.tui.screens.sharing import SharingScreen
+from dcypher.tui.screens.docs import DocsScreen
 
 # Import API client
 from dcypher.lib.api_client import DCypherClient
@@ -178,6 +179,7 @@ class DCypherTUI(App[None]):
         Binding("4", "switch_tab('accounts')", "Accounts"),
         Binding("5", "switch_tab('files')", "Files"),
         Binding("6", "switch_tab('sharing')", "Sharing"),
+        Binding("7", "switch_tab('docs')", "Docs"),
     ]
 
     # Reactive properties for app state
@@ -441,6 +443,7 @@ class DCypherTUI(App[None]):
             "Accounts",
             "Files",
             "Sharing",
+            "Docs",
             id="main-tabs",
         ):
             # Dashboard - Use proper DashboardScreen
@@ -460,6 +463,9 @@ class DCypherTUI(App[None]):
 
             # Sharing & Collaboration - Use proper SharingScreen
             yield SharingScreen(id="sharing")
+
+            # Documentation - Use proper DocsScreen
+            yield DocsScreen(id="docs")
 
         # Memory usage divider - positioned above footer
         self.memory_divider = ProcessCPU15MinDivider(id="memory-divider")
@@ -684,6 +690,7 @@ class DCypherTUI(App[None]):
                 "accounts": "tab-4",
                 "files": "tab-5",
                 "sharing": "tab-6",
+                "docs": "tab-7",
             }
             actual_tab_id = tab_mapping.get(tab_id, tab_id)
             tabs.active = actual_tab_id
