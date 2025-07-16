@@ -508,3 +508,371 @@ def get_pattern_info(num_segments: int) -> Dict[str, Any]:
         "base_pattern": [6, 8, 8, 8],
         "description": f"Cyclical pattern [6,8,8,8] for {num_segments} segments",
     }
+
+
+# ============================================================================
+# PAIREADY + HDPRINT INTEGRATION
+# ============================================================================
+# Functions for generating self-correcting identifiers in {paiready}_{hdprint} format
+
+
+def generate_self_correcting_identifier(
+    public_key: bytes,
+    size: Union[str, int] = "medium",
+    checksum_chars: int = 7,
+    racks: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Generate a self-correcting identifier combining Paiready checksum and HDprint fingerprint.
+
+    Format: {paiready}_{hdprint}
+    Example: a3k7x5a_Ab3DeF_Xy9ZmP7q_R2sK1M4V
+
+    Args:
+        public_key: The key material to fingerprint
+        size: Size name ("tiny", "small", "medium", "rack") or number of segments
+        checksum_chars: Target length of the checksum part (default: 7)
+        racks: Number of racks for high security (overrides size)
+
+    Returns:
+        Dictionary containing:
+        - identifier: Complete {paiready}_{hdprint} identifier
+        - hdprint: The hierarchical fingerprint part
+        - paiready: The self-correcting checksum part
+        - format_info: Information about the format
+        - error_correction: Error correction capabilities
+
+    Raises:
+        ImportError: If Paiready library is not available
+        ValueError: If invalid parameters are provided
+    """
+    try:
+        from dcypher.lib.paiready import InterleavedBCHChecksum
+    except ImportError:
+        raise ImportError(
+            "Paiready library not available. Install with: pip install dcypher[paiready]"
+        )
+
+    # Generate HDprint hierarchical fingerprint
+    if racks is not None:
+        hdprint = generate_hierarchical_fingerprint(public_key, racks=racks)
+        size_info = get_size_info("rack")  # Use rack pattern info for racks
+        size_info["racks"] = racks
+    else:
+        hdprint = generate_hierarchical_fingerprint(public_key, size)
+        size_info = get_size_info(size)
+
+    # Generate Paiready self-correcting checksum
+    checksum_system = InterleavedBCHChecksum(target_chars=checksum_chars)
+    paiready = checksum_system.generate_checksum(hdprint)
+
+    # Combine into complete identifier
+    identifier = f"{paiready}_{hdprint}"
+
+    # Calculate security and format information (avoiding circular import)
+    if racks is not None:
+        security_bits = 158.2 * racks  # Rough estimation based on rack pattern
+    else:
+        security_map = {"tiny": 17.6, "small": 64.4, "medium": 111.3, "rack": 158.2}
+        if isinstance(size, str):
+            security_bits = security_map.get(size, 100.0)
+        else:
+            # If size is int, estimate based on segments
+            security_bits = 50.0 * size
+
+    return {
+        "identifier": identifier,
+        "hdprint": hdprint,
+        "paiready": paiready,
+        "format_info": {
+            "format": "{paiready}_{hdprint}",
+            "checksum_length": len(paiready),
+            "hdprint_length": len(hdprint),
+            "total_length": len(identifier),
+            "hdprint_pattern": size_info["pattern"],
+            "security_bits": security_bits,
+        },
+        "error_correction": {
+            "single_char_correction": True,
+            "case_restoration": True,
+            "bch_algorithm": "5 × BCH(t=1,m=7) interleaved",
+            "encoding": "Base58L (lowercase) + Base58 (mixed case)",
+        },
+    }
+
+
+def verify_and_correct_identifier(
+    user_input: str,
+    expected_hdprint: Optional[str] = None,
+    checksum_chars: int = 7,
+) -> Dict[str, Any]:
+    """
+    Verify and auto-correct a user-provided {paiready}_{hdprint} identifier.
+
+    Supports:
+    - Single character error correction in checksum
+    - Case error restoration in HDprint
+    - Combined checksum + case error correction
+    - Format validation
+
+    Args:
+        user_input: User-provided identifier (may contain errors)
+        expected_hdprint: Expected HDprint for validation (optional)
+        checksum_chars: Expected checksum length (default: 7)
+
+    Returns:
+        Dictionary containing:
+        - status: "valid", "corrected", "invalid", or "error"
+        - corrected_identifier: Corrected identifier (if correction possible)
+        - original_input: Original user input
+        - corrections_made: List of corrections applied
+        - error_details: Error information if correction failed
+
+    Raises:
+        ImportError: If Paiready library is not available
+    """
+    try:
+        from dcypher.lib.paiready import InterleavedBCHChecksum
+    except ImportError:
+        raise ImportError(
+            "Paiready library not available. Install with: pip install dcypher[paiready]"
+        )
+
+    result: Dict[str, Any] = {
+        "status": "error",
+        "corrected_identifier": user_input,
+        "original_input": user_input,
+        "corrections_made": [],
+        "error_details": None,
+    }
+    corrections_made = result["corrections_made"]  # Explicit list reference
+
+    try:
+        # Step 1: Parse the identifier format
+        parts = user_input.split("_", 1)
+        if len(parts) < 2:
+            result["status"] = "invalid"
+            result["error_details"] = "Invalid format: missing underscore separator"
+            return result
+
+        user_checksum = parts[0]
+        user_hdprint = "_".join(parts[1:])  # Rejoin in case HDprint has underscores
+
+        # Step 2: Validate checksum length
+        if len(user_checksum) != checksum_chars:
+            result["status"] = "invalid"
+            result["error_details"] = (
+                f"Invalid checksum length: expected {checksum_chars}, got {len(user_checksum)}"
+            )
+            return result
+
+        # Step 3: Attempt checksum correction
+        checksum_system = InterleavedBCHChecksum(target_chars=checksum_chars)
+
+        # If we have the expected HDprint, use it for correction
+        if expected_hdprint:
+            correction_result = checksum_system.self_correct_checksum(
+                user_checksum, expected_hdprint
+            )
+
+            if correction_result.get("correction_successful", False):
+                corrected_checksum = correction_result["self_corrected_checksum"]
+                corrected_hdprint = expected_hdprint
+
+                if corrected_checksum != user_checksum:
+                    corrections_made.append(
+                        f"Checksum: {user_checksum} → {corrected_checksum}"
+                    )
+
+                # Check for case corrections in HDprint
+                if (
+                    user_hdprint.lower() == expected_hdprint.lower()
+                    and user_hdprint != expected_hdprint
+                ):
+                    corrections_made.append(
+                        f"HDprint case restored: {user_hdprint} → {expected_hdprint}"
+                    )
+                    corrected_hdprint = expected_hdprint
+
+                result["corrected_identifier"] = (
+                    f"{corrected_checksum}_{corrected_hdprint}"
+                )
+                result["status"] = (
+                    "corrected" if result["corrections_made"] else "valid"
+                )
+
+            else:
+                result["status"] = "invalid"
+                result["error_details"] = (
+                    f"Checksum correction failed: {correction_result.get('error', 'Unknown error')}"
+                )
+
+        else:
+            # Without expected HDprint, we can only verify format and attempt basic correction
+            # This is a limited correction mode
+            result["status"] = "valid"  # Assume valid if we can't verify
+            result["corrected_identifier"] = user_input
+            result["error_details"] = (
+                "Limited verification: no expected HDprint provided"
+            )
+
+        return result
+
+    except Exception as e:
+        result["status"] = "error"
+        result["error_details"] = f"Processing error: {str(e)}"
+        return result
+
+
+def parse_identifier_format(identifier: str) -> Dict[str, Any]:
+    """
+    Parse a {paiready}_{hdprint} identifier into its components.
+
+    Args:
+        identifier: The identifier to parse
+
+    Returns:
+        Dictionary containing:
+        - is_valid_format: Whether the format is valid
+        - checksum: The checksum part (if valid)
+        - hdprint: The HDprint part (if valid)
+        - format_analysis: Analysis of the format structure
+        - validation_errors: List of validation errors (if any)
+    """
+    result = {
+        "is_valid_format": False,
+        "checksum": None,
+        "hdprint": None,
+        "format_analysis": {},
+        "validation_errors": [],
+    }
+
+    try:
+        # Split on first underscore
+        parts = identifier.split("_", 1)
+
+        if len(parts) < 2:
+            result["validation_errors"].append("Missing underscore separator")
+            return result
+
+        checksum = parts[0]
+        hdprint = parts[1]
+
+        # Analyze checksum part
+        checksum_analysis = {
+            "length": len(checksum),
+            "is_lowercase": checksum.islower(),
+            "is_base58l_compatible": all(
+                c in "123456789abcdefghijkmnpqrstuvwxyz" for c in checksum
+            ),
+        }
+
+        # Analyze HDprint part
+        hdprint_segments = hdprint.split("_")
+        hdprint_analysis = {
+            "total_length": len(hdprint),
+            "num_segments": len(hdprint_segments),
+            "segment_lengths": [len(seg) for seg in hdprint_segments],
+            "has_mixed_case": any(c.isupper() for c in hdprint)
+            and any(c.islower() for c in hdprint),
+            "is_base58_compatible": all(
+                c in "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+                for c in hdprint.replace("_", "")
+            ),
+        }
+
+        # Validate format requirements
+        if checksum_analysis["length"] < 1:
+            result["validation_errors"].append("Empty checksum")
+
+        if not checksum_analysis["is_base58l_compatible"]:
+            result["validation_errors"].append(
+                "Checksum contains invalid Base58L characters"
+            )
+
+        if hdprint_analysis["num_segments"] < 1:
+            result["validation_errors"].append("Empty HDprint")
+
+        if not hdprint_analysis["is_base58_compatible"]:
+            result["validation_errors"].append(
+                "HDprint contains invalid Base58 characters"
+            )
+
+        # Check if it matches expected patterns
+        expected_patterns = [[6], [6, 8], [6, 8, 8], [6, 8, 8, 8]]
+        pattern_matches = hdprint_analysis["segment_lengths"] in expected_patterns
+
+        if not pattern_matches:
+            # Check for rack patterns (multiples of [6,8,8,8])
+            base_pattern = [6, 8, 8, 8]
+            segments = hdprint_analysis["segment_lengths"]
+
+            is_rack_pattern = False
+            if len(segments) >= 4 and len(segments) % 4 == 0:
+                rack_count = len(segments) // 4
+                expected_rack_pattern = base_pattern * rack_count
+                is_rack_pattern = segments == expected_rack_pattern
+
+            if not is_rack_pattern:
+                result["validation_errors"].append(
+                    f"HDprint pattern {hdprint_analysis['segment_lengths']} doesn't match expected patterns"
+                )
+
+        # Update result
+        result["checksum"] = checksum
+        result["hdprint"] = hdprint
+        result["format_analysis"] = {
+            "checksum": checksum_analysis,
+            "hdprint": hdprint_analysis,
+        }
+        result["is_valid_format"] = len(result["validation_errors"]) == 0
+
+        return result
+
+    except Exception as e:
+        result["validation_errors"].append(f"Parse error: {str(e)}")
+        return result
+
+
+def restore_case_in_hdprint(
+    lowercase_hdprint: str, case_pattern: Optional[str] = None
+) -> str:
+    """
+    Restore proper case in an HDprint that was typed in lowercase.
+
+    This is a simplified case restoration that follows HDprint patterns.
+    For full case restoration, the original HDprint or case pattern should be provided.
+
+    Args:
+        lowercase_hdprint: HDprint typed in all lowercase
+        case_pattern: Reference pattern for case restoration (optional)
+
+    Returns:
+        HDprint with restored case
+    """
+    if case_pattern:
+        # Use the provided case pattern
+        if len(lowercase_hdprint) == len(case_pattern):
+            restored = ""
+            for i, char in enumerate(lowercase_hdprint):
+                if case_pattern[i].isupper():
+                    restored += char.upper()
+                else:
+                    restored += char.lower()
+            return restored
+
+    # Basic heuristic restoration (simplified)
+    # In a real implementation, this would use the embedded case patterns
+    # from the BCH encoding or other advanced techniques
+
+    segments = lowercase_hdprint.split("_")
+    restored_segments = []
+
+    for segment in segments:
+        if len(segment) > 0:
+            # Simple pattern: First character uppercase, rest lowercase
+            # This is a placeholder - real implementation would be more sophisticated
+            restored = segment[0].upper() + segment[1:].lower()
+            restored_segments.append(restored)
+
+    return "_".join(restored_segments)

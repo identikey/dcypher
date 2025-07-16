@@ -25,36 +25,101 @@ dCypher is a core component of the IdentiKey vision for a user-controlled intern
 ---
 
 **Learn more about the technology and our vision at [identikey.io/recryption](https://identikey.io/recryption)**.
+
+## HDprint with Paiready: Self-Correcting Hierarchical Identifiers
+
+dCypher includes an innovative identifier system called **HDprint with Paiready** that generates human-readable, error-resistant identifiers for cryptographic objects like public or private keys, certificates, cryptocurrency, and encrypted data references.
+
+### Key Features
+
+* **Self-Correcting:** Automatically fixes single-character typos in checksums using BCH error correction codes
+* **Case-Insensitive Input:** Type everything in lowercase - the system restores proper mixed-case formatting
+* **Hierarchical Scaling:** Multiple security levels from 17.6 bits (testing) to 158.2+ bits (production)
+* **Human-Friendly:** Visual structure with underscores, Base58 encoding avoids confusing characters
+* **Cryptographically Strong:** HMAC-SHA3-512 chain with BLAKE3 preprocessing for collision resistance
+
+### Format Structure
+
+```
+Pattern: {paiready}_{hdprint}
+Example: myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
+
+Components:
+- Paiready checksum: 'myzgemb' (error-correcting, base58 lowercase)
+- HDprint fingerprint: '5ubrZa_T9w1LJRx_hEGmdyaM' (hierarchical, base58 mixed-case)
+```
+
+### Error Correction Demo
+
+```
+Original identifier: 4pkabdr_6QqqSV_GjsEbLU5_c8AJmdYG
+
+User types (all lowercase, 2 typos in checksum):
+User input:          1pk2bdr_6qqqsv_gjseblu5_c8ajmdyg
+
+System automatically corrects:
+Final identifier:    4pkabdr_6QqqSV_GjsEbLU5_c8AJmdYG
+```
+
+Process:
+
+1. BCH error correction fixes typos in checksum
+2. Bit field unpacking restores original mixed case in HDprint
+3. User gets canonical identifier despite typing errors
+
+### Size Options
+
+```
+TINY    mwrjzs1_zF1tjX
+        Security: 17.6 bits, Checksum: mwrjzs1
+SMALL   k68q6ci_zF1tjX_hhdbg5W6
+        Security: 64.4 bits, Checksum: k68q6ci
+MEDIUM  ajqkgas_zF1tjX_hhdbg5W6_fJN8yZJV
+        Security: 111.3 bits, Checksum: ajqkgas
+RACK    38qhkje_zF1tjX_hhdbg5W6_fJN8yZJV_D9UMe8J6
+        Security: 158.2 bits, Checksum: 38qhkje
+```
+
+### Use Cases
+
+* **Public Key Fingerprints:** Human-verifiable identifiers for cryptocurrency wallets and PKI certificates
+* **Database References:** Error-resistant record IDs that users can manually verify
+* **API Keys & Tokens:** Built-in error detection for authentication systems  
+* **QR Code Content:** Remains scannable even with minor visual damage
+* **CLI Tools:** Forgiving input processing for manually-entered identifiers
+
+This identifier system is particularly valuable in dCypher's proxy re-encryption context, where users need to reliably reference and share cryptographic keys and encrypted data objects.
+
 ## Development
 
-This project uses [Just](https://github.com/casey/just) for task automation as opposed to Make. 
+This project uses [Just](https://github.com/casey/just) for task automation as opposed to Make.
 
 ### Available Recipes
 
 Run `just` to see all available recipes, or use these common commands:
 
-- **`build-all`**            # Build both OpenFHE C++ and Python bindings
-- **`build-liboqs`**         # Clone and build liboqs C library locally (not system-wide)
-- **`build-openfhe`**        # Build OpenFHE C++ library locally (not system-wide)
-- **`build-openfhe-python`** # Build OpenFHE Python bindings using local C++ library
-- **`clean`**                # Clean all builds
-- **`clean-liboqs`**         # Clean liboqs builds
-- **`clean-openfhe`**        # Clean OpenFHE builds
-- **`cli *args`**            # Run the CLI locally with uv
-- **`default`**              # Show available tasks
-- **`dev-cli *args`**        # Run CLI in development container
-- **`dev-down`**             # Stop development environment
-- **`dev-rebuild`**          # Rebuild and restart development environment
-- **`dev-shell`**            # Open an interactive bash shell in the development container
-- **`dev-test`**             # Run tests in development container
-- **`dev-up`**               # Start development environment with volume mounting
-- **`docker-bash`**          # Open an interactive bash shell in the Docker container
-- **`docker-build-dev`**     # Build the development Docker image
-- **`docker-built`**         # Build the Docker image
-- **`docker-cli *args`**     # Run the CLI in Docker container
-- **`docker-exec command`**  # Run a custom command in the Docker container
-- **`docker-run`**           # Run the Docker container
-- **`test`**
+* **`build-all`**            # Build both OpenFHE C++ and Python bindings
+* **`build-liboqs`**         # Clone and build liboqs C library locally (not system-wide)
+* **`build-openfhe`**        # Build OpenFHE C++ library locally (not system-wide)
+* **`build-openfhe-python`** # Build OpenFHE Python bindings using local C++ library
+* **`clean`**                # Clean all builds
+* **`clean-liboqs`**         # Clean liboqs builds
+* **`clean-openfhe`**        # Clean OpenFHE builds
+* **`cli *args`**            # Run the CLI locally with uv
+* **`default`**              # Show available tasks
+* **`dev-cli *args`**        # Run CLI in development container
+* **`dev-down`**             # Stop development environment
+* **`dev-rebuild`**          # Rebuild and restart development environment
+* **`dev-shell`**            # Open an interactive bash shell in the development container
+* **`dev-test`**             # Run tests in development container
+* **`dev-up`**               # Start development environment with volume mounting
+* **`docker-bash`**          # Open an interactive bash shell in the Docker container
+* **`docker-build-dev`**     # Build the development Docker image
+* **`docker-built`**         # Build the Docker image
+* **`docker-cli *args`**     # Run the CLI in Docker container
+* **`docker-exec command`**  # Run a custom command in the Docker container
+* **`docker-run`**           # Run the Docker container
+* **`test`**
 
 ### Examples
 
@@ -93,6 +158,7 @@ just test
 ## Building
 
 ### Python Implementation (Docker)
+
 ```bash
 # Build and run the Python proof of concept
 just docker-build
@@ -100,6 +166,7 @@ just docker-run
 ```
 
 ### Zig Implementation (Native)
+
 ```bash
 # Build the Zig project
 zig build
@@ -148,20 +215,22 @@ just docker-cli --help
 ### HTTP API
 
 Start the server:
+
 ```bash
 ./zig-out/bin/dcypher serve --port 8080
 ```
 
 Available endpoints:
 
-- `GET /health` - Health check
-- `POST /api/keygen` - Generate key pair
-- `POST /api/rekey` - Generate re-encryption key  
-- `POST /api/encrypt` - Encrypt data
-- `POST /api/reencrypt` - Re-encrypt data
-- `POST /api/decrypt` - Decrypt data
+* `GET /health` - Health check
+* `POST /api/keygen` - Generate key pair
+* `POST /api/rekey` - Generate re-encryption key  
+* `POST /api/encrypt` - Encrypt data
+* `POST /api/reencrypt` - Re-encrypt data
+* `POST /api/decrypt` - Decrypt data
 
 Example request:
+
 ```bash
 curl -X POST http://localhost:8080/api/keygen
 ```
@@ -169,6 +238,7 @@ curl -X POST http://localhost:8080/api/keygen
 ## Architecture
 
 ### Project Structure
+
 ```
 dcypher/
 ├── src/                    # Python implementation
@@ -196,31 +266,36 @@ dcypher/
 ## Development Status
 
 ### Python Proof of Concept
-- ✅ OpenFHE integration working
-- ✅ Docker containerization
-- ✅ Basic CLI interface
-- ✅ Proxy re-encryption example
+
+* ✅ OpenFHE integration working
+
+* ✅ Docker containerization
+* ✅ Basic CLI interface
+* ✅ Proxy re-encryption example
 
 ### Zig Implementation  
-- ✅ Project structure and build system
-- ✅ CLI argument parsing
-- ✅ HTTP server with REST endpoints
-- ✅ File I/O operations
-- ✅ JSON serialization/deserialization
-- ❌ Actual proxy re-encryption cryptography implementation
-- ❌ Integration with OpenFHE via C++ wrapper
-- ❌ Production-ready error handling
+
+* ✅ Project structure and build system
+
+* ✅ CLI argument parsing
+* ✅ HTTP server with REST endpoints
+* ✅ File I/O operations
+* ✅ JSON serialization/deserialization
+* ❌ Actual proxy re-encryption cryptography implementation
+* ❌ Integration with OpenFHE via C++ wrapper
+* ❌ Production-ready error handling
 
 ## Security Considerations
 
 ⚠️ **Warning**: This is currently a development scaffold with stub implementations. Do not use in production until proper cryptographic implementations are added.
 
 When implementing the actual cryptography:
-- Use constant-time operations to prevent timing attacks
-- Properly handle key generation with secure randomness
-- Implement proper key serialization with integrity checks
-- Add input validation and sanitization
-- Consider memory safety for sensitive data
+
+* Use constant-time operations to prevent timing attacks
+* Properly handle key generation with secure randomness
+* Implement proper key serialization with integrity checks
+* Add input validation and sanitization
+* Consider memory safety for sensitive data
 
 ## License
 

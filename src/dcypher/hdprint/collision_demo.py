@@ -29,7 +29,7 @@ try:
         calculate_security_bits,
     )
 
-    print("HDPRINT library loaded successfully")
+    # print("HDPRINT library loaded successfully")
     library_available = True
 except ImportError as e:
     print(f"Could not import HDPRINT library: {e}")

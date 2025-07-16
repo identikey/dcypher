@@ -125,48 +125,54 @@ class BCHConfigurationSweeper:
 
     @staticmethod
     def find_optimal_config(
-        target_chars: int = 7, min_success_rate: float = 0.95
+        target_chars: int = 7, min_success_rate: float = 0.95, verbose: bool = False
     ) -> Optional[ConfigDict]:
         """
         Find optimal BCH configuration using systematic bit-incremental sweeping.
         This replicates the lab notebook methodology exactly.
         """
-        print(f"SYSTEMATIC BCH PARAMETER SWEEPING (Lab Notebook Method)")
-        print(f"   Target: {target_chars}-character Base58L checksum")
-        print(f"   Method: Incremental bit testing with BCH features")
-        print("=" * 70)
+        if verbose:
+            print(f"SYSTEMATIC BCH PARAMETER SWEEPING (Lab Notebook Method)")
+            print(f"   Target: {target_chars}-character Base58L checksum")
+            print(f"   Method: Incremental bit testing with BCH features")
+            print("=" * 70)
 
         alphabet = BASE58L_ALPHABET
         bits_per_char = math.log2(len(alphabet))  # ~5.044 bits
         exact_bits = target_chars * bits_per_char
         target_bits = round(exact_bits)
 
-        print(f"Analysis: {target_chars} chars = {exact_bits:.5f} bits target")
-        print(f"Features to test: {len(BCHConfigurationSweeper.BCH_FEATURES)}")
-        print()
+        if verbose:
+            print(f"Analysis: {target_chars} chars = {exact_bits:.5f} bits target")
+            print(f"Features to test: {len(BCHConfigurationSweeper.BCH_FEATURES)}")
+            print()
 
         # Test each BCH feature using incremental bit methodology
         feature_configs = {}
 
         for feature_key, feature_label in BCHConfigurationSweeper.BCH_FEATURES:
-            print(f"=== TESTING FEATURE: {feature_label} ===")
+            if verbose:
+                print(f"=== TESTING FEATURE: {feature_label} ===")
 
             config = BCHConfigurationSweeper._sweep_feature_with_incremental_bits(
-                feature_key, feature_label, target_chars, target_bits
+                feature_key, feature_label, target_chars, target_bits, verbose
             )
 
             if config:
                 feature_configs[feature_key] = config
-                print(f"{feature_label}: Found working configuration")
+                if verbose:
+                    print(f"{feature_label}: Found working configuration")
 
-                # Show the working config
-                bch_cfg = config.get("bch_config", {})
-                print(
-                    f"   BCH(t={bch_cfg.get('t', '?')},m={bch_cfg.get('m', '?')}) with {config.get('bits_per_code', '?')} bits"
-                )
+                    # Show the working config
+                    bch_cfg = config.get("bch_config", {})
+                    print(
+                        f"   BCH(t={bch_cfg.get('t', '?')},m={bch_cfg.get('m', '?')}) with {config.get('bits_per_code', '?')} bits"
+                    )
             else:
-                print(f"{feature_label}: No working configuration found")
-            print()
+                if verbose:
+                    print(f"{feature_label}: No working configuration found")
+            if verbose:
+                print()
 
         # Select the best overall configuration
         if feature_configs:
@@ -175,8 +181,9 @@ class BCHConfigurationSweeper:
             best_feature = list(feature_configs.keys())[0]
             best_config = feature_configs[best_feature]
 
-            print(f"SELECTED CONFIGURATION:")
-            print(f"   Based on: {best_feature}")
+            if verbose:
+                print(f"SELECTED CONFIGURATION:")
+                print(f"   Based on: {best_feature}")
 
             # Convert to the expected format
             # Calculate actual character length from total bits
@@ -196,63 +203,74 @@ class BCHConfigurationSweeper:
 
             # Display mathematically accurate information
             bch_cfg = result_config.get("bch_config", {})
-            print(
-                f"   Found working configuration for {target_chars} characters (target)"
-            )
-            if isinstance(bch_cfg, dict):
-                bch_t = bch_cfg.get("t", "?")
-                bch_m = bch_cfg.get("m", "?")
-            else:
-                bch_t = bch_m = "?"
-            print(
-                f"   Configuration: {result_config['num_codes']} × BCH(t={bch_t},m={bch_m})"
-            )
-            print(f"   Total bits: {result_config['total_bits']}")
-            print(
-                f"   Natural length: {actual_chars:.5f} chars → system uses {result_config['estimated_chars']} chars"
-            )
+            if verbose:
+                print(
+                    f"   Found working configuration for {target_chars} characters (target)"
+                )
+                if isinstance(bch_cfg, dict):
+                    bch_t = bch_cfg.get("t", "?")
+                    bch_m = bch_cfg.get("m", "?")
+                else:
+                    bch_t = bch_m = "?"
+                print(
+                    f"   Configuration: {result_config['num_codes']} × BCH(t={bch_t},m={bch_m})"
+                )
+                print(f"   Total bits: {result_config['total_bits']}")
+                print(
+                    f"   Natural length: {actual_chars:.5f} chars → system uses {result_config['estimated_chars']} chars"
+                )
 
             return result_config
 
-        print("No working configurations found for any feature")
+        if verbose:
+            print("No working configurations found for any feature")
         return None
 
     @staticmethod
     def _sweep_feature_with_incremental_bits(
-        feature_key: str, feature_label: str, target_chars: int, target_bits: int
+        feature_key: str,
+        feature_label: str,
+        target_chars: int,
+        target_bits: int,
+        verbose: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Sweep a single BCH feature using incremental bit methodology.
         Start with 1 bit, increase until something works.
         """
-        print(f"  Incremental bit sweep for {feature_label}")
+        if verbose:
+            print(f"  Incremental bit sweep for {feature_label}")
 
         # Start with 1 bit and increase until we find something that works
         for ecc_bits in range(
             BCHConfigurationSweeper.ECC_BITS_MIN,
             BCHConfigurationSweeper.ECC_BITS_MAX + 1,
         ):
-            print(f"     Testing with {ecc_bits} ECC bits...", end=" ")
+            if verbose:
+                print(f"     Testing with {ecc_bits} ECC bits...", end=" ")
 
             # Test all possible (t,m) combinations that produce this bit count
             config = BCHConfigurationSweeper._test_all_bch_params_for_bits(
-                ecc_bits, feature_key, target_chars
+                ecc_bits, feature_key, target_chars, verbose
             )
 
             if config:
-                print("FOUND")
+                if verbose:
+                    print("FOUND")
                 return config
             else:
-                print("none work")
+                if verbose:
+                    print("none work")
 
-        print(
-            f"     No working configuration found up to {BCHConfigurationSweeper.ECC_BITS_MAX} bits"
-        )
+        if verbose:
+            print(
+                f"     No working configuration found up to {BCHConfigurationSweeper.ECC_BITS_MAX} bits"
+            )
         return None
 
     @staticmethod
     def _test_all_bch_params_for_bits(
-        ecc_bits: int, feature_key: str, target_chars: int
+        ecc_bits: int, feature_key: str, target_chars: int, verbose: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
         Test all possible (t,m) combinations that produce the target ECC bit count.
@@ -483,21 +501,24 @@ class InterleavedBCHChecksum:
     Uses sweeping to find configurations that achieve 100% single character flip recovery.
     """
 
-    def __init__(self, target_chars: int = 7):
+    def __init__(self, target_chars: int = 7, verbose: bool = False):
         self.target_chars = target_chars
         self.alphabet = BASE58L_ALPHABET
         self.config: Optional[ConfigDict] = None
         self.bch_systems: List[Any] = []
+        self.verbose = verbose
 
         # Find optimal configuration through sweeping
-        print("INITIALIZING OPTIMAL BCH CHECKSUM SYSTEM")
+        if self.verbose:
+            print("INITIALIZING OPTIMAL BCH CHECKSUM SYSTEM")
         self.config = BCHConfigurationSweeper.find_optimal_config(
-            target_chars, min_success_rate=0.95
+            target_chars, min_success_rate=0.95, verbose=self.verbose
         )
 
         if not self.config:
             # Fallback to a reasonable configuration
-            print("WARNING: Using fallback configuration")
+            if self.verbose:
+                print("WARNING: Using fallback configuration")
             self.config = {
                 "num_codes": 5,
                 "bits_per_code": 15,  # Increased for stronger BCH
@@ -544,13 +565,15 @@ class InterleavedBCHChecksum:
         for _ in range(num_codes):
             self.bch_systems.append(bchlib.BCH(t=bch_t, m=bch_m))
 
-        print(f"SYSTEM READY:")
-        print(f"   Configuration: {num_codes} × BCH(t={bch_t},m={bch_m})")
-        print(f"   Total bits: {self.config['total_bits']}")
-        print(
-            f"   Estimated checksum length: {self.config.get('estimated_chars', target_chars)} characters"
-        )
-        print()
+        # Show summary only if verbose mode is enabled
+        if self.verbose:
+            print(f"SYSTEM READY:")
+            print(f"   Configuration: {num_codes} × BCH(t={bch_t},m={bch_m})")
+            print(f"   Total bits: {self.config['total_bits']}")
+            print(
+                f"   Estimated checksum length: {self.config.get('estimated_chars', target_chars)} characters"
+            )
+            print()
 
     def generate_checksum(self, fingerprint: str) -> str:
         """Generate Base58L checksum for fingerprint using optimal BCH configuration"""

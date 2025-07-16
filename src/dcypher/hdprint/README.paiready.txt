@@ -1,6 +1,6 @@
 ================================================================================
                  IDENTIKEY PAIREADY DYNAMIC TECHNICAL SPECIFICATION
-                       Run: 2025-07-15 21:21:08
+                       Run: 2025-07-16 00:50:06
                        Version: 0.0
 ================================================================================
 
@@ -26,165 +26,18 @@ Minimum success rate requirement: 95.0%
 
 
 Testing 6-character Base58L checksum:
-SYSTEMATIC BCH PARAMETER SWEEPING (Lab Notebook Method)
-   Target: 6-character Base58L checksum
-   Method: Incremental bit testing with BCH features
-======================================================================
-Analysis: 6 chars = 30.26636 bits target
-Features to test: 3
-
-=== TESTING FEATURE: Case Bitfield Recovery ===
-  Incremental bit sweep for Case Bitfield Recovery
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Case Bitfield Recovery: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Lowercase Detect ===
-  Incremental bit sweep for Lowercase Detect
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Lowercase Detect: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Checksum Correct ===
-  Incremental bit sweep for Checksum Correct
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Checksum Correct: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-SELECTED CONFIGURATION:
-   Based on: case_bitfield_recovery
-   Found working configuration for 6 characters (target)
-   Configuration: 5 × BCH(t=1,m=7)
-   Total bits: 35
-   Natural length: 6.93840 chars → system uses 7 chars
    Found working configuration for 6 characters
    Configuration: 5 × BCH(t=1,m=7)
    Total bits: 35
    Estimated length: 7 chars
 
 Testing 7-character Base58L checksum:
-SYSTEMATIC BCH PARAMETER SWEEPING (Lab Notebook Method)
-   Target: 7-character Base58L checksum
-   Method: Incremental bit testing with BCH features
-======================================================================
-Analysis: 7 chars = 35.31076 bits target
-Features to test: 3
-
-=== TESTING FEATURE: Case Bitfield Recovery ===
-  Incremental bit sweep for Case Bitfield Recovery
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Case Bitfield Recovery: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Lowercase Detect ===
-  Incremental bit sweep for Lowercase Detect
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Lowercase Detect: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Checksum Correct ===
-  Incremental bit sweep for Checksum Correct
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Checksum Correct: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-SELECTED CONFIGURATION:
-   Based on: case_bitfield_recovery
-   Found working configuration for 7 characters (target)
-   Configuration: 5 × BCH(t=1,m=7)
-   Total bits: 35
-   Natural length: 6.93840 chars → system uses 7 chars
    Found working configuration for 7 characters
    Configuration: 5 × BCH(t=1,m=7)
    Total bits: 35
    Estimated length: 7 chars
 
 Testing 8-character Base58L checksum:
-SYSTEMATIC BCH PARAMETER SWEEPING (Lab Notebook Method)
-   Target: 8-character Base58L checksum
-   Method: Incremental bit testing with BCH features
-======================================================================
-Analysis: 8 chars = 40.35515 bits target
-Features to test: 3
-
-=== TESTING FEATURE: Case Bitfield Recovery ===
-  Incremental bit sweep for Case Bitfield Recovery
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Case Bitfield Recovery: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Lowercase Detect ===
-  Incremental bit sweep for Lowercase Detect
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Lowercase Detect: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Checksum Correct ===
-  Incremental bit sweep for Checksum Correct
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Checksum Correct: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-SELECTED CONFIGURATION:
-   Based on: case_bitfield_recovery
-   Found working configuration for 8 characters (target)
-   Configuration: 5 × BCH(t=1,m=7)
-   Total bits: 35
-   Natural length: 6.93840 chars → system uses 7 chars
    Found working configuration for 8 characters
    Configuration: 5 × BCH(t=1,m=7)
    Total bits: 35
@@ -213,61 +66,6 @@ Test parameters:
    Generation success threshold: 85.0%
    Correction success threshold: 80.0%
 
-INITIALIZING OPTIMAL BCH CHECKSUM SYSTEM
-SYSTEMATIC BCH PARAMETER SWEEPING (Lab Notebook Method)
-   Target: 7-character Base58L checksum
-   Method: Incremental bit testing with BCH features
-======================================================================
-Analysis: 7 chars = 35.31076 bits target
-Features to test: 3
-
-=== TESTING FEATURE: Case Bitfield Recovery ===
-  Incremental bit sweep for Case Bitfield Recovery
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Case Bitfield Recovery: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Lowercase Detect ===
-  Incremental bit sweep for Lowercase Detect
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Lowercase Detect: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-=== TESTING FEATURE: Checksum Correct ===
-  Incremental bit sweep for Checksum Correct
-     Testing with 1 ECC bits... none work
-     Testing with 2 ECC bits... none work
-     Testing with 3 ECC bits... none work
-     Testing with 4 ECC bits... none work
-     Testing with 5 ECC bits... none work
-     Testing with 6 ECC bits... none work
-     Testing with 7 ECC bits... FOUND
-Checksum Correct: Found working configuration
-   BCH(t=1,m=7) with 7 bits
-
-SELECTED CONFIGURATION:
-   Based on: case_bitfield_recovery
-   Found working configuration for 7 characters (target)
-   Configuration: 5 × BCH(t=1,m=7)
-   Total bits: 35
-   Natural length: 6.93840 chars → system uses 7 chars
-SYSTEM READY:
-   Configuration: 5 × BCH(t=1,m=7)
-   Total bits: 35
-   Estimated checksum length: 7 characters
-
 ACTUAL SYSTEM CONFIGURATION:
    Target characters: 7
    BCH codes: 5
@@ -282,67 +80,67 @@ VALIDATION TEST 1: Checksum Generation
    Success rate: 100.0%
    <ASSERTION>: Generation success rate meets 85.0% threshold
    Sample checksums:
-     nrkrqc2:vATRrY
-     5qhbikf:j9if7M
-     82ank5r:isfKUP
-     45u2nqi:LipoZW
-     7a6byah:Kop6Ne
+     j4n8s6n:bKB5yj
+     m3tm86f:gxKLwj
+     n6gqe8f:K4bmjf
+     92hqfa3:TVKiDS
+     ks4fuhs:22X8aC
 
 VALIDATION TEST 2: Error Correction Capability
 ----------------------------------------
-   Testing fingerprint 1: 2vFm5f
-   Original checksum: cek36i7
-     Pos 0: c→1 | <PASS>
-     Pos 0: c→2 | <PASS>
-     Pos 0: c→3 | <PASS>
-     Pos 1: e→1 | <PASS>
-     Pos 1: e→2 | <PASS>
-     Pos 1: e→3 | <PASS>
-     Pos 2: k→1 | <PASS>
-     Pos 2: k→2 | <PASS>
-     Pos 2: k→3 | <PASS>
-     Pos 3: 3→1 | <PASS>
-     Pos 3: 3→2 | <PASS>
-     Pos 3: 3→4 | <PASS>
-     Pos 4: 6→1 | <PASS>
-     Pos 4: 6→2 | <PASS>
-     Pos 4: 6→3 | <PASS>
+   Testing fingerprint 1: stKJkc
+   Original checksum: bm87eya
+     Pos 0: b→1 | <PASS>
+     Pos 0: b→2 | <PASS>
+     Pos 0: b→3 | <PASS>
+     Pos 1: m→1 | <PASS>
+     Pos 1: m→2 | <PASS>
+     Pos 1: m→3 | <PASS>
+     Pos 2: 8→1 | <PASS>
+     Pos 2: 8→2 | <PASS>
+     Pos 2: 8→3 | <PASS>
+     Pos 3: 7→1 | <PASS>
+     Pos 3: 7→2 | <PASS>
+     Pos 3: 7→3 | <PASS>
+     Pos 4: e→1 | <PASS>
+     Pos 4: e→2 | <PASS>
+     Pos 4: e→3 | <PASS>
 
-   Testing fingerprint 2: Ku1RJx
-   Original checksum: ga2bw4u
-     Pos 0: g→1 | <PASS>
-     Pos 0: g→2 | <PASS>
-     Pos 0: g→3 | <PASS>
-     Pos 1: a→1 | <PASS>
-     Pos 1: a→2 | <PASS>
-     Pos 1: a→3 | <PASS>
-     Pos 2: 2→1 | <PASS>
-     Pos 2: 2→3 | <PASS>
-     Pos 2: 2→4 | <PASS>
-     Pos 3: b→1 | <PASS>
-     Pos 3: b→2 | <PASS>
-     Pos 3: b→3 | <PASS>
-     Pos 4: w→1 | <PASS>
-     Pos 4: w→2 | <PASS>
-     Pos 4: w→3 | <PASS>
+   Testing fingerprint 2: BADgey
+   Original checksum: 4vjmnqe
+     Pos 0: 4→1 | <PASS>
+     Pos 0: 4→2 | <PASS>
+     Pos 0: 4→3 | <PASS>
+     Pos 1: v→1 | <PASS>
+     Pos 1: v→2 | <PASS>
+     Pos 1: v→3 | <PASS>
+     Pos 2: j→1 | <PASS>
+     Pos 2: j→2 | <PASS>
+     Pos 2: j→3 | <PASS>
+     Pos 3: m→1 | <PASS>
+     Pos 3: m→2 | <PASS>
+     Pos 3: m→3 | <PASS>
+     Pos 4: n→1 | <PASS>
+     Pos 4: n→2 | <PASS>
+     Pos 4: n→3 | <PASS>
 
-   Testing fingerprint 3: tBMuff
-   Original checksum: 2cyehuy
-     Pos 0: 2→1 | <PASS>
-     Pos 0: 2→3 | <PASS>
-     Pos 0: 2→4 | <PASS>
-     Pos 1: c→1 | <PASS>
-     Pos 1: c→2 | <PASS>
-     Pos 1: c→3 | <PASS>
-     Pos 2: y→1 | <PASS>
-     Pos 2: y→2 | <PASS>
-     Pos 2: y→3 | <PASS>
-     Pos 3: e→1 | <PASS>
-     Pos 3: e→2 | <PASS>
-     Pos 3: e→3 | <PASS>
-     Pos 4: h→1 | <PASS>
-     Pos 4: h→2 | <PASS>
-     Pos 4: h→3 | <PASS>
+   Testing fingerprint 3: kFRfti
+   Original checksum: sghyeix
+     Pos 0: s→1 | <PASS>
+     Pos 0: s→2 | <PASS>
+     Pos 0: s→3 | <PASS>
+     Pos 1: g→1 | <PASS>
+     Pos 1: g→2 | <PASS>
+     Pos 1: g→3 | <PASS>
+     Pos 2: h→1 | <PASS>
+     Pos 2: h→2 | <PASS>
+     Pos 2: h→3 | <PASS>
+     Pos 3: y→1 | <PASS>
+     Pos 3: y→2 | <PASS>
+     Pos 3: y→3 | <PASS>
+     Pos 4: e→1 | <PASS>
+     Pos 4: e→2 | <PASS>
+     Pos 4: e→3 | <PASS>
 
    Error correction success rate: 100.0% (45/45)
    <ASSERTION>: Correction success rate meets 80.0% threshold
@@ -485,11 +283,11 @@ PERFORMANCE PROPERTIES VALIDATION
 Verifying operations complete within reasonable time bounds...
 
 CHECKSUM GENERATION:
-  Average time per operation: 0.02 ms
+  Average time per operation: 0.01 ms
 CHECKSUM VERIFICATION:
-  Average time per operation: 0.02 ms
+  Average time per operation: 0.01 ms
 ERROR CORRECTION:
-  Average time per operation: 0.05 ms
+  Average time per operation: 0.04 ms
 All performance properties verified
 
 COMPREHENSIVE VALIDATION SUMMARY
@@ -539,28 +337,28 @@ REFERENCE IMPLEMENTATION:
 STEP 1: HIERARCHICAL FINGERPRINT GENERATION
 --------------------------------------------------
 Using the same public key to show identity scaling and error correction:
-Fixed public key: 35e1b356bd15847b0edc0a0a9fa3b2dc3c9b1ee25574c70a16c1b66b101e06ff
-Key fingerprint: 35e1b356bd15847b...
+Fixed public key: 031f87ee67731dd1451ba4a1dd32f1386b354350410c7374b3aef261f7594e3c
+Key fingerprint: 031f87ee67731dd1...
 
-TINY  : prv4x6j_ntq1QX
-      Lowercase: ntq1qx
-      Case bits: 00011
+TINY  : mbtrmzd_Nkuu2k
+      Lowercase: nkuu2k
+      Case bits: 10000
       Alpha chars: 5
 
-SMALL : cpez4e1_ntq1QX_ebG4VhqN
-      Lowercase: ntq1qx_ebg4vhqn
-      Case bits: 000110011001
+SMALL : a9jctsy_Nkuu2k_jMxE3DLH
+      Lowercase: nkuu2k_jmxe3dlh
+      Case bits: 100000101111
       Alpha chars: 12
 
-MEDIUM: qnczhvv_ntq1QX_ebG4VhqN_jLJSKSMd
-      Lowercase: ntq1qx_ebg4vhqn_jljsksmd
-      Case bits: 00011001100101111110
-      Alpha chars: 20
+MEDIUM: n9xnfv7_Nkuu2k_jMxE3DLH_AcJrDH3f
+      Lowercase: nkuu2k_jmxe3dlh_acjrdh3f
+      Case bits: 1000001011111010110
+      Alpha chars: 19
 
-RACK  : g59d9n9_ntq1QX_ebG4VhqN_jLJSKSMd_HQDuXX94
-      Lowercase: ntq1qx_ebg4vhqn_jljsksmd_hqduxx94
-      Case bits: 00011001100101111110111011
-      Alpha chars: 26
+RACK  : 2d3pb2u_Nkuu2k_jMxE3DLH_AcJrDH3f_PAAkYHUc
+      Lowercase: nkuu2k_jmxe3dlh_acjrdh3f_paakyhuc
+      Case bits: 100000101111101011011101110
+      Alpha chars: 27
 
 <ASSERTION>: All 4 identity sizes generated successfully
 STEP 2: DETAILED ERROR CORRECTION DEMONSTRATION
@@ -575,76 +373,79 @@ DEMO 1: TINY SIZE ANALYSIS
 SCENARIO: User provides lowercase input with 1 character flip
 GOAL: Validate and restore proper case through error correction
 
-USER INPUT (corrupted + case-lost): pr14x6j_ntq1qx
-  Input checksum (corrupted): pr14x6j
-  Input hdprint (case-lost):   ntq1qx
-  Character flip: position 2 ('v' → '1')
+USER INPUT (corrupted + case-lost): mb1rmzd_nkuu2k
+  Input checksum (corrupted): mb1rmzd
+  Input hdprint (case-lost):   nkuu2k
+  Character flip: position 2 ('t' → '1')
   Challenge: Checksum has error + case information lost
 
 REFERENCE VALUES (what system should produce):
-  Correct checksum:         prv4x6j
-  Original hdprint (case-recovered): ntq1QX
-  Target output: prv4x6j_ntq1QX
+  Correct checksum:         mbtrmzd
+  Original hdprint (case-recovered): Nkuu2k
+  Target output: mbtrmzd_Nkuu2k
 
 STEP 2a.1: EXPECTED CHECKSUM GENERATION (TINY)
 ........................................
-Generate expected checksum for lowercase fingerprint: ntq1qx
+Generate expected checksum for lowercase fingerprint: nkuu2k
 
-BCH Code 1: dfd8a49272728c01... → ECC: 5f
-BCH Code 2: 5da9fc7974bbf5ac... → ECC: 29
-BCH Code 3: 7aad63eaba0ed722... → ECC: 63
-BCH Code 4: 16f84fa6587797b5... → ECC: 26
-BCH Code 5: 2261676dc6038c72... → ECC: 46
+BCH Code 1: 19dbb96744e5c0cd... → ECC: 19
+BCH Code 2: e60629e9e66ce067... → ECC: 06
+BCH Code 3: d807bc45844040a5... → ECC: 3c
+BCH Code 4: c5ba9beab2825854... → ECC: 6a
+BCH Code 5: 07fd002ba1b35881... → ECC: 21
 
 Bit interleaving process:
-ECC 1 bits: 1011111
-ECC 2 bits: 0101001
-ECC 3 bits: 1100011
-ECC 4 bits: 0100110
-ECC 5 bits: 1000110
-Interleaved: 10101011101000011000100111011111100
+ECC 1 bits: 0011001
+ECC 2 bits: 0000110
+ECC 3 bits: 0111100
+ECC 4 bits: 1101010
+ECC 5 bits: 0100001
+Interleaved: 00010001111010010110011000101010001
 Total bits: 35
-Expected checksum (for lowercase): 5x78tu8
+Expected checksum (for lowercase): dp55g9b
 
 STEP 2b.1: CHECKSUM VALIDATION & ERROR DETECTION (TINY)
 ........................................
 Compare user input checksum with expected (for lowercase):
-  User input:  pr14x6j
-  Expected:    5x78tu8
+  User input:  mb1rmzd
+  Expected:    dp55g9b
   Match:       <NO>
   Error detected: <YES>
 
 <ERROR> DETAILS:
-  Position 2: 'v' → '1' (character flip)
+  Position 2: 't' → '1' (character flip)
   This requires BCH error correction
 
 STEP 2c.1: BIT-LEVEL ERROR ANALYSIS (TINY)
 ........................................
-Expected bits:  00101111010010101001001000110101011
-User input bits: 11011010101011111110010110100100110
-Bit errors at positions: [0, 1, 2, 3, 5, 7, 8, 9, 10, 13, 15, 17, 18, 19, 21, 22, 23, 24, 27, 31, 32, 34]
-Total bit errors: 22
+Expected bits:  01111001111010101110010101101001011
+User input bits: 11000011010111011011101011110110110
+Bit errors at positions: [0, 2, 3, 4, 6, 8, 10, 11, 13, 14, 15, 17, 19, 20, 21, 22, 23, 24, 27, 28, 29, 30, 31, 32, 34]
+Total bit errors: 25
 
 Impact on BCH codes:
   Bit 0 → BCH code 1, bit 1
-  Bit 1 → BCH code 2, bit 1
   Bit 2 → BCH code 3, bit 1
   Bit 3 → BCH code 4, bit 1
-  Bit 5 → BCH code 1, bit 2
-  Bit 7 → BCH code 3, bit 2
+  Bit 4 → BCH code 5, bit 1
+  Bit 6 → BCH code 2, bit 2
   Bit 8 → BCH code 4, bit 2
-  Bit 9 → BCH code 5, bit 2
   Bit 10 → BCH code 1, bit 3
+  Bit 11 → BCH code 2, bit 3
   Bit 13 → BCH code 4, bit 3
+  Bit 14 → BCH code 5, bit 3
   Bit 15 → BCH code 1, bit 4
   Bit 17 → BCH code 3, bit 4
-  Bit 18 → BCH code 4, bit 4
   Bit 19 → BCH code 5, bit 4
+  Bit 20 → BCH code 1, bit 5
   Bit 21 → BCH code 2, bit 5
   Bit 22 → BCH code 3, bit 5
   Bit 23 → BCH code 4, bit 5
   Bit 24 → BCH code 5, bit 5
   Bit 27 → BCH code 3, bit 6
+  Bit 28 → BCH code 4, bit 6
+  Bit 29 → BCH code 5, bit 6
+  Bit 30 → BCH code 1, bit 7
   Bit 31 → BCH code 2, bit 7
   Bit 32 → BCH code 3, bit 7
   Bit 34 → BCH code 5, bit 7
@@ -652,44 +453,44 @@ Impact on BCH codes:
 STEP 2d.1: BCH ERROR CORRECTION PROCESS (TINY)
 ........................................
 BCH Code 1 correction:
-  Original data: dfd8a49272728c01...
-  User input ECC: 62
+  Original data: 19dbb96744e5c0cd...
+  User input ECC: 21
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 62
-  Corrected bits: 1100010
+  Corrected ECC: 21
+  Corrected bits: 0100001
 
 BCH Code 2 correction:
-  Original data: 5da9fc7974bbf5ac...
-  User input ECC: 6d
+  Original data: e60629e9e66ce067...
+  User input ECC: 45
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 6d
-  Corrected bits: 1101101
+  Corrected ECC: 45
+  Corrected bits: 1000101
 
 BCH Code 3 correction:
-  Original data: 7aad63eaba0ed722...
-  User input ECC: 32
+  Original data: d807bc45844040a5...
+  User input ECC: 66
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 32
-  Corrected bits: 0110010
+  Corrected ECC: 66
+  Corrected bits: 1100110
 
 BCH Code 4 correction:
-  Original data: 16f84fa6587797b5...
-  User input ECC: 13
+  Original data: c5ba9beab2825854...
+  User input ECC: 7c
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 13
-  Corrected bits: 0010011
+  Corrected ECC: 7c
+  Corrected bits: 1111100
 
 BCH Code 5 correction:
-  Original data: 2261676dc6038c72...
-  User input ECC: 5e
+  Original data: 07fd002ba1b35881...
+  User input ECC: 1c
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 5e
-  Corrected bits: 1011110
+  Corrected ECC: 1c
+  Corrected bits: 0011100
 
 STEP 2e.1: CHECKSUM RECONSTRUCTION (TINY)
 ........................................
@@ -698,14 +499,14 @@ Step 1: Take corrected BCH codes from error correction
 Step 2: Reinterleave corrected bits
 Step 3: Convert to Base58L encoding
 
-Expected (for lowercase):  5x78tu8
-User input checksum:       pr14x6j
-Reconstructed checksum:    5x78tu8
+Expected (for lowercase):  dp55g9b
+User input checksum:       mb1rmzd
+Reconstructed checksum:    dp55g9b
 Reconstruction: <SUCCESS>
 
 BIT-LEVEL RECONSTRUCTION VERIFICATION:
-Expected bits:      00101111010010101001001000110101011
-Reconstructed bits: 00101111010010101001001000110101011
+Expected bits:      01111001111010101110010101101001011
+Reconstructed bits: 01111001111010101110010101101001011
 Bits match: <YES>
 
 BCH ERROR CORRECTION PIPELINE COMPLETE:
@@ -716,8 +517,8 @@ BCH ERROR CORRECTION PIPELINE COMPLETE:
    5. Valid Base58L checksum reconstructed
 
 RECONSTRUCTION DETAILS:
-   Input (corrupted):   pr14x6j
-   Output (corrected):  5x78tu8
+   Input (corrupted):   mb1rmzd
+   Output (corrected):  dp55g9b
    Character flip:      Position corrected through BCH
    Verification:        Matches expected lowercase checksum
 
@@ -726,33 +527,33 @@ STEP 2e.1.1: DETAILED CASE RECOVERY ANALYSIS (TINY)
 GOAL: Trace the exact process of attempting case recovery with corrected checksum
 This exposes the fundamental limitation: corrected checksum ≠ original case pattern
 
-Input for analysis: 5x78tu8:ntq1qx
+Input for analysis: dp55g9b:nkuu2k
 
 STEP 1: Base58L Decode
-Corrected checksum: 5x78tu8
-  Position 0: '5' -> index 4
-  Position 1: 'x' -> index 30
-  Position 2: '7' -> index 6
-  Position 3: '8' -> index 7
-  Position 4: 't' -> index 26
-  Position 5: 'u' -> index 27
-  Position 6: '8' -> index 7
-  Final decoded value: 6347329963
-  Binary: 0b00101111010010101001001000110101011
+Corrected checksum: dp55g9b
+  Position 0: 'd' -> index 12
+  Position 1: 'p' -> index 22
+  Position 2: '5' -> index 4
+  Position 3: '5' -> index 4
+  Position 4: 'g' -> index 15
+  Position 5: '9' -> index 8
+  Position 6: 'b' -> index 10
+  Final decoded value: 16363498315
+  Binary: 0b01111001111010101110010101101001011
 
 STEP 2: Bit De-interleaving
-  35-bit array: 00101111010010101001001000110101011
+  35-bit array: 01111001111010101110010101101001011
   De-interleaved BCH codes:
-    BCH Code 1: 0100000
-    BCH Code 2: 0101011
-    BCH Code 3: 1110110
-    BCH Code 4: 0000001
-    BCH Code 5: 1111011
+    BCH Code 1: 0010010
+    BCH Code 2: 1001111
+    BCH Code 3: 1111000
+    BCH Code 4: 1101111
+    BCH Code 5: 1110001
 
 STEP 3: Case Pattern Analysis
   The corrected checksum was generated for lowercase fingerprint
   It encodes case pattern: ALL LOWERCASE
-  Original case pattern:   00011
+  Original case pattern:   10000
   These are DIFFERENT patterns!
 
 STEP 4: What the corrected checksum can actually do
@@ -765,45 +566,45 @@ STEP 5: Proof by contradiction
   If we decode the case pattern from corrected checksum:
   Letter count in fingerprint: 5
   All-lowercase pattern: 00000
-  Original mixed pattern:  00011
+  Original mixed pattern:  10000
 
 STEP 6: The fundamental limitation
   The corrected checksum is:
-    - CORRECT for lowercase 'ntq1qx'
-    - INCORRECT for mixed case 'ntq1QX'
+    - CORRECT for lowercase 'nkuu2k'
+    - INCORRECT for mixed case 'Nkuu2k'
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
   Testing if corrected checksum verifies against original hdprint
-  Corrected checksum: 5x78tu8
-  Original hdprint: ntq1QX
+  Corrected checksum: dp55g9b
+  Original hdprint: Nkuu2k
   Expected: VERIFICATION FAILURE
 
   Test 1: BCH Verification (corrected checksum vs original hdprint)
-    Input: 5x78tu8:ntq1QX
-    Expected checksum for original hdprint: prv4x6j
-    Actual corrected checksum: 5x78tu8
+    Input: dp55g9b:Nkuu2k
+    Expected checksum for original hdprint: mbtrmzd
+    Actual corrected checksum: dp55g9b
     Checksums match: <NO>
     BCH verification: <FAIL>
 
   Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
-    Input: 5x78tu8:ntq1qx
-    Expected checksum for lowercase hdprint: 5x78tu8
-    Actual corrected checksum: 5x78tu8
+    Input: dp55g9b:nkuu2k
+    Expected checksum for lowercase hdprint: dp55g9b
+    Actual corrected checksum: dp55g9b
     Checksums match: <YES>
     BCH verification: <PASS>
 
 STEP 8: SIGNATURE VERIFICATION RESULTS
-  Original signature: prv4x6j:ntq1QX
-  Corrected signature: 5x78tu8:ntq1QX
-  Lowercase signature: 5x78tu8:ntq1qx
+  Original signature: mbtrmzd:Nkuu2k
+  Corrected signature: dp55g9b:Nkuu2k
+  Lowercase signature: dp55g9b:nkuu2k
 
   Verification against original: <FAIL>
   Verification against lowercase: <PASS>
 
 STEP 9: What would be needed for case recovery
-  To recover 'ntq1QX' you need:
-    - The ORIGINAL checksum: prv4x6j
+  To recover 'Nkuu2k' you need:
+    - The ORIGINAL checksum: mbtrmzd
     - Which encodes the ORIGINAL case pattern
   The corrected checksum is for a DIFFERENT fingerprint!
 
@@ -815,17 +616,17 @@ The system works as designed - different case = different checksum
 STEP 2f.1: CASE RESTORATION DEMONSTRATION (TINY)
 ........................................
 CASE RESTORATION:
-  Input hdprint (case-lost):      ntq1qx
-  Case pattern extracted:        00011
-  Output hdprint (case-recovered): ntq1QX
+  Input hdprint (case-lost):      nkuu2k
+  Case pattern extracted:        10000
+  Output hdprint (case-recovered): Nkuu2k
   Restoration status:            <SUCCESS>
 
 COMPLETE RESTORATION:
-  USER INPUT:    pr14x6j_ntq1qx
-  SYSTEM OUTPUT: prv4x6j_ntq1QX
+  USER INPUT:    mb1rmzd_nkuu2k
+  SYSTEM OUTPUT: mbtrmzd_Nkuu2k
                  └── corrected ──┘ └─── case-recovered ────┘
 
-Final verification checksum: prv4x6j
+Final verification checksum: mbtrmzd
 Final verification: <PASS>
 
 STEP 2g.1: CRYPTOGRAPHIC AUDIT SUMMARY (TINY)
@@ -834,7 +635,7 @@ CORRUPTION & CORRECTION SUMMARY:
 Character flip detected: position 2
 BCH error correction: <SUCCESS>
 Checksum reconstruction: <SUCCESS>
-Case restoration: ntq1QX
+Case restoration: Nkuu2k
 Final verification: <PASS>
 
 Overall system performance: <SUCCESS>
@@ -854,117 +655,120 @@ DEMO 2: MEDIUM SIZE ANALYSIS
 SCENARIO: User provides lowercase input with 1 character flip
 GOAL: Validate and restore proper case through error correction
 
-USER INPUT (corrupted + case-lost): qn1zhvv_ntq1qx_ebg4vhqn_jljsksmd
-  Input checksum (corrupted): qn1zhvv
-  Input hdprint (case-lost):   ntq1qx_ebg4vhqn_jljsksmd
-  Character flip: position 2 ('c' → '1')
+USER INPUT (corrupted + case-lost): n91nfv7_nkuu2k_jmxe3dlh_acjrdh3f
+  Input checksum (corrupted): n91nfv7
+  Input hdprint (case-lost):   nkuu2k_jmxe3dlh_acjrdh3f
+  Character flip: position 2 ('x' → '1')
   Challenge: Checksum has error + case information lost
 
 REFERENCE VALUES (what system should produce):
-  Correct checksum:         qnczhvv
-  Original hdprint (case-recovered): ntq1QX_ebG4VhqN_jLJSKSMd
-  Target output: qnczhvv_ntq1QX_ebG4VhqN_jLJSKSMd
+  Correct checksum:         n9xnfv7
+  Original hdprint (case-recovered): Nkuu2k_jMxE3DLH_AcJrDH3f
+  Target output: n9xnfv7_Nkuu2k_jMxE3DLH_AcJrDH3f
 
 STEP 2a.2: EXPECTED CHECKSUM GENERATION (MEDIUM)
 ........................................
-Generate expected checksum for lowercase fingerprint: ntq1qx_ebg4vhqn_jljsksmd
+Generate expected checksum for lowercase fingerprint: nkuu2k_jmxe3dlh_acjrdh3f
 
-BCH Code 1: 7b306243b90be7ee... → ECC: 7b
-BCH Code 2: d146bc34a924a502... → ECC: 46
-BCH Code 3: ad7dc6f83023a22b... → ECC: 46
-BCH Code 4: 56878bb9a4c6a28b... → ECC: 39
-BCH Code 5: 7fef1e34aa844413... → ECC: 2a
+BCH Code 1: 5a668578e116f2ce... → ECC: 5a
+BCH Code 2: 3eaaf28e7875b45e... → ECC: 2a
+BCH Code 3: bd32d2a028bba3cc... → ECC: 52
+BCH Code 4: 323d045546ea5044... → ECC: 55
+BCH Code 5: 2ee3c298fcf26103... → ECC: 7c
 
 Bit interleaving process:
-ECC 1 bits: 1111011
-ECC 2 bits: 1000110
-ECC 3 bits: 1000110
-ECC 4 bits: 0111001
-ECC 5 bits: 0101010
-Interleaved: 11100100111001010011011001110110010
+ECC 1 bits: 1011010
+ECC 2 bits: 0101010
+ECC 3 bits: 1010010
+ECC 4 bits: 1010101
+ECC 5 bits: 1111100
+Interleaved: 10111010011011111001000111110000010
 Total bits: 35
-Expected checksum (for lowercase): c4as4re
+Expected checksum (for lowercase): 7eazv8m
 
 STEP 2b.2: CHECKSUM VALIDATION & ERROR DETECTION (MEDIUM)
 ........................................
 Compare user input checksum with expected (for lowercase):
-  User input:  qn1zhvv
-  Expected:    c4as4re
+  User input:  n91nfv7
+  Expected:    7eazv8m
   Match:       <NO>
   Error detected: <YES>
 
 <ERROR> DETAILS:
-  Position 2: 'c' → '1' (character flip)
+  Position 2: 'x' → '1' (character flip)
   This requires BCH error correction
 
 STEP 2c.2: BIT-LEVEL ERROR ANALYSIS (MEDIUM)
 ........................................
-Expected bits:  01101010110011100001011100000011000
-User input bits: 11100011011100010011001111001110100
-Bit errors at positions: [0, 4, 7, 8, 10, 11, 12, 13, 14, 15, 18, 21, 24, 25, 28, 29, 31, 32]
-Total bit errors: 18
+Expected bits:  00111101100111001010101110101110011
+User input bits: 11001100011001111000000010000000010
+Bit errors at positions: [0, 1, 2, 3, 7, 8, 9, 10, 11, 12, 14, 15, 18, 20, 22, 23, 26, 28, 29, 30, 34]
+Total bit errors: 21
 
 Impact on BCH codes:
   Bit 0 → BCH code 1, bit 1
-  Bit 4 → BCH code 5, bit 1
+  Bit 1 → BCH code 2, bit 1
+  Bit 2 → BCH code 3, bit 1
+  Bit 3 → BCH code 4, bit 1
   Bit 7 → BCH code 3, bit 2
   Bit 8 → BCH code 4, bit 2
+  Bit 9 → BCH code 5, bit 2
   Bit 10 → BCH code 1, bit 3
   Bit 11 → BCH code 2, bit 3
   Bit 12 → BCH code 3, bit 3
-  Bit 13 → BCH code 4, bit 3
   Bit 14 → BCH code 5, bit 3
   Bit 15 → BCH code 1, bit 4
   Bit 18 → BCH code 4, bit 4
-  Bit 21 → BCH code 2, bit 5
-  Bit 24 → BCH code 5, bit 5
-  Bit 25 → BCH code 1, bit 6
+  Bit 20 → BCH code 1, bit 5
+  Bit 22 → BCH code 3, bit 5
+  Bit 23 → BCH code 4, bit 5
+  Bit 26 → BCH code 2, bit 6
   Bit 28 → BCH code 4, bit 6
   Bit 29 → BCH code 5, bit 6
-  Bit 31 → BCH code 2, bit 7
-  Bit 32 → BCH code 3, bit 7
+  Bit 30 → BCH code 1, bit 7
+  Bit 34 → BCH code 5, bit 7
 
 STEP 2d.2: BCH ERROR CORRECTION PROCESS (MEDIUM)
 ........................................
 BCH Code 1 correction:
-  Original data: 7b306243b90be7ee...
-  User input ECC: 17
+  Original data: 5a668578e116f2ce...
+  User input ECC: 7c
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 17
-  Corrected bits: 0010111
+  Corrected ECC: 7c
+  Corrected bits: 1111100
 
 BCH Code 2 correction:
-  Original data: d146bc34a924a502...
-  User input ECC: 71
+  Original data: 3eaaf28e7875b45e...
+  User input ECC: 0d
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 71
-  Corrected bits: 1110001
+  Corrected ECC: 0d
+  Corrected bits: 0001101
 
 BCH Code 3 correction:
-  Original data: ad7dc6f83023a22b...
-  User input ECC: 44
+  Original data: bd32d2a028bba3cc...
+  User input ECC: 06
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 44
-  Corrected bits: 1000100
+  Corrected ECC: 06
+  Corrected bits: 0000110
 
 BCH Code 4 correction:
-  Original data: 56878bb9a4c6a28b...
-  User input ECC: 0c
+  Original data: 323d045546ea5044...
+  User input ECC: 0d
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 0c
-  Corrected bits: 0001100
+  Corrected ECC: 0d
+  Corrected bits: 0001101
 
 BCH Code 5 correction:
-  Original data: 7fef1e34aa844413...
-  User input ECC: 68
+  Original data: 2ee3c298fcf26103...
+  User input ECC: 70
   Error count: 1
   Correction: <SUCCESS>
-  Corrected ECC: 68
-  Corrected bits: 1101000
+  Corrected ECC: 70
+  Corrected bits: 1110000
 
 STEP 2e.2: CHECKSUM RECONSTRUCTION (MEDIUM)
 ........................................
@@ -973,14 +777,14 @@ Step 1: Take corrected BCH codes from error correction
 Step 2: Reinterleave corrected bits
 Step 3: Convert to Base58L encoding
 
-Expected (for lowercase):  c4as4re
-User input checksum:       qn1zhvv
-Reconstructed checksum:    c4as4re
+Expected (for lowercase):  7eazv8m
+User input checksum:       n91nfv7
+Reconstructed checksum:    7eazv8m
 Reconstruction: <SUCCESS>
 
 BIT-LEVEL RECONSTRUCTION VERIFICATION:
-Expected bits:      01101010110011100001011100000011000
-Reconstructed bits: 01101010110011100001011100000011000
+Expected bits:      00111101100111001010101110101110011
+Reconstructed bits: 00111101100111001010101110101110011
 Bits match: <YES>
 
 BCH ERROR CORRECTION PIPELINE COMPLETE:
@@ -991,8 +795,8 @@ BCH ERROR CORRECTION PIPELINE COMPLETE:
    5. Valid Base58L checksum reconstructed
 
 RECONSTRUCTION DETAILS:
-   Input (corrupted):   qn1zhvv
-   Output (corrected):  c4as4re
+   Input (corrupted):   n91nfv7
+   Output (corrected):  7eazv8m
    Character flip:      Position corrected through BCH
    Verification:        Matches expected lowercase checksum
 
@@ -1001,33 +805,33 @@ STEP 2e.2.1: DETAILED CASE RECOVERY ANALYSIS (MEDIUM)
 GOAL: Trace the exact process of attempting case recovery with corrected checksum
 This exposes the fundamental limitation: corrected checksum ≠ original case pattern
 
-Input for analysis: c4as4re:ntq1qx_ebg4vhqn_jljsksmd
+Input for analysis: 7eazv8m:nkuu2k_jmxe3dlh_acjrdh3f
 
 STEP 1: Base58L Decode
-Corrected checksum: c4as4re
-  Position 0: 'c' -> index 11
-  Position 1: '4' -> index 3
+Corrected checksum: 7eazv8m
+  Position 0: '7' -> index 6
+  Position 1: 'e' -> index 13
   Position 2: 'a' -> index 9
-  Position 3: 's' -> index 25
-  Position 4: '4' -> index 3
-  Position 5: 'r' -> index 24
-  Position 6: 'e' -> index 13
-  Final decoded value: 14335129624
-  Binary: 0b01101010110011100001011100000011000
+  Position 3: 'z' -> index 32
+  Position 4: 'v' -> index 28
+  Position 5: '8' -> index 7
+  Position 6: 'm' -> index 20
+  Final decoded value: 8269421939
+  Binary: 0b00111101100111001010101110101110011
 
 STEP 2: Bit De-interleaving
-  35-bit array: 01101010110011100001011100000011000
+  35-bit array: 00111101100111001010101110101110011
   De-interleaved BCH codes:
-    BCH Code 1: 0000001
-    BCH Code 2: 1100101
-    BCH Code 3: 1010100
-    BCH Code 4: 0110100
-    BCH Code 5: 1111000
+    BCH Code 1: 0100101
+    BCH Code 2: 0011010
+    BCH Code 3: 1110100
+    BCH Code 4: 1111111
+    BCH Code 5: 1000111
 
 STEP 3: Case Pattern Analysis
   The corrected checksum was generated for lowercase fingerprint
   It encodes case pattern: ALL LOWERCASE
-  Original case pattern:   00011001100101111110
+  Original case pattern:   1000001011111010110
   These are DIFFERENT patterns!
 
 STEP 4: What the corrected checksum can actually do
@@ -1038,47 +842,47 @@ STEP 4: What the corrected checksum can actually do
 
 STEP 5: Proof by contradiction
   If we decode the case pattern from corrected checksum:
-  Letter count in fingerprint: 20
-  All-lowercase pattern: 00000000000000000000
-  Original mixed pattern:  00011001100101111110
+  Letter count in fingerprint: 19
+  All-lowercase pattern: 0000000000000000000
+  Original mixed pattern:  1000001011111010110
 
 STEP 6: The fundamental limitation
   The corrected checksum is:
-    - CORRECT for lowercase 'ntq1qx_ebg4vhqn_jljsksmd'
-    - INCORRECT for mixed case 'ntq1QX_ebG4VhqN_jLJSKSMd'
+    - CORRECT for lowercase 'nkuu2k_jmxe3dlh_acjrdh3f'
+    - INCORRECT for mixed case 'Nkuu2k_jMxE3DLH_AcJrDH3f'
   Each checksum is tied to a specific case pattern.
 
 STEP 7: ACTUAL BCH VERIFICATION TEST
   Testing if corrected checksum verifies against original hdprint
-  Corrected checksum: c4as4re
-  Original hdprint: ntq1QX_ebG4VhqN_jLJSKSMd
+  Corrected checksum: 7eazv8m
+  Original hdprint: Nkuu2k_jMxE3DLH_AcJrDH3f
   Expected: VERIFICATION FAILURE
 
   Test 1: BCH Verification (corrected checksum vs original hdprint)
-    Input: c4as4re:ntq1QX_ebG4VhqN_jLJSKSMd
-    Expected checksum for original hdprint: qnczhvv
-    Actual corrected checksum: c4as4re
+    Input: 7eazv8m:Nkuu2k_jMxE3DLH_AcJrDH3f
+    Expected checksum for original hdprint: n9xnfv7
+    Actual corrected checksum: 7eazv8m
     Checksums match: <NO>
     BCH verification: <FAIL>
 
   Test 2: BCH Verification (corrected checksum vs lowercase hdprint)
-    Input: c4as4re:ntq1qx_ebg4vhqn_jljsksmd
-    Expected checksum for lowercase hdprint: c4as4re
-    Actual corrected checksum: c4as4re
+    Input: 7eazv8m:nkuu2k_jmxe3dlh_acjrdh3f
+    Expected checksum for lowercase hdprint: 7eazv8m
+    Actual corrected checksum: 7eazv8m
     Checksums match: <YES>
     BCH verification: <PASS>
 
 STEP 8: SIGNATURE VERIFICATION RESULTS
-  Original signature: qnczhvv:ntq1QX_ebG4VhqN_jLJSKSMd
-  Corrected signature: c4as4re:ntq1QX_ebG4VhqN_jLJSKSMd
-  Lowercase signature: c4as4re:ntq1qx_ebg4vhqn_jljsksmd
+  Original signature: n9xnfv7:Nkuu2k_jMxE3DLH_AcJrDH3f
+  Corrected signature: 7eazv8m:Nkuu2k_jMxE3DLH_AcJrDH3f
+  Lowercase signature: 7eazv8m:nkuu2k_jmxe3dlh_acjrdh3f
 
   Verification against original: <FAIL>
   Verification against lowercase: <PASS>
 
 STEP 9: What would be needed for case recovery
-  To recover 'ntq1QX_ebG4VhqN_jLJSKSMd' you need:
-    - The ORIGINAL checksum: qnczhvv
+  To recover 'Nkuu2k_jMxE3DLH_AcJrDH3f' you need:
+    - The ORIGINAL checksum: n9xnfv7
     - Which encodes the ORIGINAL case pattern
   The corrected checksum is for a DIFFERENT fingerprint!
 
@@ -1090,17 +894,17 @@ The system works as designed - different case = different checksum
 STEP 2f.2: CASE RESTORATION DEMONSTRATION (MEDIUM)
 ........................................
 CASE RESTORATION:
-  Input hdprint (case-lost):      ntq1qx_ebg4vhqn_jljsksmd
-  Case pattern extracted:        00011001100101111110
-  Output hdprint (case-recovered): ntq1QX_ebG4VhqN_jLJSKSMd
+  Input hdprint (case-lost):      nkuu2k_jmxe3dlh_acjrdh3f
+  Case pattern extracted:        1000001011111010110
+  Output hdprint (case-recovered): Nkuu2k_jMxE3DLH_AcJrDH3f
   Restoration status:            <SUCCESS>
 
 COMPLETE RESTORATION:
-  USER INPUT:    qn1zhvv_ntq1qx_ebg4vhqn_jljsksmd
-  SYSTEM OUTPUT: qnczhvv_ntq1QX_ebG4VhqN_jLJSKSMd
+  USER INPUT:    n91nfv7_nkuu2k_jmxe3dlh_acjrdh3f
+  SYSTEM OUTPUT: n9xnfv7_Nkuu2k_jMxE3DLH_AcJrDH3f
                  └── corrected ──┘ └─── case-recovered ────┘
 
-Final verification checksum: qnczhvv
+Final verification checksum: n9xnfv7
 Final verification: <PASS>
 
 STEP 2g.2: CRYPTOGRAPHIC AUDIT SUMMARY (MEDIUM)
@@ -1109,7 +913,7 @@ CORRUPTION & CORRECTION SUMMARY:
 Character flip detected: position 2
 BCH error correction: <SUCCESS>
 Checksum reconstruction: <SUCCESS>
-Case restoration: ntq1QX_ebG4VhqN_jLJSKSMd
+Case restoration: Nkuu2k_jMxE3DLH_AcJrDH3f
 Final verification: <PASS>
 
 Overall system performance: <SUCCESS>

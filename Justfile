@@ -143,6 +143,7 @@ build-docs:
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
 
+    uv run python ./src/dcypher/hdprint/docs/readme.py > ./src/dcypher/hdprint/README.txt
     uv run python ./src/dcypher/hdprint/docs/readme_hdprint.py > ./src/dcypher/hdprint/README.hdprint.txt
     uv run python ./src/dcypher/hdprint/docs/readme_paiready.py > ./src/dcypher/hdprint/README.paiready.txt
 

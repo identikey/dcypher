@@ -65,6 +65,11 @@ from .algorithms import (
     extract_segments,
     get_prefix,
     check_hierarchical_compatibility,
+    # Paiready + HDprint integration
+    generate_self_correcting_identifier,
+    verify_and_correct_identifier,
+    parse_identifier_format,
+    restore_case_in_hdprint,
 )
 
 # Security analysis
@@ -116,6 +121,11 @@ __all__ = [
     "extract_segments",
     "get_prefix",
     "check_hierarchical_compatibility",
+    # Paiready + HDprint integration
+    "generate_self_correcting_identifier",
+    "verify_and_correct_identifier",
+    "parse_identifier_format",
+    "restore_case_in_hdprint",
     # Security analysis
     "calculate_security_bits",
     "analyze_entropy_efficiency",
