@@ -1,17 +1,18 @@
 ================================================================================
-                    IDK-HPRINT DYNAMIC TECHNICAL DOCUMENTATION
-                          Run: 2025-07-14 23:06:30
+            IDENTIKEY HPRINT PAIREADY DYNAMIC TECHNICAL DOCUMENTATION
+                            Run: 2025-07-14 23:06:30
 ================================================================================
 
-CRYPTOGRAPHIC AUDIT: SAME IDENTITY ACROSS ALL SIZES + ERROR CORRECTION
-================================================================================
+SAME IDENTITY ACROSS ALL SIZES + ERROR CORRECTION
+=================================================
+
 STEP-BY-STEP DEMONSTRATION OF SINGLE CHARACTER FLIP RECOVERY
 Using the same public key to show identity scaling and error correction:
 Fixed public key: dd26e243585d2b4cf445912e3791199cf38c814fa4e5645c3134a191116451c0
 Key fingerprint: dd26e243585d2b4c...
 
 STEP 1: HIERARCHICAL FINGERPRINT GENERATION
---------------------------------------------------
+-------------------------------------------
 TINY  : dencpts:7aF3YK
       Lowercase: 7af3yk
       Case bits: 0111
