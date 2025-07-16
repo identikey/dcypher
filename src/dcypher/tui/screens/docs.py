@@ -29,8 +29,8 @@ class DocsScreen(Widget):
     }
     
     #docs-tree-panel {
-        width: 30%;
-        min-width: 25;
+        width: 15%;
+        min-width: 15;
         background: $surface;
         border: double $primary;
         margin-left: 0;
@@ -51,7 +51,7 @@ class DocsScreen(Widget):
     }
     
     #docs-content-panel {
-        width: 70%;
+        width: 85%;
         height: 100%;
         border: double $primary;
         margin: 1;
