@@ -1020,13 +1020,15 @@ def demonstrate_system_overview():
     print("   - Provides additional layer of error detection")
     print()
 
-    print("BIT INTERLEAVING STRATEGY:")
-    print("- Single character error in Base58L causes 5-6 bit errors")
-    print("- Bits are interleaved across BCH codes: A1,B1,C1,A2,B2,C2...")
-    print("- Character flip spreads damage across all BCH codes")
-    print("- Each BCH code sees only 1 bit error, which it can correct")
-    print("- Result: Multi-bit character error becomes correctable single-bit errors")
-    print("- Why it works: Transforms hard problem into multiple easy problems")
+    print("4. BIT INTERLEAVING STRATEGY:")
+    print("   - Single character error in Base58L causes 5-6 bit errors")
+    print("   - Bits are interleaved across BCH codes: A1,B1,C1,A2,B2,C2...")
+    print("   - Character flip spreads damage across all BCH codes")
+    print("   - Each BCH code sees only 1 bit error, which it can correct")
+    print(
+        "   - Result: Multi-bit character error becomes correctable single-bit errors"
+    )
+    print("   - Why it works: Transforms hard problem into multiple easy problems")
     print()
 
     print("CORE FEATURES:")

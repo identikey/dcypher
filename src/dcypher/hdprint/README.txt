@@ -2,7 +2,7 @@
     HDPRINT WITH PAIREADY: SELF-CORRECTING HIERARCHICAL IDENTIFIERS
                       Technical Reference Specification
                            Version: 0.0
-                    Generated: 2025-07-16 00:50:02
+                    Generated: 2025-07-16 01:28:24
 ================================================================================
 
 Self-correcting checksum + hierarchical fingerprint integration
@@ -82,13 +82,13 @@ THREE-LAYER BCH ARCHITECTURE:
    - Ensures the HDprint matches the expected format and content
    - Provides additional layer of error detection
 
-BIT INTERLEAVING STRATEGY:
-- Single character error in Base58L causes 5-6 bit errors
-- Bits are interleaved across BCH codes: A1,B1,C1,A2,B2,C2...
-- Character flip spreads damage across all BCH codes
-- Each BCH code sees only 1 bit error, which it can correct
-- Result: Multi-bit character error becomes correctable single-bit errors
-- Why it works: Transforms hard problem into multiple easy problems
+4. BIT INTERLEAVING STRATEGY:
+   - Single character error in Base58L causes 5-6 bit errors
+   - Bits are interleaved across BCH codes: A1,B1,C1,A2,B2,C2...
+   - Character flip spreads damage across all BCH codes
+   - Each BCH code sees only 1 bit error, which it can correct
+   - Result: Multi-bit character error becomes correctable single-bit errors
+   - Why it works: Transforms hard problem into multiple easy problems
 
 CORE FEATURES:
 ==============
@@ -270,8 +270,8 @@ Static checksum: tax447q
 
 Dynamic Test Vector (Random)
 ----------------------------
-Dynamic HDprint: 4R1myE_jw7e1nwf_DN1Ld8Gk
-Dynamic checksum: ectw4mb
+Dynamic HDprint: 728ex7_wv1m7QSk_G8w5P1w6
+Dynamic checksum: rnb6c7b
 
 
 Multiple Error Scenarios
@@ -319,17 +319,17 @@ Note: BCH(t=1) theoretically corrects 1 error, but interleaving can sometimes ha
 
 Double Error (2 random character flips):
   Original:  tax447q
-  Corrupted: t7x44pq
-  Changes:   pos 5: '7' → 'p', pos 1: 'a' → '7'
+  Corrupted: 3ax44rq
+  Changes:   pos 0: 't' → '3', pos 5: '7' → 'r'
   Result: SUCCESS
   Corrected: tax447q
-  Errors fixed: 2 characters, 4/5 BCH codes, 4 total bits
+  Errors fixed: 2 characters, 5/5 BCH codes, 5 total bits
 [PASS] Double Error: Correction matches original when successful
 
 Triple Error (3 random character flips):
   Original:  tax447q
-  Corrupted: uax466q
-  Changes:   pos 0: 't' → 'u', pos 5: '7' → '6', pos 4: '4' → '6'
+  Corrupted: caxn47d
+  Changes:   pos 6: 'q' → 'd', pos 3: '4' → 'n', pos 0: 't' → 'c'
   Result: SUCCESS
   Corrected: tax447q
   Errors fixed: 3 characters, 5/5 BCH codes, 5 total bits
@@ -337,17 +337,17 @@ Triple Error (3 random character flips):
 
 Adjacent Double Error (2 adjacent character flips):
   Original:  tax447q
-  Corrupted: tax44hz
-  Changes:   pos 5: '7' → 'h', pos 6: 'q' → 'z'
+  Corrupted: t79447q
+  Changes:   pos 1: 'a' → '7', pos 2: 'x' → '9'
   Result: SUCCESS
   Corrected: tax447q
-  Errors fixed: 2 characters, 4/5 BCH codes, 4 total bits
+  Errors fixed: 2 characters, 5/5 BCH codes, 5 total bits
 [PASS] Adjacent Double Error: Correction matches original when successful
 
 Spaced Triple Error (3 spaced character flips (first/middle/last)):
   Original:  tax447q
-  Corrupted: vaxk47a
-  Changes:   pos 0: 't' → 'v', pos 3: '4' → 'k', pos 6: 'q' → 'a'
+  Corrupted: 7axz47z
+  Changes:   pos 0: 't' → '7', pos 3: '4' → 'z', pos 6: 'q' → 'z'
   Result: SUCCESS
   Corrected: tax447q
   Errors fixed: 3 characters, 5/5 BCH codes, 5 total bits
@@ -355,8 +355,8 @@ Spaced Triple Error (3 spaced character flips (first/middle/last)):
 
 First Half Corruption (4 character flips (first half)):
   Original:  tax447q
-  Corrupted: z7re47q
-  Changes:   pos 0: 't' → 'z', pos 1: 'a' → '7', pos 2: 'x' → 'r', pos 3: '4' → 'e'
+  Corrupted: bppr47q
+  Changes:   pos 0: 't' → 'b', pos 1: 'a' → 'p', pos 2: 'x' → 'p', pos 3: '4' → 'r'
   Result: SUCCESS
   Corrected: tax447q
   Errors fixed: 4 characters, 5/5 BCH codes, 5 total bits
@@ -364,45 +364,45 @@ First Half Corruption (4 character flips (first half)):
 
 Last Half Corruption (4 character flips (last half)):
   Original:  tax447q
-  Corrupted: taxn74z
-  Changes:   pos 3: '4' → 'n', pos 4: '4' → '7', pos 5: '7' → '4', pos 6: 'q' → 'z'
+  Corrupted: taxe789
+  Changes:   pos 3: '4' → 'e', pos 4: '4' → '7', pos 5: '7' → '8', pos 6: 'q' → '9'
   Result: SUCCESS
   Corrected: tax447q
-  Errors fixed: 4 characters, 5/5 BCH codes, 5 total bits
+  Errors fixed: 4 characters, 4/5 BCH codes, 4 total bits
 [PASS] Last Half Corruption: Correction matches original when successful
 
 === End Static Vector Tests ===
 
 === Dynamic Vector Error Correction Tests ===
-Testing checksum: ectw4mb
+Testing checksum: rnb6c7b
 
 
 Position 0 Error Test:
-  Original:  ectw4mb
-  Corrupted: 1ctw4mb
-  Change: 'e' → '1' at position 0
+  Original:  rnb6c7b
+  Corrupted: 1nb6c7b
+  Change: 'r' → '1' at position 0
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 1 characters, 5/5 BCH codes, 5 total bits
 [PASS] Single error at position 0 successfully corrected
 [PASS] Position 0 correction matches original
 
 Position 3 Error Test:
-  Original:  ectw4mb
-  Corrupted: ect14mb
-  Change: 'w' → '1' at position 3
+  Original:  rnb6c7b
+  Corrupted: rnb1c7b
+  Change: '6' → '1' at position 3
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 1 characters, 4/5 BCH codes, 4 total bits
 [PASS] Single error at position 3 successfully corrected
 [PASS] Position 3 correction matches original
 
 Position 6 Error Test:
-  Original:  ectw4mb
-  Corrupted: ectw4m1
+  Original:  rnb6c7b
+  Corrupted: rnb6c71
   Change: 'b' → '1' at position 6
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 1 characters, 3/5 BCH codes, 3 total bits
 [PASS] Single error at position 6 successfully corrected
 [PASS] Position 6 correction matches original
@@ -413,57 +413,57 @@ Testing interleaved BCH's ability to handle multiple character errors:
 Note: BCH(t=1) theoretically corrects 1 error, but interleaving can sometimes handle more
 
 Double Error (2 random character flips):
-  Original:  ectw4mb
-  Corrupted: 5ctw4m4
-  Changes:   pos 6: 'b' → '4', pos 0: 'e' → '5'
+  Original:  rnb6c7b
+  Corrupted: yn16c7b
+  Changes:   pos 2: 'b' → '1', pos 0: 'r' → 'y'
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 2 characters, 5/5 BCH codes, 5 total bits
 [PASS] Double Error: Correction matches original when successful
 
 Triple Error (3 random character flips):
-  Original:  ectw4mb
-  Corrupted: eftwbib
-  Changes:   pos 4: '4' → 'b', pos 5: 'm' → 'i', pos 1: 'c' → 'f'
+  Original:  rnb6c7b
+  Corrupted: rnz6w7i
+  Changes:   pos 2: 'b' → 'z', pos 6: 'b' → 'i', pos 4: 'c' → 'w'
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 3 characters, 5/5 BCH codes, 5 total bits
 [PASS] Triple Error: Correction matches original when successful
 
 Adjacent Double Error (2 adjacent character flips):
-  Original:  ectw4mb
-  Corrupted: ectwhkb
-  Changes:   pos 4: '4' → 'h', pos 5: 'm' → 'k'
+  Original:  rnb6c7b
+  Corrupted: rngic7b
+  Changes:   pos 2: 'b' → 'g', pos 3: '6' → 'i'
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 2 characters, 5/5 BCH codes, 5 total bits
 [PASS] Adjacent Double Error: Correction matches original when successful
 
 Spaced Triple Error (3 spaced character flips (first/middle/last)):
-  Original:  ectw4mb
-  Corrupted: 9cty4m7
-  Changes:   pos 0: 'e' → '9', pos 3: 'w' → 'y', pos 6: 'b' → '7'
+  Original:  rnb6c7b
+  Corrupted: jnbtc7f
+  Changes:   pos 0: 'r' → 'j', pos 3: '6' → 't', pos 6: 'b' → 'f'
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 3 characters, 5/5 BCH codes, 5 total bits
 [PASS] Spaced Triple Error: Correction matches original when successful
 
 First Half Corruption (4 character flips (first half)):
-  Original:  ectw4mb
-  Corrupted: px9g4mb
-  Changes:   pos 0: 'e' → 'p', pos 1: 'c' → 'x', pos 2: 't' → '9', pos 3: 'w' → 'g'
+  Original:  rnb6c7b
+  Corrupted: pgkxc7b
+  Changes:   pos 0: 'r' → 'p', pos 1: 'n' → 'g', pos 2: 'b' → 'k', pos 3: '6' → 'x'
   Result: SUCCESS
-  Corrected: ectw4mb
+  Corrected: rnb6c7b
   Errors fixed: 4 characters, 5/5 BCH codes, 5 total bits
 [PASS] First Half Corruption: Correction matches original when successful
 
 Last Half Corruption (4 character flips (last half)):
-  Original:  ectw4mb
-  Corrupted: ectm6rw
-  Changes:   pos 3: 'w' → 'm', pos 4: '4' → '6', pos 5: 'm' → 'r', pos 6: 'b' → 'w'
+  Original:  rnb6c7b
+  Corrupted: rnbb5jf
+  Changes:   pos 3: '6' → 'b', pos 4: 'c' → '5', pos 5: '7' → 'j', pos 6: 'b' → 'f'
   Result: SUCCESS
-  Corrected: ectw4mb
-  Errors fixed: 4 characters, 5/5 BCH codes, 5 total bits
+  Corrected: rnb6c7b
+  Errors fixed: 4 characters, 3/5 BCH codes, 3 total bits
 [PASS] Last Half Corruption: Correction matches original when successful
 
 === End Dynamic Vector Tests ===
