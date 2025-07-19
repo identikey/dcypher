@@ -4,7 +4,7 @@ ARG OPENHANDS_VERSION=${OPENHANDS_VERSION:-}
 # Use the AllHands runtime as base image
 FROM docker.all-hands.dev/all-hands-ai/runtime:${OPENHANDS_VERSION}
 
-# Install Zig and Just
+# Install dependencies including minisign for signature verification
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -14,18 +14,66 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     git \
     tree \
-    && curl -sS https://webinstall.dev/zig | bash \
-    && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin \
-    && chmod +x /usr/local/bin/just \
+    minisign \
+    jq \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Zig using community mirrors with signature verification
+RUN set -e && \
+    # Zig version and architecture
+    ZIG_VERSION="0.14.1" && \
+    ZIG_ARCH="x86_64-linux" && \
+    ZIG_TARBALL="zig-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" && \
+    # ZSF public key for signature verification (from https://ziglang.org/download)
+    ZIG_PUBKEY="RWSGOq2NVecA2UPNdBUZykf1CCb147pkmdtYxgb3Ti+JO/wCYvhbAb/U" && \
+    # Fetch mirror list
+    curl -fsSL "https://ziglang.org/download/community-mirrors.txt" | shuf > /tmp/mirrors.txt && \
+    # Try mirrors in random order
+    SUCCESS=false && \
+    while IFS= read -r mirror_url; do \
+        echo "Trying mirror: $mirror_url" && \
+        if curl -fsSL "${mirror_url}/${ZIG_TARBALL}?source=dockerfile-allhands" -o "/tmp/${ZIG_TARBALL}" && \
+           curl -fsSL "${mirror_url}/${ZIG_TARBALL}.minisig?source=dockerfile-allhands" -o "/tmp/${ZIG_TARBALL}.minisig"; then \
+            echo "Downloaded from mirror, verifying signature..." && \
+            if minisign -Vm "/tmp/${ZIG_TARBALL}" -P "${ZIG_PUBKEY}" -x "/tmp/${ZIG_TARBALL}.minisig"; then \
+                echo "Signature verified successfully!" && \
+                SUCCESS=true && \
+                break; \
+            else \
+                echo "Signature verification failed for mirror: $mirror_url"; \
+            fi; \
+        else \
+            echo "Failed to download from mirror: $mirror_url"; \
+        fi; \
+    done < /tmp/mirrors.txt && \
+    # Fallback to ziglang.org if all mirrors fail
+    if [ "$SUCCESS" = "false" ]; then \
+        echo "All mirrors failed, trying ziglang.org as fallback..." && \
+        curl -fsSL "https://ziglang.org/builds/${ZIG_TARBALL}" -o "/tmp/${ZIG_TARBALL}" && \
+        curl -fsSL "https://ziglang.org/builds/${ZIG_TARBALL}.minisig" -o "/tmp/${ZIG_TARBALL}.minisig" && \
+        minisign -Vm "/tmp/${ZIG_TARBALL}" -P "${ZIG_PUBKEY}" -x "/tmp/${ZIG_TARBALL}.minisig" && \
+        SUCCESS=true; \
+    fi && \
+    # Extract and install Zig
+    if [ "$SUCCESS" = "true" ]; then \
+        tar -xf "/tmp/${ZIG_TARBALL}" -C /opt && \
+        ln -s "/opt/zig-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig && \
+        rm -f "/tmp/${ZIG_TARBALL}" "/tmp/${ZIG_TARBALL}.minisig" /tmp/mirrors.txt; \
+    else \
+        echo "Failed to download and verify Zig" && exit 1; \
+    fi
+
+# Install Just
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin \
+    && chmod +x /usr/local/bin/just
+
 # Set environment variables  
-ENV PATH="/root/.local/opt/zig:$PATH"
+ENV PATH="/usr/local/bin:$PATH"
 
 # Add labels
 LABEL maintainer="duke@identikey.io" \
-      description="AllHands runtime with Zig installed"
+      description="AllHands runtime with Zig installed via community mirrors"
 
 # Expose port 3000
 EXPOSE 3000
