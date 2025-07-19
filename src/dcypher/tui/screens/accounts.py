@@ -14,7 +14,11 @@ from rich.text import Text
 
 # Import API client and related modules
 try:
-    from dcypher.lib.api_client import DCypherClient, DCypherAPIError, ResourceNotFoundError
+    from dcypher.lib.api_client import (
+        DCypherClient,
+        DCypherAPIError,
+        ResourceNotFoundError,
+    )
     from dcypher.lib.key_manager import KeyManager
 
     api_available = True

@@ -13,3 +13,6 @@
 [submodule "vendor/liboqs-python"]
 	path = vendor/liboqs-python
 	url = https://github.com/open-quantum-safe/liboqs-python
+[submodule "vendor/openhands"]
+	path = vendor/openhands
+	url = https://github.com/All-Hands-AI/OpenHands.git

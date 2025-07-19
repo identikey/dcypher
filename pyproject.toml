@@ -20,7 +20,10 @@ dependencies = [
     "ruff",
     "pre-commit",
     "pandas",
-    "openfhe",
+    "liboqs-python",
+    "pybind11",
+    "pybind11-global",
+    "pybind11-stubgen",
     "ecdsa>=0.19.1",
     "python-multipart>=0.0.20",
     "bip-utils>=2.9.3",
@@ -31,11 +34,12 @@ dependencies = [
     "numpy>=2.3.1",
     "py-spy>=0.4.0",
     "line-profiler>=4.2.0",
-    "liboqs-python",
     "based58>=0.1.1",
     "blake3>=1.0.5",
     "bchlib>=2.1.3",
     "base58>=2.1.1",
+    "mypy>=1.17.0",
+    "openfhe",
 ]
 
 [project.scripts]
@@ -110,9 +114,9 @@ filterwarnings = [
 
 [tool.uv.sources]
 dcypher-backend = { path = ".", editable = true }
-openfhe-python = { path = "./openfhe-python" }                       # TODO: ?
-openfhe = { path = "./vendor/openfhe-python", editable = true }
-liboqs-python = { path = "./vendor/liboqs-python", editable = true }
+openfhe-python = { path = "./openfhe-python" }                     # TODO: ?
+openfhe = { path = "vendor/openfhe-python", editable = true }
+liboqs-python = { path = "vendor/liboqs-python", editable = true }
 
 [dependency-groups]
 dev = ["httpx>=0.28.1", "setuptools>=80.9.0", "textual-dev>=1.7.0"]

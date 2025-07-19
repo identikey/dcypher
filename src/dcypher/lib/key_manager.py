@@ -39,6 +39,8 @@ import threading
 import math
 from dcypher.lib import pre
 import base64
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import serialization
 
 try:
     from dcypher.crypto.context_manager import (
@@ -620,6 +622,22 @@ class KeyManager:
         return sk_classic, pk_classic_hex
 
     @staticmethod
+    def generate_ed25519_keypair() -> Tuple[ed25519.Ed25519PrivateKey, str]:
+        """
+        Generate an ED25519 key pair.
+
+        Returns:
+            tuple: (ED25519PrivateKey object, hex-encoded public key)
+        """
+        sk_ed25519 = ed25519.Ed25519PrivateKey.generate()
+        vk_ed25519 = sk_ed25519.public_key()
+        pk_ed25519_bytes = vk_ed25519.public_bytes(
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+        )
+        pk_ed25519_hex = pk_ed25519_bytes.hex()
+        return sk_ed25519, pk_ed25519_hex
+
+    @staticmethod
     def generate_pq_keypair(algorithm: str) -> Tuple[bytes, bytes]:
         """
         Generate a post-quantum key pair.
@@ -652,6 +670,22 @@ class KeyManager:
             return ecdsa.SigningKey.from_string(
                 bytes.fromhex(sk_hex), curve=ecdsa.SECP256k1
             )
+
+    @staticmethod
+    def save_ed25519_key(sk: ed25519.Ed25519PrivateKey, file_path: Path) -> None:
+        """Save ED25519 private key to file."""
+        sk_bytes = sk.private_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PrivateFormat.Raw,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        file_path.write_bytes(sk_bytes)
+
+    @staticmethod
+    def load_ed25519_key(file_path: Path) -> ed25519.Ed25519PrivateKey:
+        """Load ED25519 private key from file."""
+        sk_bytes = file_path.read_bytes()
+        return ed25519.Ed25519PrivateKey.from_private_bytes(sk_bytes)
 
     @staticmethod
     def load_pq_key(file_path: Path) -> bytes:
@@ -752,12 +786,13 @@ class KeyManager:
 
         This method loads an identity file and converts it to the same format
         as load_auth_keys_bundle() for compatibility with existing code.
+        Now also supports ED25519 keys.
 
         Args:
             identity_file: Path to identity JSON file
 
         Returns:
-            dict: Contains 'classic_sk' and 'pq_keys' list (same format as auth_keys)
+            dict: Contains 'classic_sk', 'pq_keys' list, and optionally 'ed25519_sk'
         """
         with open(identity_file, "r") as f:
             identity_data = json.load(f)
@@ -781,6 +816,15 @@ class KeyManager:
             bytes.fromhex(classic_sk_hex), curve=ecdsa.SECP256k1
         )
 
+        # Load ED25519 signing key from hex (if present)
+        if "ed25519" not in auth_keys:
+            raise ValueError("Missing required Ed25519 key in identity file")
+        ed25519_data = auth_keys["ed25519"]
+        ed25519_sk_hex = ed25519_data["sk_hex"]
+        ed25519_sk = ed25519.Ed25519PrivateKey.from_private_bytes(
+            bytes.fromhex(ed25519_sk_hex)
+        )
+
         # Load PQ keys from hex
         pq_keys = []
         for pq_key_info in auth_keys["pq"]:
@@ -794,7 +838,11 @@ class KeyManager:
                 }
             )
 
-        return {"classic_sk": classic_sk, "pq_keys": pq_keys}
+        result: Dict[str, Any] = {"classic_sk": classic_sk, "pq_keys": pq_keys}
+        if ed25519_sk is not None:
+            result["ed25519_sk"] = ed25519_sk
+
+        return result
 
     @classmethod
     def load_keys_unified(cls, keys_file: Path) -> Dict[str, Any]:
@@ -843,6 +891,7 @@ class KeyManager:
         Usage:
             with KeyManager.signing_context(keys_file) as keys:
                 classic_sk = keys["classic_sk"]
+                ed25519_sk = keys.get("ed25519_sk")  # Optional
                 pq_sigs = keys["pq_sigs"]
                 # Use signing keys...
             # OQS signatures are automatically freed
@@ -851,7 +900,7 @@ class KeyManager:
             auth_keys_file: Path to auth keys JSON file or identity file
 
         Yields:
-            dict: Contains 'classic_sk' and 'pq_sigs' with OQS objects
+            dict: Contains 'classic_sk', optional 'ed25519_sk', and 'pq_sigs' with OQS objects
         """
         # Use unified loader to support both auth_keys and identity files
         auth_keys = cls.load_keys_unified(auth_keys_file)
@@ -868,7 +917,13 @@ class KeyManager:
                     {"sig": sig_obj, "pk_hex": pq_key["pk_hex"], "alg": pq_key["alg"]}
                 )
 
-            yield {"classic_sk": auth_keys["classic_sk"], "pq_sigs": pq_sigs}
+            result = {"classic_sk": auth_keys["classic_sk"], "pq_sigs": pq_sigs}
+
+            # Include ED25519 key if present
+            if "ed25519_sk" in auth_keys:
+                result["ed25519_sk"] = auth_keys["ed25519_sk"]
+
+            yield result
         finally:
             # Automatically free all OQS signature objects
             for sig_obj in oqs_objects:
@@ -904,6 +959,26 @@ class KeyManager:
         pk_classic_hex = vk_classic.to_string("uncompressed").hex()
 
         return sk_classic, pk_classic_hex, path
+
+    @staticmethod
+    def _derive_ed25519_key_from_seed(
+        master_seed: bytes, account_index: int
+    ) -> Tuple[ed25519.Ed25519PrivateKey, str, str]:
+        """Derive an ED25519 key using our custom KDF."""
+        # Use a different coin type for ED25519 to avoid conflicts with ECDSA
+        path = f"m/44'/1729'/{account_index}'/0/0"  # Using 1729 (Ramanujan number) for ED25519
+        ed25519_seed = KeyManager._derive_key_material(master_seed, path, "ed25519")
+
+        # Create ED25519 private key from the 32-byte seed
+        sk_ed25519 = ed25519.Ed25519PrivateKey.from_private_bytes(ed25519_seed)
+
+        vk_ed25519 = sk_ed25519.public_key()
+        pk_ed25519_bytes = vk_ed25519.public_bytes(
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+        )
+        pk_ed25519_hex = pk_ed25519_bytes.hex()
+
+        return sk_ed25519, pk_ed25519_hex, path
 
     @staticmethod
     def _derive_pq_key_from_seed(
@@ -976,6 +1051,9 @@ class KeyManager:
         sk_classic, pk_classic_hex, classic_path = (
             KeyManager._derive_classic_key_from_seed(master_seed, 0)
         )
+        sk_ed25519, pk_ed25519_hex, ed25519_path = (
+            KeyManager._derive_ed25519_key_from_seed(master_seed, 0)
+        )
         pq_pk, pq_sk, pq_path = KeyManager._derive_pq_key_from_seed(master_seed, 0)
 
         # 3. Generate PRE keys using the crypto context and store context in identity
@@ -1029,12 +1107,24 @@ class KeyManager:
             "version": "hd_v1",
             "derivable": True,  # This identity is derivable from the mnemonic
             "rotation_count": 0,
-            "derivation_paths": {"classic": classic_path, "pq": pq_path},
+            "derivation_paths": {
+                "classic": classic_path,
+                "ed25519": ed25519_path,
+                "pq": pq_path,
+            },
             "crypto_context": crypto_context_data,  # Store the crypto context for self-contained identity
             "auth_keys": {
                 "classic": {
                     "pk_hex": pk_classic_hex,
                     "sk_hex": sk_classic.to_string().hex(),
+                },
+                "ed25519": {
+                    "pk_hex": pk_ed25519_hex,
+                    "sk_hex": sk_ed25519.private_bytes(
+                        encoding=serialization.Encoding.Raw,
+                        format=serialization.PrivateFormat.Raw,
+                        encryption_algorithm=serialization.NoEncryption(),
+                    ).hex(),
                 },
                 "pq": [
                     {"alg": ML_DSA_ALG, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
@@ -1520,6 +1610,27 @@ class KeyManager:
         scheme_prefix = f"ecdsa-secp256k1-{key_suffix}"
         return f"{scheme_prefix}:colca:{fingerprint}"
 
+
+@staticmethod
+def generate_ed25519_key_fingerprint(
+    key_hex: str, material_type: str = "public"
+) -> str:
+    """
+    Generate ColCa fingerprint for an Ed25519 key.
+
+    Args:
+        key_hex: Hex-encoded key
+        material_type: "public" or "private"
+
+    Returns:
+        ColCa fingerprint with Ed25519 scheme prefix
+    """
+    scheme_prefix = f"ed25519-{material_type}"
+    fingerprint = KeyManager.generate_key_fingerprint(
+        key_hex.encode("utf-8"), scheme_prefix
+    )
+    return f"{scheme_prefix}:colca:{fingerprint}"
+
     @staticmethod
     def get_identity_fingerprints(identity_file: Path) -> Dict[str, Dict[str, str]]:
         """
@@ -1550,6 +1661,21 @@ class KeyManager:
             if classic_sk:
                 fingerprints["classic"]["private"] = (
                     KeyManager.generate_classic_key_fingerprint(classic_sk, "private")
+                )
+
+        # Ed25519 key fingerprints
+        if "ed25519" in auth_keys:
+            ed25519_pk = auth_keys["ed25519"]["pk_hex"]
+            ed25519_sk = auth_keys["ed25519"].get("sk_hex", "")
+
+            fingerprints["ed25519"] = {
+                "public": KeyManager.generate_ed25519_key_fingerprint(
+                    ed25519_pk, "public"
+                ),
+            }
+            if ed25519_sk:
+                fingerprints["ed25519"]["private"] = (
+                    KeyManager.generate_ed25519_key_fingerprint(ed25519_sk, "private")
                 )
 
         # PQ key fingerprints

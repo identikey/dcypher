@@ -1,20 +1,27 @@
-# Use the AllHands runtime as base image
-FROM docker.all-hands.dev/all-hands-ai/runtime:0.46-nikolaik
+# OpenHands version is provided as build argument from config.toml via Justfile
+ARG OPENHANDS_VERSION=${OPENHANDS_VERSION:-}
 
-# Install Zig
+# Use the AllHands runtime as base image
+FROM docker.all-hands.dev/all-hands-ai/runtime:${OPENHANDS_VERSION}
+
+# Install Zig and Just
 RUN apt-get update && apt-get install -y \
     wget \
-    && wget -O zig.tar.xz https://ziglang.org/download/0.12.0/zig-linux-x86_64-0.12.0.tar.xz \
-    && tar xvf zig.tar.xz \
-    && mv zig-linux-x86_64-0.12.0 /usr/local/zig \
-    && ln -s /usr/local/zig/zig /usr/local/bin/zig \
-    && rm zig.tar.xz \
+    curl \
+    build-essential \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    git \
+    tree \
+    && curl -sS https://webinstall.dev/zig | bash \
+    && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin \
+    && chmod +x /usr/local/bin/just \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables
-ENV PATH="/usr/local/zig:$PATH" \
-    ZIG_VERSION="0.12.0"
+# Set environment variables  
+ENV PATH="/root/.local/opt/zig:$PATH"
 
 # Add labels
 LABEL maintainer="duke@identikey.io" \

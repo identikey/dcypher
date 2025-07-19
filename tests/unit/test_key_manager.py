@@ -4,6 +4,8 @@ import pytest
 import tempfile
 from pathlib import Path
 import ecdsa
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import serialization
 import oqs
 import json
 from dcypher.lib.key_manager import KeyManager, SecureBytes, SecureKeyHandle
@@ -47,6 +49,25 @@ def test_generate_classic_keypair():
     assert vk.to_string("uncompressed").hex() == pk_hex
 
 
+def test_generate_ed25519_keypair():
+    """Test ED25519 key pair generation."""
+    sk, pk_hex = KeyManager.generate_ed25519_keypair()
+
+    # Verify types
+    assert isinstance(sk, ed25519.Ed25519PrivateKey)
+    assert isinstance(pk_hex, str)
+    assert len(pk_hex) == 64
+
+    # Verify public key can be reconstructed
+    vk = sk.public_key()
+    assert (
+        vk.public_bytes(
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+        ).hex()
+        == pk_hex
+    )
+
+
 def test_save_and_load_classic_key():
     """Test saving and loading classic keys."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -65,6 +86,62 @@ def test_save_and_load_classic_key():
         vk_loaded = sk_loaded.get_verifying_key()
         assert vk_loaded is not None
         assert vk_loaded.to_string("uncompressed").hex() == pk_hex
+
+
+def test_serialize_and_deserialize_ed25519_key():
+    """Test serializing and deserializing Ed25519 keys as done in identity files."""
+    sk_original, pk_hex = KeyManager.generate_ed25519_keypair()
+
+    # Serialize private key to hex
+    sk_hex = sk_original.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).hex()
+
+    # Deserialize
+    sk_loaded = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(sk_hex))
+
+    # Verify public key matches
+    pk_loaded_hex = (
+        sk_loaded.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+        )
+        .hex()
+    )
+    assert pk_loaded_hex == pk_hex
+
+    # Test signing consistency
+    message = b"test message"
+    sig_original = sk_original.sign(message)
+    sig_loaded = sk_loaded.sign(message)
+    assert sig_original == sig_loaded
+
+
+def test_save_and_load_ed25519_key():
+    """Test saving and loading ED25519 keys."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Generate and save key
+        sk_original, pk_hex = KeyManager.generate_ed25519_keypair()
+        key_file = temp_path / "test_ed25519.sk"
+        KeyManager.save_ed25519_key(sk_original, key_file)
+
+        # Verify file exists
+        assert key_file.exists()
+
+        # Load key and verify it matches
+        sk_loaded = KeyManager.load_ed25519_key(key_file)
+        vk_loaded = sk_loaded.public_key()
+        assert (
+            vk_loaded.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            ).hex()
+            == pk_hex
+        )
 
 
 def test_create_auth_keys_bundle():

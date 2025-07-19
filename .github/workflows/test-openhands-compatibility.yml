@@ -1,0 +1,54 @@
+name: Test OpenHands Compatibility
+
+on:
+  push:
+    paths:
+      - "vendor/openhands/**"
+      - "scripts/test_openhands_*.sh"
+      - ".github/workflows/test-openhands-compatibility.yml"
+  pull_request:
+    paths:
+      - "vendor/openhands/**"
+      - "scripts/test_openhands_*.sh"
+      - ".github/workflows/test-openhands-compatibility.yml"
+  schedule:
+    # Run weekly to catch upstream breaking changes
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+jobs:
+  test-openhands:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Run OpenHands fork-specific tests
+        run: |
+          chmod +x scripts/test_openhands_fork.sh
+          ./scripts/test_openhands_fork.sh
+
+      - name: Run OpenHands full test suite
+        run: |
+          chmod +x scripts/test_openhands_suite.sh
+          ./scripts/test_openhands_suite.sh

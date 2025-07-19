@@ -11,11 +11,17 @@ class PqSignature(BaseModel):
 
 
 class CreateAccountRequest(BaseModel):
-    public_key: str = Field(
+    ecdsa_public_key: str = Field(
         ..., description="Hex-encoded uncompressed SECP256k1 public key."
     )
-    signature: str = Field(
-        ..., description="Hex-encoded DER signature from the classic key."
+    ecdsa_signature: str = Field(
+        ..., description="Hex-encoded DER signature from the ECDSA key."
+    )
+    ed25519_public_key: str = Field(
+        ..., description="Hex-encoded ED25519 public key."
+    )
+    ed25519_signature: str = Field(
+        ..., description="Hex-encoded signature from the ED25519 key."
     )
     ml_dsa_signature: PqSignature = Field(
         ..., description="Mandatory ML-DSA-87 signature."
@@ -43,6 +49,8 @@ class AddPqKeysRequest(BaseModel):
         ..., description="Signatures from all existing PQ keys on the account."
     )
     nonce: str = Field(..., description="Time-based nonce provided by the server.")
+    ed25519_signature: str = Field(..., description="Hex-encoded signature from the ED25519 key.")
+
 
 
 class RemovePqKeysRequest(BaseModel):
@@ -57,6 +65,9 @@ class RemovePqKeysRequest(BaseModel):
     )
     pq_signatures: list[PqSignature] = Field(
         ..., description="Signatures from all existing PQ keys on the account."
+    )
+    ed25519_signature: str = Field(
+        ..., description="Hex-encoded signature from the ED25519 key."
     )
     nonce: str = Field(..., description="Time-based nonce provided by the server.")
 

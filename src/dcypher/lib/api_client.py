@@ -329,6 +329,108 @@ class DCypherClient:
         auth_keys = self._load_auth_keys()
         return KeyManager.get_classic_public_key(auth_keys["classic_sk"])
 
+    def get_dual_classical_public_keys(self) -> Dict[str, str]:
+        """
+        Get both classical public keys (ECDSA and ED25519) from the loaded auth keys.
+
+        Returns:
+            Dict with 'ecdsa' and 'ed25519' public keys in hex format
+        """
+        auth_keys = self._load_auth_keys()
+
+        result = {"ecdsa": KeyManager.get_classic_public_key(auth_keys["classic_sk"])}
+
+        # Include ED25519 key if present
+        if "ed25519_sk" in auth_keys and auth_keys["ed25519_sk"] is not None:
+            from dcypher.lib.auth import ed25519_public_key_to_hex
+
+            ed25519_pk = auth_keys["ed25519_sk"].public_key()
+            result["ed25519"] = ed25519_public_key_to_hex(ed25519_pk)
+
+        return result
+
+    def create_account_dual_classical(
+        self, ecdsa_pk_hex: str, ed25519_pk_hex: str, pq_keys: List[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        Create a new account with dual classical keys (ECDSA + ED25519) and PQ keys.
+
+        Args:
+            ecdsa_pk_hex: Hex-encoded uncompressed SECP256k1 public key
+            ed25519_pk_hex: Hex-encoded ED25519 public key
+            pq_keys: List of PQ key info with 'pk_hex' and 'alg' fields
+
+        Returns:
+            API response data
+        """
+        # Get nonce for the operation
+        nonce = self.get_nonce()
+
+        # Construct message to sign: ecdsa_pk:ed25519_pk:pq_pk1:pq_pk2:...:nonce
+        all_pks = [ecdsa_pk_hex, ed25519_pk_hex] + [key["pk_hex"] for key in pq_keys]
+        message = f"{':'.join(all_pks)}:{nonce}"
+
+        # Sign the message
+        signatures = self._sign_message(message)
+
+        # Prepare payload
+        payload = {
+            "ecdsa_public_key": ecdsa_pk_hex,
+            "ed25519_public_key": ed25519_pk_hex,
+            "ecdsa_signature": signatures["classic_signature"],
+            "nonce": nonce,
+        }
+
+        # Add ED25519 signature if available
+        if "ed25519_signature" in signatures:
+            payload["ed25519_signature"] = signatures["ed25519_signature"]
+
+        # Check if identity file has PRE keys and include them
+        if self.keys_path and Path(self.keys_path).exists():
+            try:
+                with open(self.keys_path, "r") as f:
+                    identity_data = json.load(f)
+
+                # Check if this is an identity file with PRE keys
+                if "auth_keys" in identity_data and "pre" in identity_data["auth_keys"]:
+                    pre_keys = identity_data["auth_keys"]["pre"]
+                    if "pk_hex" in pre_keys and pre_keys["pk_hex"]:
+                        payload["pre_public_key_hex"] = pre_keys["pk_hex"]
+            except (json.JSONDecodeError, KeyError):
+                # If we can't read PRE keys, just continue without them
+                pass
+
+        # Add PQ signatures - first one is mandatory ML-DSA
+        if pq_keys:
+            ml_dsa_key = pq_keys[0]  # Assume first is ML-DSA
+            pq_sig_for_ml_dsa = signatures["pq_signatures"][0]
+            payload["ml_dsa_signature"] = {
+                "public_key": ml_dsa_key["pk_hex"],
+                "signature": pq_sig_for_ml_dsa["signature"],
+                "alg": ml_dsa_key["alg"],
+            }
+
+            # Additional PQ keys
+            if len(pq_keys) > 1:
+                additional_pq_sigs = []
+                for i, pq_key in enumerate(pq_keys[1:], 1):
+                    additional_pq_sigs.append(
+                        {
+                            "public_key": pq_key["pk_hex"],
+                            "signature": signatures["pq_signatures"][i]["signature"],
+                            "alg": pq_key["alg"],
+                        }
+                    )
+                payload["additional_pq_signatures"] = additional_pq_sigs
+
+        try:
+            response = requests.post(
+                f"{self.api_url}/accounts", json=payload
+            )
+            return self._handle_response(response)
+        except requests.exceptions.RequestException as e:
+            raise DCypherAPIError(f"Failed to create dual classical account: {e}")
+
     def create_account(
         self, classic_pk_hex: str, pq_keys: List[Dict[str, str]]
     ) -> Dict[str, Any]:
@@ -1143,3 +1245,81 @@ class DCypherClient:
         client.create_account(pk_classic_hex, pq_keys)
 
         return client, pk_classic_hex
+
+    @classmethod
+    def create_test_account_dual_classical(
+        cls,
+        api_url: str,
+        temp_dir: Path,
+        additional_pq_algs: Optional[List[str]] = None,
+    ) -> Tuple["DCypherClient", str, str]:
+        """
+        Creates a test account with dual classical keys (ECDSA + ED25519).
+        Uses KeyManager for streamlined key generation and identity creation.
+
+        Args:
+            api_url: API server URL
+            temp_dir: Temporary directory for identity files
+            additional_pq_algs: Additional PQ algorithms beyond ML-DSA
+
+        Returns:
+            tuple: (DCypherClient, ecdsa_public_key_hex, ed25519_public_key_hex)
+        """
+
+        # Get context bytes from server for PRE capabilities
+        cc_bytes = requests.get(f"{api_url}/pre-crypto-context").content
+
+        # Create identity file with dual classical keys
+        mnemonic, identity_file = KeyManager.create_identity_file(
+            "test_account_dual_classical",
+            temp_dir,
+            context_bytes=cc_bytes,
+            context_source=f"server:{api_url}",
+        )
+
+        # Add additional PQ algorithms if specified
+        if additional_pq_algs:
+            # Load the identity file
+            with open(identity_file, "r") as f:
+                identity_data = json.load(f)
+
+            # Generate additional PQ keys
+            for alg in additional_pq_algs:
+                pq_pk, pq_sk = KeyManager.generate_pq_keypair(alg)
+                identity_data["auth_keys"]["pq"].append(
+                    {"alg": alg, "pk_hex": pq_pk.hex(), "sk_hex": pq_sk.hex()}
+                )
+
+            # Save the updated identity file
+            with open(identity_file, "w") as f:
+                json.dump(identity_data, f, indent=2)
+
+        # Load identity to get both public keys
+        keys_data = KeyManager.load_identity_file(identity_file)
+        pk_ecdsa_hex = KeyManager.get_classic_public_key(keys_data["classic_sk"])
+
+        # Get ED25519 public key
+        if "ed25519_sk" not in keys_data:
+            raise ValueError("ED25519 key not found in identity file")
+
+        from dcypher.lib.auth import ed25519_public_key_to_hex
+
+        ed25519_pk = keys_data["ed25519_sk"].public_key()
+        pk_ed25519_hex = ed25519_public_key_to_hex(ed25519_pk)
+
+        # Create API client with identity file
+        client = cls(api_url, identity_path=str(identity_file))
+
+        # Load the keys to get PQ key info for account creation
+        if not client.keys_path:
+            raise ValueError("No keys path configured for client")
+
+        keys_data = KeyManager.load_keys_unified(Path(client.keys_path))
+        pq_keys = [
+            {"pk_hex": key["pk_hex"], "alg": key["alg"]} for key in keys_data["pq_keys"]
+        ]
+
+        # Create dual classical account
+        client.create_account_dual_classical(pk_ecdsa_hex, pk_ed25519_hex, pq_keys)
+
+        return client, pk_ecdsa_hex, pk_ed25519_hex

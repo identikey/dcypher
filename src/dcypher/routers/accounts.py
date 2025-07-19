@@ -1,8 +1,12 @@
 import time
 from fastapi import APIRouter, HTTPException
 from dcypher.app_state import state
-from dcypher.models import CreateAccountRequest, AddPqKeysRequest, RemovePqKeysRequest
-from dcypher.lib.auth import verify_signature
+from dcypher.models import (
+    CreateAccountRequest,
+    AddPqKeysRequest,
+    RemovePqKeysRequest,
+)
+from dcypher.lib.auth import verify_signature, verify_dual_classical_signatures
 from dcypher.lib.pq_auth import verify_pq_signature, SUPPORTED_SIG_ALGS
 from dcypher.security import verify_nonce
 from dcypher.config import ML_DSA_ALG
@@ -14,15 +18,15 @@ router = APIRouter()
 @router.post("/accounts")
 def create_account(request: CreateAccountRequest):
     """
-    Creates a new account, identified by a public key.
-    The request must be signed with a classic ECDSA key, a mandatory ML-DSA key,
+    Creates a new account, identified by a composite public key (ECDSA + ED25519).
+    The request must be signed with both classic keys, a mandatory ML-DSA key,
     and any number of optional additional post-quantum keys.
 
     All signatures must be valid for the account to be created.
 
     To create an account, the client must first request a nonce from the `/nonce`
     endpoint. Then, it must sign a message with the format:
-    f"{classic_pk_hex}:{ml_dsa_pk_hex}:{other_pk_1_hex}:...:{nonce}"
+    f"{ecdsa_pk_hex}:{ed25519_pk_hex}:{ml_dsa_pk_hex}:{other_pk_1_hex}:...:{nonce}"
 
     The signature should be created over the bytes of this UTF-8 encoded string.
     """
@@ -54,19 +58,42 @@ def create_account(request: CreateAccountRequest):
                 status_code=400, detail=f"Unsupported PQ algorithm: {pq_sig.alg}."
             )
 
+    # Use a composite key for account identification: ecdsa_pk:ed25519_pk
+    composite_key = f"{request.ecdsa_public_key}:{request.ed25519_public_key}"
+
+    # Check for account existence based on the composite key
+    if composite_key in state.accounts:
+        raise HTTPException(
+            status_code=409,
+            detail="Account with these dual classical public keys already exists.",
+        )
+
+    # Also check if either individual key already exists in single-key accounts
+    if request.ecdsa_public_key in state.accounts:
+        raise HTTPException(
+            status_code=409,
+            detail="ECDSA public key already exists in a single-key account.",
+        )
+
     # Construct the message from all public keys and the nonce.
     all_pq_public_keys = [sig.public_key for sig in all_pq_signatures]
-    all_public_keys_str = ":".join([request.public_key] + all_pq_public_keys)
+    all_public_keys_str = ":".join(
+        [request.ecdsa_public_key, request.ed25519_public_key] + all_pq_public_keys
+    )
     message_to_verify = f"{all_public_keys_str}:{request.nonce}".encode("utf-8")
 
-    # 1. Verify classic signature
-    is_valid_classic = verify_signature(
-        public_key_hex=request.public_key,
-        signature_hex=request.signature,
+    # 1. Verify dual classical signatures
+    is_valid_dual_classical, error_msg = verify_dual_classical_signatures(
+        ecdsa_pk_hex=request.ecdsa_public_key,
+        ecdsa_sig_hex=request.ecdsa_signature,
+        ed25519_pk_hex=request.ed25519_public_key,
+        ed25519_sig_hex=request.ed25519_signature,
         message=message_to_verify,
     )
-    if not is_valid_classic:
-        raise HTTPException(status_code=401, detail="Invalid classic signature.")
+    if not is_valid_dual_classical:
+        raise HTTPException(
+            status_code=401, detail=error_msg
+        )
 
     # 2. Verify all post-quantum signatures
     for pq_sig in all_pq_signatures:
@@ -82,23 +109,27 @@ def create_account(request: CreateAccountRequest):
                 detail=f"Invalid post-quantum signature for algorithm {pq_sig.alg}.",
             )
 
-    # Check for account existence based on the classic public key
-    if request.public_key in state.accounts:
-        raise HTTPException(
-            status_code=409,
-            detail="Account with this classic public key already exists.",
-        )
-
     # Store the account with all its public keys, indexed by algorithm
     active_pq_keys = {sig.alg: sig.public_key for sig in all_pq_signatures}
-    state.accounts[request.public_key] = active_pq_keys
+    state.accounts[composite_key] = {
+        "type": "dual_classical",
+        "ecdsa_public_key": request.ecdsa_public_key,
+        "ed25519_public_key": request.ed25519_public_key,
+        "pq_keys": active_pq_keys,
+    }
     state.used_nonces.add(request.nonce)
 
     # If a PRE public key is provided, store it
     if request.pre_public_key_hex:
-        state.add_pre_key(request.public_key, bytes.fromhex(request.pre_public_key_hex))
+        state.add_pre_key(composite_key, bytes.fromhex(request.pre_public_key_hex))
 
-    return {"message": "Account created successfully", "public_key": request.public_key}
+    return {
+        "message": "Dual classical account created successfully",
+        "composite_key": composite_key,
+        "ecdsa_public_key": request.ecdsa_public_key,
+        "ed25519_public_key": request.ed25519_public_key,
+    }
+
 
 
 @router.get("/accounts")
