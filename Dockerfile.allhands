@@ -1,5 +1,5 @@
 # OpenHands version is provided as build argument from config.toml via Justfile
-ARG OPENHANDS_VERSION=${OPENHANDS_VERSION:-}
+ARG OPENHANDS_VERSION
 
 # Use the AllHands runtime as base image
 FROM docker.all-hands.dev/all-hands-ai/runtime:${OPENHANDS_VERSION}
