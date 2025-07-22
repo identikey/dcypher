@@ -57,7 +57,7 @@ export LD_LIBRARY_PATH
 export PYTHONPATH
 
 echo "📋 Environment variables set:"
-echo "   OQS_INSTALL_PATH: $OQS_INSTALL_PATH"
+echo "   OQS_INSTALL_PATH: ${OQS_INSTALL_PATH:-'(not set)'}"
 echo "   LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 echo "   PYTHONPATH: $PYTHONPATH"
 echo ""
