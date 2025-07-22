@@ -250,11 +250,11 @@ build-docs:
 
 # Clean OpenFHE builds
 clean-openfhe:
-    rm -rf vendor/openfhe-development/build openfhe-local vendor/openfhe-python/build vendor/openfhe-python/openfhe/openfhe.so
+    rm -rf vendor/openfhe-development/build vendor/openfhe-python/build vendor/openfhe-python/openfhe/openfhe.so
 
 # Clean liboqs builds
 clean-liboqs:
-    rm -rf vendor/liboqs/build liboqs-local
+    rm -rf vendor/liboqs/build build/lib/liboqs* build/include/oqs/
 
 # Clean liboqs-python builds
 clean-liboqs-python:
@@ -281,6 +281,10 @@ clean-openfhe-python:
 # Clean all builds
 clean: clean-openfhe clean-liboqs clean-liboqs-python clean-openfhe-python
 
+# Just cleans up all the intermediary build artifacts.
+cleanup:
+    rm -rf vendor/liboqs/build vendor/openfhe-development/build
+    
 # Check which liboqs algorithms are available
 check-liboqs:
     #!/usr/bin/env bash
