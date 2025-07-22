@@ -4,6 +4,11 @@
 # - Regular builds: Uses the specific commit defined in src/dcypher/openhands_version.py
 # - Dev mode builds: Preserves your local changes in vendor/openhands (add 'dev' parameter)
 #   Examples: just build-openhands-dev, just setup-openhands-dev, just doit-dev
+#
+# OWNERSHIP FIX: The doit and doit-dev commands now start containers with proper user permissions
+# to prevent root-owned files in your workspace. If you get Docker socket permission errors:
+#   sudo usermod -aG docker $USER && newgrp docker
+# Or run: sudo chmod 666 /var/run/docker.sock (less secure)
 
 # Show available tasks
 default:
@@ -585,12 +590,22 @@ doit:
     set -Eeuvxo pipefail
     OPENHANDS_VERSION=${OPENHANDS_VERSION:-$(uv run python scripts/get_openhands_version.py --repo)}
     echo "Starting DCypher OpenHands AI development environment..."
+    
+    # Create the .openhands directory with proper ownership BEFORE starting the container
+    # This prevents the Docker container from creating root-owned files
+    mkdir -p ~/.openhands
+    
+    # Fix ownership of any existing files in mounted directories to prevent root ownership issues
+    sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || true
+    
     docker run -it --rm \
         -e L=DEBUG \
         -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-openhands \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
         -e SANDBOX_USER_ID=$(id -u) \
         -e LOG_ALL_EVENTS=true \
+        -e NO_SETUP=true \
+        --user $(id -u):$(id -g) \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v ~/.openhands:/.openhands \
         -p 127.0.0.1:3000:3000 \
@@ -603,8 +618,8 @@ doit:
 
 # Build and start OpenHands development environment with local changes
 # Usage: just doit-dev                    # Use existing images (fast)
-#        just doit-dev --build            # Force rebuild images (slower but fresh)
-doit-dev build="":
+#        just doit-dev --build            # Force rebuild ALL images including runtime (slower but fresh)
+doit-dev build="": (fix-perms)
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
     
@@ -612,14 +627,20 @@ doit-dev build="":
     
     # Check if build is needed
     NEED_BUILD=false
+    FORCE_REBUILD=false
     if [ "{{build}}" = "--build" ] || [ "{{build}}" = "force" ]; then
-        echo "🔨 Force rebuild requested"
+        echo "🔨 Force rebuild requested - will rebuild ALL images with --no-cache"
+        echo "   🏗️  This includes: Runtime + App + DCypher container"
         NEED_BUILD=true
+        FORCE_REBUILD=true
     elif ! docker image inspect dcypher-openhands:latest >/dev/null 2>&1; then
         echo "📦 DCypher image not found - building..."
         NEED_BUILD=true
     elif ! docker image inspect docker.all-hands.dev/all-hands-ai/openhands:${OPENHANDS_VERSION} >/dev/null 2>&1; then
         echo "📦 OpenHands v${OPENHANDS_VERSION} image not found - building..."
+        NEED_BUILD=true
+    elif ! docker image inspect docker.all-hands.dev/all-hands-ai/runtime:${OPENHANDS_VERSION} >/dev/null 2>&1; then
+        echo "📦 OpenHands runtime v${OPENHANDS_VERSION} image not found - building..."
         NEED_BUILD=true
     else
         echo "📦 Using existing images (run with --build to force rebuild)"
@@ -628,24 +649,42 @@ doit-dev build="":
     # Build if needed
     if [ "$NEED_BUILD" = "true" ]; then
         FORCE_ARG=""
-        if [ "{{build}}" = "--build" ] || [ "{{build}}" = "force" ]; then
+        if [ "$FORCE_REBUILD" = "true" ]; then
             FORCE_ARG="force"
+            echo "🔧 DEV MODE: Building with local changes preserved in vendor/openhands"
+            echo "🏗️  Force rebuilding ALL images with --no-cache:"
+            echo "   1. 🏃 Runtime image (with VSCode extensions)"
+            echo "   2. 📱 App image (OpenHands main app)"  
+            echo "   3. 🔧 DCypher container (with Zig + Just)"
+        else
+            echo "🔧 DEV MODE: Building missing images with cache"
         fi
         just build-doit-dev "${FORCE_ARG}"
     fi
     
     echo "🔧 Starting DCypher OpenHands AI development environment (DEV MODE)..."
     echo "💡 This uses your local changes in vendor/openhands"
-    echo "📁 Mounting OpenHands source directories for live development"
+    echo "📁 Main App: Mounting OpenHands source directories for live development"
+    echo "🏃 Runtime: Mounting OpenHands core + project files to /openhands/code/"
     echo "🔄 Hot reload enabled - Python changes will be picked up automatically"
     echo "⚙️  Preserving container's virtual environment and frontend build"
     echo "🚀 Smart caching - only rebuilds when images are missing or forced"
+    
+    # Create the .openhands directory with proper ownership BEFORE starting the container
+    # This prevents the Docker container from creating root-owned files
+    mkdir -p ~/.openhands
+  
+
     docker run -it --rm \
         -e LOG_LEVEL=DEBUG \
         -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-openhands \
-        -e SANDBOX_VOLUMES=${PWD}:/workspace,${PWD}/vendor/openhands:/openhands:rw \
+        -e SANDBOX_VOLUMES="${PWD}:/workspace,${PWD}/vendor/openhands/openhands:/openhands/code/openhands:rw,${PWD}/vendor/openhands/pyproject.toml:/openhands/code/pyproject.toml:rw,${PWD}/vendor/openhands/poetry.lock:/openhands/code/poetry.lock:rw" \
         -e SANDBOX_USER_ID=$(id -u) \
+        -e SANDBOX_GROUP_ID=$(id -g) \
+        -e WORKSPACE_MOUNT_PATH=/workspace \
         -e LOG_ALL_EVENTS=true \
+        -e RUN_AS_OPENHANDS=true \
+        -e NO_SETUP=true \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v ~/.openhands:/.openhands \
         -v ${PWD}/vendor/openhands/openhands:/app/openhands \
@@ -715,6 +754,108 @@ doit-dev-frontend:
     # Start frontend dev server
     npm run dev
 
+# Get logs from OpenHands development containers
+doit-dev-logs follow="" container="app":
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    
+    # Determine container name based on the container parameter
+    CONTAINER_NAME=""
+    case "{{container}}" in
+        "app"|"openhands")
+            CONTAINER_NAME="openhands-app"
+            ;;
+        "runtime"|"sandbox")
+            # Find the most recent runtime container
+            CONTAINER_NAME=$(docker ps --format "table {{{{.Names}}}}" | grep -E "openhands-runtime|sandbox" | head -1 || echo "")
+            if [ -z "$CONTAINER_NAME" ]; then
+                echo "❌ No runtime/sandbox container found"
+                echo "💡 Available containers:"
+                docker ps --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}"
+                exit 1
+            fi
+            ;;
+        *)
+            CONTAINER_NAME="{{container}}"
+            ;;
+    esac
+    
+    echo "📋 Getting logs from container: ${CONTAINER_NAME}"
+    
+    # Check if container exists and is running
+    if ! docker ps --format "{{{{.Names}}}}" | grep -q "^${CONTAINER_NAME}$"; then
+        echo "❌ Container '${CONTAINER_NAME}' is not running"
+        echo ""
+        echo "🔍 Available running containers:"
+        docker ps --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}"
+        echo ""
+        echo "💡 Usage examples:"
+        echo "   just doit-dev-logs                    # View app logs"
+        echo "   just doit-dev-logs follow             # Follow app logs"
+        echo "   just doit-dev-logs \"\" runtime         # View runtime logs" 
+        echo "   just doit-dev-logs follow runtime     # Follow runtime logs"
+        exit 1
+    fi
+    
+    # Build docker logs command
+    LOGS_CMD="docker logs"
+    
+    # Add follow flag if requested
+    if [ "{{follow}}" = "follow" ] || [ "{{follow}}" = "-f" ] || [ "{{follow}}" = "--follow" ]; then
+        LOGS_CMD="${LOGS_CMD} --follow"
+        echo "🔄 Following logs from ${CONTAINER_NAME} (Ctrl+C to stop)..."
+    else
+        # Show last 100 lines by default for non-following logs
+        LOGS_CMD="${LOGS_CMD} --tail 100"
+        echo "📜 Showing last 100 lines from ${CONTAINER_NAME}..."
+    fi
+    
+    # Add timestamps
+    LOGS_CMD="${LOGS_CMD} --timestamps"
+    
+    # Execute the logs command
+    ${LOGS_CMD} ${CONTAINER_NAME}
+
+# Follow logs from OpenHands development containers (shorthand)
+doit-dev-logs-follow container="app": (doit-dev-logs "follow" container)
+
+# Show all running OpenHands development containers
+doit-dev-status:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    
+    echo "🐳 OpenHands Development Container Status"
+    echo "=========================================="
+    echo ""
+    
+    # Check for main app container
+    if docker ps --format "{{{{.Names}}}}" | grep -q "^openhands-app$"; then
+        echo "✅ Main App Container:"
+        docker ps --filter "name=openhands-app" --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}\t{{{{.Ports}}}}"
+    else
+        echo "❌ Main app container (openhands-app) not running"
+    fi
+    
+    echo ""
+    
+    # Check for runtime/sandbox containers
+    RUNTIME_CONTAINERS=$(docker ps --format "{{{{.Names}}}}" | grep -E "openhands-runtime|sandbox" || echo "")
+    if [ -n "$RUNTIME_CONTAINERS" ]; then
+        echo "✅ Runtime/Sandbox Containers:"
+        echo "$RUNTIME_CONTAINERS" | while read container; do
+            docker ps --filter "name=$container" --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}"
+        done
+    else
+        echo "ℹ️  No runtime/sandbox containers currently running"
+    fi
+    
+    echo ""
+    echo "💡 Useful commands:"
+    echo "   just doit-dev-logs                    # View app logs"
+    echo "   just doit-dev-logs follow             # Follow app logs"
+    echo "   just doit-dev-logs \"\" runtime         # View runtime logs"
+    echo "   just doit-dev-logs follow runtime     # Follow runtime logs"
+
 
 lint:
     uv run ruff check src/ tests/
@@ -725,3 +866,10 @@ format:
 
 typecheck:
     uv run mypy src/
+
+fix-perms:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null
+    sudo chown -R $(id -u):$(id -g) ./ 2>/dev/null
+    sudo chown -R $(id -u):$(id -g) ./.* 2>/dev/null
