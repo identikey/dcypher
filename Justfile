@@ -9,56 +9,130 @@
 default:
     @just --list
 
-# ONE-COMMAND SETUP: Build everything needed for OpenHands development
-setup-openhands force="" dev="": (build-openhands force dev)
-    #!/usr/bin/env bash
-    echo "SUCCESS: DCypher + OpenHands development environment ready!"
-    if [ "{{dev}}" = "dev" ] || [ "{{dev}}" = "current" ]; then
-        echo "🔧 Built in DEVELOPMENT MODE with local changes"
-        echo "TIP: Run 'just doit-dev' to start with development images"
-    else
-        echo "TIP: Run 'just doit' to start the OpenHands interface"
-    fi
-
-# Force rebuild everything from scratch (ignores all caches)
-setup-openhands-force: (setup-openhands "force")
-
-# Setup in development mode (preserves local changes in vendor/openhands)
-setup-openhands-dev: (setup-openhands "" "dev")
-
 run:
     uv run uvicorn main:app --reload
 
 tui:
     uv run python -m src.cli tui
 
-# Build the Docker image for Intel processor
-docker-build-intel:
-    docker build build --platform linux/amd64 -t dcypher --load .
+# Run the CLI locally with uv
+cli *args:
+    uv run python src/cli.py {{args}}
 
-# Build the development Docker image
-docker-build-intel-dev:
-    docker buildx build --platform linux/amd64 -f dockerfile.dev -t dcypher-dev --load .
+# Run the FastAPI server locally with uv
+serve:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    source ./env.sh
+    echo "Starting DCypher FastAPI server..."
+    uv run uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 
-# Run the Docker container
-docker-run-intel:
-    docker run --rm dcypher
+lint:
+    uv run ruff check src/ tests/
+    uv run ruff format src/ tests/
 
-# Start development environment with volume mounting
-dev-up-intel:
-    docker-compose -f docker-compose.dev.yml up -d
+format:
+    uv run ruff format src/ tests/
 
-# Stop development environment
-dev-down-intel:
-    docker-compose -f docker-compose.dev.yml down
+typecheck:
+    uv run mypy src/
 
-# Open an interactive bash shell in the development container
-dev-shell-intel:
-    docker-compose -f docker-compose.dev.yml exec dcypher-dev bash
 
-# Run tests in development container
-dev-test-intel:
-    docker-compose -f docker-compose.dev.yml exec dcypher-dev uv run pytest tests/ -v
+
+
+###############
+### Testing ###
+###############
+
+
+
+test:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    source ./env.sh
+    echo "Running DCypher test suite..."
+    # echo "Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
+    uv run pytest -n auto --dist worksteal ./tests/
+
+test-unit:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    source ./env.sh
+    echo "Running DCypher test suite..."
+    # echo "Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
+    uv run pytest -n auto --dist worksteal ./tests/unit/
+
+test-integration:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    source ./env.sh
+    echo "Running DCypher test suite..."
+    # echo "Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
+    uv run pytest -n auto --dist worksteal ./tests/integration/
+
+# Run pytest with custom arguments (for specific files, functions, classes, marks, etc.)
+pytest *args:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    source ./env.sh
+    uv run pytest {{args}}
+
+
+# Run all test suites including OpenHands compatibility tests
+test-all:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Running comprehensive test suite..."
+    echo ""
+    echo "1. Running DCypher unit tests..."
+    echo "================================="
+    just test-unit
+    echo ""
+    echo "2. Running DCypher integration tests..."
+    echo "========================================"
+    just test-integration
+    echo ""
+    echo "3. Running OpenHands fork modification tests..."
+    echo "==============================================="
+    just test-openhands-fork
+    echo ""
+    echo "4. Running OpenHands full compatibility tests..."
+    echo "================================================="
+    just test-openhands
+    echo ""
+    echo "All test suites completed!"
+
+# Run tests repeatedly until they break or user cancels
+test-until-break:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Running tests repeatedly until failure or cancellation (Ctrl+C to stop)..."
+    run_count=0
+    total_time=0
+    while true; do
+        run_count=$((run_count + 1))
+        echo "Test run #${run_count}..."
+        start_time=$(date +%s)
+        if ! just test; then
+            end_time=$(date +%s)
+            duration=$((end_time - start_time))
+            echo "FAILED: Tests failed on run #${run_count} after ${duration}s!"
+            exit 1
+        fi
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+        total_time=$((total_time + duration))
+        avg_time=$((total_time / run_count))
+        echo "PASSED: Test run #${run_count} passed in ${duration}s (avg: ${avg_time}s)"
+        sleep 1
+    done
+
+
+
+##############
+### Docker ###
+##############
+
 
 # Run CLI in development container
 dev-cli *args:
@@ -74,10 +148,6 @@ dev-rebuild:
 docker-bash:
     docker run --rm -it dcypher bash
 
-# Run the CLI locally with uv
-cli *args:
-    uv run python src/cli.py {{args}}
-
 # Run the CLI in Docker container
 docker-cli *args:
     docker run --rm -it dcypher uv run python src/cli.py {{args}}
@@ -86,17 +156,19 @@ docker-cli *args:
 docker-exec command:
     docker run --rm -it dcypher {{command}}
 
-# Run the FastAPI server locally with uv
-serve:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    source ./env.sh
-    echo "Starting DCypher FastAPI server..."
-    uv run uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 
 # Run the FastAPI server in development container
-dev-serve:
+docker-dev-serve:
     docker-compose -f docker-compose.dev.yml exec dcypher-dev uv run uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+
+
+
+############################
+### Building & Compiling ###
+############################
+
+
 
 # Build OpenFHE C++ library locally (not system-wide)
 build-openfhe:
@@ -201,6 +273,41 @@ clean-openfhe-python:
     # Clean any build artifacts
     rm -rf vendor/openfhe-python/build vendor/openfhe-python/dist vendor/openfhe-python/*.egg-info vendor/openfhe-python/openfhe/openfhe.so
 
+# Clean all builds
+clean: clean-openfhe clean-liboqs clean-liboqs-python clean-openfhe-python
+
+# Check which liboqs algorithms are available
+check-liboqs:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Checking liboqs algorithm availability..."
+    source ./env.sh
+    uv run python scripts/check_liboqs_algorithms.py
+
+
+
+#################
+### OPENHANDS ###
+#################
+
+# ONE-COMMAND SETUP: Build everything needed for OpenHands development
+setup-openhands force="" dev="": (build-openhands force dev)
+    #!/usr/bin/env bash
+    echo "SUCCESS: DCypher + OpenHands development environment ready!"
+    if [ "{{dev}}" = "dev" ] || [ "{{dev}}" = "current" ]; then
+        echo "🔧 Built in DEVELOPMENT MODE with local changes"
+        echo "TIP: Run 'just doit-dev' to start with development images"
+    else
+        echo "TIP: Run 'just doit' to start the OpenHands interface"
+    fi
+
+# Force rebuild everything from scratch (ignores all caches)
+setup-openhands-force: (setup-openhands "force")
+
+# Setup in development mode (preserves local changes in vendor/openhands)
+setup-openhands-dev: (setup-openhands "" "dev")
+
+
 # Clean OpenHands images
 clean-openhands:
     #!/usr/bin/env bash
@@ -258,111 +365,6 @@ status-openhands:
     echo "Legend:"
     echo "   [LOCAL]  = Built from our vendored repo"
     echo "   [REMOTE] = Pulled from remote or unknown source"
-
-# Clean all builds
-clean: clean-openfhe clean-liboqs clean-liboqs-python clean-openfhe-python
-
-# Check which liboqs algorithms are available
-check-liboqs:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    echo "Checking liboqs algorithm availability..."
-    source ./env.sh
-    uv run python scripts/check_liboqs_algorithms.py
-
-test:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    source ./env.sh
-    echo "Running DCypher test suite..."
-    # echo "Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
-    uv run pytest -n auto --dist worksteal ./tests/
-
-test-unit:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    source ./env.sh
-    echo "Running DCypher test suite..."
-    # echo "Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
-    uv run pytest -n auto --dist worksteal ./tests/unit/
-
-test-integration:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    source ./env.sh
-    echo "Running DCypher test suite..."
-    # echo "Running crypto tests sequentially (to avoid OpenFHE context conflicts)..."
-    uv run pytest -n auto --dist worksteal ./tests/integration/
-
-# Run pytest with custom arguments (for specific files, functions, classes, marks, etc.)
-pytest *args:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    source ./env.sh
-    uv run pytest {{args}}
-
-# Run OpenHands full test suite to ensure fork compatibility
-test-openhands:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    echo "Running OpenHands full test suite..."
-    ./scripts/test_openhands_suite.sh
-
-# Run tests specific to our fork modifications
-test-openhands-fork:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    echo "Running OpenHands fork-specific tests..."
-    ./scripts/test_openhands_fork.sh
-
-# Run all test suites including OpenHands compatibility tests
-test-all:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    echo "Running comprehensive test suite..."
-    echo ""
-    echo "1. Running DCypher unit tests..."
-    echo "================================="
-    just test-unit
-    echo ""
-    echo "2. Running DCypher integration tests..."
-    echo "========================================"
-    just test-integration
-    echo ""
-    echo "3. Running OpenHands fork modification tests..."
-    echo "==============================================="
-    just test-openhands-fork
-    echo ""
-    echo "4. Running OpenHands full compatibility tests..."
-    echo "================================================="
-    just test-openhands
-    echo ""
-    echo "All test suites completed!"
-
-# Run tests repeatedly until they break or user cancels
-test-until-break:
-    #!/usr/bin/env bash
-    set -Eeuvxo pipefail
-    echo "Running tests repeatedly until failure or cancellation (Ctrl+C to stop)..."
-    run_count=0
-    total_time=0
-    while true; do
-        run_count=$((run_count + 1))
-        echo "Test run #${run_count}..."
-        start_time=$(date +%s)
-        if ! just test; then
-            end_time=$(date +%s)
-            duration=$((end_time - start_time))
-            echo "FAILED: Tests failed on run #${run_count} after ${duration}s!"
-            exit 1
-        fi
-        end_time=$(date +%s)
-        duration=$((end_time - start_time))
-        total_time=$((total_time + duration))
-        avg_time=$((total_time / run_count))
-        echo "PASSED: Test run #${run_count} passed in ${duration}s (avg: ${avg_time}s)"
-        sleep 1
-    done
 
 # Build OpenHands runtime image from vendored repo (with force and dev options)
 build-openhands-runtime force="" dev="":
@@ -613,12 +615,16 @@ doit-dev: build-doit-dev
         --name openhands-app \
         docker.all-hands.dev/all-hands-ai/openhands:${OPENHANDS_VERSION}
 
-lint:
-    uv run ruff check src/ tests/
-    uv run ruff format src/ tests/
+# Run OpenHands full test suite to ensure fork compatibility
+test-openhands:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Running OpenHands full test suite..."
+    ./scripts/test_openhands_suite.sh
 
-format:
-    uv run ruff format src/ tests/
-
-typecheck:
-    uv run mypy src/
+# Run tests specific to our fork modifications
+test-openhands-fork:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Running OpenHands fork-specific tests..."
+    ./scripts/test_openhands_fork.sh
