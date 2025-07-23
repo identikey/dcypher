@@ -300,7 +300,7 @@ check-liboqs:
 #################
 
 # ONE-COMMAND SETUP: Build everything needed for OpenHands development
-setup-openhands force="" dev="": (build-openhands force dev)
+setup-openhands force="" dev="": setup-material-icons (build-openhands force dev)
     #!/usr/bin/env bash
     echo "SUCCESS: DCypher + OpenHands development environment ready!"
     if [ "{{dev}}" = "dev" ] || [ "{{dev}}" = "current" ]; then
@@ -487,6 +487,11 @@ build-openhands-app force="" dev="":
     fi
     
     if [ "$SHOULD_BUILD" = true ]; then
+        echo "Setting up material icons before building..."
+        cd frontend
+        npm run update-icons
+        cd ..
+        
         echo "Building OpenHands app image..."
         ./containers/build.sh -i openhands --load
         
@@ -513,6 +518,23 @@ build-openhands-app force="" dev="":
 
 # Build all OpenHands dependencies
 build-openhands force="" dev="": (build-openhands-runtime force dev) (build-openhands-app force dev)
+
+# Setup latest material icons from upstream VSCode theme (requires git + bun)
+setup-material-icons:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "🎨 Setting up latest vscode-material-icons from upstream..."
+    echo "Requirements: git (for submodules) + bun (for icon fetching)"
+    
+    cd vendor/openhands/frontend
+    
+    # Use the OpenHands frontend scripts to handle everything
+    echo "Running OpenHands material icons update..."
+    npm run update-icons
+    
+    echo "✅ Material icons setup complete!"
+    
+    cd ../../..
 
 # Force rebuild all OpenHands images (ignores cache)
 build-openhands-force: (build-openhands "force")
@@ -661,6 +683,7 @@ doit-dev build="": (fix-perms)
             echo "   1. 🏃 Runtime image (with VSCode extensions)"
             echo "   2. 📱 App image (OpenHands main app)"  
             echo "   3. 🔧 DCypher container (with Zig + Just)"
+            echo "   4. 🎨 Refreshing material icons from upstream"
         else
             echo "🔧 DEV MODE: Building missing images with cache"
         fi
@@ -742,6 +765,11 @@ doit-dev-frontend:
     if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
         echo "📦 Installing/updating frontend dependencies..."
         npm install
+        echo "🎨 Ensuring material icons are available..."
+        if [ ! -f "public/assets/material-icons/just.svg" ]; then
+            echo "Icons not found, copying from submodule..."
+            npm run update-icons
+        fi
     fi
     
     # Set environment variables for local development
