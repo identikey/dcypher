@@ -206,13 +206,24 @@ build-openfhe-python: build-openfhe
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
     echo "Building OpenFHE Python bindings..."
-    # Install required build dependencies first
-    uv add pybind11 pybind11-global pybind11-stubgen
-    export CMAKE_PREFIX_PATH="$(pwd)/build:${CMAKE_PREFIX_PATH:-}"
-    export LD_LIBRARY_PATH="$(pwd)/build/lib:${LD_LIBRARY_PATH:-}"
-    export DYLD_LIBRARY_PATH="$(pwd)/build/lib:${DYLD_LIBRARY_PATH:-}"
+    source ./env.sh
+    
+    # Get the absolute path to our OpenFHE installation
+    OPENFHE_INSTALL_PATH="$(pwd)/build"
+    export CMAKE_PREFIX_PATH="${OPENFHE_INSTALL_PATH}:${CMAKE_PREFIX_PATH:-}"
+    export PKG_CONFIG_PATH="${OPENFHE_INSTALL_PATH}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    
     cd vendor/openfhe-python
-    uv run python setup.py build_ext --inplace
+    uv add pybind11 pybind11-global pybind11-stubgen
+    
+    # Clean any previous build artifacts
+    rm -rf build dist *.egg-info openfhe/*.so
+    
+    # Build the Python package with OpenFHE path
+    env CMAKE_PREFIX_PATH="${OPENFHE_INSTALL_PATH}" \
+        PKG_CONFIG_PATH="${OPENFHE_INSTALL_PATH}/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
+        uv run python setup.py build_ext --inplace
+    
     cd ../..
     # Install in development mode to replace the file:// dependency
     uv add --editable ./vendor/openfhe-python
