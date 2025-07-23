@@ -42,7 +42,15 @@ format:
 typecheck:
     uv run mypy src/
 
+setup: (submodules)
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
 
+submodules:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Setting up submodules..."
+    git submodule update --init --recursive
 
 
 ###############
@@ -238,7 +246,7 @@ build-liboqs-python: build-liboqs
     echo "liboqs-python installed and available!"
 
 # Build both OpenFHE C++ and Python bindings, and liboqs-python
-build-all: build-openfhe-python build-liboqs-python build-docs
+build-all: setup build-openfhe-python build-liboqs-python build-docs
 
 build-docs:
     #!/usr/bin/env bash
