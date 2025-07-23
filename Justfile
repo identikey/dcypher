@@ -50,7 +50,7 @@ submodules:
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
     echo "Setting up submodules..."
-    git submodule update --init --recursive
+    git submodule update --init --recursive --depth 1
 
 
 ###############
