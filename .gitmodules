@@ -16,6 +16,3 @@
 [submodule "vendor/openhands"]
 	path = vendor/openhands
 	url = https://github.com/All-Hands-AI/OpenHands.git
-[submodule "vendor/openvscode-server"]
-	path = vendor/openvscode-server
-	url = git@github.com:claysauruswrecks/openvscode-server.git
