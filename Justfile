@@ -206,12 +206,11 @@ build-openfhe-python: build-openfhe
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
     echo "Building OpenFHE Python bindings..."
-    source ./env.sh
     
     # Get the absolute path to our OpenFHE installation
     OPENFHE_INSTALL_PATH="$(pwd)/build"
-    export CMAKE_PREFIX_PATH="${OPENFHE_INSTALL_PATH}:${CMAKE_PREFIX_PATH:-}"
-    export PKG_CONFIG_PATH="${OPENFHE_INSTALL_PATH}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    CMAKE_PREFIX_PATH="${OPENFHE_INSTALL_PATH}:${CMAKE_PREFIX_PATH:-}"
+    PKG_CONFIG_PATH="${OPENFHE_INSTALL_PATH}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
     
     cd vendor/openfhe-python
     uv add pybind11 pybind11-global pybind11-stubgen
