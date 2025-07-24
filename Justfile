@@ -642,15 +642,18 @@ doit:
     
     # Fix ownership of any existing files in mounted directories to prevent root ownership issues
     sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || true
-    
+
     docker run -it --rm \
-        -e L=DEBUG \
+        -e LOG_LEVEL=DEBUG \
         -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-openhands \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
         -e SANDBOX_USER_ID=$(id -u) \
+        -e SANDBOX_GROUP_ID=$(id -g) \
+        -e WORKSPACE_MOUNT_PATH=/workspace \
         -e LOG_ALL_EVENTS=true \
-        -e NO_SETUP=true \
-        --user $(id -u):$(id -g) \
+        -e RUN_AS_OPENHANDS=true \
+        -e NO_SETUP=false \
+        -e DEBUG=1 \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v ~/.openhands:/.openhands \
         -p 127.0.0.1:3000:3000 \
@@ -658,7 +661,7 @@ doit:
         --dns 1.1.1.1 \
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
-        --name openhands-app \
+        --name openhands-app-dev \
         docker.all-hands.dev/all-hands-ai/openhands:${OPENHANDS_VERSION}
 
 # Build and start OpenHands development environment with local changes
@@ -667,9 +670,9 @@ doit:
 doit-dev build="": (fix-perms)
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
-    
+
     OPENHANDS_VERSION=${OPENHANDS_VERSION:-$(uv run python scripts/get_openhands_version.py --repo)}
-    
+
     # Check if build is needed
     NEED_BUILD=false
     FORCE_REBUILD=false
@@ -690,7 +693,7 @@ doit-dev build="": (fix-perms)
     else
         echo "📦 Using existing images (run with --build to force rebuild)"
     fi
-    
+
     # Build if needed
     if [ "$NEED_BUILD" = "true" ]; then
         FORCE_ARG=""
@@ -707,7 +710,7 @@ doit-dev build="": (fix-perms)
         fi
         just build-doit-dev "${FORCE_ARG}"
     fi
-    
+
     echo "🔧 Starting DCypher OpenHands AI development environment (DEV MODE)..."
     echo "💡 This uses your local changes in vendor/openhands"
     echo "📁 Main App: Mounting OpenHands source directories for live development"
@@ -730,7 +733,8 @@ doit-dev build="": (fix-perms)
         -e WORKSPACE_MOUNT_PATH=/workspace \
         -e LOG_ALL_EVENTS=true \
         -e RUN_AS_OPENHANDS=true \
-        -e NO_SETUP=true \
+        -e NO_SETUP=false \
+        -e DEBUG=1 \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v ~/.openhands:/.openhands \
         -v ${PWD}/vendor/openhands/openhands:/app/openhands \
@@ -745,7 +749,7 @@ doit-dev build="": (fix-perms)
         --dns 1.1.1.1 \
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
-        --name openhands-app \
+        --name openhands-app-dev \
         docker.all-hands.dev/all-hands-ai/openhands:${OPENHANDS_VERSION} \
         uvicorn openhands.server.listen:app --host 0.0.0.0 --port 3000 --reload --reload-exclude "./workspace"
 
@@ -882,9 +886,9 @@ doit-dev-status:
     # Check for main app container
     if docker ps --format "{{{{.Names}}}}" | grep -q "^openhands-app$"; then
         echo "✅ Main App Container:"
-        docker ps --filter "name=openhands-app" --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}\t{{{{.Ports}}}}"
+        docker ps --filter "name=openhands-app-dev" --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}\t{{{{.Ports}}}}"
     else
-        echo "❌ Main app container (openhands-app) not running"
+        echo "❌ Main app container (openhands-app-dev) not running"
     fi
     
     echo ""
@@ -926,6 +930,32 @@ test-openhands-fork:
 fix-perms:
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
-    sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null
-    sudo chown -R $(id -u):$(id -g) ./ 2>/dev/null
-    sudo chown -R $(id -u):$(id -g) ./.* 2>/dev/null
+    echo "🔧 Fixing OpenHands file permissions..."
+    
+    # Fix ownership of .openhands directory (most important)
+    if [ -d ~/.openhands ]; then
+        echo "📁 Fixing ~/.openhands ownership..."
+        sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || {
+            echo "⚠️  Could not fix ~/.openhands ownership (this may be normal if no sudo access)"
+        }
+    fi
+    
+    # Fix ownership of current workspace directory
+    echo "📁 Fixing workspace ownership for $(pwd)..."
+    sudo chown -R $(id -u):$(id -g) ./ 2>/dev/null || {
+        echo "⚠️  Could not fix workspace ownership (this may be normal if no sudo access)"
+    }
+    
+    # Fix any root-owned Docker volume mounts that may have been created
+    if [ -d ./workspace ]; then
+        echo "📁 Fixing ./workspace ownership..."
+        sudo chown -R $(id -u):$(id -g) ./workspace 2>/dev/null || {
+            echo "⚠️  Could not fix ./workspace ownership (this may be normal if no sudo access)"
+        }
+    fi
+    
+    echo "✅ File permission fixes completed"
+    echo "💡 If you still see permission issues:"
+    echo "   1. Ensure Docker containers are not running as root"
+    echo "   2. Check that SANDBOX_USER_ID=$(id -u) is set correctly"
+    echo "   3. Verify RUN_AS_OPENHANDS=true for proper user mapping"
