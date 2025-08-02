@@ -42,7 +42,15 @@ format:
 typecheck:
     uv run mypy src/
 
+setup: (submodules)
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
 
+submodules:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "Setting up submodules..."
+    git submodule update --init --recursive --depth 1
 
 
 ###############
@@ -198,13 +206,23 @@ build-openfhe-python: build-openfhe
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
     echo "Building OpenFHE Python bindings..."
-    # Install required build dependencies first
-    uv add pybind11 pybind11-global pybind11-stubgen
-    export CMAKE_PREFIX_PATH="$(pwd)/build:${CMAKE_PREFIX_PATH:-}"
-    export LD_LIBRARY_PATH="$(pwd)/build/lib:${LD_LIBRARY_PATH:-}"
-    export DYLD_LIBRARY_PATH="$(pwd)/build/lib:${DYLD_LIBRARY_PATH:-}"
+    
+    # Get the absolute path to our OpenFHE installation
+    OPENFHE_INSTALL_PATH="$(pwd)/build"
+    CMAKE_PREFIX_PATH="${OPENFHE_INSTALL_PATH}:${CMAKE_PREFIX_PATH:-}"
+    PKG_CONFIG_PATH="${OPENFHE_INSTALL_PATH}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    
     cd vendor/openfhe-python
-    uv run python setup.py build_ext --inplace
+    uv add pybind11 pybind11-global pybind11-stubgen
+    
+    # Clean any previous build artifacts
+    rm -rf build dist *.egg-info openfhe/*.so
+    
+    # Build the Python package with OpenFHE path
+    env CMAKE_PREFIX_PATH="${OPENFHE_INSTALL_PATH}" \
+        PKG_CONFIG_PATH="${OPENFHE_INSTALL_PATH}/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
+        uv run python setup.py build_ext --inplace
+    
     cd ../..
     # Install in development mode to replace the file:// dependency
     uv add --editable ./vendor/openfhe-python
@@ -238,7 +256,7 @@ build-liboqs-python: build-liboqs
     echo "liboqs-python installed and available!"
 
 # Build both OpenFHE C++ and Python bindings, and liboqs-python
-build-all: build-openfhe-python build-liboqs-python build-docs
+build-all: setup build-openfhe-python build-liboqs-python build-docs build-doit
 
 # Build just the static libraries
 build-static: build-openfhe build-liboqs
@@ -303,7 +321,7 @@ check-liboqs:
 #################
 
 # ONE-COMMAND SETUP: Build everything needed for OpenHands development
-setup-openhands force="" dev="": (build-openhands force dev)
+setup-openhands force="" dev="": setup-material-icons (build-openhands force dev)
     #!/usr/bin/env bash
     echo "SUCCESS: DCypher + OpenHands development environment ready!"
     if [ "{{dev}}" = "dev" ] || [ "{{dev}}" = "current" ]; then
@@ -490,6 +508,11 @@ build-openhands-app force="" dev="":
     fi
     
     if [ "$SHOULD_BUILD" = true ]; then
+        echo "Setting up material icons before building..."
+        cd frontend
+        npm run update-icons
+        cd ..
+        
         echo "Building OpenHands app image..."
         ./containers/build.sh -i openhands --load
         
@@ -516,6 +539,23 @@ build-openhands-app force="" dev="":
 
 # Build all OpenHands dependencies
 build-openhands force="" dev="": (build-openhands-runtime force dev) (build-openhands-app force dev)
+
+# Setup latest material icons from upstream VSCode theme (requires git + bun)
+setup-material-icons:
+    #!/usr/bin/env bash
+    set -Eeuvxo pipefail
+    echo "🎨 Setting up latest vscode-material-icons from upstream..."
+    echo "Requirements: git (for submodules) + bun (for icon fetching)"
+    
+    cd vendor/openhands/frontend
+    
+    # Use the OpenHands frontend scripts to handle everything
+    echo "Running OpenHands material icons update..."
+    npm run update-icons
+    
+    echo "✅ Material icons setup complete!"
+    
+    cd ../../..
 
 # Force rebuild all OpenHands images (ignores cache)
 build-openhands-force: (build-openhands "force")
@@ -607,13 +647,16 @@ doit:
     #sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || true
     
     docker run -it --rm \
-        -e L=DEBUG \
+        -e LOG_LEVEL=DEBUG \
         -e SANDBOX_RUNTIME_CONTAINER_IMAGE=dcypher-openhands \
         -e SANDBOX_VOLUMES=${PWD}:/workspace \
         -e SANDBOX_USER_ID=$(id -u) \
+        -e SANDBOX_GROUP_ID=$(id -g) \
+        -e WORKSPACE_MOUNT_PATH=/workspace \
         -e LOG_ALL_EVENTS=true \
-        -e NO_SETUP=true \
-        --user $(id -u):$(id -g) \
+        -e RUN_AS_OPENHANDS=true \
+        -e NO_SETUP=false \
+        -e DEBUG=1 \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v ~/.openhands:/.openhands \
         -p 127.0.0.1:3000:3000 \
@@ -621,7 +664,7 @@ doit:
         --dns 1.1.1.1 \
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
-        --name openhands-app \
+        --name openhands-app-dev \
         docker.all-hands.dev/all-hands-ai/openhands:${OPENHANDS_VERSION}
 
 # Build and start OpenHands development environment with local changes
@@ -630,9 +673,9 @@ doit:
 doit-dev build="":
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
-    
+
     OPENHANDS_VERSION=${OPENHANDS_VERSION:-$(uv run python scripts/get_openhands_version.py --repo)}
-    
+
     # Check if build is needed
     NEED_BUILD=false
     FORCE_REBUILD=false
@@ -653,7 +696,7 @@ doit-dev build="":
     else
         echo "📦 Using existing images (run with --build to force rebuild)"
     fi
-    
+
     # Build if needed
     if [ "$NEED_BUILD" = "true" ]; then
         FORCE_ARG=""
@@ -664,12 +707,13 @@ doit-dev build="":
             echo "   1. 🏃 Runtime image (with VSCode extensions)"
             echo "   2. 📱 App image (OpenHands main app)"  
             echo "   3. 🔧 DCypher container (with Zig + Just)"
+            echo "   4. 🎨 Refreshing material icons from upstream"
         else
             echo "🔧 DEV MODE: Building missing images with cache"
         fi
         just build-doit-dev "${FORCE_ARG}"
     fi
-    
+
     echo "🔧 Starting DCypher OpenHands AI development environment (DEV MODE)..."
     echo "💡 This uses your local changes in vendor/openhands"
     echo "📁 Main App: Mounting OpenHands source directories for live development"
@@ -692,7 +736,8 @@ doit-dev build="":
         -e WORKSPACE_MOUNT_PATH=/workspace \
         -e LOG_ALL_EVENTS=true \
         -e RUN_AS_OPENHANDS=true \
-        -e NO_SETUP=true \
+        -e NO_SETUP=false \
+        -e DEBUG=1 \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v ~/.openhands:/.openhands \
         -v ${PWD}/vendor/openhands/openhands:/app/openhands \
@@ -707,7 +752,7 @@ doit-dev build="":
         --dns 1.1.1.1 \
         --dns 8.8.8.8 \
         --dns 8.8.4.4 \
-        --name openhands-app \
+        --name openhands-app-dev \
         docker.all-hands.dev/all-hands-ai/openhands:${OPENHANDS_VERSION} \
         uvicorn openhands.server.listen:app --host 0.0.0.0 --port 3000 --reload --reload-exclude "./workspace"
 
@@ -745,6 +790,11 @@ doit-dev-frontend:
     if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
         echo "📦 Installing/updating frontend dependencies..."
         npm install
+        echo "🎨 Ensuring material icons are available..."
+        if [ ! -f "public/assets/material-icons/just.svg" ]; then
+            echo "Icons not found, copying from submodule..."
+            npm run update-icons
+        fi
     fi
     
     # Set environment variables for local development
@@ -839,9 +889,9 @@ doit-dev-status:
     # Check for main app container
     if docker ps --format "{{{{.Names}}}}" | grep -q "^openhands-app$"; then
         echo "✅ Main App Container:"
-        docker ps --filter "name=openhands-app" --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}\t{{{{.Ports}}}}"
+        docker ps --filter "name=openhands-app-dev" --format "table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}\t{{{{.Ports}}}}"
     else
-        echo "❌ Main app container (openhands-app) not running"
+        echo "❌ Main app container (openhands-app-dev) not running"
     fi
     
     echo ""
@@ -883,6 +933,32 @@ test-openhands-fork:
 fix-perms:
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
-    sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null
-    sudo chown -R $(id -u):$(id -g) ./ 2>/dev/null
-    sudo chown -R $(id -u):$(id -g) ./.* 2>/dev/null
+    echo "🔧 Fixing OpenHands file permissions..."
+    
+    # Fix ownership of .openhands directory (most important)
+    if [ -d ~/.openhands ]; then
+        echo "📁 Fixing ~/.openhands ownership..."
+        sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || {
+            echo "⚠️  Could not fix ~/.openhands ownership (this may be normal if no sudo access)"
+        }
+    fi
+    
+    # Fix ownership of current workspace directory
+    echo "📁 Fixing workspace ownership for $(pwd)..."
+    sudo chown -R $(id -u):$(id -g) ./ 2>/dev/null || {
+        echo "⚠️  Could not fix workspace ownership (this may be normal if no sudo access)"
+    }
+    
+    # Fix any root-owned Docker volume mounts that may have been created
+    if [ -d ./workspace ]; then
+        echo "📁 Fixing ./workspace ownership..."
+        sudo chown -R $(id -u):$(id -g) ./workspace 2>/dev/null || {
+            echo "⚠️  Could not fix ./workspace ownership (this may be normal if no sudo access)"
+        }
+    fi
+    
+    echo "✅ File permission fixes completed"
+    echo "💡 If you still see permission issues:"
+    echo "   1. Ensure Docker containers are not running as root"
+    echo "   2. Check that SANDBOX_USER_ID=$(id -u) is set correctly"
+    echo "   3. Verify RUN_AS_OPENHANDS=true for proper user mapping"

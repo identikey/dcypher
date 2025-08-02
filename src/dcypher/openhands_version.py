@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 # Full commit SHA (for reference and verification)
-OPENHANDS_FULL_SHA = "b4fc3c4e45198d5d8bcf7794dcdb5444c28d93eb"
+OPENHANDS_FULL_SHA = "6b938527516ca4203fcbce6e61fa82af74528994"
 
 # Exact commit SHA to check out and build from
 # This ensures reproducible builds regardless of what's currently checked out

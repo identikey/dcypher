@@ -68,12 +68,21 @@ RUN set -e && \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin \
     && chmod +x /usr/local/bin/just
 
+# Fix user ID mapping: Remove the existing openhands user and let runtime create it dynamically
+# This prevents UID conflicts when the host user has a different UID
+RUN userdel -r openhands 2>/dev/null || true
+
+# Ensure the runtime initialization can create users properly
+# Set UID range to allow creation of users with any UID
+RUN sed -i 's/^UID_MIN.*/UID_MIN 100/' /etc/login.defs && \
+    sed -i 's/^UID_MAX.*/UID_MAX 100000/' /etc/login.defs
+
 # Set environment variables
 ENV PATH="/usr/local/bin:$PATH"
 
 # Add labels
 LABEL maintainer="duke@identikey.io" \
-      description="AllHands runtime with Zig installed via community mirrors"
+      description="AllHands runtime with Zig and dynamic user ID mapping"
 
 # Expose port 3000
 EXPOSE 3000

@@ -1,0 +1,6 @@
+__pycache__
+.venv
+.git
+.env*
+vendor/
+node_modules/
