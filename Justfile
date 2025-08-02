@@ -240,6 +240,9 @@ build-liboqs-python: build-liboqs
 # Build both OpenFHE C++ and Python bindings, and liboqs-python
 build-all: build-openfhe-python build-liboqs-python build-docs
 
+# Build just the static libraries
+build-static: build-openfhe build-liboqs
+
 build-docs:
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
@@ -284,7 +287,7 @@ clean: clean-openfhe clean-liboqs clean-liboqs-python clean-openfhe-python
 # Just cleans up all the intermediary build artifacts.
 cleanup:
     rm -rf vendor/liboqs/build vendor/openfhe-development/build
-    
+
 # Check which liboqs algorithms are available
 check-liboqs:
     #!/usr/bin/env bash
@@ -601,7 +604,7 @@ doit:
     mkdir -p ~/.openhands
     
     # Fix ownership of any existing files in mounted directories to prevent root ownership issues
-    sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || true
+    #sudo chown -R $(id -u):$(id -g) ~/.openhands 2>/dev/null || true
     
     docker run -it --rm \
         -e L=DEBUG \
@@ -624,7 +627,7 @@ doit:
 # Build and start OpenHands development environment with local changes
 # Usage: just doit-dev                    # Use existing images (fast)
 #        just doit-dev --build            # Force rebuild ALL images including runtime (slower but fresh)
-doit-dev build="": (fix-perms)
+doit-dev build="":
     #!/usr/bin/env bash
     set -Eeuvxo pipefail
     
