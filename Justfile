@@ -256,7 +256,7 @@ build-liboqs-python: build-liboqs
     echo "liboqs-python installed and available!"
 
 # Build both OpenFHE C++ and Python bindings, and liboqs-python
-build-all: setup build-openfhe-python build-liboqs-python build-docs build-doit
+build-all: setup build-openfhe-python build-liboqs-python build-docs 
 
 # Build just the static libraries
 build-static: build-openfhe build-liboqs

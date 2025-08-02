@@ -36,7 +36,7 @@ if [[ -d "$OPENFHE_LIB" && -f "$OPENFHE_LIB/libOPENFHEcore.so" ]]; then
     echo "✅ Found local OpenFHE build"
     
     # Update LD_LIBRARY_PATH for OpenFHE (if not already added above)
-    if [[ "$LD_LIBRARY_PATH" != *"$OPENFHE_LIB"* ]]; then
+    if [[ "${LD_LIBRARY_PATH:-}" != *"$OPENFHE_LIB"* ]]; then
         if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
             export LD_LIBRARY_PATH="$OPENFHE_LIB:$LD_LIBRARY_PATH"
         else
