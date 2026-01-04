@@ -1,302 +1,247 @@
-# dCypher: FHE Quantum-Resistant Recryption Proxy
+# dCypher: Quantum-Resistant Proxy Recryption System
 
-**dCypher** is an open-source, easy-to-deploy, production-ready **Recryption** (recryption) proxy that enables private, shareable, and revocable cloud storage.
-
-The goal of dCypher is to fundamentally change how we interact with cloud storage. It flips the game board so you can store your data on any cloud provider, **without that provider ever having access to the unencrypted data**. At the same time, you can securely share that data with any other individual or group and revoke their access at any time.
-
-This project solves a major missing component in decentralized systems, bringing them closer to par with their centralized equivalents by offering secure access control over encrypted data stored with untrusted intermediaries.
-
-### How It Works
-
-dCypher acts as a proxy that can take ciphertext encrypted for a specific private key and recrypt it for a different private key, without ever decrypting the data itself. This technique, known as Proxy Recryption (PRE), allows a storage provider to serve data to authorized users on behalf of the data owner, without having access to the plaintext or the owner's private keys.
-
-We use the excellent OpenFHE library to implement lattice-based cryptography, making the system quantum-resistant.
-
-### Features
-
-* **Untrusted Storage:** Store your data on any S3-compatible cloud service, a local server, or even a Raspberry Pi, with the guarantee that the provider cannot read it.
-* **Secure, Revocable Sharing:** Delegate and revoke read access to your encrypted files for any user/public key via a simple ACL API.
-* **Quantum-Resistant:** Designed with post-quantum cryptography (PQC) to ensure long-term data security.
-* **Flexible Deployment:** Architected to be deployed on cloud hardware, local servers, or scalable "serverless" platforms.
-* **Open Source:** Free to use and build upon under a permissive license (MIT/Apache).
-
-dCypher is a core component of the IdentiKey vision for a user-controlled internet where individuals maintain sovereignty over their digital identities and data.
+**Status:** 🚧 In Development - Rust Port Phase  
+**Version:** 2.0 (Rust Implementation)  
 
 ---
 
-**Learn more about the technology and our vision at [identikey.io/recryption](https://identikey.io/recryption)**.
+## Overview
 
-## HDprint with Paiready: Self-Correcting Hierarchical Identifiers
+dCypher is a production-ready proxy recryption system that enables secure, revocable file sharing with untrusted storage providers. Built on lattice-based cryptography (OpenFHE) with post-quantum signatures (liboqs), it provides end-to-end encryption where files can be shared without exposing private keys or plaintext.
 
-dCypher includes an innovative identifier system called **HDprint with Paiready** that generates human-readable, error-resistant identifiers for cryptographic objects like public or private keys, certificates, cryptocurrency, and encrypted data references.
+### Core Innovation
 
-### Key Features
+**Proxy Recryption:** Transform ciphertext encrypted for Alice into ciphertext for Bob without ever decrypting. The storage provider can facilitate sharing without accessing plaintext.
 
-* **Self-Correcting:** Automatically fixes single-character typos in checksums using BCH error correction codes
-* **Case-Insensitive Input:** Type everything in lowercase - the system restores proper mixed-case formatting
-* **Hierarchical Scaling:** Multiple security levels from 17.6 bits (testing) to 158.2+ bits (production)
-* **Human-Friendly:** Visual structure with underscores, Base58 encoding avoids confusing characters
-* **Cryptographically Strong:** HMAC-SHA3-512 chain with BLAKE3 preprocessing for collision resistance
+**Quantum-Resistant:** Uses ML-DSA-87 and other post-quantum signature algorithms alongside lattice-based encryption for long-term security.
 
-### Format Structure
+**Self-Correcting Identifiers:** HDprint system provides human-readable identifiers that automatically correct typos and restore proper case from lowercase input.
 
-```
-Pattern: {paiready}_{hdprint}
-Example: myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
+---
 
-Components:
-- Paiready checksum: 'myzgemb' (error-correcting, base58 lowercase)
-- HDprint fingerprint: '5ubrZa_T9w1LJRx_hEGmdyaM' (hierarchical, base58 mixed-case)
-```
+## Current Status
 
-### Error Correction Demo
+### ✅ Phase 0: Planning (CURRENT)
+- [x] Master implementation plan written (`RUST_PORT_PLAN.md`)
+- [ ] Architecture decision documents
+- [ ] Design questions answered
+- [ ] Workspace structure defined
 
-```
-Original identifier: 4pkabdr_6QqqSV_GjsEbLU5_c8AJmdYG
+### 🔲 Upcoming Phases
+- Phase 1: FFI Bindings (OpenFHE + liboqs)
+- Phase 2: Core Cryptography
+- Phase 3: Protocol Layer
+- Phase 4: Storage Layer (S3-compatible)
+- Phase 5: HDprint Implementation
+- Phase 6: HTTP API Server
+- Phase 7: CLI Application
+- Phase 8: Minimal TUI
 
-User types (all lowercase, 2 typos in checksum):
-User input:          1pk2bdr_6qqqsv_gjseblu5_c8ajmdyg
+**Timeline:** 8-10 weeks to production-ready
 
-System automatically corrects:
-Final identifier:    4pkabdr_6QqqSV_GjsEbLU5_c8AJmdYG
-```
+---
 
-Process:
-
-1. BCH error correction fixes typos in checksum
-2. Bit field unpacking restores original mixed case in HDprint
-3. User gets canonical identifier despite typing errors
-
-### Size Options
-
-```
-TINY    mwrjzs1_zF1tjX
-        Security: 17.6 bits, Checksum: mwrjzs1
-SMALL   k68q6ci_zF1tjX_hhdbg5W6
-        Security: 64.4 bits, Checksum: k68q6ci
-MEDIUM  ajqkgas_zF1tjX_hhdbg5W6_fJN8yZJV
-        Security: 111.3 bits, Checksum: ajqkgas
-RACK    38qhkje_zF1tjX_hhdbg5W6_fJN8yZJV_D9UMe8J6
-        Security: 158.2 bits, Checksum: 38qhkje
-```
-
-### Use Cases
-
-* **Public Key Fingerprints:** Human-verifiable identifiers for cryptocurrency wallets and PKI certificates
-* **Database References:** Error-resistant record IDs that users can manually verify
-* **API Keys & Tokens:** Built-in error detection for authentication systems  
-* **QR Code Content:** Remains scannable even with minor visual damage
-* **CLI Tools:** Forgiving input processing for manually-entered identifiers
-
-This identifier system is particularly valuable in dCypher's proxy recryption context, where users need to reliably reference and share cryptographic keys and encrypted data objects.
-
-## Development
-
-This project uses [Just](https://github.com/casey/just) for task automation as opposed to Make.
-
-### Available Recipes
-
-Run `just` to see all available recipes, or use these common commands:
-
-* **`build-all`**            # Build both OpenFHE C++ and Python bindings
-* **`build-liboqs`**         # Clone and build liboqs C library locally (not system-wide)
-* **`build-openfhe`**        # Build OpenFHE C++ library locally (not system-wide)
-* **`build-openfhe-python`** # Build OpenFHE Python bindings using local C++ library
-* **`clean`**                # Clean all builds
-* **`clean-liboqs`**         # Clean liboqs builds
-* **`clean-openfhe`**        # Clean OpenFHE builds
-* **`cli *args`**            # Run the CLI locally with uv
-* **`default`**              # Show available tasks
-* **`dev-cli *args`**        # Run CLI in development container
-* **`dev-down`**             # Stop development environment
-* **`dev-rebuild`**          # Rebuild and restart development environment
-* **`dev-shell`**            # Open an interactive bash shell in the development container
-* **`dev-test`**             # Run tests in development container
-* **`dev-up`**               # Start development environment with volume mounting
-* **`docker-bash`**          # Open an interactive bash shell in the Docker container
-* **`docker-build-dev`**     # Build the development Docker image
-* **`docker-built`**         # Build the Docker image
-* **`docker-cli *args`**     # Run the CLI in Docker container
-* **`docker-exec command`**  # Run a custom command in the Docker container
-* **`docker-run`**           # Run the Docker container
-* **`test`**
-
-### Examples
-
-```bash
-# Quick local development
-just cli
-
-# Build and test with Docker
-just docker-build
-just docker-run
-
-# Debug in container
-just docker-bash
-
-# Run tests in container
-just docker-exec "python -m pytest"
-## Documentation
-
-The detailed message specification can be found in [docs/spec.md](docs/spec.md).
-
-## Library
-
-The core PRE logic is implemented in `src/lib/pre.py`.
-
-## Tests
-
-To run the tests, execute the following command:
-
-```bash
-just build-all
-just test
-```
-
-**Note**: The Python implementation uses OpenFHE which requires Linux, so local development on macOS requires Docker.
-
-## Building
-
-### Python Implementation (Docker)
-
-```bash
-# Build and run the Python proof of concept
-just docker-build
-just docker-run
-```
-
-### Zig Implementation (Native)
-
-```bash
-# Build the Zig project
-zig build
-
-# Run tests
-zig build test
-
-# Build and run in one step
-zig build run
-```
-
-## Usage
-
-### Python CLI (via Docker)
-
-```bash
-# Run the Python CLI in Docker
-just docker-cli --help
-```
-
-### Zig CLI (Native)
-
-```bash
-# Generate a key pair
-./zig-out/bin/dcypher keygen --output alice_keys.json
-
-# Generate another key pair
-./zig-out/bin/dcypher keygen --output bob_keys.json
-
-# Generate recryption key from Alice to Bob
-./zig-out/bin/dcypher rekey --from alice_keys.json --to bob_keys.json --output alice_to_bob.json
-
-# Encrypt data with Alice's key
-./zig-out/bin/dcypher encrypt --key alice_keys.json --input message.txt --output encrypted.bin
-
-# Recrypt data for Bob using the recryption key
-./zig-out/bin/dcypher recrypt --rekey alice_to_bob.json --input encrypted.bin --output recrypted.bin
-
-# Bob decrypts the data with his key
-./zig-out/bin/dcypher decrypt --key bob_keys.json --input recrypted.bin --output message_decrypted.txt
-
-# Start the HTTP server
-./zig-out/bin/dcypher serve --port 8080
-```
-
-### HTTP API
-
-Start the server:
-
-```bash
-./zig-out/bin/dcypher serve --port 8080
-```
-
-Available endpoints:
-
-* `GET /health` - Health check
-* `POST /api/keygen` - Generate key pair
-* `POST /api/rekey` - Generate recryption key  
-* `POST /api/encrypt` - Encrypt data
-* `POST /api/recrypt` - Recrypt data
-* `POST /api/decrypt` - Decrypt data
-
-Example request:
-
-```bash
-curl -X POST http://localhost:8080/api/keygen
-```
-
-## Architecture
-
-### Project Structure
+## Repository Structure
 
 ```
 dcypher/
-├── src/                    # Python implementation
-│   ├── cli.py             # Python CLI
-│   └── lib/               # Python libraries
-├── tests/                 # Python tests
-├── Dockerfile             # Docker build for Python
-├── Justfile              # Task automation for Python/Docker
-├── pyproject.toml        # Python dependencies
-├── build.zig             # Main Zig build configuration
-├── build.zig.zon         # Zig package dependencies
-├── build_openfhe.zig     # OpenFHE integration build
-├── openfhe.zig           # Zig OpenFHE bindings
-├── openfhe_wrapper.cpp   # C++ wrapper for OpenFHE
-├── openfhe_wrapper.h     # C++ header
-└── src/                  # Zig implementation (TODO: rename to avoid conflict)
-    ├── main.zig          # CLI application entry point
-    ├── root.zig          # Library exports  
-    ├── cli.zig           # Command-line argument parsing
-    ├── server.zig        # HTTP server implementation
-    ├── crypto.zig        # Cryptographic operations (stubbed)
-    └── tests.zig         # Integration tests
+├── RUST_PORT_PLAN.md          # 📋 Master implementation plan - READ THIS FIRST
+├── README.md                   # This file
+│
+├── python-prototype/           # 📦 ARCHIVED: Original Python proof-of-concept
+│   ├── src/                    # Reference implementation
+│   ├── tests/                  # Test suite (ported to Rust)
+│   ├── docs/                   # Original specifications
+│   └── README.md               # Python implementation docs
+│
+├── vendor/                     # Third-party dependencies
+│   ├── openfhe-development/    # OpenFHE C++ library
+│   ├── liboqs/                 # Post-quantum crypto library
+│   └── ...
+│
+└── [Rust workspace to be created in Phase 1]
 ```
 
-## Development Status
+---
 
-### Python Proof of Concept
+## Quick Start (Coming Soon)
 
-* ✅ OpenFHE integration working
+```bash
+# Phase 1+: Build from source
+cargo build --release
 
-* ✅ Docker containerization
-* ✅ Basic CLI interface
-* ✅ Proxy recryption example
+# Generate identity
+dcypher identity new --output alice.json
 
-### Zig Implementation  
+# Encrypt file
+dcypher encrypt myfile.txt --for <bob-pubkey> --output myfile.enc
 
-* ✅ Project structure and build system
+# Share with Bob (generates recryption key)
+dcypher share create <file-hash> --to <bob-pubkey>
 
-* ✅ CLI argument parsing
-* ✅ HTTP server with REST endpoints
-* ✅ File I/O operations
-* ✅ JSON serialization/deserialization
-* ❌ Actual proxy recryption cryptography implementation
-* ❌ Integration with OpenFHE via C++ wrapper
-* ❌ Production-ready error handling
+# Bob downloads (server recrypts on-the-fly)
+dcypher share download <share-id> --output myfile.txt
+```
 
-## Security Considerations
+---
 
-⚠️ **Warning**: This is currently a development scaffold with stub implementations. Do not use in production until proper cryptographic implementations are added.
+## Key Features
 
-When implementing the actual cryptography:
+### 🔐 Cryptography
+- **OpenFHE BFVrns** for lattice-based proxy recryption
+- **ED25519** for classical signatures
+- **ML-DSA-87** (mandatory) + optional PQ algorithms
+- **Multi-signature** authorization (all keys must sign)
 
-* Use constant-time operations to prevent timing attacks
-* Properly handle key generation with secure randomness
-* Implement proper key serialization with integrity checks
-* Add input validation and sanitization
-* Consider memory safety for sensitive data
+### 💾 Storage
+- **S3-compatible** storage layer (Minio for dev, any S3 for prod)
+- **Authenticated access** via file hash lookup
+- **Chunked streaming** for large files
+- **Content-addressed** storage
+
+### 🎯 HDprint Identifiers
+- **Error correction**: Automatically fixes single-character typos
+- **Case restoration**: Type lowercase, get proper mixed-case
+- **Hierarchical scaling**: 17.6 to 158+ bits security
+- **Human-friendly**: Base58 encoding, visual separators
+
+### 🌐 API & Interfaces
+- **HTTP REST API** (Axum framework)
+- **CLI application** with rich interactions
+- **Minimal TUI** for visual operations
+
+---
+
+## Design Philosophy
+
+### What Changed from Python Prototype
+
+**Removed:**
+- ❌ ECDSA/SECP256k1 (ED25519 sufficient for classical fallback)
+- ❌ Naive file storage (moved to S3-compatible)
+- ❌ ASCII armor as primary format (moving to efficient binary protocol)
+
+**Enhanced:**
+- ✅ Proper Rust architecture with focused crates
+- ✅ S3-compatible storage for production
+- ✅ Efficient wire protocol (binary + optional ASCII export)
+- ✅ Standardized hashing (Blake2b vs Blake3 analysis)
+- ✅ Streaming chunk verification
+
+**No Compatibility Required:**
+- This is a clean slate implementation
+- Cannot decrypt Python ciphertexts (different serialization)
+- No migration path needed (no production deployments exist)
+
+---
+
+## Documentation
+
+- **[RUST_PORT_PLAN.md](RUST_PORT_PLAN.md)** - Master implementation plan with all phases
+- **python-prototype/docs/** - Original specifications and design docs
+- **Phase-specific docs** - To be created in `docs/` as implementation progresses
+
+### Key Design Documents (To Be Written)
+1. `docs/crypto-architecture.md` - Encryption approach (full-file vs hybrid)
+2. `docs/hashing-standard.md` - Blake2b vs Blake3 decision
+3. `docs/verification-architecture.md` - Streaming chunk verification
+4. `docs/non-determinism.md` - Testing strategy for crypto
+5. `docs/storage-design.md` - S3 integration architecture
+6. `docs/wire-protocol.md` - Binary protocol specification
+7. `docs/hdprint-specification.md` - Complete HDprint system writeup
+
+---
+
+## Development
+
+### Prerequisites
+- Rust 1.75+ (stable)
+- OpenFHE C++ library
+- liboqs (post-quantum crypto)
+- Docker (for Minio development environment)
+
+### Python Prototype (Archived)
+
+The original Python proof-of-concept is preserved in `python-prototype/` for reference. It demonstrated the feasibility of proxy recryption with post-quantum signatures and includes a full TUI implementation.
+
+**To explore the prototype:**
+```bash
+cd python-prototype
+# See python-prototype/README.md for setup instructions
+```
+
+**Note:** The Python implementation is archived and not actively maintained. All new development is in Rust.
+
+---
+
+## Terminology
+
+- **Recryption**: Transformation of ciphertext from one key to another (not "re-encryption")
+- **Recryption Key**: The key that enables recryption transformation (not "rekey" or "re-encryption key")
+- **Recrypted**: Data that has undergone recryption transformation
+
+This terminology is standardized throughout the Rust implementation.
+
+---
+
+## Architecture Highlights
+
+### Workspace Structure (Phase 1+)
+```
+dcypher/
+├── crates/
+│   ├── dcypher-ffi/          # OpenFHE + liboqs bindings
+│   ├── dcypher-core/         # Core crypto operations
+│   ├── dcypher-proto/        # Wire protocol
+│   ├── dcypher-storage/      # S3-compatible storage
+│   └── dcypher-hdprint/      # Identifier system
+├── dcypher-cli/              # CLI binary
+├── dcypher-server/           # HTTP API binary
+└── dcypher-tui/              # TUI binary
+```
+
+### Key Crates
+- **dcypher-ffi**: Safe Rust bindings to OpenFHE (C++) and liboqs (C)
+- **dcypher-core**: Pure Rust API for encryption, decryption, recryption
+- **dcypher-proto**: Message format, Merkle trees, serialization
+- **dcypher-storage**: Pluggable storage backends (S3, Minio, local)
+- **dcypher-hdprint**: Self-correcting identifier generation
+
+---
+
+## Security Model
+
+### Trust Assumptions
+- **Untrusted Storage**: Storage provider cannot read plaintext
+- **Trusted Proxy**: Server performs recryption honestly (can be verified)
+- **Client-side Keys**: Users control their private keys
+- **Multi-signature**: All keys must authorize operations
+
+### Cryptographic Guarantees
+- **End-to-end Encryption**: Only key holders decrypt
+- **Quantum Resistance**: Post-quantum signatures + lattice crypto
+- **Forward Secrecy**: Recryption keys can be revoked
+- **Integrity**: Merkle tree verification for all chunks
+
+---
+
+## Contributing
+
+Currently in active development for Rust port. Check `RUST_PORT_PLAN.md` for current phase and open tasks.
+
+---
 
 ## License
 
-[Add your license here]
+[License TBD]
+
+---
+
+## Links
+
+- **Website**: [identikey.io/recryption](https://identikey.io/recryption)
+- **Proxy Recryption Explainer**: [identikey.io/recryption](https://identikey.io/recryption)
+
+---
+
+**For detailed implementation plan and current status, see [RUST_PORT_PLAN.md](RUST_PORT_PLAN.md)**

@@ -6,7 +6,7 @@ A quantum-resistant encryption Terminal User Interface (TUI) inspired by cyberpu
 
 The dCypher TUI combines:
 
-- **Cyberpunk/Cipherpunk** aesthetics with @repligate styling
+- **Cyberpunk/Cypherpunk** aesthetics with @repligate styling
 - **btop-inspired** real-time system monitoring
 - **Art Deco** design influences for elegant borders and layouts
 - **Matrix-style** animations and effects

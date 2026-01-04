@@ -35,7 +35,7 @@ The headers are in `Key: Value` format.
 * `PartSlotsTotal`: The total number of available slots per ciphertext, as determined by the `CryptoContext`.
 * `PartSlotsUsed`: The total number of coefficients (or slots) in the original data vector. This is used to correctly truncate the decrypted vector before byte conversion.
 * `BytesTotal`: The total size in bytes of the original, unencoded message data. This is critical for correctly truncating the data after decryption.
-* `MerkleRoot`: The BLAKE2b hash of the root of the Merle tree. This also serves as the unique identifier for the message.
+* `MerkleRoot`: The BLAKE2b hash of the root of the Merkle tree. This also serves as the unique identifier for the message.
 * `Signature`: An ECDSA signature of the canonicalized headers, to authenticate the metadata.
 * `SignerPublicKey`: The hex-encoded public key of the message signer, enabling self-contained verification.
 

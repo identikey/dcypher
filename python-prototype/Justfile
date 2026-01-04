@@ -171,7 +171,8 @@ docker-dev-serve:
 ### Building & Compiling ###
 ############################
 
-
+build-zig:
+    zig build
 
 # Build OpenFHE C++ library locally (not system-wide)
 build-openfhe:
@@ -246,10 +247,10 @@ build-liboqs-python: build-liboqs
     echo "liboqs-python installed and available!"
 
 # Build both OpenFHE C++ and Python bindings, and liboqs-python
-build-all: setup build-openfhe-python build-liboqs-python build-docs 
+build-all: setup build-openfhe-python build-liboqs-python build-docs build-zig
 
 # Build just the static libraries
-build-static: build-openfhe build-liboqs
+build-static: build-openfhe build-liboqs build-zig
 
 build-docs:
     #!/usr/bin/env bash
