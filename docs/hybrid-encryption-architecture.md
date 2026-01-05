@@ -1,8 +1,8 @@
 # Hybrid Encryption Architecture
 
 **Status:** ✅ DECIDED  
-**Default:** Post-quantum hybrid (Lattice-KEM + ChaCha20 + Bao)  
-**Fallback:** Classical hybrid (EC-KEM + ChaCha20 + Bao)
+**Default:** Post-quantum hybrid (Lattice-KEM + XChaCha20 + Bao)  
+**Fallback:** Classical hybrid (EC-KEM + XChaCha20 + Bao)
 
 ---
 
@@ -115,12 +115,12 @@ An authorized user with legitimate access can always leak content. No cryptograp
 ### DEM Ciphertext (Symmetric Encryption)
 
 | Cipher                | Input   | Output   | Expansion |
-| --------------------- | ------- | -------- | --------- |
-| **ChaCha20 + Bao**    | N bytes | N bytes  | ~0%       |
-| **ChaCha20-Poly1305** | N bytes | N + 16 B | ~0%       |
+| --------------------- | ------- | -------- | --------- | --- |
+| **XChaCha20 + Bao**   | N bytes | N bytes  | ~0%       |
+| **ChaCha20-Poly1305** | N bytes | N + 16 B | ~0%       |     |
 | **AES-256-GCM**       | N bytes | N + 16 B | ~0%       |
 
-**Note:** We use ChaCha20 (pure stream cipher) + Bao tree hashing, not AEAD. The Bao tree (~1% overhead) is stored separately as outboard data.
+**Note:** We use XChaCha20 (pure stream cipher with 192-bit nonce) + Bao tree hashing, not AEAD. The Bao tree (~1% overhead) is stored separately as outboard data. XChaCha20's extended nonce eliminates birthday-bound concerns with random nonce generation.
 
 ### Total Overhead (Hybrid)
 
@@ -148,7 +148,7 @@ For a 1 MB file:
 | **Recrypt**              | 50-150 ms         | ~18 ms     | ~12 ms       | ~3-10x       |
 | **Decrypt (unwrap)**     | 5-15 ms           | ~6.5 ms    | ~4 ms        | ~1-3x        |
 
-### Symmetric Operations (ChaCha20 + Bao)
+### Symmetric Operations (XChaCha20 + Bao)
 
 | File Size | Encrypt + Hash | Decrypt + Verify |
 | --------- | -------------- | ---------------- |
@@ -157,7 +157,7 @@ For a 1 MB file:
 | 100 MB    | ~50 ms         | ~50 ms           |
 | 1 GB      | ~500 ms        | ~500 ms          |
 
-**Note:** Slightly slower than pure ChaCha20 due to Bao tree hashing, but enables streaming verification.
+**Note:** Slightly slower than pure XChaCha20 due to Bao tree hashing, but enables streaming verification.
 
 ### End-to-End Latency (Hybrid, 1 MB File)
 
@@ -266,7 +266,7 @@ Both lattice and EC-based PRE can be extended to threshold/MPC schemes:
 │ bao_outboard_len: u64          // Length of Bao tree        │
 │ bao_outboard: [u8]             // Bao verification tree     │
 │ ciphertext_len: u64            // Length of ciphertext      │
-│ ciphertext: [u8]               // ChaCha20 encrypted data   │
+│ ciphertext: [u8]               // XChaCha20 encrypted data  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -275,7 +275,7 @@ Both lattice and EC-based PRE can be extended to threshold/MPC schemes:
 - No Poly1305 auth tag—Bao root + signature provides equivalent security
 - `plaintext_hash` and `plaintext_size` are INSIDE `wrapped_key` (encrypted)
 - `bao_outboard` can be stored separately or inline
-- Ciphertext is pure ChaCha20 (seekable, no per-chunk overhead)
+- Ciphertext is pure XChaCha20 (seekable, no per-chunk overhead)
 
 ### Wrapped Key Bundle (PRE-Encrypted)
 
@@ -283,10 +283,10 @@ The key material bundle is encrypted by the PRE backend:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ KeyMaterial (84 bytes, plaintext before PRE encryption)     │
+│ KeyMaterial (96 bytes, plaintext before PRE encryption)     │
 ├─────────────────────────────────────────────────────────────┤
-│ symmetric_key: [u8; 32]        // ChaCha20 key              │
-│ nonce: [u8; 12]                // ChaCha20 nonce            │
+│ symmetric_key: [u8; 32]        // XChaCha20 key             │
+│ nonce: [u8; 24]                // XChaCha20 extended nonce  │
 │ plaintext_hash: [u8; 32]       // Blake3 of plaintext       │
 │ plaintext_size: u64            // Original size (LE bytes)  │
 └─────────────────────────────────────────────────────────────┘
@@ -328,11 +328,20 @@ This binding provides:
 
 ---
 
-## Symmetric Encryption: ChaCha20 + Bao (No Poly1305)
+## Symmetric Encryption: XChaCha20 + Bao (No Poly1305)
 
 ### Decision
 
-Use **ChaCha20** (pure stream cipher) with **Blake3/Bao** for integrity, rather than ChaCha20-Poly1305 AEAD.
+Use **XChaCha20** (pure stream cipher with 192-bit nonce) with **Blake3/Bao** for integrity, rather than ChaCha20-Poly1305 AEAD.
+
+### Why XChaCha20 over ChaCha20?
+
+XChaCha20 extends the nonce from 96 bits to 192 bits via an HChaCha20 key derivation step. Benefits:
+
+1. **Nonce safety:** With 192-bit random nonces, birthday collision probability is negligible (~2^-96 after 2^48 encryptions vs ~2^-32 for 96-bit nonces)
+2. **Simpler key management:** Safe to use random nonces per-file forever without tracking state
+3. **Same security:** Underlying ChaCha20 security properties unchanged
+4. **Negligible overhead:** One extra HChaCha20 call (~nanoseconds) per encryption
 
 ### Rationale
 
@@ -354,7 +363,7 @@ Our construction achieves the same properties through composition:
 
 | Property            | AEAD (Poly1305)      | Our Construction      |
 | ------------------- | -------------------- | --------------------- |
-| **Confidentiality** | ChaCha20             | ChaCha20              |
+| **Confidentiality** | ChaCha20             | XChaCha20             |
 | **Integrity**       | Poly1305 MAC         | Blake3/Bao tree hash  |
 | **Authenticity**    | Poly1305 key binding | Signature on Bao root |
 
@@ -369,7 +378,7 @@ Both prove "this ciphertext came from someone who knows the secret." The signatu
 
 ### Security Proof Sketch
 
-1. **Confidentiality:** ChaCha20 with random key/nonce is IND-CPA secure
+1. **Confidentiality:** XChaCha20 with random key/nonce is IND-CPA secure
 2. **Integrity:** Blake3 is collision-resistant; finding `ct'` where `Bao(ct') = Bao(ct)` requires ~2^128 work
 3. **Authenticity:** Signature on `(wrapped_key, bao_root)` binds:
    - The symmetric key (via `wrapped_key`)
@@ -416,11 +425,11 @@ The `plaintext_hash` is included in the PRE-encrypted key material, not public m
 ```rust
 /// Key material bundle (encrypted by PRE backend)
 struct KeyMaterial {
-    /// ChaCha20 symmetric key
+    /// XChaCha20 symmetric key
     pub symmetric_key: [u8; 32],
 
-    /// ChaCha20 nonce
-    pub nonce: [u8; 12],
+    /// XChaCha20 extended nonce (192-bit for birthday-safe random generation)
+    pub nonce: [u8; 24],
 
     /// Blake3 hash of original plaintext (for post-decrypt verification)
     pub plaintext_hash: [u8; 32],
@@ -428,7 +437,7 @@ struct KeyMaterial {
     /// Original plaintext size in bytes
     pub plaintext_size: u64,
 }
-// Total: 84 bytes — fits in one PRE ciphertext slot
+// Total: 96 bytes — fits in one PRE ciphertext slot
 ```
 
 Only someone who can unwrap the key can see the plaintext hash.
@@ -455,7 +464,7 @@ DOWNLOAD & STREAMING VERIFY (no decryption needed):
 
 DECRYPT & FINAL VERIFY (requires unwrapping):
   4. Unwrap key material via PRE → get (key, nonce, plaintext_hash, size)
-  5. Decrypt ciphertext with ChaCha20(key, nonce)
+  5. Decrypt ciphertext with XChaCha20(key, nonce)
   6. Verify: len(plaintext) == size ✓
   7. Verify: blake3(plaintext) == plaintext_hash ✓
 ```
@@ -485,21 +494,24 @@ And because it's encrypted, it reveals **nothing** to observers.
 ```rust
 struct WrappedKeyBundle {
     wrapped_key: Vec<u8>,     // PRE-encrypted symmetric key
-    nonce: [u8; 12],          // Random nonce for ChaCha20
+    nonce: [u8; 24],          // Random 192-bit nonce for XChaCha20
 }
 ```
 
 ### Alternatives Considered
 
-| Strategy                   | Pros           | Cons                              |
-| -------------------------- | -------------- | --------------------------------- |
-| **Random (chosen)**        | Simple, secure | Must store with wrapped key       |
-| **Derived from file hash** | Deterministic  | Risk if same file encrypted twice |
-| **Counter-based**          | No storage     | Requires state management         |
+| Strategy                   | Pros           | Cons                                  |
+| -------------------------- | -------------- | ------------------------------------- |
+| **Random (chosen)**        | Simple, secure | Must store with wrapped key           |
+| **Derived from file hash** | Deterministic  | Risk if same file encrypted twice     |
+| **Counter-based**          | No storage     | Requires state management             |
+| **ChaCha20 (96-bit)**      | RFC 8439       | Birthday bound at ~2^48 random nonces |
+
+XChaCha20's 192-bit nonce means random generation is safe indefinitely—no birthday concerns even at planetary scale.
 
 ### No Per-Chunk Nonces Needed
 
-Since we use ChaCha20 as a pure stream cipher (not per-chunk AEAD), we only need a single nonce per file. ChaCha20 is seekable—we can decrypt any byte offset without processing preceding bytes.
+Since we use XChaCha20 as a pure stream cipher (not per-chunk AEAD), we only need a single nonce per file. XChaCha20 is seekable—we can decrypt any byte offset without processing preceding bytes.
 
 ---
 
@@ -507,6 +519,7 @@ Since we use ChaCha20 as a pure stream cipher (not per-chunk AEAD), we only need
 
 - [KEM-DEM Paradigm](https://en.wikipedia.org/wiki/Hybrid_cryptosystem)
 - [ChaCha20 Stream Cipher](https://cr.yp.to/chacha.html)
+- [XChaCha20 (IETF Draft)](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha)
 - [Blake3 Hash Function](https://github.com/BLAKE3-team/BLAKE3)
 - [Bao: Blake3 Tree Hashing](https://github.com/oconnor663/bao) — streaming verification
 - [BFV Encryption Scheme](https://eprint.iacr.org/2012/144)

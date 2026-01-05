@@ -13,7 +13,7 @@ dCypher is a production-ready proxy recryption system enabling secure, revocable
 
 **Proxy Recryption:** Transform ciphertext encrypted for Alice into ciphertext for Bob without ever decrypting. The storage provider facilitates sharing without accessing plaintext.
 
-**Hybrid Encryption:** KEM-DEM architecture with pluggable PRE backends (lattice for post-quantum, EC for classical). Symmetric encryption (ChaCha20 + Bao) handles bulk data.
+**Hybrid Encryption:** KEM-DEM architecture with pluggable PRE backends (lattice for post-quantum, EC for classical). Symmetric encryption (XChaCha20 + Bao) handles bulk data.
 
 **Self-Correcting Identifiers:** HDprint provides human-readable identifiers that automatically correct typos and restore proper case from lowercase input.
 

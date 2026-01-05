@@ -1,0 +1,25 @@
+[package]
+name = "dcypher-ffi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cxx.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
+rand_core.workspace = true
+thiserror.workspace = true
+
+# OpenFHE bindings will be added via dcypher-openfhe-sys (Phase 1b)
+# openfhe-sys = { path = "../dcypher-openfhe-sys", optional = true }
+
+[build-dependencies]
+cxx-build = "1.0"
+
+[dev-dependencies]
+proptest.workspace = true
+
+[features]
+default = ["liboqs"]
+# openfhe = ["dep:openfhe-sys"]  # Enable when dcypher-openfhe-sys is ready
+liboqs = []

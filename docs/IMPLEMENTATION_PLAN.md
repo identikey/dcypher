@@ -54,7 +54,7 @@ Production Rust implementation of dCypher, a quantum-resistant proxy recryption 
 **Architecture:**
 
 1. **KEM (Key Encapsulation):** PRE-encrypt a random 256-bit symmetric key
-2. **DEM (Data Encapsulation):** ChaCha20 + Bao tree hashing for bulk data encryption
+2. **DEM (Data Encapsulation):** XChaCha20 + Bao tree hashing for bulk data encryption
 3. **Recryption:** Only transforms the wrapped key (~KB), not the file
 
 **PRE Backends (pluggable):**
@@ -68,7 +68,7 @@ Production Rust implementation of dCypher, a quantum-resistant proxy recryption 
 **Rationale:**
 
 - Lattice PRE has 50-100x ciphertext expansion; hybrid makes this negligible
-- Symmetric encryption (ChaCha20) is ~GB/s; PRE operations are ms-scale
+- Symmetric encryption (XChaCha20) is ~GB/s; PRE operations are ms-scale
 - Pluggable backends allow post-quantum or classical choice per use case
 - EC backends are pure Rust (no FFI), better for mobile/WASM
 
@@ -428,10 +428,10 @@ pub trait PreBackend: Send + Sync {
 pub struct HybridEncryptor<B: PreBackend> { backend: B }
 
 impl<B: PreBackend> HybridEncryptor<B> {
-    /// Encrypt: generates random symmetric key, PRE-wraps it, ChaCha20 encrypts data
+    /// Encrypt: generates random symmetric key, PRE-wraps it, XChaCha20 encrypts data
     pub fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<EncryptedFile>;
 
-    /// Decrypt: unwraps key via PRE, ChaCha20 decrypts, verifies plaintext hash
+    /// Decrypt: unwraps key via PRE, XChaCha20 decrypts, verifies plaintext hash
     pub fn decrypt(&self, secret: &SecretKey, file: &EncryptedFile) -> PreResult<Vec<u8>>;
 
     /// Recrypt: transforms wrapped_key only (ciphertext unchanged)
@@ -498,17 +498,17 @@ pub struct EncryptedFile {
     pub wrapped_key: Ciphertext,        // PRE-encrypted KeyMaterial
     pub bao_hash: [u8; 32],             // Ciphertext integrity root
     pub bao_outboard: Vec<u8>,          // Bao verification tree
-    pub ciphertext: Vec<u8>,            // ChaCha20 encrypted data
+    pub ciphertext: Vec<u8>,            // XChaCha20 encrypted data
 }
 
 /// KeyMaterial (encrypted INSIDE wrapped_key—protects plaintext_hash)
 pub struct KeyMaterial {
-    pub symmetric_key: [u8; 32],        // ChaCha20 key
-    pub nonce: [u8; 12],                // ChaCha20 nonce
+    pub symmetric_key: [u8; 32],        // XChaCha20 key
+    pub nonce: [u8; 24],                // XChaCha20 extended nonce
     pub plaintext_hash: [u8; 32],       // Blake3 of plaintext (encrypted!)
     pub plaintext_size: u64,            // Original size
 }
-// Total: 84 bytes
+// Total: 96 bytes (32 key + 24 nonce + 32 hash + 8 size)
 ```
 
 **Verification Flow:**
@@ -516,7 +516,7 @@ pub struct KeyMaterial {
 1. Stream download: verify chunks against Bao tree
 2. After full download: verify `computed_bao_root == stored_bao_hash`
 3. Unwrap key via PRE → get `(key, nonce, plaintext_hash, size)`
-4. Decrypt with ChaCha20, verify plaintext hash and size
+4. Decrypt with XChaCha20, verify plaintext hash and size
 
 **Testing:**
 

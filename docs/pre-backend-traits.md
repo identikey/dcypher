@@ -275,24 +275,25 @@ impl Ciphertext {
 ```rust
 //! dcypher-core/src/hybrid.rs
 //!
-//! Hybrid encryption using ChaCha20 + Blake3/Bao for streaming verification.
+//! Hybrid encryption using XChaCha20 + Blake3/Bao for streaming verification.
 //! No Poly1305—authenticity comes from signatures on the Bao root.
+//! XChaCha20's 192-bit nonce eliminates birthday-bound concerns with random nonces.
 
-use chacha20::ChaCha20;
+use chacha20::XChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher, StreamCipherSeek};
 use rand::{RngCore, rngs::OsRng};
 use zeroize::Zeroizing;
 
 use crate::pre::{PreBackend, PublicKey, SecretKey, RecryptKey, Ciphertext, PreResult, PreError};
 
-/// Symmetric key size (ChaCha20 uses 256-bit keys)
+/// Symmetric key size (XChaCha20 uses 256-bit keys)
 pub const SYMMETRIC_KEY_SIZE: usize = 32;
 
-/// Nonce size for ChaCha20
-pub const NONCE_SIZE: usize = 12;
+/// Nonce size for XChaCha20 (192-bit extended nonce)
+pub const NONCE_SIZE: usize = 24;
 
 /// Total key material size (key + nonce + plaintext_hash + size)
-pub const KEY_MATERIAL_SIZE: usize = 32 + 12 + 32 + 8; // 84 bytes
+pub const KEY_MATERIAL_SIZE: usize = 32 + 24 + 32 + 8; // 96 bytes
 
 /// Key material bundle (encrypted inside wrapped_key)
 ///
@@ -301,10 +302,10 @@ pub const KEY_MATERIAL_SIZE: usize = 32 + 12 + 32 + 8; // 84 bytes
 /// and dictionary attacks.
 #[derive(Clone, Debug)]
 pub struct KeyMaterial {
-    /// ChaCha20 symmetric key
+    /// XChaCha20 symmetric key
     pub symmetric_key: [u8; 32],
-    /// ChaCha20 nonce
-    pub nonce: [u8; 12],
+    /// XChaCha20 extended nonce (192-bit for birthday-safe random generation)
+    pub nonce: [u8; 24],
     /// Blake3 hash of original plaintext (for post-decryption verification)
     pub plaintext_hash: [u8; 32],
     /// Original plaintext size in bytes
@@ -312,14 +313,14 @@ pub struct KeyMaterial {
 }
 
 impl KeyMaterial {
-    pub const SERIALIZED_SIZE: usize = 32 + 12 + 32 + 8; // 84 bytes
+    pub const SERIALIZED_SIZE: usize = 32 + 24 + 32 + 8; // 96 bytes
 
     pub fn to_bytes(&self) -> [u8; Self::SERIALIZED_SIZE] {
         let mut out = [0u8; Self::SERIALIZED_SIZE];
         out[0..32].copy_from_slice(&self.symmetric_key);
-        out[32..44].copy_from_slice(&self.nonce);
-        out[44..76].copy_from_slice(&self.plaintext_hash);
-        out[76..84].copy_from_slice(&self.plaintext_size.to_le_bytes());
+        out[32..56].copy_from_slice(&self.nonce);
+        out[56..88].copy_from_slice(&self.plaintext_hash);
+        out[88..96].copy_from_slice(&self.plaintext_size.to_le_bytes());
         out
     }
 
@@ -329,9 +330,9 @@ impl KeyMaterial {
         }
         Ok(Self {
             symmetric_key: bytes[0..32].try_into().unwrap(),
-            nonce: bytes[32..44].try_into().unwrap(),
-            plaintext_hash: bytes[44..76].try_into().unwrap(),
-            plaintext_size: u64::from_le_bytes(bytes[76..84].try_into().unwrap()),
+            nonce: bytes[32..56].try_into().unwrap(),
+            plaintext_hash: bytes[56..88].try_into().unwrap(),
+            plaintext_size: u64::from_le_bytes(bytes[88..96].try_into().unwrap()),
         })
     }
 }
@@ -349,7 +350,7 @@ pub struct EncryptedFile {
     /// Bao outboard data (verification tree, ~1% of ciphertext size)
     pub bao_outboard: Vec<u8>,
 
-    /// ChaCha20-encrypted data (no auth tag—Bao provides integrity)
+    /// XChaCha20-encrypted data (no auth tag—Bao provides integrity)
     pub ciphertext: Vec<u8>,
 }
 
@@ -379,7 +380,7 @@ impl EncryptedFile {
     }
 }
 
-/// Hybrid encryption using PRE for key wrapping + ChaCha20 + Bao
+/// Hybrid encryption using PRE for key wrapping + XChaCha20 + Bao
 pub struct HybridEncryptor<B: PreBackend> {
     backend: B,
 }
@@ -401,9 +402,9 @@ impl<B: PreBackend> HybridEncryptor<B> {
         let plaintext_hash = blake3::hash(plaintext);
         let plaintext_size = plaintext.len() as u64;
 
-        // Encrypt with ChaCha20 (pure stream cipher, no Poly1305)
+        // Encrypt with XChaCha20 (pure stream cipher, no Poly1305)
         let mut ciphertext = plaintext.to_vec();
-        let mut cipher = ChaCha20::new((&*sym_key).into(), (&nonce).into());
+        let mut cipher = XChaCha20::new((&*sym_key).into(), (&nonce).into());
         cipher.apply_keystream(&mut ciphertext);
 
         // Compute Bao tree for streaming verification
@@ -445,9 +446,9 @@ impl<B: PreBackend> HybridEncryptor<B> {
         let key_material = KeyMaterial::from_bytes(&key_material_bytes)
             .map_err(|e| PreError::Decryption(e.to_string()))?;
 
-        // Decrypt with ChaCha20
+        // Decrypt with XChaCha20
         let mut plaintext = file.ciphertext.clone();
-        let mut cipher = ChaCha20::new(
+        let mut cipher = XChaCha20::new(
             (&key_material.symmetric_key).into(),
             (&key_material.nonce).into(),
         );
@@ -502,7 +503,7 @@ impl<B: PreBackend> HybridEncryptor<B> {
 //! dcypher-core/src/pre/backends/mock.rs
 
 use crate::pre::*;
-use chacha20::ChaCha20;
+use chacha20::XChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use rand::{RngCore, rngs::OsRng};
 use zeroize::Zeroizing;
@@ -563,11 +564,11 @@ impl PreBackend for MockBackend {
     }
 
     fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<Ciphertext> {
-        let mut nonce = [0u8; 12];
+        let mut nonce = [0u8; 24];
         OsRng.fill_bytes(&mut nonce);
 
         let mut ct = plaintext.to_vec();
-        let mut cipher = ChaCha20::new(
+        let mut cipher = XChaCha20::new(
             (&recipient.bytes[..32]).into(),
             (&nonce).into(),
         );
@@ -585,14 +586,14 @@ impl PreBackend for MockBackend {
     }
 
     fn decrypt(&self, secret: &SecretKey, ciphertext: &Ciphertext) -> PreResult<Zeroizing<Vec<u8>>> {
-        if ciphertext.bytes.len() < 12 {
+        if ciphertext.bytes.len() < 24 {
             return Err(PreError::Decryption("Ciphertext too short".into()));
         }
 
-        let nonce: [u8; 12] = ciphertext.bytes[..12].try_into().unwrap();
-        let mut pt = ciphertext.bytes[12..].to_vec();
+        let nonce: [u8; 24] = ciphertext.bytes[..24].try_into().unwrap();
+        let mut pt = ciphertext.bytes[24..].to_vec();
 
-        let mut cipher = ChaCha20::new(
+        let mut cipher = XChaCha20::new(
             (&secret.bytes[..32]).into(),
             (&nonce).into(),
         );
@@ -624,7 +625,7 @@ impl PreBackend for MockBackend {
     }
 
     fn ciphertext_size_estimate(&self, plaintext_size: usize) -> usize {
-        plaintext_size + 12 // Just nonce, no auth tag (Bao provides integrity)
+        plaintext_size + 24 // Just nonce (24 bytes for XChaCha20), no auth tag (Bao provides integrity)
     }
 }
 ```
@@ -1026,7 +1027,7 @@ lattice = []  # Requires OpenFHE FFI setup
 
 [dependencies]
 async-trait = "0.1"
-chacha20 = "0.9"           # Pure stream cipher (no Poly1305)
+chacha20 = "0.9"           # XChaCha20 stream cipher (192-bit nonce, no Poly1305)
 blake3 = "1.5"             # Hashing + Bao tree mode
 bao = "0.12"               # Streaming verification trees
 rand = "0.8"
@@ -1041,8 +1042,9 @@ umbral-pre = { version = "0.11", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-**Note:** We use `chacha20` (not `chacha20poly1305`) because:
+**Note:** We use `chacha20::XChaCha20` (not `chacha20poly1305`) because:
 
+- XChaCha20's 192-bit nonce eliminates birthday-bound concerns with random nonce generation
 - Poly1305 provides all-or-nothing authentication (incompatible with streaming)
 - Bao provides streaming verification via Blake3 tree hashing
 - Signatures on Bao root provide authenticity (equivalent to Poly1305's key binding)
