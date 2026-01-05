@@ -1,20 +1,21 @@
 # dCypher Python Prototype (ARCHIVED)
 
 **Status:** 📦 Archived - Reference Implementation Only  
-**Purpose:** Proof-of-concept that validated proxy recryption approach  
+**Purpose:** Proof-of-concept that validated proxy recryption approach
 
 ---
 
 ## ⚠️ Important Notice
 
 This Python implementation is **archived and not actively maintained**. It served its purpose as a proof-of-concept to validate:
+
 - OpenFHE integration for proxy recryption
 - Post-quantum signature schemes (liboqs)
 - IDK message format with Merkle tree verification
 - HDprint self-correcting identifier system
 - Multi-signature authorization patterns
 
-**All new development is in Rust.** See `../RUST_PORT_PLAN.md` for the production implementation.
+**All new development is in Rust.** See `../docs/IMPLEMENTATION_PLAN.md` for the production implementation.
 
 ---
 
@@ -23,6 +24,7 @@ This Python implementation is **archived and not actively maintained**. It serve
 This directory contains the original Python prototype with:
 
 - **src/dcypher/** - Core implementation
+
   - `lib/pre.py` - OpenFHE proxy recryption wrapper
   - `lib/idk_message.py` - IDK message format implementation
   - `hdprint/` - Self-correcting identifier system
@@ -31,6 +33,7 @@ This directory contains the original Python prototype with:
   - `cli/` - Command-line interface
 
 - **tests/** - Test suite (35 unit + 31 integration tests)
+
   - Reference for porting to Rust
   - Demonstrates expected behavior
 
@@ -43,6 +46,7 @@ This directory contains the original Python prototype with:
 ## Key Learnings & Design Issues
 
 ### What Worked Well ✅
+
 - OpenFHE integration via Python bindings
 - Multi-signature authorization pattern
 - HDprint error correction (BCH codes)
@@ -50,6 +54,7 @@ This directory contains the original Python prototype with:
 - Merkle tree verification
 
 ### Issues to Fix in Rust Port ⚠️
+
 - **Non-deterministic serialization**: OpenFHE produces different bytes for same object
 - **Context lifetime bugs**: Parallel tests destroy shared context
 - **ECDSA complexity**: Unnecessary, ED25519 sufficient
@@ -81,6 +86,7 @@ This directory contains the original Python prototype with:
 ## Running the Prototype (If Needed)
 
 **Requirements:**
+
 - Python 3.11+
 - Docker (for OpenFHE)
 - Just task runner
@@ -140,12 +146,14 @@ python-prototype/
 ## Key Implementation Details
 
 ### OpenFHE Integration
+
 - Uses BFVrns scheme with plaintext modulus 65537
 - Ring dimension determined by security level (128/192/256 bits)
 - Serialization is non-canonical (same object → different bytes)
 - Context must be kept alive for all related operations
 
 ### Multi-Signature Pattern
+
 ```python
 # Every operation requires:
 1. ED25519 signature (classical fallback)
@@ -155,12 +163,14 @@ python-prototype/
 ```
 
 ### HDprint System
+
 - BLAKE3 preprocessing → HMAC-SHA3-512 iterative chain
 - 5× BCH(t=1, m=7) interleaved codes for error correction
 - Base58L lowercase for checksum, Base58 mixed-case for fingerprint
 - Deterministic generation (same input → same identifier)
 
 ### IDK Message Format
+
 ```
 ----- BEGIN IDK MESSAGE PART 1/N -----
 Headers (key: value format)
@@ -176,6 +186,7 @@ Headers (key: value format)
 ## Performance Characteristics
 
 **Python Prototype (Reference):**
+
 - Key generation: ~200ms
 - Encrypt 1KB: ~50ms
 - Decrypt 1KB: ~50ms
@@ -189,6 +200,7 @@ Headers (key: value format)
 ## Security Notes
 
 ### Known Issues (Python)
+
 - Non-canonical serialization makes content addressing tricky
 - Shared context in server vulnerable to destruction
 - No rate limiting on endpoints
@@ -196,6 +208,7 @@ Headers (key: value format)
 - File storage has no size limits
 
 ### Addressed in Rust
+
 - ✅ Proper context lifetime management
 - ✅ Rate limiting via Tower middleware
 - ✅ Bounded nonce cache with expiration
@@ -209,12 +222,14 @@ Headers (key: value format)
 The test suite is comprehensive but not fully compatible with Rust:
 
 **Can Port:**
+
 - ✅ Test structure and scenarios
 - ✅ Multi-sig authorization flows
 - ✅ HDprint generation and correction
 - ✅ Merkle tree verification logic
 
 **Cannot Port:**
+
 - ❌ Byte-level ciphertext comparisons (non-deterministic)
 - ❌ Serialized key equality checks (format changing)
 - ❌ IDK message parsing (format changing)
@@ -226,6 +241,7 @@ The test suite is comprehensive but not fully compatible with Rust:
 ## Dependencies (Python)
 
 Major dependencies preserved for reference:
+
 - `openfhe` - FHE library (via Docker)
 - `fastapi` - HTTP server framework
 - `textual` - TUI framework
@@ -239,18 +255,21 @@ Major dependencies preserved for reference:
 ## Migration Notes
 
 ### Functions Worth Porting 1:1
+
 - `src/dcypher/lib/pre.py` - Core crypto operations
 - `src/dcypher/hdprint/algorithms.py` - HDprint generation
 - `src/dcypher/hdprint/bch.py` - BCH error correction
 - `src/dcypher/lib/idk_message.py` - Merkle tree construction
 
 ### Functions to Rewrite
+
 - Storage layer (moving to S3)
 - Serialization (moving to binary protocol)
 - Authentication (removing ECDSA)
 - TUI (minimal version)
 
 ### Functions to Skip
+
 - Docker-specific setup
 - Profiling infrastructure
 - ASCII art widgets
@@ -260,14 +279,14 @@ Major dependencies preserved for reference:
 
 ## Questions? Issues?
 
-This is an archived reference implementation. For questions about the Rust port, see:
-- `../RUST_PORT_PLAN.md` - Master implementation plan
+This is an archived reference implementation. For questions about the Rust implementation, see:
+
+- `../docs/IMPLEMENTATION_PLAN.md` - Master implementation plan
 - `../README.md` - Current project status
 
-Do not file issues against this Python code - it is preserved for reference only.
+Do not file issues against this Python code—it is preserved for reference only.
 
 ---
 
 **Last Updated:** January 2026  
-**Archived By:** Rust port initiative
-
+**Archived:** Reference implementation only

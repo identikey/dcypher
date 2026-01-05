@@ -1,43 +1,47 @@
 # dCypher: Quantum-Resistant Proxy Recryption System
 
-**Status:** 🚧 In Development - Rust Port Phase  
-**Version:** 2.0 (Rust Implementation)  
+**Status:** 🚀 Implementation Phase  
+**Version:** 2.0 (Rust)
 
 ---
 
 ## Overview
 
-dCypher is a production-ready proxy recryption system that enables secure, revocable file sharing with untrusted storage providers. Built on lattice-based cryptography (OpenFHE) with post-quantum signatures (liboqs), it provides end-to-end encryption where files can be shared without exposing private keys or plaintext.
+dCypher is a production-ready proxy recryption system enabling secure, revocable file sharing with untrusted storage providers. Built on lattice-based cryptography (OpenFHE) with post-quantum signatures (liboqs), it provides end-to-end encryption where files can be shared without exposing private keys or plaintext.
 
 ### Core Innovation
 
-**Proxy Recryption:** Transform ciphertext encrypted for Alice into ciphertext for Bob without ever decrypting. The storage provider can facilitate sharing without accessing plaintext.
+**Proxy Recryption:** Transform ciphertext encrypted for Alice into ciphertext for Bob without ever decrypting. The storage provider facilitates sharing without accessing plaintext.
 
-**Quantum-Resistant:** Uses ML-DSA-87 and other post-quantum signature algorithms alongside lattice-based encryption for long-term security.
+**Hybrid Encryption:** KEM-DEM architecture with pluggable PRE backends (lattice for post-quantum, EC for classical). Symmetric encryption (ChaCha20 + Bao) handles bulk data.
 
-**Self-Correcting Identifiers:** HDprint system provides human-readable identifiers that automatically correct typos and restore proper case from lowercase input.
+**Self-Correcting Identifiers:** HDprint provides human-readable identifiers that automatically correct typos and restore proper case from lowercase input.
 
 ---
 
 ## Current Status
 
-### ✅ Phase 0: Planning (CURRENT)
-- [x] Master implementation plan written (`RUST_PORT_PLAN.md`)
-- [ ] Architecture decision documents
-- [ ] Design questions answered
-- [ ] Workspace structure defined
+### ✅ Phase 0: Planning — COMPLETE
 
-### 🔲 Upcoming Phases
-- Phase 1: FFI Bindings (OpenFHE + liboqs)
-- Phase 2: Core Cryptography
-- Phase 3: Protocol Layer
-- Phase 4: Storage Layer (S3-compatible)
-- Phase 5: HDprint Implementation
-- Phase 6: HTTP API Server
-- Phase 7: CLI Application
-- Phase 8: Minimal TUI
+- [x] Implementation plan (`docs/IMPLEMENTATION_PLAN.md`)
+- [x] All design decisions documented
+- [x] Workspace structure defined
 
-**Timeline:** 8-10 weeks to production-ready
+### 🔲 Implementation Phases
+
+| Phase | Description                                       | Status |
+| ----- | ------------------------------------------------- | ------ |
+| 1     | FFI Bindings (OpenFHE + liboqs)                   | 🔲     |
+| 2     | Core Cryptography (PRE traits, hybrid encryption) | 🔲     |
+| 3     | Protocol Layer (Protobuf, Bao)                    | 🔲     |
+| 4     | Storage Client (S3-compatible)                    | 🔲     |
+| 4b    | Auth Service (identikey-storage-auth)             | 🔲     |
+| 5     | HDprint (parallelizable)                          | 🔲     |
+| 6     | Recryption Proxy Server                           | 🔲     |
+| 7     | CLI Application                                   | 🔲     |
+| 8     | Minimal TUI                                       | 🔲     |
+
+**Timeline:** 10-12 weeks to production-ready
 
 ---
 
@@ -45,21 +49,36 @@ dCypher is a production-ready proxy recryption system that enables secure, revoc
 
 ```
 dcypher/
-├── RUST_PORT_PLAN.md          # 📋 Master implementation plan - READ THIS FIRST
-├── README.md                   # This file
+├── README.md
+├── docs/
+│   ├── IMPLEMENTATION_PLAN.md    # 📋 Master plan - READ THIS FIRST
+│   ├── hybrid-encryption-architecture.md
+│   ├── pre-backend-traits.md
+│   ├── storage-design.md
+│   ├── wire-protocol.md
+│   └── ...                       # Other design docs
 │
-├── python-prototype/           # 📦 ARCHIVED: Original Python proof-of-concept
-│   ├── src/                    # Reference implementation
-│   ├── tests/                  # Test suite (ported to Rust)
-│   ├── docs/                   # Original specifications
-│   └── README.md               # Python implementation docs
+├── python-prototype/             # 📦 ARCHIVED: Reference implementation
+│   ├── src/dcypher/
+│   ├── tests/
+│   └── docs/
 │
-├── vendor/                     # Third-party dependencies
-│   ├── openfhe-development/    # OpenFHE C++ library
-│   ├── liboqs/                 # Post-quantum crypto library
+├── vendor/                       # Third-party dependencies
+│   ├── openfhe-development/
+│   ├── liboqs/
 │   └── ...
 │
-└── [Rust workspace to be created in Phase 1]
+└── [Rust workspace - Phase 1+]
+    ├── crates/
+    │   ├── dcypher-ffi/
+    │   ├── dcypher-core/
+    │   ├── dcypher-proto/
+    │   ├── dcypher-storage/
+    │   └── dcypher-hdprint/
+    ├── dcypher-cli/
+    ├── dcypher-server/
+    ├── dcypher-tui/
+    └── identikey-storage-auth/
 ```
 
 ---
@@ -88,24 +107,28 @@ dcypher share download <share-id> --output myfile.txt
 ## Key Features
 
 ### 🔐 Cryptography
+
 - **OpenFHE BFVrns** for lattice-based proxy recryption
 - **ED25519** for classical signatures
 - **ML-DSA-87** (mandatory) + optional PQ algorithms
 - **Multi-signature** authorization (all keys must sign)
 
 ### 💾 Storage
+
 - **S3-compatible** storage layer (Minio for dev, any S3 for prod)
 - **Authenticated access** via file hash lookup
 - **Chunked streaming** for large files
 - **Content-addressed** storage
 
 ### 🎯 HDprint Identifiers
+
 - **Error correction**: Automatically fixes single-character typos
 - **Case restoration**: Type lowercase, get proper mixed-case
 - **Hierarchical scaling**: 17.6 to 158+ bits security
 - **Human-friendly**: Base58 encoding, visual separators
 
 ### 🌐 API & Interfaces
+
 - **HTTP REST API** (Axum framework)
 - **CLI application** with rich interactions
 - **Minimal TUI** for visual operations
@@ -114,48 +137,55 @@ dcypher share download <share-id> --output myfile.txt
 
 ## Design Philosophy
 
-### What Changed from Python Prototype
+### Key Decisions
 
-**Removed:**
-- ❌ ECDSA/SECP256k1 (ED25519 sufficient for classical fallback)
-- ❌ Naive file storage (moved to S3-compatible)
-- ❌ ASCII armor as primary format (moving to efficient binary protocol)
+| Area             | Decision                                           |
+| ---------------- | -------------------------------------------------- |
+| **Encryption**   | Hybrid KEM-DEM with pluggable PRE backends         |
+| **Hashing**      | Blake3 everywhere (HMAC-SHA3-512 for HDprint only) |
+| **Verification** | Blake3/Bao tree mode for streaming                 |
+| **Wire format**  | Protobuf (primary), ASCII armor (export)           |
+| **Storage**      | Content-addressed S3 + auth service                |
+| **Signatures**   | ED25519 (classical) + ML-DSA-87 (post-quantum)     |
 
-**Enhanced:**
-- ✅ Proper Rust architecture with focused crates
-- ✅ S3-compatible storage for production
-- ✅ Efficient wire protocol (binary + optional ASCII export)
-- ✅ Standardized hashing (Blake2b vs Blake3 analysis)
-- ✅ Streaming chunk verification
+### Changes from Python Prototype
 
-**No Compatibility Required:**
-- This is a clean slate implementation
-- Cannot decrypt Python ciphertexts (different serialization)
-- No migration path needed (no production deployments exist)
+| Removed             | Added                                 |
+| ------------------- | ------------------------------------- |
+| ECDSA/SECP256k1     | Pluggable PRE backends (lattice + EC) |
+| Naive file storage  | S3-compatible + auth service          |
+| Custom Merkle trees | Blake3/Bao streaming verification     |
+| Mixed hashing       | Blake3 standardized                   |
+
+**Clean Slate:** No compatibility with Python prototype (different serialization, no production deployments)
 
 ---
 
 ## Documentation
 
-- **[RUST_PORT_PLAN.md](RUST_PORT_PLAN.md)** - Master implementation plan with all phases
-- **python-prototype/docs/** - Original specifications and design docs
-- **Phase-specific docs** - To be created in `docs/` as implementation progresses
+- **[docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)** - Master implementation plan
+- **python-prototype/docs/** - Original specifications (archived)
 
-### Key Design Documents
-1. `docs/hybrid-encryption-architecture.md` - Encryption architecture (KEM-DEM with pluggable PRE backends)
-2. `docs/pre-backend-traits.md` - Trait hierarchy for pluggable PRE backends
-3. `docs/hashing-standard.md` - Blake3 standardization decision
-4. `docs/verification-architecture.md` - Streaming chunk verification via Bao
-5. `docs/non-determinism.md` - Testing strategy for crypto
-6. `docs/storage-design.md` - S3 integration architecture
-7. `docs/wire-protocol.md` - Binary protocol specification
-8. `docs/hdprint-specification.md` - Complete HDprint system writeup
+### Design Documents
+
+| Document                                 | Description                         |
+| ---------------------------------------- | ----------------------------------- |
+| `docs/hybrid-encryption-architecture.md` | KEM-DEM with pluggable PRE backends |
+| `docs/pre-backend-traits.md`             | `PreBackend` trait hierarchy        |
+| `docs/storage-design.md`                 | S3 + auth service architecture      |
+| `docs/wire-protocol.md`                  | Protobuf + ASCII armor formats      |
+| `docs/verification-architecture.md`      | Blake3/Bao streaming verification   |
+| `docs/hashing-standard.md`               | Blake3 standardization              |
+| `docs/non-determinism.md`                | Crypto testing strategy             |
+| `docs/hdprint-specification.md`          | HDprint identifier system           |
+| `docs/hmac-analysis.md`                  | HMAC usage (HDprint only)           |
 
 ---
 
 ## Development
 
 ### Prerequisites
+
 - Rust 1.75+ (stable)
 - OpenFHE C++ library
 - liboqs (post-quantum crypto)
@@ -166,6 +196,7 @@ dcypher share download <share-id> --output myfile.txt
 The original Python proof-of-concept is preserved in `python-prototype/` for reference. It demonstrated the feasibility of proxy recryption with post-quantum signatures and includes a full TUI implementation.
 
 **To explore the prototype:**
+
 ```bash
 cd python-prototype
 # See python-prototype/README.md for setup instructions
@@ -187,48 +218,50 @@ This terminology is standardized throughout the Rust implementation.
 
 ## Architecture Highlights
 
-### Workspace Structure (Phase 1+)
-```
-dcypher/
-├── crates/
-│   ├── dcypher-ffi/          # OpenFHE + liboqs bindings
-│   ├── dcypher-core/         # Core crypto operations
-│   ├── dcypher-proto/        # Wire protocol
-│   ├── dcypher-storage/      # S3-compatible storage
-│   └── dcypher-hdprint/      # Identifier system
-├── dcypher-cli/              # CLI binary
-├── dcypher-server/           # HTTP API binary
-└── dcypher-tui/              # TUI binary
-```
+### Crates
 
-### Key Crates
-- **dcypher-ffi**: Safe Rust bindings to OpenFHE (C++) and liboqs (C)
-- **dcypher-core**: Pure Rust API for encryption, decryption, recryption
-- **dcypher-proto**: Message format, Merkle trees, serialization
-- **dcypher-storage**: Pluggable storage backends (S3, Minio, local)
-- **dcypher-hdprint**: Self-correcting identifier generation
+| Crate                    | Purpose                                     |
+| ------------------------ | ------------------------------------------- |
+| `dcypher-ffi`            | OpenFHE + liboqs FFI bindings               |
+| `dcypher-core`           | PRE backends, hybrid encryption, signatures |
+| `dcypher-proto`          | Wire protocol (Protobuf + Bao)              |
+| `dcypher-storage`        | S3-compatible storage client                |
+| `dcypher-hdprint`        | Self-correcting identifiers                 |
+| `identikey-storage-auth` | Auth service for storage access             |
+
+### Binaries
+
+| Binary           | Purpose                                                       |
+| ---------------- | ------------------------------------------------------------- |
+| `dcypher-server` | Recryption proxy (streams KEM ciphertext, holds recrypt keys) |
+| `dcypher-cli`    | Command-line interface                                        |
+| `dcypher-tui`    | Minimal terminal UI                                           |
 
 ---
 
 ## Security Model
 
 ### Trust Assumptions
-- **Untrusted Storage**: Storage provider cannot read plaintext
-- **Trusted Proxy**: Server performs recryption honestly (can be verified)
-- **Client-side Keys**: Users control their private keys
-- **Multi-signature**: All keys must authorize operations
+
+| Component        | Trust Level  | Notes                                            |
+| ---------------- | ------------ | ------------------------------------------------ |
+| Storage provider | Untrusted    | Sees only ciphertext + wrapped keys              |
+| Recryption proxy | Semi-trusted | Has recrypt keys, not secret keys; self-hostable |
+| Auth service     | Trusted      | Controls access; can be self-hosted              |
+| Client           | Trusted      | Holds secret keys                                |
 
 ### Cryptographic Guarantees
-- **End-to-end Encryption**: Only key holders decrypt
-- **Quantum Resistance**: Post-quantum signatures + lattice crypto
-- **Forward Secrecy**: Recryption keys can be revoked
-- **Integrity**: Merkle tree verification for all chunks
+
+- **E2E Encryption**: Only key holders decrypt (plaintext never leaves client)
+- **Quantum Resistance**: Lattice-based PRE + ML-DSA-87 signatures
+- **Forward Secrecy**: Per-file random symmetric keys
+- **Streaming Integrity**: Blake3/Bao verification during download
 
 ---
 
 ## Contributing
 
-Currently in active development for Rust port. Check `RUST_PORT_PLAN.md` for current phase and open tasks.
+See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for current phase and open tasks.
 
 ---
 
@@ -241,8 +274,7 @@ Currently in active development for Rust port. Check `RUST_PORT_PLAN.md` for cur
 ## Links
 
 - **Website**: [identikey.io/recryption](https://identikey.io/recryption)
-- **Proxy Recryption Explainer**: [identikey.io/recryption](https://identikey.io/recryption)
 
 ---
 
-**For detailed implementation plan and current status, see [RUST_PORT_PLAN.md](RUST_PORT_PLAN.md)**
+**→ [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)** for full implementation details

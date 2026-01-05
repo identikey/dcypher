@@ -7,7 +7,7 @@
 
 ## Summary
 
-All hashing in the Rust port uses **Blake3** exclusively, with one exception: HMAC-SHA3-512 remains in HDprint for keyed fingerprint generation (see `hmac-analysis.md`).
+All hashing uses **Blake3** exclusively, with one exception: HMAC-SHA3-512 remains in HDprint for keyed fingerprint generation (see `hmac-analysis.md`).
 
 ---
 
