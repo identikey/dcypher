@@ -7,9 +7,3 @@
 [submodule "vendor/openfhe-development"]
 	path = vendor/openfhe-development
 	url = https://github.com/openfheorg/openfhe-development.git
-[submodule "vendor/liboqs"]
-	path = vendor/liboqs
-	url = https://github.com/open-quantum-safe/liboqs.git
-[submodule "vendor/liboqs-python"]
-	path = vendor/liboqs-python
-	url = https://github.com/open-quantum-safe/liboqs-python
