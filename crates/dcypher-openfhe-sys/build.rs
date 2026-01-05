@@ -11,7 +11,7 @@ fn link_openmp() {
         for path in &omp_paths {
             let lib_path = PathBuf::from(path);
             if lib_path.join("libomp.dylib").exists() {
-                println!("cargo::rustc-link-search=native={}", path);
+                println!("cargo::rustc-link-search=native={path}");
                 println!("cargo::rustc-link-lib=omp");
                 return;
             }
@@ -42,8 +42,7 @@ fn main() {
     // Verify OpenFHE was built
     if !openfhe_lib.join("libOPENFHEpke_static.a").exists() {
         panic!(
-            "OpenFHE static libraries not found at {:?}. Run `just build-openfhe` first.",
-            openfhe_lib
+            "OpenFHE static libraries not found at {openfhe_lib:?}. Run `just build-openfhe` first."
         );
     }
 

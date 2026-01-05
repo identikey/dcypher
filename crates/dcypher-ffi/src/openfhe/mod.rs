@@ -151,7 +151,7 @@ impl PreContext {
         }
 
         // Convert back to bytes
-        let coeff_count = (original_len + 1) / 2; // Each coeff is 2 bytes
+        let coeff_count = original_len.div_ceil(2);
         let bytes = coefficients_to_bytes(
             &all_coeffs[..coeff_count.min(all_coeffs.len())],
             original_len,
