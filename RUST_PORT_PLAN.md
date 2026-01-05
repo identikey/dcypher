@@ -32,9 +32,9 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 - ❌ **No naive file storage** - Moving to S3-compatible API (Minio for dev)
 - ❌ **No IDK ASCII armor as primary format** - More efficient wire protocol needed
 - ✅ **Hybrid encryption** - KEM-DEM with pluggable PRE backends (lattice for PQ, EC for classical)
-- 🔄 **Standardize hashing** - Blake2b vs Blake3 analysis needed
-- 🔄 **HMAC usage review** - Ensure appropriate application
-- 🔄 **Hierarchical verification** - Enable streaming chunk verification
+- ✅ **Blake3 everywhere** - Standardized hashing (faster, Bao integration)
+- ✅ **HMAC for HDprint only** - Plain Blake3 elsewhere
+- ✅ **Blake3/Bao tree mode** - Streaming chunk verification
 
 ### What We're Building New
 
@@ -198,9 +198,9 @@ decoder.write_all(&chunk)?;  // verifies incrementally
 **Key Design Points:**
 
 - Files referenced by hash (hosting-agnostic, like IPFS)
-- Auth service returns capabilities for accessing specific hashes
-- Recryption proxy is separate, lean, self-hostable
-- TODO: Analyze metadata storage (inline S3 vs auth service)
+- Auth service (`identikey-storage-auth`) returns capabilities for accessing specific hashes
+- Recryption proxy (`dcypher-server`) is the main service—streams KEM ciphertext, holds recrypt keys
+- Auth service is part of Identikey suite; implementing in this repo for now, will split later
 
 **Document in:** `docs/storage-design.md`
 
@@ -303,10 +303,10 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 **Deliverables:**
 
 - ✅ This master plan
-- 🔲 Answer all 7 design questions above
-- 🔲 Architecture decision records for each question
-- 🔲 Rust workspace structure defined
-- 🔲 Dependency analysis (crates needed)
+- ✅ Answer all 7 design questions above
+- ✅ Architecture decision records for each question
+- ✅ Rust workspace structure defined
+- ✅ Dependency analysis (crates needed)
 
 **Design Docs Written:**
 
@@ -386,44 +386,65 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 dcypher-core/
 ├── src/
 │   ├── lib.rs
-│   ├── context.rs      // Crypto context management
-│   ├── keys.rs         // Key generation, serialization
-│   ├── encrypt.rs      // Encryption operations
-│   ├── recrypt.rs      // Recryption operations (NOTE: "recrypt" not "re_encrypt")
-│   ├── sign.rs         // ED25519 + PQ signatures
-│   └── types.rs        // Core types: PublicKey, SecretKey, Ciphertext, RecryptKey
+│   ├── hybrid.rs           // HybridEncryptor (KEM-DEM pattern)
+│   ├── sign.rs             // ED25519 + PQ signatures, MultiSig
+│   └── pre/
+│       ├── mod.rs          // Re-exports
+│       ├── traits.rs       // PreBackend trait
+│       ├── keys.rs         // PublicKey, SecretKey, RecryptKey, Ciphertext
+│       ├── error.rs        // PreError
+│       ├── registry.rs     // Backend registry (feature-gated)
+│       └── backends/
+│           ├── mod.rs
+│           ├── mock.rs     // MockBackend (testing)
+│           ├── lattice.rs  // LatticeBackend (OpenFHE FFI)
+│           └── ec_pairing.rs // EcPairingBackend (recrypt crate)
 └── tests/
-    ├── roundtrip.rs    // Basic encrypt/decrypt
-    ├── recryption.rs   // Full Alice->Bob flow
-    └── signatures.rs   // Multi-sig verification
+    ├── roundtrip.rs        // Basic encrypt/decrypt via HybridEncryptor
+    ├── recryption.rs       // Full Alice->Bob flow
+    └── signatures.rs       // Multi-sig verification
 ```
 
 **Key Design Decisions:**
 
-- **Encryption approach:** Implement decision from Phase 0 (full-file vs hybrid)
-- **Context management:** Singleton pattern or explicit passing? (Recommend explicit for testability)
-- **Error handling:** Custom error types with `thiserror`
+- **Encryption approach:** Hybrid KEM-DEM with pluggable PRE backends (see `docs/hybrid-encryption-architecture.md`)
+- **Context management:** Explicit backend passing via `HybridEncryptor<B: PreBackend>` for testability
+- **Error handling:** Custom error types with `thiserror` (see `PreError` enum)
 - **Async or sync:** Start sync, async can wrap later if needed
 
 **API Sketch:**
 
 ```rust
-// Core encryption operations
-pub fn encrypt(ctx: &CryptoContext, pk: &PublicKey, data: &[u8]) -> Result<Ciphertext>;
-pub fn decrypt(ctx: &CryptoContext, sk: &SecretKey, ct: &Ciphertext) -> Result<Vec<u8>>;
-
-// Recryption operations (NOTE: "recrypt" terminology)
-pub fn generate_recrypt_key(ctx: &CryptoContext, from_sk: &SecretKey, to_pk: &PublicKey) -> Result<RecryptKey>;
-pub fn recrypt(ctx: &CryptoContext, rk: &RecryptKey, ct: &Ciphertext) -> Result<Ciphertext>;
-
-// Multi-signature
-pub struct MultiSig {
-    ed25519_sig: Signature,
-    pq_sigs: Vec<PqSignature>,
+//! PRE Backend Trait (pluggable: lattice, EC-pairing, EC-secp256k1)
+pub trait PreBackend: Send + Sync {
+    fn generate_keypair(&self) -> PreResult<KeyPair>;
+    fn generate_recrypt_key(&self, from_sk: &SecretKey, to_pk: &PublicKey) -> PreResult<RecryptKey>;
+    fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<Ciphertext>;
+    fn decrypt(&self, secret: &SecretKey, ciphertext: &Ciphertext) -> PreResult<Vec<u8>>;
+    fn recrypt(&self, recrypt_key: &RecryptKey, ciphertext: &Ciphertext) -> PreResult<Ciphertext>;
 }
+
+//! Hybrid Encryption (KEM-DEM pattern)
+pub struct HybridEncryptor<B: PreBackend> { backend: B }
+
+impl<B: PreBackend> HybridEncryptor<B> {
+    /// Encrypt: generates random symmetric key, PRE-wraps it, ChaCha20 encrypts data
+    pub fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<EncryptedFile>;
+
+    /// Decrypt: unwraps key via PRE, ChaCha20 decrypts, verifies plaintext hash
+    pub fn decrypt(&self, secret: &SecretKey, file: &EncryptedFile) -> PreResult<Vec<u8>>;
+
+    /// Recrypt: transforms wrapped_key only (ciphertext unchanged)
+    pub fn recrypt(&self, recrypt_key: &RecryptKey, file: &EncryptedFile) -> PreResult<EncryptedFile>;
+}
+
+//! Multi-signature (ED25519 + PQ)
+pub struct MultiSig { ed25519_sig: Signature, pq_sigs: Vec<PqSignature> }
 pub fn sign_message(msg: &[u8], keys: &SigningKeys) -> Result<MultiSig>;
 pub fn verify_message(msg: &[u8], sig: &MultiSig, pks: &VerifyingKeys) -> Result<bool>;
 ```
+
+See `docs/pre-backend-traits.md` for full trait hierarchy and backend implementations.
 
 **Testing Strategy:**
 
@@ -453,9 +474,9 @@ pub fn verify_message(msg: &[u8], sig: &MultiSig, pks: &VerifyingKeys) -> Result
 dcypher-proto/
 ├── src/
 │   ├── lib.rs
-│   ├── wire.rs         // Binary wire format (protobuf/capnp/flatbuf)
-│   ├── armor.rs        // ASCII armor format (optional, for export)
-│   ├── merkle.rs       // Merkle tree construction + verification
+│   ├── wire.rs         // Protobuf serialization
+│   ├── armor.rs        // ASCII armor format (export/debugging)
+│   ├── bao.rs          // Blake3/Bao tree verification helpers
 │   └── message.rs      // High-level message construction
 └── tests/
     ├── serialization.rs
@@ -464,42 +485,38 @@ dcypher-proto/
 
 **Key Decisions (from Phase 0):**
 
-- Wire format: Binary (protobuf?) for performance
-- ASCII armor: Optional export format for human debugging
-- Merkle vs Blake3 tree mode for verification
-- Header fields to include (revisit IDK spec)
+- Wire format: Protobuf (primary), ASCII armor (export), JSON (debug)
+- Blake3/Bao tree mode for streaming verification
+- Header fields defined in `docs/wire-protocol.md`
 
 **Message Types:**
 
 ```rust
-// Core message structure
-pub struct DcypherMessage {
-    pub version: u32,
-    pub chunks: Vec<Chunk>,
-    pub metadata: Metadata,
-    pub signatures: MultiSig,
+/// Encrypted file (from hybrid-encryption-architecture.md)
+pub struct EncryptedFile {
+    pub version: u8,                    // Format version (2)
+    pub wrapped_key: Ciphertext,        // PRE-encrypted KeyMaterial
+    pub bao_hash: [u8; 32],             // Ciphertext integrity root
+    pub bao_outboard: Vec<u8>,          // Bao verification tree
+    pub ciphertext: Vec<u8>,            // ChaCha20 encrypted data
 }
 
-pub struct Chunk {
-    pub index: u32,
-    pub ciphertext: Ciphertext,
-    pub proof: VerificationProof, // Merkle path or Blake3 proof
+/// KeyMaterial (encrypted INSIDE wrapped_key—protects plaintext_hash)
+pub struct KeyMaterial {
+    pub symmetric_key: [u8; 32],        // ChaCha20 key
+    pub nonce: [u8; 12],                // ChaCha20 nonce
+    pub plaintext_hash: [u8; 32],       // Blake3 of plaintext (encrypted!)
+    pub plaintext_size: u64,            // Original size
 }
-
-pub struct Metadata {
-    pub file_hash: Hash,
-    pub chunk_count: u32,
-    pub total_size: u64,
-    // ... other fields TBD in Phase 0
-}
+// Total: 84 bytes
 ```
 
 **Verification Flow:**
 
-- Compute chunk hash
-- Verify against proof + root hash
-- Verify signature over metadata
-- Return verified chunk OR error
+1. Stream download: verify chunks against Bao tree
+2. After full download: verify `computed_bao_root == stored_bao_hash`
+3. Unwrap key via PRE → get `(key, nonce, plaintext_hash, size)`
+4. Decrypt with ChaCha20, verify plaintext hash and size
 
 **Testing:**
 
@@ -592,10 +609,88 @@ services:
 
 ---
 
+### Phase 4b: Storage Auth Service (identikey-storage-auth)
+
+**Duration:** 3-4 days  
+**Goal:** Authenticated access to content-addressed storage
+
+**Why S3 Isn't Enough:**
+
+S3 ACLs are bucket/prefix-based. We need:
+
+- Access control based on cryptographic identity (pubkeys)
+- Per-hash authorization (not per-prefix)
+- Hash → storage provider mapping (hosting agility)
+
+**Architecture:**
+
+```rust
+identikey-storage-auth/
+├── src/
+│   ├── lib.rs
+│   ├── ownership.rs    // pubkey → hash ownership index
+│   ├── capability.rs   // Signed access tokens
+│   ├── index.rs        // hash → provider URL mapping
+│   └── api.rs          // HTTP endpoints
+└── tests/
+    ├── capability_test.rs
+    └── integration_test.rs
+```
+
+**Core Functions:**
+
+```rust
+/// Ownership registry
+pub trait OwnershipStore {
+    /// Register file ownership
+    async fn register(&self, owner: &PublicKey, hash: &Hash, provider_url: &str) -> Result<()>;
+
+    /// Check if pubkey owns hash
+    async fn is_owner(&self, owner: &PublicKey, hash: &Hash) -> Result<bool>;
+
+    /// List files owned by pubkey
+    async fn list_owned(&self, owner: &PublicKey) -> Result<Vec<Hash>>;
+}
+
+/// Capability issuance
+pub struct Capability {
+    pub hash: Hash,
+    pub grantee: PublicKey,
+    pub expires: Option<DateTime>,
+    pub permissions: Permissions,  // Read, Write, Share
+    pub signature: Signature,      // Signed by auth service
+}
+
+/// Hash → provider mapping (hosting agility)
+pub trait ProviderIndex {
+    /// Where is this hash stored?
+    async fn lookup(&self, hash: &Hash) -> Result<Vec<ProviderUrl>>;
+
+    /// Update location (file moved between providers)
+    async fn update_location(&self, hash: &Hash, old: &ProviderUrl, new: &ProviderUrl) -> Result<()>;
+}
+```
+
+**API Endpoints:**
+
+```
+POST   /auth/register          - Register file ownership (after upload)
+GET    /auth/capability/{hash} - Request access capability (if authorized)
+POST   /auth/grant             - Grant access to another pubkey
+DELETE /auth/revoke            - Revoke access
+GET    /auth/locate/{hash}     - Resolve hash to storage URL(s)
+```
+
+**Note:** This is part of the Identikey suite. Will eventually move to separate repo, but building here for now since we need it.
+
+---
+
 ### Phase 5: HDprint Implementation (dcypher-hdprint)
 
 **Duration:** 2-3 days  
 **Goal:** Self-correcting identifier system
+
+**⚡ Parallelization Note:** HDprint has NO dependencies on Phases 1-4b. Can start immediately alongside FFI work.
 
 **Architecture:**
 
@@ -635,10 +730,18 @@ dcypher-hdprint/
 
 ---
 
-### Phase 6: HTTP API Server (dcypher-server)
+### Phase 6: Recryption Proxy Server (dcypher-server)
 
 **Duration:** 4-5 days  
-**Goal:** Production REST API with Axum
+**Goal:** Production recryption proxy with REST API (Axum)
+
+**What dcypher-server IS:**
+
+- The internet-connected recryption proxy
+- Holds recrypt keys (semi-trusted—users can self-host)
+- Streams KEM ciphertext through itself (wrapped key transforms)
+- Does NOT hold user secret keys
+- Does NOT see plaintext (only transforms encrypted key material)
 
 **Architecture:**
 
@@ -662,6 +765,8 @@ dcypher-server/
 ```
 
 **Framework:** Axum (modern, fast, well-integrated with Tower)
+
+**Dependencies:** Uses `dcypher-core` (crypto), `dcypher-storage` (S3 client), `identikey-storage-auth` (access control)
 
 **API Routes:**
 
@@ -868,7 +973,11 @@ dcypher/
 │   ├── Cargo.toml
 │   └── src/
 │
-├── dcypher-server/                 # HTTP API server binary
+├── dcypher-server/                 # Recryption proxy + HTTP API (streams KEM ciphertext)
+│   ├── Cargo.toml
+│   └── src/
+│
+├── identikey-storage-auth/         # Auth service for S3 (future: separate Identikey repo)
 │   ├── Cargo.toml
 │   └── src/
 │
@@ -904,7 +1013,7 @@ dcypher/
 - `cxx` - C++/Rust FFI for OpenFHE bindings
 - `oqs-sys` or `pqcrypto` - Post-quantum crypto via liboqs
 - `ed25519-dalek` - ED25519 signatures
-- `blake3` - Hashing (pending standardization decision)
+- `blake3` - Hashing (standardized)
 - `rand` + `rand_core` - Cryptographic RNG
 
 ### Serialization
@@ -988,10 +1097,10 @@ python-prototype/
 
 ### Phase 0 Complete When:
 
-- [ ] All 7 design questions answered with documented decisions
-- [ ] Architecture docs written and reviewed
-- [ ] Rust workspace structure defined
-- [ ] Dependency list finalized
+- [x] All 7 design questions answered with documented decisions
+- [x] Architecture docs written and reviewed
+- [x] Rust workspace structure defined
+- [x] Dependency list finalized
 
 ### Phase 1 Complete When:
 
@@ -1025,6 +1134,14 @@ python-prototype/
 - [ ] S3 integration tested
 - [ ] Docker compose dev environment
 - [ ] Concurrent access patterns validated
+
+### Phase 4b Complete When:
+
+- [ ] Ownership registration working
+- [ ] Capability issuance and verification working
+- [ ] Hash → provider URL lookup working
+- [ ] Access grant/revoke flow working
+- [ ] Integration with dcypher-storage validated
 
 ### Phase 5 Complete When:
 
@@ -1068,33 +1185,22 @@ python-prototype/
 
 ---
 
-## Open Questions for Team Discussion
-
-1. **Encryption approach:** Full-file vs hybrid? (Performance benchmarks needed)
-2. **Hashing standard:** Blake2b vs Blake3 everywhere? (Both are fine, pick one)
-3. **Wire protocol:** Protobuf vs Cap'n Proto vs Flatbuffers? (Need to decide)
-4. **Storage naming:** Content-addressed vs user-namespaced? (Security implications)
-5. **Verification:** Merkle tree vs Blake3 tree mode? (API differences)
-6. **HMAC usage:** Keep in HDprint or simplify? (Security analysis needed)
-7. **ASCII armor:** Keep as export format or drop entirely? (Debuggability tradeoff)
-
----
-
 ## Timeline Estimate
 
-**Phase 0:** 2-3 days (design decisions)  
+**Phase 0:** 2-3 days (design decisions) ✅ COMPLETE  
 **Phase 1:** 3-5 days (FFI bindings)  
 **Phase 2:** 4-5 days (core crypto)  
 **Phase 3:** 3-4 days (protocol)  
-**Phase 4:** 3-4 days (storage)  
-**Phase 5:** 2-3 days (HDprint)  
-**Phase 6:** 4-5 days (server)  
+**Phase 4:** 3-4 days (storage client)  
+**Phase 4b:** 3-4 days (auth service)  
+**Phase 5:** 2-3 days (HDprint) — can parallelize with 1-4  
+**Phase 6:** 4-5 days (recryption proxy server)  
 **Phase 7:** 3-4 days (CLI)  
 **Phase 8:** 2-3 days (TUI)
 
-**Total:** 26-36 days (~5-7 weeks)
+**Total:** 29-40 days (~6-8 weeks)
 
-**With buffer for unknowns:** 8-10 weeks to production-ready
+**With buffer for unknowns:** 10-12 weeks to production-ready
 
 ---
 

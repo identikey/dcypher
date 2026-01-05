@@ -20,7 +20,7 @@ The trait hierarchy allows swapping PRE backends without changing application lo
 ### `PreBackend` — The Main Abstraction
 
 ```rust
-//! dcypher-crypto/src/pre/traits.rs
+//! dcypher-core/src/pre/traits.rs
 
 use async_trait::async_trait;
 use zeroize::Zeroizing;
@@ -131,7 +131,7 @@ pub trait PreBackend: Send + Sync {
 ### Key Types
 
 ```rust
-//! dcypher-crypto/src/pre/keys.rs
+//! dcypher-core/src/pre/keys.rs
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -273,7 +273,7 @@ impl Ciphertext {
 ## Hybrid Encryption Layer
 
 ```rust
-//! dcypher-crypto/src/hybrid.rs
+//! dcypher-core/src/hybrid.rs
 //!
 //! Hybrid encryption using ChaCha20 + Blake3/Bao for streaming verification.
 //! No Poly1305—authenticity comes from signatures on the Bao root.
@@ -499,7 +499,7 @@ impl<B: PreBackend> HybridEncryptor<B> {
 ### Mock Backend (for testing)
 
 ```rust
-//! dcypher-crypto/src/pre/backends/mock.rs
+//! dcypher-core/src/pre/backends/mock.rs
 
 use crate::pre::*;
 use chacha20::ChaCha20;
@@ -632,7 +632,7 @@ impl PreBackend for MockBackend {
 ### Lattice Backend (OpenFHE via FFI)
 
 ```rust
-//! dcypher-crypto/src/pre/backends/lattice.rs
+//! dcypher-core/src/pre/backends/lattice.rs
 //!
 //! OpenFHE BFV/PRE backend for post-quantum security
 
@@ -713,7 +713,7 @@ impl PreBackend for LatticeBackend {
 ### EC Pairing Backend (recrypt crate)
 
 ```rust
-//! dcypher-crypto/src/pre/backends/ec_pairing.rs
+//! dcypher-core/src/pre/backends/ec_pairing.rs
 //!
 //! IronCore recrypt backend (BN254 pairing-based)
 
@@ -860,7 +860,7 @@ impl PreBackend for EcPairingBackend {
 ## Backend Registry
 
 ```rust
-//! dcypher-crypto/src/pre/registry.rs
+//! dcypher-core/src/pre/registry.rs
 
 use std::sync::Arc;
 use crate::pre::{PreBackend, BackendId, PreResult, PreError};
@@ -939,11 +939,11 @@ pub fn default_registry() -> BackendRegistry {
 ## Module Structure
 
 ```
-dcypher-crypto/
+dcypher-core/
 ├── Cargo.toml
 └── src/
     ├── lib.rs
-    ├── hybrid.rs           # HybridEncryptor, EncryptedMessage
+    ├── hybrid.rs           # HybridEncryptor, EncryptedFile
     └── pre/
         ├── mod.rs          # Re-exports
         ├── traits.rs       # PreBackend trait
@@ -962,14 +962,14 @@ dcypher-crypto/
 ## Usage Example
 
 ```rust
-use dcypher_crypto::{
+use dcypher_core::{
     HybridEncryptor,
     pre::{BackendRegistry, BackendId},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get default backend (lattice/post-quantum)
-    let registry = dcypher_crypto::pre::default_registry();
+    let registry = dcypher_core::pre::default_registry();
     let backend = registry.default_backend()?;
 
     println!("Using backend: {} (PQ: {})",
@@ -1014,7 +1014,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [package]
-name = "dcypher-crypto"
+name = "dcypher-core"
 version = "0.1.0"
 edition = "2021"
 
