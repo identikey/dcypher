@@ -17,6 +17,7 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 ## Design Philosophy Changes
 
 ### What We're Keeping
+
 - ✅ Proxy recryption via OpenFHE lattice crypto
 - ✅ Post-quantum signatures (ML-DSA-87, etc via liboqs)
 - ✅ Dual classical keys (ED25519 only, **dropping ECDSA/SECP256k1**)
@@ -26,6 +27,7 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 - ✅ Chunked streaming architecture
 
 ### What We're Changing
+
 - ❌ **No ECDSA/SECP256k1** - Unnecessary complexity, ED25519 sufficient for classical fallback
 - ❌ **No naive file storage** - Moving to S3-compatible API (Minio for dev)
 - ❌ **No IDK ASCII armor as primary format** - More efficient wire protocol needed
@@ -35,6 +37,7 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 - 🔄 **Hierarchical verification** - Enable streaming chunk verification
 
 ### What We're Building New
+
 - 🆕 **S3-compatible storage layer** - Authenticated access via file hash lookup
 - 🆕 **Efficient wire protocol** - Binary serialization for performance
 - 🆕 **Minimal rad TUI** - Inherit spirit, lose bloat
@@ -42,220 +45,166 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 
 ---
 
-## Critical Design Questions (Answer Before Coding)
+## Critical Design Questions — DECISIONS
 
-### 1. Encryption Architecture
+### 1. Encryption Architecture ⏳ PENDING DISCUSSION
+
 **Question:** Full-file asymmetric vs hybrid approach?
 
-**Analysis Required:**
-- **Pure Asymmetric:** Encrypt entire file with OpenFHE PRE
-  - ✅ Simple model: one ciphertext per file
-  - ✅ Direct recryption transformation
-  - ❌ Performance: FHE expensive for large files
-  - ❌ Size overhead: ciphertext expansion significant
+**Preliminary Analysis (see `docs/crypto-architecture.md`):**
 
-- **Hybrid (PGP-style):** Symmetric file encryption + asymmetric key wrapping
-  - ✅ Performance: AES/ChaCha20 for bulk data
-  - ✅ Small ciphertext: only symmetric key encrypted with FHE
-  - ❌ Complexity: two-stage encryption/decryption
-  - ❌ Recryption: must transform wrapped key, not file
-  - ⚠️  Security: ensure key derivation sound
+- BFV/PRE ciphertext expansion is ~50-100x for 128-bit security
+- Pure asymmetric: 1MB file → 50-100MB ciphertext (impractical)
+- Hybrid recommended: ChaCha20-Poly1305 for bulk data, PRE for key wrapping only
 
-**Decision Criteria:**
-- Performance benchmarks: encrypt/decrypt 1MB, 10MB, 100MB files
-- Security analysis: hybrid construction proof
-- Ciphertext size comparison
-- Streaming capability requirements
+**Status:** Pending dedicated discussion before finalizing.
 
 **Document in:** `docs/crypto-architecture.md`
 
 ---
 
-### 2. Hashing Standardization
-**Question:** Blake2b vs Blake3 - when to use each?
+### 2. Hashing Standardization ✅ DECIDED: Blake3 Everywhere
 
-**Current State (Python prototype):**
-- Blake2b: Merkle trees, chunk hashes, IDK message integrity
-- Blake3: HDprint preprocessing (before HMAC-SHA3-512)
-- HMAC-SHA3-512: HDprint fingerprint generation
+**Decision:** Standardize on **Blake3** for all hashing operations.
 
-**Analysis Required:**
-- **Blake2b advantages:** Mature, simpler, widely deployed
-- **Blake3 advantages:** Parallelizable, faster, tree mode built-in
-- **HMAC-SHA3-512:** Strong but potentially overkill
+**Rationale:**
 
-**Standardization Options:**
-1. **Blake3 everywhere:** Modern choice, best performance
-2. **Blake2b everywhere:** Conservative choice, battle-tested
-3. **Strategic split:** Blake3 for data, Blake2b for legacy compat (but we don't need compat!)
+- 4-8x faster than Blake2b
+- Built-in tree mode (Bao) for streaming verification
+- Native parallelism
+- Excellent Rust crate (`blake3`)
+- 256-bit security margin
 
-**Decision Criteria:**
-- Performance benchmarks on target hardware
-- Security analysis: both are solid, pick on engineering grounds
-- Ecosystem support in Rust (both have excellent crates)
+**Migration from Python:**
+
+- Blake2b (Merkle, chunks) → Blake3
+- Blake3 (HDprint preprocessing) → Blake3 (unchanged)
+- HMAC-SHA3-512 (HDprint fingerprint) → Keep (see HMAC decision)
 
 **Document in:** `docs/hashing-standard.md`
 
 ---
 
-### 3. HMAC Usage Review
-**Question:** Where is HMAC appropriate vs plain hashing?
+### 3. HMAC Usage Review ✅ DECIDED: HDprint Only
 
-**Current Usage (Python prototype):**
-- HMAC-SHA3-512 in HDprint fingerprint generation
-- HMAC provides key-based authentication
+**Decision:** Retain **HMAC-SHA3-512 for HDprint only**; use plain Blake3 elsewhere.
 
-**Analysis Required:**
-- **When HMAC needed:** Keyed integrity, authentication tags
-- **When plain hash sufficient:** Content addressing, Merkle trees
-- **HDprint case:** Is key-based fingerprint necessary? Or can we use Blake3(public_key || data)?
+**Rationale:**
 
-**Decision Criteria:**
-- Threat model: what attacks does HMAC prevent here?
-- Performance: HMAC overhead vs plain hash
-- Simplicity: fewer primitives = easier audit
+- HDprint requires keyed fingerprints bound to public key
+- HMAC provides PRF property for uniform base58 distribution
+- Collision-finding without key is computationally infeasible
+- Plain Blake3 sufficient for: content hashes, Merkle/Bao trees, wire integrity
 
 **Document in:** `docs/hmac-analysis.md`
 
 ---
 
-### 4. Hierarchical Verification Architecture
-**Question:** How to enable streaming verification of chunks?
+### 4. Hierarchical Verification ✅ DECIDED: Blake3/Bao Tree Mode
 
-**Requirements:**
-- ✅ Verify individual chunks as they arrive (low latency)
-- ✅ Verify entire file integrity (security)
-- ✅ Support partial downloads (range requests)
-- ✅ Enable parallel chunk processing
+**Decision:** Use **Blake3's built-in Bao tree mode** for streaming verification.
 
-**Design Options:**
+**Benefits:**
 
-**Option A: Merkle Tree (Current)**
-- Root hash = file identity
-- Auth paths allow per-chunk verification
-- ✅ Well understood, proven security
-- ❌ Need to transmit auth paths with chunks
-- ❌ Root hash must be known/trusted upfront
+- Native streaming verification (chunks verified as they arrive)
+- No manual Merkle tree construction
+- Root hash sufficient for full file integrity
+- Parallel hashing built-in
+- Implicit auth paths in encoding (no per-chunk overhead)
 
-**Option B: Blake3 Tree Mode**
-- Blake3 has built-in Merkle tree construction
-- Can verify chunks with only root hash + chunk positions
-- ✅ Simpler implementation (library handles it)
-- ✅ Parallelizable by design
-- ⚠️  Less battle-tested than Merkle tree construction
+**Implementation:**
 
-**Option C: Hybrid**
-- Blake3 for content hashing (fast, parallel)
-- Separate Merkle tree for verification structure
-- ✅ Best of both worlds
-- ❌ More complexity
+```rust
+use bao::{encode::Encoder, decode::Decoder};
 
-**Decision Criteria:**
-- Streaming verification performance
-- Implementation complexity
-- Wire protocol efficiency (how much verification data per chunk?)
+// Encoding
+let (encoded, root) = bao::encode::encode(data);
+
+// Streaming verification
+let mut decoder = Decoder::new(&root);
+decoder.write_all(&chunk)?;  // verifies incrementally
+```
 
 **Document in:** `docs/verification-architecture.md`
 
 ---
 
-### 5. Non-Deterministic Operations
-**Question:** What operations are non-deterministic and why does it matter?
+### 5. Non-Deterministic Operations ✅ DECIDED: Semantic Testing
 
-**Known Non-Determinism in Python Prototype:**
-- ⚠️  **OpenFHE Serialization (line 269):** Same object → different bytes on re-serialize
-  - Impact: Can't use byte-level equality for testing
-  - Impact: Can't use serialized form as content hash
-  - Solution: Semantic equivalence tests, not byte comparison
+**Decision:** Test **semantic correctness**, not byte equality.
 
-- ⚠️  **Post-Quantum Signatures:** Many PQ schemes include randomness
-  - Impact: Same message + key → different signature each time
-  - Impact: Can't rely on signature as deterministic identifier
-  - Solution: Verify signatures, don't compare them
+**Sources of Non-Determinism:**
+| Source | Cause | Test Strategy |
+|--------|-------|---------------|
+| OpenFHE serialization | Internal state ordering | Roundtrip semantic equality |
+| OpenFHE ciphertext | Encryption randomness | decrypt(encrypt(x)) == x |
+| PQ signatures | Randomized signing | verify(sign(m)) == true |
 
-**Critical for Rust Port:**
-- ✅ Crypto context management: must keep same context instance for related operations
-- ✅ Testing strategy: validate cryptographic properties, not byte equality
-- ✅ Content addressing: hash plaintext or deterministic representation, not ciphertext
-- ✅ Idempotency: operations must be repeatable even if bytes differ
+**Content Addressing:** Hash **plaintext** (or deterministic canonical form), never ciphertext.
 
 **Document in:** `docs/non-determinism.md`
 
 ---
 
-### 6. S3-Compatible Storage Design
-**Question:** How to integrate S3 for production storage?
+### 6. S3-Compatible Storage ✅ DECIDED: Content-Addressed + Auth Service
 
-**Requirements:**
-- ✅ Local dev: Minio in Docker
-- ✅ Production: Any S3-compatible service (AWS, Backblaze, etc)
-- ✅ Authenticated access via file hash
-- ✅ Support chunked uploads/downloads
-- ✅ Range request support for partial retrieval
+**Decision:** Content-addressed storage (IPFS-style) with separate **Authentication Service** layer.
 
-**Design Sketch:**
+**Architecture:**
+
 ```
-Storage Layer API:
-  - put_chunk(hash, data) -> Result<()>
-  - get_chunk(hash) -> Result<Vec<u8>>
-  - list_chunks(prefix) -> Result<Vec<ChunkMetadata>>
-  - delete_chunk(hash) -> Result<()>
-
-Implementations:
-  - MinioStorage (dev)
-  - S3Storage (prod)
-  - LocalFileStorage (testing)
+┌─────────────────────────────────────────────────────────────────┐
+│                     AUTHENTICATION SERVICE                       │
+│  - Manages file ownership (pubkey → file hashes)                │
+│  - Issues access capabilities (signed tokens)                   │
+│  - Maintains storage provider index (hash → provider URLs)      │
+│  - Handles hosting agility (files movable between providers)    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     S3-COMPATIBLE STORAGE                        │
+│  - Single bucket for all users                                  │
+│  - Objects keyed by Blake3 hash (content-addressed)             │
+│  - Automatic deduplication                                      │
+│  - Any provider: Minio (dev), AWS S3, Backblaze, etc.          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     RECRYPTION PROXY (separate)                  │
+│  - Lean, special-purpose                                        │
+│  - Holds recryption keys only                                   │
+│  - Semi-trusted (users can self-host for security)             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Key Decisions:**
-- **Bucket structure:** One bucket per user? Or shared bucket with namespacing?
-- **Object naming:** `/user/{pubkey}/chunks/{hash}` or content-addressed `/chunks/{hash}`?
-- **Metadata storage:** S3 object metadata or separate index?
-- **Authentication:** Pre-signed URLs? IAM roles? Custom auth layer?
+**Key Design Points:**
+
+- Files referenced by hash (hosting-agnostic, like IPFS)
+- Auth service returns capabilities for accessing specific hashes
+- Recryption proxy is separate, lean, self-hostable
+- TODO: Analyze metadata storage (inline S3 vs auth service)
 
 **Document in:** `docs/storage-design.md`
 
 ---
 
-### 7. IDK Message Format Revision
-**Question:** What should the wire protocol look like?
+### 7. Wire Protocol ✅ DECIDED: Multiple Formats
 
-**Current (ASCII Armor):**
-```
------ BEGIN IDK MESSAGE PART 1/8 -----
-Headers (key: value)
+**Decision:** Support **multiple serialization formats**; maintenance overhead minimal.
 
-<base64 payload>
------ END IDK MESSAGE PART 1/8 -----
-```
+**Supported Formats:**
 
-**Pros:** Human-readable, debuggable, PGP-familiar
-**Cons:** Size overhead (base64 ~33%), parsing complexity
+1. **Protobuf (primary)** — Compact, typed, fast
+2. **ASCII Armor (export)** — Human-readable, debugging, key backup
+3. **JSON (debug/API)** — Easy inspection, API responses
 
-**New Design Options:**
+**Format Selection:**
 
-**Option A: Binary Protocol (Efficient)**
-- Protocol Buffers / Cap'n Proto / Flatbuffers
-- ✅ Compact: no base64, no text headers
-- ✅ Fast: zero-copy deserialization
-- ❌ Not human-readable
-- ❌ Debugging harder
-
-**Option B: Hybrid**
-- Binary for wire protocol performance
-- ASCII armor as export/import format for human use
-- ✅ Best of both worlds
-- ❌ Two serialization paths to maintain
-
-**Decision Criteria:**
-- Performance: serialize/deserialize benchmarks
-- Debuggability: how often do we need to inspect?
-- Tooling: can we build good debug tools for binary format?
-
-**Headers to Revisit:**
-- Which headers actually needed?
-- Can we compress/deduplicate repeated headers?
-- Version negotiation strategy
+- Wire protocol: Protobuf (default)
+- File export/import: ASCII armor
+- REST API responses: JSON or Protobuf (content negotiation)
 
 **Document in:** `docs/wire-protocol.md`
 
@@ -264,11 +213,14 @@ Headers (key: value)
 ## HDprint System: Full Specification
 
 ### What It Is
+
 Self-correcting hierarchical identifier system combining:
+
 - **Paiready checksum:** BCH error-correcting, Base58L lowercase
 - **HDprint fingerprint:** HMAC-SHA3-512 chain, hierarchical scaling
 
 ### Format
+
 ```
 {paiready}_{hdprint}
 myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
@@ -277,17 +229,20 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 ### Key Benefits
 
 **1. Error Correction**
+
 - Single character typos automatically corrected
 - User types: `1pk2bdr_...` (2 errors in checksum)
 - System corrects to: `4pkabdr_...`
 - Implementation: 5× BCH(t=1, m=7) interleaved codes
 
 **2. Case Insensitivity**
+
 - User types everything lowercase: `myzgemb_5ubrza_t9w1ljrx_hegmdyam`
 - System restores proper case: `myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM`
 - Implementation: Case bit field encoded in checksum
 
 **3. Hierarchical Scaling**
+
 - TINY: 17.6 bits security (testing)
 - SMALL: 64.4 bits (low security)
 - MEDIUM: 111.3 bits (standard)
@@ -295,22 +250,26 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 - Multiple racks for even higher security
 
 **4. Human Friendly**
+
 - Base58 encoding (no confusing chars: 0/O, 1/l)
 - Underscore separators for visual parsing
 - Meaningful structure: checksum first, then hierarchical segments
 
 ### Use Cases in dCypher
+
 - Public key fingerprints (human-verifiable)
 - File content addressing (error-resistant)
 - Share IDs (user can manually enter/verify)
 - API tokens (built-in integrity checking)
 
 ### Security Properties
+
 - **Collision Resistance:** HMAC-SHA3-512 base provides >256-bit security
 - **Preimage Resistance:** Can't reverse engineer source from identifier
 - **Second Preimage Resistance:** Can't find different input with same identifier
 
 ### Implementation Notes
+
 - **Algorithm:** BLAKE3 preprocessing → HMAC-SHA3-512 iterative chain
 - **Key Material:** Can use public key, file hash, or any unique data
 - **Deterministic:** Same input → same identifier (important for testing)
@@ -323,8 +282,10 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 ## Implementation Phases
 
 ### Phase 0: Planning & Specification (Current)
+
 **Duration:** 2-3 days  
 **Deliverables:**
+
 - ✅ This master plan
 - 🔲 Answer all 7 design questions above
 - 🔲 Architecture decision records for each question
@@ -332,6 +293,7 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 - 🔲 Dependency analysis (crates needed)
 
 **Design Docs to Write:**
+
 1. `docs/crypto-architecture.md` - Encryption approach decision
 2. `docs/hashing-standard.md` - Blake2b vs Blake3 + HMAC analysis
 3. `docs/verification-architecture.md` - Streaming chunk verification
@@ -343,26 +305,30 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 ---
 
 ### Phase 1: Rust Workspace Setup & FFI Foundations
+
 **Duration:** 3-5 days  
 **Goal:** Get OpenFHE and liboqs working in Rust
 
 **Tasks:**
+
 1. Create workspace structure:
+
    ```
    dcypher-rust/
    ├── Cargo.toml (workspace)
    ├── crates/
    │   ├── dcypher-ffi/      # START HERE
-   │   ├── dcypher-core/     
-   │   ├── dcypher-proto/    
-   │   ├── dcypher-storage/  
-   │   └── dcypher-hdprint/  
-   ├── dcypher-cli/          
-   ├── dcypher-server/       
+   │   ├── dcypher-core/
+   │   ├── dcypher-proto/
+   │   ├── dcypher-storage/
+   │   └── dcypher-hdprint/
+   ├── dcypher-cli/
+   ├── dcypher-server/
    └── docs/
    ```
 
 2. **dcypher-ffi crate:**
+
    - OpenFHE bindings via cxx
    - Reference: `vendor/openfhe-rs/` in Python repo
    - liboqs bindings (check crates.io first, may exist)
@@ -379,10 +345,12 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
    - Decrypt after recryption succeeds
 
 **Non-Determinism Note:**
+
 - Write tests that validate cryptographic properties (plaintext recovered)
 - NOT byte-level comparison of ciphertexts/serialized keys
 
 **Dependencies to evaluate:**
+
 - `cxx` for OpenFHE bindings
 - `oqs-sys` or `pqcrypto` for liboqs (check which is maintained)
 - `ed25519-dalek` for ED25519 signatures
@@ -391,10 +359,12 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 ---
 
 ### Phase 2: Core Cryptography (dcypher-core)
+
 **Duration:** 4-5 days  
 **Goal:** Production-ready crypto operations library
 
 **Architecture:**
+
 ```rust
 dcypher-core/
 ├── src/
@@ -412,12 +382,14 @@ dcypher-core/
 ```
 
 **Key Design Decisions:**
+
 - **Encryption approach:** Implement decision from Phase 0 (full-file vs hybrid)
 - **Context management:** Singleton pattern or explicit passing? (Recommend explicit for testability)
 - **Error handling:** Custom error types with `thiserror`
 - **Async or sync:** Start sync, async can wrap later if needed
 
 **API Sketch:**
+
 ```rust
 // Core encryption operations
 pub fn encrypt(ctx: &CryptoContext, pk: &PublicKey, data: &[u8]) -> Result<Ciphertext>;
@@ -437,6 +409,7 @@ pub fn verify_message(msg: &[u8], sig: &MultiSig, pks: &VerifyingKeys) -> Result
 ```
 
 **Testing Strategy:**
+
 - Property-based tests with `proptest`:
   - encrypt(decrypt(x)) == x
   - decrypt_bob(recrypt(encrypt_alice(x))) == x
@@ -445,6 +418,7 @@ pub fn verify_message(msg: &[u8], sig: &MultiSig, pks: &VerifyingKeys) -> Result
 - Performance benchmarks with `criterion`
 
 **Critical:** Document non-determinism in tests
+
 - Ciphertext bytes will differ each run (randomness)
 - Serialized keys may differ (OpenFHE non-canonical)
 - Test semantic equivalence, not byte equality
@@ -452,10 +426,12 @@ pub fn verify_message(msg: &[u8], sig: &MultiSig, pks: &VerifyingKeys) -> Result
 ---
 
 ### Phase 3: Protocol Layer (dcypher-proto)
+
 **Duration:** 3-4 days  
 **Goal:** Wire protocol for serialization/deserialization
 
 **Architecture:**
+
 ```rust
 dcypher-proto/
 ├── src/
@@ -470,12 +446,14 @@ dcypher-proto/
 ```
 
 **Key Decisions (from Phase 0):**
+
 - Wire format: Binary (protobuf?) for performance
 - ASCII armor: Optional export format for human debugging
 - Merkle vs Blake3 tree mode for verification
 - Header fields to include (revisit IDK spec)
 
 **Message Types:**
+
 ```rust
 // Core message structure
 pub struct DcypherMessage {
@@ -500,12 +478,14 @@ pub struct Metadata {
 ```
 
 **Verification Flow:**
+
 - Compute chunk hash
 - Verify against proof + root hash
 - Verify signature over metadata
 - Return verified chunk OR error
 
 **Testing:**
+
 - Round-trip serialization
 - Merkle tree proofs for various tree sizes
 - Signature verification
@@ -514,10 +494,12 @@ pub struct Metadata {
 ---
 
 ### Phase 4: Storage Layer (dcypher-storage)
+
 **Duration:** 3-4 days  
 **Goal:** S3-compatible storage abstraction
 
 **Architecture:**
+
 ```rust
 dcypher-storage/
 ├── src/
@@ -532,6 +514,7 @@ dcypher-storage/
 ```
 
 **Storage Trait:**
+
 ```rust
 #[async_trait]
 pub trait ChunkStorage {
@@ -544,12 +527,15 @@ pub trait ChunkStorage {
 ```
 
 **Implementations:**
+
 1. **MinioStorage** - Development environment
+
    - Uses `rusoto_s3` or `aws-sdk-rust`
    - Docker compose for local Minio
    - Configuration via env vars
 
 2. **S3Storage** - Production
+
    - Same interface, different endpoint
    - Supports any S3-compatible service
 
@@ -559,19 +545,22 @@ pub trait ChunkStorage {
    - Fast for unit tests
 
 **Key Design (from Phase 0):**
+
 - Authenticated access model
 - Bucket/object naming scheme
 - Metadata handling strategy
 
 **Testing:**
+
 - Unit tests with LocalFileStorage
 - Integration tests with Minio (Docker)
 - Error handling: network failures, permission errors
 - Concurrent access patterns
 
 **Docker Compose for Dev:**
+
 ```yaml
-version: '3'
+version: "3"
 services:
   minio:
     image: minio/minio
@@ -587,10 +576,12 @@ services:
 ---
 
 ### Phase 5: HDprint Implementation (dcypher-hdprint)
+
 **Duration:** 2-3 days  
 **Goal:** Self-correcting identifier system
 
 **Architecture:**
+
 ```rust
 dcypher-hdprint/
 ├── src/
@@ -606,17 +597,20 @@ dcypher-hdprint/
 ```
 
 **Python Reference:**
+
 - Most implementation in `src/dcypher/hdprint/`
 - Can mostly port directly, well-contained
 - May need Rust BCH library or port from Python
 
 **Key Features to Preserve:**
+
 - Deterministic generation (same input → same output)
 - Single char error correction in checksum
 - Case restoration from lowercase input
 - Hierarchical scaling (tiny/small/medium/rack)
 
 **Testing:**
+
 - Known-answer tests from Python prototype
 - Error correction: inject typos, verify correction
 - Case round-trip: lowercase input → proper case output
@@ -625,10 +619,12 @@ dcypher-hdprint/
 ---
 
 ### Phase 6: HTTP API Server (dcypher-server)
+
 **Duration:** 4-5 days  
 **Goal:** Production REST API with Axum
 
 **Architecture:**
+
 ```rust
 dcypher-server/
 ├── src/
@@ -651,6 +647,7 @@ dcypher-server/
 **Framework:** Axum (modern, fast, well-integrated with Tower)
 
 **API Routes:**
+
 ```
 POST   /accounts                    - Create account (ED25519 + PQ keys)
 GET    /accounts/{pubkey}           - Get account info
@@ -671,6 +668,7 @@ GET    /health                      - Health check
 ```
 
 **Key Features:**
+
 - Multi-signature verification middleware
 - Nonce-based replay prevention
 - Rate limiting (Tower middleware)
@@ -679,6 +677,7 @@ GET    /health                      - Health check
 - Graceful shutdown
 
 **Configuration:**
+
 ```rust
 pub struct Config {
     pub host: String,
@@ -690,6 +689,7 @@ pub struct Config {
 ```
 
 **Testing:**
+
 - Unit tests for each route handler
 - Integration tests with test client
 - E2E tests: full Alice->Bob sharing flow
@@ -698,10 +698,12 @@ pub struct Config {
 ---
 
 ### Phase 7: CLI Application (dcypher-cli)
+
 **Duration:** 3-4 days  
 **Goal:** User-friendly command-line interface
 
 **Architecture:**
+
 ```rust
 dcypher-cli/
 ├── src/
@@ -721,6 +723,7 @@ dcypher-cli/
 **CLI Framework:** `clap` v4 with derive macros
 
 **Command Structure:**
+
 ```
 dcypher identity new [--output identity.json]
 dcypher identity show <identity-file>
@@ -743,6 +746,7 @@ dcypher server start [--config server.toml]
 ```
 
 **Key Features:**
+
 - Interactive prompts with `dialoguer` for sensitive operations
 - Progress bars with `indicatif` for uploads/downloads
 - Colored output with `colored`
@@ -750,17 +754,18 @@ dcypher server start [--config server.toml]
 - Shell completions generation
 
 **Identity File Format:**
+
 ```json
 {
   "version": "1.0",
   "public_key": {
     "ed25519": "...",
-    "pq_keys": [{"alg": "ML-DSA-87", "key": "..."}],
+    "pq_keys": [{ "alg": "ML-DSA-87", "key": "..." }],
     "pre_key": "..."
   },
   "secret_key": {
     "ed25519": "...",
-    "pq_keys": [{"alg": "ML-DSA-87", "key": "..."}],
+    "pq_keys": [{ "alg": "ML-DSA-87", "key": "..." }],
     "pre_key": "..."
   },
   "crypto_context": "..." // Serialized context
@@ -768,6 +773,7 @@ dcypher server start [--config server.toml]
 ```
 
 **Testing:**
+
 - Command parsing tests
 - Integration tests with mock server
 - E2E tests with real server
@@ -775,24 +781,28 @@ dcypher server start [--config server.toml]
 ---
 
 ### Phase 8: Minimal Rad TUI (dcypher-tui)
+
 **Duration:** 2-3 days  
 **Goal:** Inherit spirit, lose bloat
 
 **Framework:** `ratatui` (formerly tui-rs) - lightweight, no heavy deps
 
 **Screens (Minimal Set):**
+
 1. **Dashboard** - System status, active operations
 2. **Files** - Browse, upload, download
 3. **Sharing** - Create/revoke shares
 4. **Keys** - Identity management
 
 **What We're NOT Building:**
+
 - ❌ CPU/memory monitoring widgets
 - ❌ ASCII art animations
 - ❌ Matrix rain effects
 - ❌ Extensive profiling UI
 
 **Rad Spirit Elements:**
+
 - ✅ Clean cyberpunk color scheme
 - ✅ Clear visual hierarchy
 - ✅ Real-time operation feedback
@@ -800,6 +810,7 @@ dcypher server start [--config server.toml]
 - ✅ Instant responsiveness
 
 **Testing:**
+
 - UI component tests
 - Integration tests with mock backend
 - Snapshot tests for layout
@@ -870,6 +881,7 @@ dcypher/
 ## Key Dependencies (Preliminary)
 
 ### Cryptography
+
 - `cxx` - C++/Rust FFI for OpenFHE bindings
 - `oqs-sys` or `pqcrypto` - Post-quantum crypto via liboqs
 - `ed25519-dalek` - ED25519 signatures
@@ -877,23 +889,27 @@ dcypher/
 - `rand` + `rand_core` - Cryptographic RNG
 
 ### Serialization
+
 - `serde` + `serde_json` - Config files, identity files
 - `prost` or `capnp` or `flatbuffers` - Wire protocol (TBD)
 - `base64` - ASCII armor encoding
 - `hex` - Hex encoding for debugging
 
 ### Storage
+
 - `aws-sdk-rust` or `rusoto_s3` - S3 API client
 - `tokio` - Async runtime
 - `tower` + `tower-http` - HTTP middleware
 
 ### Server
+
 - `axum` - HTTP framework
 - `tracing` + `tracing-subscriber` - Structured logging
 - `metrics` + `metrics-exporter-prometheus` - Observability
 - `tower-http` - CORS, compression, rate limiting
 
 ### CLI/TUI
+
 - `clap` - CLI argument parsing
 - `ratatui` - TUI framework
 - `dialoguer` - Interactive prompts
@@ -901,6 +917,7 @@ dcypher/
 - `colored` - Terminal colors
 
 ### Development
+
 - `thiserror` - Error handling
 - `anyhow` - Error propagation in binaries
 - `proptest` - Property-based testing
@@ -912,6 +929,7 @@ dcypher/
 ## Migration Notes from Python Prototype
 
 ### Files to Reference (Now Archived)
+
 ```
 python-prototype/
 ├── src/dcypher/lib/pre.py          # Core crypto operations
@@ -922,6 +940,7 @@ python-prototype/
 ```
 
 ### What NOT to Port
+
 - ❌ `dcypher/lib/auth.py` - ECDSA verification (dropping SECP256k1)
 - ❌ `dcypher/routers/storage.py` - Naive file storage (moving to S3)
 - ❌ `dcypher/tui/widgets/` - Heavy widgets (minimal TUI instead)
@@ -929,12 +948,14 @@ python-prototype/
 - ❌ Test harness for Python-Rust compatibility (not needed)
 
 ### Terminology Migration
+
 - `re_encrypt` → `recrypt`
 - `re_encryption_key` → `recrypt_key`
 - `rekey` → `recrypt_key` (consistent naming)
 - Everything else: `recryption` (already correct)
 
 ### No Compatibility Requirements
+
 - ✅ Can't decrypt Python ciphertexts with Rust (different serialization)
 - ✅ Can't verify Python signatures with Rust (different key formats)
 - ✅ Can't parse Python IDK messages with Rust (format changing)
@@ -947,12 +968,14 @@ python-prototype/
 ## Success Criteria
 
 ### Phase 0 Complete When:
+
 - [ ] All 7 design questions answered with documented decisions
 - [ ] Architecture docs written and reviewed
 - [ ] Rust workspace structure defined
 - [ ] Dependency list finalized
 
 ### Phase 1 Complete When:
+
 - [ ] Can encrypt/decrypt in Rust using OpenFHE
 - [ ] Can generate/verify ED25519 signatures
 - [ ] Can generate/verify PQ signatures (ML-DSA-87)
@@ -961,6 +984,7 @@ python-prototype/
 - [ ] All FFI smoke tests passing
 
 ### Phase 2 Complete When:
+
 - [ ] Core crypto API stable and documented
 - [ ] Property-based tests passing
 - [ ] Known-answer tests for regression
@@ -968,6 +992,7 @@ python-prototype/
 - [ ] Documentation with examples
 
 ### Phase 3 Complete When:
+
 - [ ] Wire protocol defined and implemented
 - [ ] Merkle tree/Blake3 tree verification working
 - [ ] Message serialization round-trips
@@ -975,6 +1000,7 @@ python-prototype/
 - [ ] Streaming verification functional
 
 ### Phase 4 Complete When:
+
 - [ ] Local file storage working
 - [ ] Minio integration functional
 - [ ] S3 integration tested
@@ -982,6 +1008,7 @@ python-prototype/
 - [ ] Concurrent access patterns validated
 
 ### Phase 5 Complete When:
+
 - [ ] HDprint generation deterministic
 - [ ] Error correction working
 - [ ] Case restoration working
@@ -989,6 +1016,7 @@ python-prototype/
 - [ ] Performance benchmarks met (<1ms for MEDIUM)
 
 ### Phase 6 Complete When:
+
 - [ ] All API routes functional
 - [ ] Multi-sig verification working
 - [ ] Nonce replay prevention validated
@@ -996,6 +1024,7 @@ python-prototype/
 - [ ] Load testing baseline established
 
 ### Phase 7 Complete When:
+
 - [ ] All CLI commands functional
 - [ ] Interactive mode polished
 - [ ] Config file management working
@@ -1003,6 +1032,7 @@ python-prototype/
 - [ ] Shell completions generated
 
 ### Phase 8 Complete When:
+
 - [ ] All TUI screens functional
 - [ ] Keyboard navigation smooth
 - [ ] Real-time updates working
@@ -1010,6 +1040,7 @@ python-prototype/
 - [ ] No performance regressions
 
 ### Overall Complete When:
+
 - [ ] Full Alice->Bob E2E flow works CLI-to-CLI via server
 - [ ] TUI provides full functionality
 - [ ] Documentation complete (user guide + API docs)
@@ -1040,7 +1071,7 @@ python-prototype/
 **Phase 5:** 2-3 days (HDprint)  
 **Phase 6:** 4-5 days (server)  
 **Phase 7:** 3-4 days (CLI)  
-**Phase 8:** 2-3 days (TUI)  
+**Phase 8:** 2-3 days (TUI)
 
 **Total:** 26-36 days (~5-7 weeks)
 
@@ -1070,4 +1101,3 @@ python-prototype/
 ---
 
 **This document is the source of truth for the Rust port. Update it as decisions are made.**
-
