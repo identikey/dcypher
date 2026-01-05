@@ -13,6 +13,9 @@ thiserror.workspace = true
 # OpenFHE bindings
 dcypher-openfhe-sys = { path = "../dcypher-openfhe-sys", optional = true }
 
+# Post-quantum signatures via liboqs
+oqs = { version = "0.11", optional = true }
+
 [build-dependencies]
 cxx-build = "1.0"
 
@@ -22,4 +25,4 @@ proptest.workspace = true
 [features]
 default = ["openfhe", "liboqs"]
 openfhe = ["dep:dcypher-openfhe-sys"]
-liboqs = []
+liboqs = ["dep:oqs"]

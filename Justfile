@@ -7,6 +7,17 @@ default:
     @just --list
 
 # --------------------
+# Environment Setup
+# --------------------
+
+# OpenSSL lib path for oqs-sys linking (macOS Homebrew)
+export LIBRARY_PATH := if os() == "macos" {
+    env_var_or_default("LIBRARY_PATH", "") + ":/opt/homebrew/opt/openssl@3/lib:/usr/local/opt/openssl@3/lib"
+} else {
+    env_var_or_default("LIBRARY_PATH", "")
+}
+
+# --------------------
 # Rust Development
 # --------------------
 
@@ -25,7 +36,7 @@ test:
 
 # Run tests for dcypher-ffi specifically
 test-ffi:
-    cargo test -p dcypher-ffi
+    cargo test -p dcypher-ffi -- --test-threads=1
 
 # Run tests for dcypher-openfhe-sys (must be sequential due to OpenFHE global state)
 test-openfhe:
@@ -165,79 +176,18 @@ check-omp:
 clean-openfhe:
     rm -rf vendor/openfhe-development/build vendor/openfhe-install
 
-# --------------------
-# liboqs (Static)
-# --------------------
-
-# Build liboqs as a static library
-build-liboqs:
-    #!/usr/bin/env bash
-    set -Eeuo pipefail
-    echo "Building liboqs C library (static)..."
-    
-    INSTALL_DIR="$(pwd)/vendor/liboqs-install"
-    
-    # Find OpenSSL on macOS (Homebrew) or Linux
-    if [[ -d "/opt/homebrew/opt/openssl@3" ]]; then
-        OPENSSL_ROOT="/opt/homebrew/opt/openssl@3"
-    elif [[ -d "/usr/local/opt/openssl@3" ]]; then
-        OPENSSL_ROOT="/usr/local/opt/openssl@3"
-    elif command -v brew &>/dev/null; then
-        OPENSSL_ROOT="$(brew --prefix openssl@3 2>/dev/null || echo "")"
-    else
-        OPENSSL_ROOT=""
-    fi
-    
-    cd vendor/liboqs
-    rm -rf build
-    mkdir -p build
-    cd build
-    
-    CMAKE_ARGS=(
-        -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}"
-        -DCMAKE_BUILD_TYPE=Release
-        -DBUILD_SHARED_LIBS=OFF
-        -DOQS_BUILD_ONLY_LIB=ON
-    )
-    
-    if [[ -n "${OPENSSL_ROOT}" ]]; then
-        echo "Using OpenSSL from: ${OPENSSL_ROOT}"
-        CMAKE_ARGS+=(
-            -DOQS_USE_OPENSSL=ON
-            -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT}"
-        )
-    else
-        echo "⚠️  OpenSSL not found, building without OpenSSL acceleration"
-        CMAKE_ARGS+=(-DOQS_USE_OPENSSL=OFF)
-    fi
-    
-    cmake .. "${CMAKE_ARGS[@]}"
-    
-    # Cross-platform nproc
-    NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-    make -j${NPROC}
-    make install
-    
-    echo ""
-    echo "✅ liboqs static library installed to: ${INSTALL_DIR}"
-    echo "   Library: ${INSTALL_DIR}/lib/liboqs.a"
-    echo "   Headers: ${INSTALL_DIR}/include/oqs/"
-
-# Clean liboqs build artifacts
-clean-liboqs:
-    rm -rf vendor/liboqs/build vendor/liboqs-install
 
 # --------------------
 # Combined Targets
 # --------------------
 
 # Build all C/C++ dependencies (static)
-build-deps: build-openfhe build-liboqs
+build-deps: build-openfhe
     @echo ""
     @echo "✅ All dependencies built (static linking ready)"
 
 # Clean all C/C++ dependency builds
-clean-deps: clean-openfhe clean-liboqs
+clean-deps: clean-openfhe
 
 # Clean everything (Rust + deps)
 clean-all: clean-rust clean-deps
@@ -266,10 +216,5 @@ show-deps:
         echo "❌ OpenFHE: not built (run: just build-openfhe)"
     fi
     echo ""
-    if [[ -d "vendor/liboqs-install" ]]; then
-        echo "✅ liboqs: vendor/liboqs-install/"
-        ls -la vendor/liboqs-install/lib/*.a 2>/dev/null || echo "   (no static libs found)"
-    else
-        echo "❌ liboqs: not built (run: just build-liboqs)"
-    fi
+    echo "ℹ️  liboqs: using oqs crate (no vendored build needed)"
 
