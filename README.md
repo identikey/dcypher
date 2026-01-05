@@ -141,14 +141,15 @@ dcypher share download <share-id> --output myfile.txt
 - **python-prototype/docs/** - Original specifications and design docs
 - **Phase-specific docs** - To be created in `docs/` as implementation progresses
 
-### Key Design Documents (To Be Written)
-1. `docs/crypto-architecture.md` - Encryption approach (full-file vs hybrid)
-2. `docs/hashing-standard.md` - Blake2b vs Blake3 decision
-3. `docs/verification-architecture.md` - Streaming chunk verification
-4. `docs/non-determinism.md` - Testing strategy for crypto
-5. `docs/storage-design.md` - S3 integration architecture
-6. `docs/wire-protocol.md` - Binary protocol specification
-7. `docs/hdprint-specification.md` - Complete HDprint system writeup
+### Key Design Documents
+1. `docs/hybrid-encryption-architecture.md` - Encryption architecture (KEM-DEM with pluggable PRE backends)
+2. `docs/pre-backend-traits.md` - Trait hierarchy for pluggable PRE backends
+3. `docs/hashing-standard.md` - Blake3 standardization decision
+4. `docs/verification-architecture.md` - Streaming chunk verification via Bao
+5. `docs/non-determinism.md` - Testing strategy for crypto
+6. `docs/storage-design.md` - S3 integration architecture
+7. `docs/wire-protocol.md` - Binary protocol specification
+8. `docs/hdprint-specification.md` - Complete HDprint system writeup
 
 ---
 

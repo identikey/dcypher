@@ -31,7 +31,7 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 - ❌ **No ECDSA/SECP256k1** - Unnecessary complexity, ED25519 sufficient for classical fallback
 - ❌ **No naive file storage** - Moving to S3-compatible API (Minio for dev)
 - ❌ **No IDK ASCII armor as primary format** - More efficient wire protocol needed
-- 🔄 **Reconsider encryption approach** - Full-file asymmetric vs hybrid symmetric/asymmetric (PGP-style)
+- ✅ **Hybrid encryption** - KEM-DEM with pluggable PRE backends (lattice for PQ, EC for classical)
 - 🔄 **Standardize hashing** - Blake2b vs Blake3 analysis needed
 - 🔄 **HMAC usage review** - Ensure appropriate application
 - 🔄 **Hierarchical verification** - Enable streaming chunk verification
@@ -47,19 +47,35 @@ Port dCypher from Python prototype to production Rust implementation. The Python
 
 ## Critical Design Questions — DECISIONS
 
-### 1. Encryption Architecture ⏳ PENDING DISCUSSION
+### 1. Encryption Architecture ✅ DECIDED: Hybrid with Pluggable PRE Backends
 
-**Question:** Full-file asymmetric vs hybrid approach?
+**Decision:** Use **hybrid encryption** (KEM-DEM) with pluggable PRE backends.
 
-**Preliminary Analysis (see `docs/crypto-architecture.md`):**
+**Architecture:**
 
-- BFV/PRE ciphertext expansion is ~50-100x for 128-bit security
-- Pure asymmetric: 1MB file → 50-100MB ciphertext (impractical)
-- Hybrid recommended: ChaCha20-Poly1305 for bulk data, PRE for key wrapping only
+1. **KEM (Key Encapsulation):** PRE-encrypt a random 256-bit symmetric key
+2. **DEM (Data Encapsulation):** ChaCha20 + Bao tree hashing for bulk data encryption
+3. **Recryption:** Only transforms the wrapped key (~KB), not the file
 
-**Status:** Pending dedicated discussion before finalizing.
+**PRE Backends (pluggable):**
 
-**Document in:** `docs/crypto-architecture.md`
+| Backend                   | Security       | Ciphertext Size | Status      |
+| ------------------------- | -------------- | --------------- | ----------- |
+| **OpenFHE BFV/PRE**       | Post-quantum   | ~1-10 KB        | Default     |
+| **recrypt (IronCore)**    | Classical (EC) | ~480 bytes      | Alternative |
+| **umbral-pre (NuCypher)** | Classical (EC) | ~200 bytes      | Alternative |
+
+**Rationale:**
+
+- Lattice PRE has 50-100x ciphertext expansion; hybrid makes this negligible
+- Symmetric encryption (ChaCha20) is ~GB/s; PRE operations are ms-scale
+- Pluggable backends allow post-quantum or classical choice per use case
+- EC backends are pure Rust (no FFI), better for mobile/WASM
+
+**Documents:**
+
+- `docs/hybrid-encryption-architecture.md` — Full trade-off analysis
+- `docs/pre-backend-traits.md` — Trait hierarchy for pluggable backends
 
 ---
 
@@ -292,15 +308,16 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 - 🔲 Rust workspace structure defined
 - 🔲 Dependency analysis (crates needed)
 
-**Design Docs to Write:**
+**Design Docs Written:**
 
-1. `docs/crypto-architecture.md` - Encryption approach decision
-2. `docs/hashing-standard.md` - Blake2b vs Blake3 + HMAC analysis
-3. `docs/verification-architecture.md` - Streaming chunk verification
-4. `docs/non-determinism.md` - Testing strategy for non-deterministic crypto
-5. `docs/storage-design.md` - S3 integration architecture
-6. `docs/wire-protocol.md` - Binary vs ASCII armor decision
-7. `docs/hdprint-specification.md` - Full HDprint writeup
+1. ✅ `docs/hybrid-encryption-architecture.md` - Encryption architecture (KEM-DEM + pluggable PRE)
+2. ✅ `docs/pre-backend-traits.md` - Trait hierarchy for pluggable backends
+3. ✅ `docs/hashing-standard.md` - Blake3 standardization
+4. ✅ `docs/verification-architecture.md` - Streaming chunk verification via Bao
+5. ✅ `docs/non-determinism.md` - Testing strategy for non-deterministic crypto
+6. ✅ `docs/storage-design.md` - S3 integration architecture
+7. ✅ `docs/wire-protocol.md` - Binary protocol specification
+8. ✅ `docs/hdprint-specification.md` - Full HDprint writeup
 
 ---
 
@@ -860,12 +877,14 @@ dcypher/
 │   └── src/
 │
 ├── docs/                           # Design documents
-│   ├── crypto-architecture.md
+│   ├── hybrid-encryption-architecture.md
+│   ├── pre-backend-traits.md
 │   ├── hashing-standard.md
 │   ├── verification-architecture.md
 │   ├── non-determinism.md
 │   ├── storage-design.md
 │   ├── wire-protocol.md
+│   ├── hmac-analysis.md
 │   └── hdprint-specification.md
 │
 ├── python-prototype/               # ARCHIVED: Original Python implementation
