@@ -31,3 +31,7 @@ idk_signing.sec
 liboqs-local/
 openfhe-local/
 target/
+
+# Static library installs (built via `just build-deps`)
+vendor/openfhe-install/
+vendor/liboqs-install/

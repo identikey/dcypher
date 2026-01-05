@@ -223,11 +223,20 @@ version = "0.1.0"
 dependencies = [
  "cxx",
  "cxx-build",
+ "dcypher-openfhe-sys",
  "ed25519-dalek",
  "proptest",
  "rand 0.8.5",
  "rand_core 0.6.4",
  "thiserror",
+]
+
+[[package]]
+name = "dcypher-openfhe-sys"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-build",
 ]
 
 [[package]]

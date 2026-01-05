@@ -41,6 +41,7 @@ After attempting to integrate the vendored `openfhe-rs` (v0.3.2), discovered:
 
 - `docs/plans/2026-01-04-phase-1-ffi-foundations.md` - Main implementation plan (Phase 1b section updated)
 - `docs/plans/openfhe-minimal-bindings-analysis.md` - NEW: Detailed analysis of required API surface
+- `docs/openfhe-threading-model.md` - **IMPORTANT**: Thread safety patterns for production proxy
 - `python-prototype/src/dcypher/lib/pre.py` - Reference implementation showing exact OpenFHE usage
 
 ## Recent Changes
@@ -98,6 +99,9 @@ Created/modified files:
 - `crates/dcypher-ffi/src/liboqs/sig.rs`
 - `docs/plans/openfhe-minimal-bindings-analysis.md` - **NEW: Key reference**
 - `docs/plans/2026-01-04-phase-1-ffi-foundations.md:204-248` - Updated Phase 1b section
+- `docs/openfhe-threading-model.md` - **NEW: Production threading patterns**
+- `Justfile` - Updated `build-openfhe` with OpenMP, added `check-omp`
+- `crates/dcypher-openfhe-sys/build.rs` - Added `link_openmp()` for libomp/libgomp
 
 ## Action Items & Next Steps
 
@@ -149,3 +153,27 @@ Per memory 12922366: Use "recrypt" not "re-encrypt" for all PRE operations in th
 ### Key Insight
 
 The Python prototype's `pre.py` uses a very small OpenFHE surface. The openfhe-rs bindings are overkill and maintenance burden. A minimal custom implementation (~500 lines total) is more maintainable than tracking 1500+ lines of unused bindings.
+
+### Threading Model (Production Critical)
+
+OpenMP ≠ Thread Safety. See `docs/openfhe-threading-model.md` for full details.
+
+**Summary**:
+
+- OpenMP: Parallelizes _within_ each operation (faster individual ops)
+- Thread safety: Achieved via architecture, not OpenMP
+
+**Safe pattern for recryption proxy**:
+
+```
+Startup (single thread):  create context, load keys
+Runtime (concurrent):     encrypt/decrypt/recrypt calls are thread-safe
+```
+
+**Build commands updated**:
+
+- `just build-openfhe` now enables OpenMP on macOS (auto-detects Homebrew libomp)
+- `just check-omp` verifies OpenMP availability
+- `crates/dcypher-openfhe-sys/build.rs` links against libomp/libgomp
+
+**Why tests use `--test-threads=1`**: Tests create/destroy contexts (unsafe). Production code that initializes once is fine.

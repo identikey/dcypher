@@ -8,7 +8,7 @@
 //! # Status
 //!
 //! - ✅ ED25519: Fully functional via ed25519-dalek
-//! - 🚧 OpenFHE: Stub implementation pending dcypher-openfhe-sys (Phase 1b)
+//! - ✅ OpenFHE: Functional via dcypher-openfhe-sys (enable with `openfhe` feature)
 //! - 🚧 liboqs: Stub implementation pending bindings (Phase 1c)
 
 pub mod error;
