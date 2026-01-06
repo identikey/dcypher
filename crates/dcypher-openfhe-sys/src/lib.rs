@@ -1,4 +1,4 @@
-//! Minimal OpenFHE bindings for Proxy Re-Encryption (PRE)
+//! Minimal OpenFHE bindings for Proxy Recryption (PRE)
 //!
 //! This crate provides the raw FFI layer to OpenFHE, exposing only the
 //! ~15 functions needed for PRE operations with the BFV scheme.

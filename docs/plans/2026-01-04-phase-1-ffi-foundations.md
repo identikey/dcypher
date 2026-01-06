@@ -1,5 +1,9 @@
 # Phase 1: FFI Foundations Implementation Plan
 
+> **Status: ✅ COMPLETE** (2026-01-05)
+>
+> All phases implemented and verified. 16 tests passing. Notable deviation: used `oqs` crate v0.11 instead of vendored liboqs.
+
 ## Overview
 
 Build the Rust FFI layer that wraps OpenFHE (lattice PRE) and liboqs (PQ signatures), plus ED25519 classical signatures. This is the critical path foundation—everything else depends on it.
@@ -9,16 +13,19 @@ Build the Rust FFI layer that wraps OpenFHE (lattice PRE) and liboqs (PQ signatu
 ### What Exists
 
 1. **OpenFHE Rust bindings** (`vendor/openfhe-rs/`)
+
    - Complete cxx-based FFI to OpenFHE
    - Already has `ReKeyGen` and `ReEncrypt` for PRE
    - Uses BFV/BGV/CKKS schemes
    - Well-structured C++ wrapper layer
 
 2. **OpenFHE C++ library** (built in `vendor/openfhe-development/build/lib/`)
+
    - `libOPENFHEpke.dylib`, `libOPENFHEcore.dylib`, `libOPENFHEbinfhe.dylib`
    - Version 1.3.0
 
 3. **liboqs C library** (built in `vendor/liboqs/build/`)
+
    - Shared library already compiled
    - Python prototype uses it via `oqs` Python package
 
@@ -195,7 +202,7 @@ liboqs = []
 
 #### Manual Verification
 
-- [ ] Directory structure looks correct
+- [x] Directory structure looks correct
 
 **Implementation Note**: This phase is quick scaffolding. Proceed immediately to Phase 1b.
 
@@ -219,6 +226,7 @@ After analysis (see `docs/plans/openfhe-minimal-bindings-analysis.md`):
 **Decision: Create `dcypher-openfhe-sys` with minimal bindings**
 
 Benefits:
+
 - ~80% less code to maintain
 - Tailored for PRE use case
 - Byte-based serialization (not file-based)
@@ -272,7 +280,7 @@ cp -r vendor/openfhe-rs crates/dcypher-ffi/openfhe-sys
 **File**: `crates/dcypher-ffi/src/openfhe/pre.rs`
 
 ```rust
-//! Proxy Re-Encryption operations via OpenFHE BFV scheme
+//! Proxy recryption operations via OpenFHE BFV scheme
 
 use crate::error::FfiError;
 use crate::openfhe::bridge::ffi;
@@ -284,7 +292,7 @@ pub struct PreContext {
 
 impl PreContext {
     /// Create a new PRE context with default parameters
-    /// 
+    ///
     /// Uses BFVrns with:
     /// - plaintext_modulus = 65537
     /// - PRE mode = INDCPA (or HRA for stronger security)
@@ -292,15 +300,15 @@ impl PreContext {
         let mut params = ffi::GenParamsBFVRNS();
         params.pin_mut().SetPlaintextModulus(65537);
         params.pin_mut().SetMultiplicativeDepth(2);
-        
+
         let ctx = ffi::DCRTPolyGenCryptoContextByParamsBFVRNS(&params);
         ctx.EnableByFeature(ffi::PKESchemeFeature::PKE);
         ctx.EnableByFeature(ffi::PKESchemeFeature::KEYSWITCH);
         ctx.EnableByFeature(ffi::PKESchemeFeature::PRE);
-        
+
         Ok(Self { inner: ctx })
     }
-    
+
     /// Generate a new keypair
     pub fn generate_keypair(&self) -> Result<KeyPair, FfiError> {
         let kp = self.inner.KeyGen();
@@ -309,7 +317,7 @@ impl PreContext {
             secret: SecretKey { inner: kp.GetPrivateKey() },
         })
     }
-    
+
     /// Encrypt data for a recipient
     pub fn encrypt(&self, pk: &PublicKey, data: &[u8]) -> Result<Ciphertext, FfiError> {
         let coeffs = bytes_to_coefficients(data);
@@ -317,7 +325,7 @@ impl PreContext {
         let ct = self.inner.EncryptByPublicKey(&pk.inner, &plaintext);
         Ok(Ciphertext { inner: ct })
     }
-    
+
     /// Decrypt ciphertext
     pub fn decrypt(&self, sk: &SecretKey, ct: &Ciphertext) -> Result<Vec<u8>, FfiError> {
         let mut plaintext = ffi::GenNullPlainText();
@@ -327,7 +335,7 @@ impl PreContext {
         let coeffs = plaintext.GetPackedValue();
         Ok(coefficients_to_bytes(&coeffs))
     }
-    
+
     /// Generate a recryption key from Alice to Bob
     pub fn generate_recrypt_key(
         &self,
@@ -337,7 +345,7 @@ impl PreContext {
         let rk = self.inner.ReKeyGen(&from_sk.inner, &to_pk.inner);
         Ok(RecryptKey { inner: rk })
     }
-    
+
     /// Transform ciphertext from Alice to Bob
     pub fn recrypt(
         &self,
@@ -392,7 +400,7 @@ fn main() {
         .flag_if_supported("-std=c++17")
         .flag_if_supported("-O3")
         .compile("openfhe_bridge");
-    
+
     // Link OpenFHE libraries
     println!("cargo::rustc-link-arg=-L/usr/local/lib");
     println!("cargo::rustc-link-arg=-lOPENFHEpke");
@@ -406,8 +414,8 @@ fn main() {
 
 #### Automated Verification
 
-- [ ] `cargo build -p dcypher-ffi --features openfhe` compiles
-- [ ] OpenFHE smoke test passes:
+- [x] `cargo build -p dcypher-ffi --features openfhe` compiles
+- [x] OpenFHE smoke test passes:
 
 ```rust
 #[test]
@@ -415,14 +423,14 @@ fn test_pre_roundtrip() {
     let ctx = PreContext::new().unwrap();
     let alice = ctx.generate_keypair().unwrap();
     let bob = ctx.generate_keypair().unwrap();
-    
+
     let plaintext = b"Hello, PRE!";
     let ct = ctx.encrypt(&alice.public, plaintext).unwrap();
-    
+
     // Direct decryption by Alice
     let decrypted = ctx.decrypt(&alice.secret, &ct).unwrap();
     assert_eq!(&decrypted[..plaintext.len()], plaintext);
-    
+
     // Recryption flow: Alice → Bob
     let rk = ctx.generate_recrypt_key(&alice.secret, &bob.public).unwrap();
     let ct_for_bob = ctx.recrypt(&rk, &ct).unwrap();
@@ -433,7 +441,7 @@ fn test_pre_roundtrip() {
 
 #### Manual Verification
 
-- [ ] Confirm OpenFHE dylibs are linked correctly: `otool -L target/debug/libdcypher_ffi.dylib`
+- [x] Confirm OpenFHE dylibs are linked correctly: `otool -L target/debug/libdcypher_ffi.dylib`
 
 ---
 
@@ -462,6 +470,7 @@ cargo search pqcrypto
 ```
 
 Known options:
+
 - `pqcrypto` — Pure Rust implementations, may not have ML-DSA-87
 - `oqs-sys` — Low-level bindings if they exist
 
@@ -575,20 +584,20 @@ pub fn pq_verify(
 
 #### Automated Verification
 
-- [ ] `cargo build -p dcypher-ffi --features liboqs` compiles
-- [ ] PQ signature test passes:
+- [x] `cargo build -p dcypher-ffi --features liboqs` compiles (via `oqs` crate v0.11)
+- [x] PQ signature test passes:
 
 ```rust
 #[test]
 fn test_pq_signature_roundtrip() {
     let keypair = pq_keygen(PqAlgorithm::MlDsa87).unwrap();
     let message = b"Test message for PQ signature";
-    
+
     let signature = pq_sign(&keypair.secret_key, PqAlgorithm::MlDsa87, message).unwrap();
     let valid = pq_verify(&keypair.public_key, PqAlgorithm::MlDsa87, message, &signature).unwrap();
-    
+
     assert!(valid);
-    
+
     // Tampered message should fail
     let mut bad_message = message.to_vec();
     bad_message[0] ^= 0xFF;
@@ -648,7 +657,7 @@ pub fn ed25519_verify(
 
 #### Automated Verification
 
-- [ ] ED25519 test passes:
+- [x] ED25519 test passes:
 
 ```rust
 #[test]
@@ -685,14 +694,14 @@ fn test_full_pre_flow() {
     let ctx = PreContext::new().unwrap();
     let alice = ctx.generate_keypair().unwrap();
     let bob = ctx.generate_keypair().unwrap();
-    
+
     let data = b"Sensitive document for proxy recryption";
     let ct_alice = ctx.encrypt(&alice.public, data).unwrap();
-    
+
     // Proxy transforms for Bob (without seeing plaintext)
     let recrypt_key = ctx.generate_recrypt_key(&alice.secret, &bob.public).unwrap();
     let ct_bob = ctx.recrypt(&recrypt_key, &ct_alice).unwrap();
-    
+
     // Bob decrypts
     let recovered = ctx.decrypt(&bob.secret, &ct_bob).unwrap();
     assert_eq!(&recovered[..data.len()], data);
@@ -701,15 +710,15 @@ fn test_full_pre_flow() {
 #[test]
 fn test_dual_signature_flow() {
     let message = b"Dual-signed authentication request";
-    
+
     // Classical signature
     let ed_kp = ed25519_keygen();
     let ed_sig = ed25519_sign(&ed_kp.signing_key, message);
-    
+
     // Post-quantum signature
     let pq_kp = pq_keygen(PqAlgorithm::MlDsa87).unwrap();
     let pq_sig = pq_sign(&pq_kp.secret_key, PqAlgorithm::MlDsa87, message).unwrap();
-    
+
     // Both verify
     assert!(ed25519_verify(&ed_kp.verifying_key, message, &ed_sig).is_ok());
     assert!(pq_verify(&pq_kp.public_key, PqAlgorithm::MlDsa87, message, &pq_sig).unwrap());
@@ -720,15 +729,15 @@ fn test_dual_signature_flow() {
 
 #### Automated Verification
 
-- [ ] All tests pass: `cargo test -p dcypher-ffi`
-- [ ] No clippy warnings: `cargo clippy -p dcypher-ffi -- -D warnings`
-- [ ] Documentation builds: `cargo doc -p dcypher-ffi`
+- [x] All tests pass: `cargo test -p dcypher-ffi` — 16 tests passing
+- [x] No clippy warnings: `cargo clippy -p dcypher-ffi -- -D warnings`
+- [x] Documentation builds: `cargo doc -p dcypher-ffi`
 
 #### Manual Verification
 
-- [ ] Libraries link correctly on macOS (dylib)
+- [x] Libraries link correctly on macOS (dylib)
 - [ ] Libraries link correctly on Linux (if CI available)
-- [ ] Performance is acceptable (PRE ~10-100ms, signatures ~1ms)
+- [x] Performance is acceptable (PRE ~10-100ms, signatures ~1ms)
 
 ---
 
@@ -772,12 +781,12 @@ proptest! {
 
 ## Known Risks & Mitigations
 
-| Risk | Mitigation |
-|------|------------|
+| Risk                                          | Mitigation                                          |
+| --------------------------------------------- | --------------------------------------------------- |
 | OpenFHE linking issues on different platforms | Document required env vars; consider static linking |
-| liboqs algorithm name changes | Use feature detection; fallback names |
-| Non-deterministic serialization | Test semantic equality only |
-| Large ciphertext sizes (~10KB) | Document in API; optimize later |
+| liboqs algorithm name changes                 | Use feature detection; fallback names               |
+| Non-deterministic serialization               | Test semantic equality only                         |
+| Large ciphertext sizes (~10KB)                | Document in API; optimize later                     |
 
 ## References
 
@@ -801,7 +810,7 @@ proptest! {
 ### ED25519 Crate
 
 Using `ed25519-dalek` v2.1:
+
 - Well-maintained, audited
 - Supports `SigningKey`/`VerifyingKey` API
 - No additional dependencies needed
-

@@ -1,0 +1,40 @@
+[package]
+name = "dcypher-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Crypto primitives
+chacha20 = "0.9"                                            # XChaCha20 (192-bit nonce, no Poly1305)
+blake3 = { version = "1.5", features = ["traits-preview"] }
+bao = "0.12"                                                # Streaming verification
+rand = "0.8"
+rand_core = "0.6"
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Secret zeroization
+zeroize = { version = "1.7", features = ["derive"] }
+
+# ED25519 signatures
+ed25519-dalek.workspace = true
+
+# FFI binding (our Phase 1 crate)
+dcypher-ffi = { path = "../dcypher-ffi" }
+
+# Property testing (optional)
+proptest = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+criterion = "0.5"
+
+[features]
+default = []
+proptest = ["dep:proptest"]
+
+[[bench]]
+name = "crypto_ops"
+harness = false

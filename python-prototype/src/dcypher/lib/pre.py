@@ -41,7 +41,7 @@ def create_crypto_context(
     """Creates and configures a crypto context for BFVrns.
 
     This function sets up the fundamental cryptographic parameters for the
-    Proxy Re-Encryption (PRE) scheme. The choice of parameters is critical
+    Proxy Recryption (PRE) scheme. The choice of parameters is critical
     for security and performance.
 
     Args:
@@ -221,9 +221,9 @@ def decrypt(cc, secret_key, ciphertexts, length=None):
 
 
 def generate_re_encryption_key(cc, alice_secret_key, bob_public_key):
-    """Generates a re-encryption key from Alice to Bob.
+    """Generates a Recryption key from Alice to Bob.
 
-    This is the core of the Proxy Re-Encryption scheme. The generated key
+    This is the core of the Proxy Recryption scheme. The generated key
     allows a proxy to transform a ciphertext encrypted under Alice's public
     key into a ciphertext that can be decrypted by Bob's secret key, without
     the proxy being able to learn anything about the underlying plaintext.
@@ -234,16 +234,16 @@ def generate_re_encryption_key(cc, alice_secret_key, bob_public_key):
         bob_public_key: The public key of the intended recipient (Bob).
 
     Returns:
-        An OpenFHE EvalKey object representing the re-encryption key.
+        An OpenFHE EvalKey object representing the Recryption key.
     """
     return cc.ReKeyGen(alice_secret_key, bob_public_key)
 
 
 def re_encrypt(cc, re_encryption_key, ciphertexts):
-    """Re-encrypts a list of ciphertexts using a re-encryption key.
+    """Re-encrypts a list of ciphertexts using a Recryption key.
 
     The proxy executes this function. It takes a list of ciphertexts that
-    were originally encrypted for Alice and applies the re-encryption key to
+    were originally encrypted for Alice and applies the Recryption key to
     transform them into ciphertexts for Bob.
 
     Args:

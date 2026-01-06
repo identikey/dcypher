@@ -1011,7 +1011,7 @@ dcypher/
 ### Cryptography
 
 - `cxx` - C++/Rust FFI for OpenFHE bindings
-- `oqs-sys` or `pqcrypto` - Post-quantum crypto via liboqs
+- `oqs` v0.11 - Post-quantum signatures (ML-DSA) via liboqs
 - `ed25519-dalek` - ED25519 signatures
 - `blake3` - Hashing (standardized)
 - `rand` + `rand_core` - Cryptographic RNG
@@ -1104,12 +1104,12 @@ python-prototype/
 
 ### Phase 1 Complete When:
 
-- [ ] Can encrypt/decrypt in Rust using OpenFHE
-- [ ] Can generate/verify ED25519 signatures
-- [ ] Can generate/verify PQ signatures (ML-DSA-87)
-- [ ] Can generate recryption keys
-- [ ] Can perform recryption transformation
-- [ ] All FFI smoke tests passing
+- [x] Can encrypt/decrypt in Rust using OpenFHE
+- [x] Can generate/verify ED25519 signatures
+- [x] Can generate/verify PQ signatures (ML-DSA-87) — via `oqs` crate v0.11
+- [x] Can generate recryption keys
+- [x] Can perform recryption transformation
+- [x] All FFI smoke tests passing — 16 tests
 
 ### Phase 2 Complete When:
 
@@ -1188,7 +1188,7 @@ python-prototype/
 ## Timeline Estimate
 
 **Phase 0:** 2-3 days (design decisions) ✅ COMPLETE  
-**Phase 1:** 3-5 days (FFI bindings)  
+**Phase 1:** 3-5 days (FFI bindings) ✅ COMPLETE  
 **Phase 2:** 4-5 days (core crypto)  
 **Phase 3:** 3-4 days (protocol)  
 **Phase 4:** 3-4 days (storage client)  

@@ -1,7 +1,7 @@
 //! dcypher-ffi: FFI bindings for cryptographic primitives
 //!
 //! This crate provides Rust wrappers for:
-//! - OpenFHE (lattice-based Proxy Re-Encryption via BFV scheme)
+//! - OpenFHE (lattice-based Proxy Recryption via BFV scheme)
 //! - liboqs (post-quantum signatures via ML-DSA)
 //! - ED25519 (classical signatures via ed25519-dalek)
 //!

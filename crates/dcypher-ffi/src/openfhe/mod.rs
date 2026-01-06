@@ -1,4 +1,4 @@
-//! OpenFHE Proxy Re-Encryption bindings
+//! OpenFHE Proxy Recryption bindings
 //!
 //! Provides lattice-based PRE via the BFV scheme with INDCPA security.
 

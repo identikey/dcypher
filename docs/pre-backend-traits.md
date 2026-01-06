@@ -1,7 +1,7 @@
 # PRE Backend Trait Hierarchy
 
 **Status:** 📐 DESIGN SKETCH  
-**Purpose:** Pluggable backend system for proxy re-encryption
+**Purpose:** Pluggable backend system for proxy recryption
 
 ---
 
@@ -69,7 +69,7 @@ pub enum BackendId {
     Mock = 255,
 }
 
-/// A proxy re-encryption backend
+/// A proxy recryption backend
 ///
 /// This trait abstracts over different PRE schemes, allowing the system
 /// to use lattice-based (post-quantum) or EC-based (classical) backends
