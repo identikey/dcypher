@@ -7,17 +7,6 @@ default:
     @just --list
 
 # --------------------
-# Environment Setup
-# --------------------
-
-# OpenSSL lib path for oqs-sys linking (macOS Homebrew)
-export LIBRARY_PATH := if os() == "macos" {
-    env_var_or_default("LIBRARY_PATH", "") + ":/opt/homebrew/opt/openssl@3/lib:/usr/local/opt/openssl@3/lib"
-} else {
-    env_var_or_default("LIBRARY_PATH", "")
-}
-
-# --------------------
 # Rust Development
 # --------------------
 

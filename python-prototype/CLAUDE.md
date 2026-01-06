@@ -87,7 +87,8 @@ The project includes three OpenFHE components in subdirectories:
 
 - `openfhe-development/` - Core C++ OpenFHE library
 - `openfhe-python/` - Python bindings
-- `openfhe-rs/` - Rust bindings
+- `openfhe-rs/` - [DELETED] Was Rust bindings reference. See `crates/dcypher-ffi/`
+- `openfhe-python/` - [DELETED] Was Python bindings. Prototype is reference-only now.
 
 These are external dependencies required for the proxy recryption functionality.
 

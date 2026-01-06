@@ -4,6 +4,10 @@
 >
 > All phases implemented and verified. 16 tests passing. Notable deviation: used `oqs` crate v0.11 instead of vendored liboqs.
 
+> **Historical Note:** This plan originally referenced `vendor/openfhe-rs/` which has since been
+> **deleted**. We created minimal custom bindings in `crates/dcypher-openfhe-sys/` instead.
+> See `crates/dcypher-ffi/src/lib.rs` for the current architecture.
+
 ## Overview
 
 Build the Rust FFI layer that wraps OpenFHE (lattice PRE) and liboqs (PQ signatures), plus ED25519 classical signatures. This is the critical path foundation—everything else depends on it.

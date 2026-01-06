@@ -347,7 +347,7 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 2. **dcypher-ffi crate:**
 
    - OpenFHE bindings via cxx
-   - Reference: `vendor/openfhe-rs/` in Python repo
+   - OpenFHE bindings: `crates/dcypher-openfhe-sys/` (custom minimal wrapper)
    - liboqs bindings (check crates.io first, may exist)
    - ED25519 via libsodium or RustCrypto
    - Build system: `build.rs` with cxx-build

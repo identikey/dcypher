@@ -1259,61 +1259,38 @@ mod tests {
 
 ---
 
-## Phase 3.6: OpenFHE Key Serialization (Lattice Backend Completion)
+## Phase 3.6: Lattice Backend Completion (Wire Up Existing Serialization)
 
 ### Overview
 
-Implement serialization for OpenFHE keys and ciphertexts to complete the Lattice backend.
+**Good news:** OpenFHE serialization already exists in `dcypher-openfhe-sys`! The C++ wrapper uses Cereal's `PortableBinaryOutputArchive` via `std::stringstream`. We just need to wire it through `dcypher-ffi` and complete the Lattice backend stubs.
+
+See `docs/plans/openfhe-serialization-research.md` for full analysis.
+
+### What Already Exists
+
+**`dcypher-openfhe-sys/src/wrapper.cc`** already implements:
+```cpp
+rust::Vec<uint8_t> serialize_ciphertext(const Ciphertext &ct);
+std::unique_ptr<Ciphertext> deserialize_ciphertext(const CryptoContext &ctx, rust::Slice<const uint8_t> data);
+// ... same for public_key, private_key, recrypt_key
+```
+
+**`dcypher-openfhe-sys/src/lib.rs`** exposes these via CXX FFI.
 
 ### Changes Required
 
-#### 1. Add serialization to dcypher-openfhe-sys
-
-**File**: `crates/dcypher-openfhe-sys/src/wrapper.cc` (additions)
-
-```cpp
-// Add serialization functions
-
-rust::Vec<uint8_t> serialize_public_key(const PublicKey& pk) {
-    std::stringstream ss;
-    Serial::Serialize(pk, ss, SerType::BINARY);
-    std::string str = ss.str();
-    rust::Vec<uint8_t> result;
-    result.reserve(str.size());
-    for (char c : str) {
-        result.push_back(static_cast<uint8_t>(c));
-    }
-    return result;
-}
-
-std::unique_ptr<PublicKey> deserialize_public_key(
-    const CryptoContext& ctx,
-    rust::Slice<const uint8_t> bytes
-) {
-    std::string str(bytes.begin(), bytes.end());
-    std::stringstream ss(str);
-    auto pk = std::make_unique<PublicKey>();
-    Serial::Deserialize(*pk, ss, SerType::BINARY);
-    return pk;
-}
-
-// Similar for SecretKey, Ciphertext, RecryptKey...
-```
-
-#### 2. Update dcypher-ffi to expose serialization
+#### 1. Expose serialization in dcypher-ffi
 
 **File**: `crates/dcypher-ffi/src/openfhe/mod.rs` (additions)
 
 ```rust
-// Add serialization methods to PreContext
-
 impl PreContext {
-    /// Serialize public key to bytes
+    /// Serialize public key to bytes (Cereal binary format)
     pub fn serialize_public_key(&self, pk: &PublicKey) -> Result<Vec<u8>, FfiError> {
         #[cfg(feature = "openfhe")]
         {
-            let bytes = openfhe::serialize_public_key(&pk.inner);
-            Ok(bytes.into_iter().collect())
+            Ok(dcypher_openfhe_sys::serialize_public_key(&pk.inner))
         }
         #[cfg(not(feature = "openfhe"))]
         Err(FfiError::OpenFhe("OpenFHE not enabled".into()))
@@ -1323,7 +1300,7 @@ impl PreContext {
     pub fn deserialize_public_key(&self, bytes: &[u8]) -> Result<PublicKey, FfiError> {
         #[cfg(feature = "openfhe")]
         {
-            let pk = openfhe::deserialize_public_key(&self.inner, bytes);
+            let pk = dcypher_openfhe_sys::deserialize_public_key(&self.inner, bytes);
             if pk.is_null() {
                 return Err(FfiError::OpenFhe("Failed to deserialize public key".into()));
             }
@@ -1333,27 +1310,87 @@ impl PreContext {
         Err(FfiError::OpenFhe("OpenFHE not enabled".into()))
     }
     
-    // Similar for secret_key, ciphertext, recrypt_key...
+    // Same pattern for: serialize/deserialize_private_key, _ciphertext, _recrypt_key
 }
 ```
 
-#### 3. Complete Lattice backend in dcypher-core
+#### 2. Complete Lattice backend in dcypher-core
 
-**File**: `crates/dcypher-core/src/pre/backends/lattice.rs` (complete implementation)
+**File**: `crates/dcypher-core/src/pre/backends/lattice.rs`
 
-Replace the stub serialization functions with actual implementations using `dcypher-ffi`.
+Replace stubs with actual implementations:
+
+```rust
+impl PreBackend for LatticeBackend {
+    fn generate_keypair(&self) -> PreResult<KeyPair> {
+        let ffi_kp = self.context.generate_keypair()
+            .map_err(|e| PreError::KeyGeneration(e.to_string()))?;
+        
+        // Serialize keys for storage in our wrapper types
+        let pk_bytes = self.context.serialize_public_key(&ffi_kp.public)
+            .map_err(|e| PreError::Serialization(e.to_string()))?;
+        let sk_bytes = self.context.serialize_private_key(&ffi_kp.secret)
+            .map_err(|e| PreError::Serialization(e.to_string()))?;
+        
+        Ok(KeyPair {
+            public: PublicKey::new(BackendId::Lattice, pk_bytes),
+            secret: SecretKey::new(BackendId::Lattice, sk_bytes),
+        })
+    }
+    
+    fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<Ciphertext> {
+        // Deserialize recipient's public key
+        let pk = self.context.deserialize_public_key(recipient.as_bytes())
+            .map_err(|e| PreError::Deserialization(e.to_string()))?;
+        
+        // Encrypt (returns Vec<FfiCiphertext> due to slot chunking)
+        let cts = self.context.encrypt(&pk, plaintext)
+            .map_err(|e| PreError::Encryption(e.to_string()))?;
+        
+        // Serialize all ciphertexts into one blob with length prefixes
+        let mut ct_bytes = Vec::new();
+        ct_bytes.extend((cts.len() as u32).to_le_bytes());
+        for ct in &cts {
+            let serialized = self.context.serialize_ciphertext(ct)
+                .map_err(|e| PreError::Serialization(e.to_string()))?;
+            ct_bytes.extend((serialized.len() as u32).to_le_bytes());
+            ct_bytes.extend(serialized);
+        }
+        
+        Ok(Ciphertext::new(BackendId::Lattice, 0, ct_bytes))
+    }
+    
+    // decrypt, recrypt follow same pattern...
+}
+```
+
+#### 3. Key Size Expectations
+
+| Object | Measured Size |
+|--------|--------------|
+| PublicKey | ~180-220 KB |
+| PrivateKey | ~90-120 KB |
+| RecryptKey | ~1.5-2 MB |
+| Ciphertext (96B input) | ~5-10 KB |
+| CryptoContext | 10-50 MB (NOT serialized per-message) |
+
+**Important:** CryptoContext is huge. We use a single shared context with fixed BFV parameters. Don't serialize it with each message—assume both sides have compatible contexts.
 
 ### Success Criteria
 
 #### Automated Verification:
 
 - [ ] Lattice backend tests pass: `cargo test -p dcypher-core --features openfhe lattice`
-- [ ] Serialization roundtrip: serialize → deserialize → use
+- [ ] Serialization roundtrip: `cargo test -p dcypher-openfhe-sys serialization`
+- [ ] Full encrypt→serialize→deserialize→decrypt works
 
 #### Manual Verification:
 
-- [ ] Key sizes match expectations from design docs (~200 KB public key)
-- [ ] Serialization is deterministic per session (OpenFHE quirk: non-deterministic between sessions)
+- [ ] Key sizes match expectations (~200 KB public key)
+- [ ] Recrypt key roundtrip works
+- [ ] Performance acceptable (~20ms encrypt, ~10ms decrypt)
+
+**Revised Effort:** 0.5 day (down from 1 day—just wiring, not wrestling)
 
 ---
 
@@ -1578,17 +1615,19 @@ members = [
 
 ## Timeline
 
-**Estimated:** 3-4 days
+**Estimated:** 2.5-3 days (revised down—OpenFHE serialization already exists)
 
 - **Phase 3.1:** Crate structure & schema (0.5 day)
 - **Phase 3.2:** Error types & MultiFormat trait (0.25 day)
 - **Phase 3.3:** ASCII armor (0.25 day)
 - **Phase 3.4:** Protobuf serialization (0.5 day)
 - **Phase 3.5:** Bao streaming (0.5 day)
-- **Phase 3.6:** OpenFHE serialization (1 day) - most complex
+- **Phase 3.6:** Lattice backend wiring (0.5 day) - just connecting dots
 - **Phase 3.7:** Signature binding (0.5 day)
 
 **Buffer:** 0.5 day for debugging/iteration
+
+**Note:** Phase 3.6 reduced from 1 day to 0.5 day bc OpenFHE serialization already exists in `dcypher-openfhe-sys`. See `docs/plans/openfhe-serialization-research.md`.
 
 ---
 

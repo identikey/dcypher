@@ -1,9 +1,13 @@
 # OpenFHE Minimal Bindings Analysis
 
+> **Historical Note:** This analysis led to the decision to create custom minimal bindings
+> in `crates/dcypher-openfhe-sys/` instead of using `vendor/openfhe-rs/`. The openfhe-rs
+> directory has since been **deleted**. This document is preserved for reference.
+
 ## Summary
 
 Based on the Python prototype's `pre.py`, we need a very small subset of OpenFHE.
-The existing `openfhe-rs` bindings are ~1500 lines of Rust + ~2000 lines of C++ wrapper code,
+The original `openfhe-rs` bindings were ~1500 lines of Rust + ~2000 lines of C++ wrapper code,
 but we only need ~15% of that functionality.
 
 ## Required API Surface

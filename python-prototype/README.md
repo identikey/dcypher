@@ -17,6 +17,14 @@ This Python implementation is **archived and not actively maintained**. It serve
 
 **All new development is in Rust.** See `../docs/IMPLEMENTATION_PLAN.md` for the production implementation.
 
+### Removed Dependencies
+
+The following vendored submodules have been removed:
+- `vendor/openfhe-python/` - Python bindings for OpenFHE
+- `vendor/openfhe-rs/` - Rust bindings (was reference only)
+
+**This prototype will not run** without reinstalling these dependencies. It exists solely as a reference for the Rust implementation.
+
 ---
 
 ## What's Here
