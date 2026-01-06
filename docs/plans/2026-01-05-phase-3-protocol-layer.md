@@ -51,13 +51,13 @@ A production-ready `dcypher-proto` crate that:
 
 #### Automated:
 
-- [ ] All unit tests pass: `cargo test -p dcypher-proto`
-- [ ] Protobuf roundtrip tests pass for all message types
-- [ ] ASCII armor parse/emit roundtrip for keys
-- [ ] JSON serialization matches expected schema
-- [ ] Integration with `dcypher-core` compiles: `cargo build -p dcypher-core -p dcypher-proto`
-- [ ] Clippy clean: `cargo clippy -p dcypher-proto -- -D warnings`
-- [ ] Doc tests pass: `cargo test -p dcypher-proto --doc`
+- [x] All unit tests pass: `cargo test -p dcypher-proto`
+- [x] Protobuf roundtrip tests pass for all message types
+- [x] ASCII armor parse/emit roundtrip for keys
+- [x] JSON serialization matches expected schema
+- [x] Integration with `dcypher-core` compiles: `cargo build -p dcypher-core -p dcypher-proto`
+- [x] Clippy clean: `cargo clippy -p dcypher-proto -- -D warnings`
+- [x] Doc tests pass: `cargo test -p dcypher-proto --doc`
 
 #### Manual:
 
@@ -157,7 +157,7 @@ fn main() -> Result<()> {
     prost_build::Config::new()
         .out_dir("src/generated")
         .compile_protos(&["proto/dcypher.proto"], &["proto/"])?;
-    
+
     println!("cargo:rerun-if-changed=proto/dcypher.proto");
     Ok(())
 }
@@ -390,9 +390,9 @@ pub mod dcypher {
 
 #### Automated Verification:
 
-- [ ] Crate compiles: `cargo build -p dcypher-proto`
-- [ ] Protobuf types generated: `ls crates/dcypher-proto/src/generated/dcypher.v1.rs`
-- [ ] Generated code has expected types: grep for `EncryptedFileProto`
+- [x] Crate compiles: `cargo build -p dcypher-proto`
+- [x] Protobuf types generated: `ls crates/dcypher-proto/src/generated/dcypher.v1.rs`
+- [x] Generated code has expected types: grep for `EncryptedFileProto`
 
 #### Manual Verification:
 
@@ -528,8 +528,8 @@ pub trait MultiFormat: Sized {
 
 #### Automated Verification:
 
-- [ ] Error types compile: `cargo build -p dcypher-proto`
-- [ ] Format detection tests pass
+- [x] Error types compile: `cargo build -p dcypher-proto`
+- [x] Format detection tests pass
 
 #### Manual Verification:
 
@@ -550,7 +550,7 @@ Implement PGP-style ASCII armor for human-readable key export.
 
 **File**: `crates/dcypher-proto/src/armor.rs`
 
-```rust
+````rust
 //! ASCII armor format for human-readable export
 //!
 //! Format:
@@ -621,60 +621,60 @@ pub fn armor_encode(
     payload: &[u8],
 ) -> String {
     let mut result = String::new();
-    
+
     // Begin line
     result.push_str(&format!("----- BEGIN DCYPHER {} -----\n", armor_type.label()));
-    
+
     // Headers
     for (key, value) in headers {
         result.push_str(&format!("{}: {}\n", key, value));
     }
-    
+
     // Blank line before payload
     result.push('\n');
-    
+
     // Base64 payload (wrapped at 64 chars)
     let b64 = BASE64.encode(payload);
     for chunk in b64.as_bytes().chunks(64) {
         result.push_str(std::str::from_utf8(chunk).unwrap());
         result.push('\n');
     }
-    
+
     // End line
     result.push_str(&format!("----- END DCYPHER {} -----\n", armor_type.label()));
-    
+
     result
 }
 
 /// Decode ASCII armor to bytes
 pub fn armor_decode(s: &str) -> ProtoResult<ArmorBlock> {
     let lines: Vec<&str> = s.lines().collect();
-    
+
     // Find BEGIN line
     let begin_idx = lines.iter()
         .position(|l| l.starts_with("----- BEGIN DCYPHER"))
         .ok_or_else(|| ProtoError::ArmorParse("Missing BEGIN line".into()))?;
-    
+
     // Parse armor type from BEGIN line
     let begin_line = lines[begin_idx];
     let type_str = begin_line
         .strip_prefix("----- BEGIN DCYPHER ")
         .and_then(|s| s.strip_suffix(" -----"))
         .ok_or_else(|| ProtoError::ArmorParse("Invalid BEGIN format".into()))?;
-    
+
     let armor_type = ArmorType::from_label(type_str)
         .ok_or_else(|| ProtoError::ArmorParse(format!("Unknown armor type: {}", type_str)))?;
-    
+
     // Find END line
     let end_marker = format!("----- END DCYPHER {} -----", armor_type.label());
     let end_idx = lines.iter()
         .position(|l| *l == end_marker)
         .ok_or_else(|| ProtoError::ArmorParse("Missing END line".into()))?;
-    
+
     // Parse headers (until blank line)
     let mut headers = HashMap::new();
     let mut payload_start = begin_idx + 1;
-    
+
     for (i, line) in lines[begin_idx + 1..end_idx].iter().enumerate() {
         if line.is_empty() {
             payload_start = begin_idx + 1 + i + 1;
@@ -684,16 +684,16 @@ pub fn armor_decode(s: &str) -> ProtoResult<ArmorBlock> {
             headers.insert(key.to_string(), value.to_string());
         }
     }
-    
+
     // Decode base64 payload
     let payload_b64: String = lines[payload_start..end_idx]
         .iter()
         .flat_map(|l| l.chars())
         .filter(|c| !c.is_whitespace())
         .collect();
-    
+
     let payload = BASE64.decode(&payload_b64)?;
-    
+
     Ok(ArmorBlock {
         armor_type,
         headers,
@@ -712,10 +712,10 @@ mod tests {
             ("Version", "1"),
             ("Algorithm", "ED25519+ML-DSA-87"),
         ];
-        
+
         let armored = armor_encode(ArmorType::PublicKey, &headers, payload);
         let decoded = armor_decode(&armored).unwrap();
-        
+
         assert_eq!(decoded.armor_type, ArmorType::PublicKey);
         assert_eq!(decoded.headers.get("Version"), Some(&"1".to_string()));
         assert_eq!(decoded.payload, payload);
@@ -726,18 +726,18 @@ mod tests {
         let payload = vec![0u8; 1024]; // 1 KB
         let armored = armor_encode(ArmorType::Message, &[], &payload);
         let decoded = armor_decode(&armored).unwrap();
-        
+
         assert_eq!(decoded.payload, payload);
     }
 }
-```
+````
 
 ### Success Criteria
 
 #### Automated Verification:
 
-- [ ] Armor tests pass: `cargo test -p dcypher-proto armor`
-- [ ] Roundtrip preserves all data
+- [x] Armor tests pass: `cargo test -p dcypher-proto armor`
+- [x] Roundtrip preserves all data
 
 #### Manual Verification:
 
@@ -781,7 +781,7 @@ impl From<BackendId> for i32 {
 
 impl TryFrom<i32> for BackendId {
     type Error = ProtoError;
-    
+
     fn try_from(v: i32) -> ProtoResult<Self> {
         match v {
             1 => Ok(BackendId::Lattice),
@@ -806,7 +806,7 @@ impl From<&Ciphertext> for CiphertextProto {
 
 impl TryFrom<CiphertextProto> for Ciphertext {
     type Error = ProtoError;
-    
+
     fn try_from(proto: CiphertextProto) -> ProtoResult<Self> {
         let backend = BackendId::try_from(proto.backend)?;
         Ok(Ciphertext::new(backend, proto.level as u8, proto.data))
@@ -829,17 +829,17 @@ impl From<&EncryptedFile> for EncryptedFileProto {
 
 impl TryFrom<EncryptedFileProto> for EncryptedFile {
     type Error = ProtoError;
-    
+
     fn try_from(proto: EncryptedFileProto) -> ProtoResult<Self> {
         let wrapped_key = proto.wrapped_key
             .ok_or_else(|| ProtoError::MissingField("wrapped_key".into()))?;
-        
+
         if proto.bao_hash.len() != 32 {
             return Err(ProtoError::InvalidFormat(
                 format!("bao_hash must be 32 bytes, got {}", proto.bao_hash.len())
             ));
         }
-        
+
         Ok(EncryptedFile {
             wrapped_key: Ciphertext::try_from(wrapped_key)?,
             bao_hash: proto.bao_hash.try_into().unwrap(),
@@ -864,26 +864,26 @@ impl From<&MultiSig> for MultiSignatureProto {
 
 impl TryFrom<MultiSignatureProto> for MultiSig {
     type Error = ProtoError;
-    
+
     fn try_from(proto: MultiSignatureProto) -> ProtoResult<Self> {
         use ed25519_dalek::Signature;
-        
+
         if proto.ed25519_signature.len() != 64 {
             return Err(ProtoError::InvalidFormat(
                 "ED25519 signature must be 64 bytes".into()
             ));
         }
-        
+
         let ed25519_sig = Signature::from_bytes(
             &proto.ed25519_signature.try_into().unwrap()
         );
-        
+
         let ml_dsa_sig = proto.pq_signatures
             .into_iter()
             .find(|s| s.algorithm == "ML-DSA-87")
             .ok_or_else(|| ProtoError::MissingField("ML-DSA-87 signature".into()))?
             .signature;
-        
+
         Ok(MultiSig {
             ed25519_sig,
             ml_dsa_sig,
@@ -913,19 +913,19 @@ impl MultiFormat for EncryptedFile {
     fn proto_name() -> &'static str {
         "dcypher.v1.EncryptedFileProto"
     }
-    
+
     fn to_protobuf(&self) -> ProtoResult<Vec<u8>> {
         let proto = EncryptedFileProto::from(self);
         let mut buf = Vec::with_capacity(proto.encoded_len());
         proto.encode(&mut buf)?;
         Ok(buf)
     }
-    
+
     fn from_protobuf(bytes: &[u8]) -> ProtoResult<Self> {
         let proto = EncryptedFileProto::decode(bytes)?;
         Self::try_from(proto)
     }
-    
+
     fn to_json(&self) -> ProtoResult<String> {
         // Use a JSON-friendly representation
         #[derive(Serialize)]
@@ -936,14 +936,14 @@ impl MultiFormat for EncryptedFile {
             bao_outboard: String,
             ciphertext: String,
         }
-        
+
         #[derive(Serialize)]
         struct JsonCiphertext {
             backend: String,
             level: u32,
             data: String,
         }
-        
+
         let json = JsonEncryptedFile {
             version: 2,
             wrapped_key: JsonCiphertext {
@@ -955,10 +955,10 @@ impl MultiFormat for EncryptedFile {
             bao_outboard: hex::encode(&self.bao_outboard),
             ciphertext: hex::encode(&self.ciphertext),
         };
-        
+
         Ok(serde_json::to_string_pretty(&json)?)
     }
-    
+
     fn from_json(s: &str) -> ProtoResult<Self> {
         // Parse JSON and convert
         #[derive(Deserialize)]
@@ -969,23 +969,23 @@ impl MultiFormat for EncryptedFile {
             bao_outboard: String,
             ciphertext: String,
         }
-        
+
         #[derive(Deserialize)]
         struct JsonCiphertext {
             backend: String,
             level: u32,
             data: String,
         }
-        
+
         let json: JsonEncryptedFile = serde_json::from_str(s)?;
-        
+
         if json.version != 2 {
             return Err(ProtoError::VersionMismatch {
                 expected: 2,
                 actual: json.version,
             });
         }
-        
+
         let backend = match json.wrapped_key.backend.as_str() {
             "Lattice" => dcypher_core::pre::BackendId::Lattice,
             "Mock" => dcypher_core::pre::BackendId::Mock,
@@ -993,11 +993,11 @@ impl MultiFormat for EncryptedFile {
                 format!("Unknown backend: {}", json.wrapped_key.backend)
             )),
         };
-        
+
         let bao_hash: [u8; 32] = hex::decode(&json.bao_hash)?
             .try_into()
             .map_err(|_| ProtoError::InvalidFormat("bao_hash must be 32 bytes".into()))?;
-        
+
         Ok(EncryptedFile {
             wrapped_key: dcypher_core::pre::Ciphertext::new(
                 backend,
@@ -1009,7 +1009,7 @@ impl MultiFormat for EncryptedFile {
             ciphertext: hex::decode(&json.ciphertext)?,
         })
     }
-    
+
     fn to_armor(&self, _armor_type: ArmorType) -> ProtoResult<String> {
         let proto_bytes = self.to_protobuf()?;
         let headers = [
@@ -1018,7 +1018,7 @@ impl MultiFormat for EncryptedFile {
         ];
         Ok(armor_encode(ArmorType::EncryptedFile, &headers, &proto_bytes))
     }
-    
+
     fn from_armor(s: &str) -> ProtoResult<Self> {
         let block = armor_decode(s)?;
         if block.armor_type != ArmorType::EncryptedFile {
@@ -1035,10 +1035,10 @@ impl MultiFormat for EncryptedFile {
 
 #### Automated Verification:
 
-- [ ] Conversion tests pass: `cargo test -p dcypher-proto convert`
-- [ ] Protobuf roundtrip for EncryptedFile works
-- [ ] JSON roundtrip works
-- [ ] Armor roundtrip works
+- [x] Conversion tests pass: `cargo test -p dcypher-proto convert`
+- [x] Protobuf roundtrip for EncryptedFile works
+- [x] JSON roundtrip works
+- [x] Armor roundtrip works
 
 #### Manual Verification:
 
@@ -1081,13 +1081,13 @@ impl BaoEncoder {
     pub fn new() -> Self {
         Self { outboard: Vec::new() }
     }
-    
+
     /// Encode data and return (bao_hash, outboard)
     pub fn encode(&mut self, data: &[u8]) -> ProtoResult<([u8; 32], Vec<u8>)> {
         let (outboard, hash) = bao::encode::outboard(data);
         Ok((*hash.as_bytes(), outboard))
     }
-    
+
     /// Encode with streaming input
     pub fn encode_streaming<R: Read>(&mut self, mut reader: R) -> ProtoResult<([u8; 32], Vec<u8>)> {
         let mut data = Vec::new();
@@ -1115,12 +1115,12 @@ impl BaoDecoder {
             expected_hash: bao::Hash::from(expected_hash),
         }
     }
-    
+
     /// Verify data against expected hash (simple mode)
     pub fn verify(&self, data: &[u8], outboard: &[u8]) -> ProtoResult<()> {
         // Compute hash and compare
         let computed = blake3::hash(data);
-        
+
         // For now, simple verification (full Bao verification requires outboard parsing)
         // TODO: Use bao::decode::outboard when API stabilizes
         if computed.as_bytes() != self.expected_hash.as_bytes() {
@@ -1128,7 +1128,7 @@ impl BaoDecoder {
                 "Hash mismatch: data corrupted".into()
             ));
         }
-        
+
         // Verify outboard size is reasonable
         let expected_outboard_size = bao::encode::outboard_size(data.len() as u64);
         if outboard.len() as u64 != expected_outboard_size {
@@ -1136,10 +1136,10 @@ impl BaoDecoder {
                 format!("Outboard size mismatch: {} != {}", outboard.len(), expected_outboard_size)
             ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Verify streaming (chunk by chunk)
     pub fn verify_streaming<R: Read>(
         &self,
@@ -1151,7 +1151,7 @@ impl BaoDecoder {
         let mut buf = Vec::new();
         std::io::copy(&mut std::io::BufReader::new(data), &mut std::io::Cursor::new(&mut buf))
             .map_err(|e| ProtoError::BaoVerification(e.to_string()))?;
-        
+
         self.verify(&buf, outboard)?;
         Ok(buf)
     }
@@ -1168,7 +1168,7 @@ impl SliceVerifier {
             expected_hash: bao::Hash::from(expected_hash),
         }
     }
-    
+
     /// Extract a verified slice from encoded data
     ///
     /// This allows downloading only a portion of a file while still
@@ -1184,14 +1184,14 @@ impl SliceVerifier {
         // For now, verify whole and return slice
         let decoder = BaoDecoder::new(*self.expected_hash.as_bytes());
         decoder.verify(data, outboard)?;
-        
+
         let end = (start + len) as usize;
         if end > data.len() {
             return Err(ProtoError::BaoVerification(
                 format!("Slice out of bounds: {}..{} > {}", start, end, data.len())
             ));
         }
-        
+
         Ok(data[start as usize..end].to_vec())
     }
 }
@@ -1208,10 +1208,10 @@ mod tests {
     #[test]
     fn test_encode_decode() {
         let data = b"Hello, Bao streaming!";
-        
+
         let mut encoder = BaoEncoder::new();
         let (hash, outboard) = encoder.encode(data).unwrap();
-        
+
         let decoder = BaoDecoder::new(hash);
         decoder.verify(data, &outboard).unwrap();
     }
@@ -1219,26 +1219,26 @@ mod tests {
     #[test]
     fn test_corrupted_data_detected() {
         let data = b"Original data";
-        
+
         let mut encoder = BaoEncoder::new();
         let (hash, outboard) = encoder.encode(data).unwrap();
-        
+
         let corrupted = b"Corrupted data";
         let decoder = BaoDecoder::new(hash);
-        
+
         assert!(decoder.verify(corrupted, &outboard).is_err());
     }
 
     #[test]
     fn test_slice_extraction() {
         let data = b"Hello, this is a longer message for slicing!";
-        
+
         let mut encoder = BaoEncoder::new();
         let (hash, outboard) = encoder.encode(data).unwrap();
-        
+
         let verifier = SliceVerifier::new(hash);
         let slice = verifier.extract_slice(data, &outboard, 7, 4).unwrap();
-        
+
         assert_eq!(&slice, b"this");
     }
 }
@@ -1248,9 +1248,9 @@ mod tests {
 
 #### Automated Verification:
 
-- [ ] Bao tests pass: `cargo test -p dcypher-proto bao`
-- [ ] Corruption detection works
-- [ ] Slice extraction works
+- [x] Bao tests pass: `cargo test -p dcypher-proto bao`
+- [x] Corruption detection works
+- [x] Slice extraction works
 
 #### Manual Verification:
 
@@ -1270,6 +1270,7 @@ See `docs/plans/openfhe-serialization-research.md` for full analysis.
 ### What Already Exists
 
 **`dcypher-openfhe-sys/src/wrapper.cc`** already implements:
+
 ```cpp
 rust::Vec<uint8_t> serialize_ciphertext(const Ciphertext &ct);
 std::unique_ptr<Ciphertext> deserialize_ciphertext(const CryptoContext &ctx, rust::Slice<const uint8_t> data);
@@ -1295,7 +1296,7 @@ impl PreContext {
         #[cfg(not(feature = "openfhe"))]
         Err(FfiError::OpenFhe("OpenFHE not enabled".into()))
     }
-    
+
     /// Deserialize public key from bytes
     pub fn deserialize_public_key(&self, bytes: &[u8]) -> Result<PublicKey, FfiError> {
         #[cfg(feature = "openfhe")]
@@ -1309,7 +1310,7 @@ impl PreContext {
         #[cfg(not(feature = "openfhe"))]
         Err(FfiError::OpenFhe("OpenFHE not enabled".into()))
     }
-    
+
     // Same pattern for: serialize/deserialize_private_key, _ciphertext, _recrypt_key
 }
 ```
@@ -1325,28 +1326,28 @@ impl PreBackend for LatticeBackend {
     fn generate_keypair(&self) -> PreResult<KeyPair> {
         let ffi_kp = self.context.generate_keypair()
             .map_err(|e| PreError::KeyGeneration(e.to_string()))?;
-        
+
         // Serialize keys for storage in our wrapper types
         let pk_bytes = self.context.serialize_public_key(&ffi_kp.public)
             .map_err(|e| PreError::Serialization(e.to_string()))?;
         let sk_bytes = self.context.serialize_private_key(&ffi_kp.secret)
             .map_err(|e| PreError::Serialization(e.to_string()))?;
-        
+
         Ok(KeyPair {
             public: PublicKey::new(BackendId::Lattice, pk_bytes),
             secret: SecretKey::new(BackendId::Lattice, sk_bytes),
         })
     }
-    
+
     fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<Ciphertext> {
         // Deserialize recipient's public key
         let pk = self.context.deserialize_public_key(recipient.as_bytes())
             .map_err(|e| PreError::Deserialization(e.to_string()))?;
-        
+
         // Encrypt (returns Vec<FfiCiphertext> due to slot chunking)
         let cts = self.context.encrypt(&pk, plaintext)
             .map_err(|e| PreError::Encryption(e.to_string()))?;
-        
+
         // Serialize all ciphertexts into one blob with length prefixes
         let mut ct_bytes = Vec::new();
         ct_bytes.extend((cts.len() as u32).to_le_bytes());
@@ -1356,23 +1357,23 @@ impl PreBackend for LatticeBackend {
             ct_bytes.extend((serialized.len() as u32).to_le_bytes());
             ct_bytes.extend(serialized);
         }
-        
+
         Ok(Ciphertext::new(BackendId::Lattice, 0, ct_bytes))
     }
-    
+
     // decrypt, recrypt follow same pattern...
 }
 ```
 
 #### 3. Key Size Expectations
 
-| Object | Measured Size |
-|--------|--------------|
-| PublicKey | ~180-220 KB |
-| PrivateKey | ~90-120 KB |
-| RecryptKey | ~1.5-2 MB |
-| Ciphertext (96B input) | ~5-10 KB |
-| CryptoContext | 10-50 MB (NOT serialized per-message) |
+| Object                 | Measured Size                         |
+| ---------------------- | ------------------------------------- |
+| PublicKey              | ~180-220 KB                           |
+| PrivateKey             | ~90-120 KB                            |
+| RecryptKey             | ~1.5-2 MB                             |
+| Ciphertext (96B input) | ~5-10 KB                              |
+| CryptoContext          | 10-50 MB (NOT serialized per-message) |
 
 **Important:** CryptoContext is huge. We use a single shared context with fixed BFV parameters. Don't serialize it with each message—assume both sides have compatible contexts.
 
@@ -1427,14 +1428,14 @@ impl EncryptedFile {
         payload.extend(&self.bao_hash);
         payload
     }
-    
+
     /// Sign the file with the given keys
     pub fn sign(&mut self, keys: &crate::sign::SigningKeys) -> crate::CoreResult<()> {
         let payload = self.signature_payload();
         self.signature = Some(crate::sign::sign_message(&payload, keys)?);
         Ok(())
     }
-    
+
     /// Verify the signature
     pub fn verify_signature(&self, pks: &crate::sign::VerifyingKeys) -> crate::CoreResult<bool> {
         match &self.signature {
@@ -1465,7 +1466,7 @@ impl<B: PreBackend> HybridEncryptor<B> {
         file.sign(signing_keys)?;
         Ok(file)
     }
-    
+
     /// Decrypt with signature verification
     pub fn decrypt_and_verify(
         &self,
@@ -1485,9 +1486,9 @@ impl<B: PreBackend> HybridEncryptor<B> {
 
 #### Automated Verification:
 
-- [ ] Signature tests pass: `cargo test -p dcypher-core signature`
-- [ ] Signed file roundtrip works
-- [ ] Tampering detected (modify wrapped_key or bao_hash)
+- [x] Signature tests pass: `cargo test -p dcypher-core signature`
+- [x] Signed file roundtrip works
+- [x] Tampering detected (modify wrapped_key or bao_hash)
 
 #### Manual Verification:
 
@@ -1522,12 +1523,12 @@ proptest! {
         let backend = MockBackend;
         let encryptor = HybridEncryptor::new(backend);
         let kp = encryptor.backend().generate_keypair().unwrap();
-        
+
         let original = encryptor.encrypt(&kp.public, &data).unwrap();
         let proto_bytes = original.to_protobuf().unwrap();
         let restored = EncryptedFile::from_protobuf(&proto_bytes).unwrap();
         let decrypted = encryptor.decrypt(&kp.secret, &restored).unwrap();
-        
+
         prop_assert_eq!(decrypted, data);
     }
 }
@@ -1539,11 +1540,11 @@ proptest! {
 
 ### Serialization Overhead
 
-| Format   | Overhead | Speed     | Use Case          |
-|----------|----------|-----------|-------------------|
-| Protobuf | ~0.1%    | Very fast | Wire, storage     |
-| JSON     | ~0.5%    | Fast      | Debug, API        |
-| Armor    | ~35%     | Slow      | Key export only   |
+| Format   | Overhead | Speed     | Use Case        |
+| -------- | -------- | --------- | --------------- |
+| Protobuf | ~0.1%    | Very fast | Wire, storage   |
+| JSON     | ~0.5%    | Fast      | Debug, API      |
+| Armor    | ~35%     | Slow      | Key export only |
 
 ### Memory
 
@@ -1642,4 +1643,3 @@ members = [
 ---
 
 **Next Phase:** Phase 4 (Storage Layer) - S3-compatible storage, chunking, local filesystem
-

@@ -8,6 +8,7 @@ pub use keymaterial::KeyMaterial;
 
 use crate::error::{CoreError, CoreResult};
 use crate::pre::{PreBackend, PublicKey, RecryptKey, SecretKey};
+use crate::sign::{SigningKeys, VerifyingKeys};
 use chacha20::XChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
 use rand::{RngCore, rngs::OsRng};
@@ -59,6 +60,7 @@ impl<B: PreBackend> HybridEncryptor<B> {
             bao_hash: *bao_hash.as_bytes(),
             bao_outboard,
             ciphertext,
+            signature: None,
         })
     }
 
@@ -120,7 +122,33 @@ impl<B: PreBackend> HybridEncryptor<B> {
             bao_hash: file.bao_hash,
             bao_outboard: file.bao_outboard.clone(),
             ciphertext: file.ciphertext.clone(),
+            signature: file.signature.clone(),
         })
+    }
+
+    /// Encrypt and sign data
+    pub fn encrypt_and_sign(
+        &self,
+        recipient: &PublicKey,
+        plaintext: &[u8],
+        signing_keys: &SigningKeys,
+    ) -> CoreResult<EncryptedFile> {
+        let mut file = self.encrypt(recipient, plaintext)?;
+        file.sign(signing_keys)?;
+        Ok(file)
+    }
+
+    /// Decrypt with signature verification
+    pub fn decrypt_and_verify(
+        &self,
+        secret: &SecretKey,
+        file: &EncryptedFile,
+        verifying_keys: &VerifyingKeys,
+    ) -> CoreResult<Vec<u8>> {
+        // Verify signature first
+        file.verify_signature(verifying_keys)?;
+        // Then decrypt
+        self.decrypt(secret, file)
     }
 
     /// Access the underlying PRE backend

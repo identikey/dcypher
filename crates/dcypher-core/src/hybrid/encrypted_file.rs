@@ -1,6 +1,8 @@
 //! Encrypted file structure (implementation in Phase 2.4)
 
+use crate::error::CoreResult;
 use crate::pre::Ciphertext;
+use crate::sign::{MultiSig, SigningKeys, VerifyingKeys};
 
 /// An encrypted file with streaming-verifiable integrity
 #[derive(Clone, Debug)]
@@ -16,9 +18,39 @@ pub struct EncryptedFile {
 
     /// XChaCha20-encrypted data (no auth tag—Bao provides integrity)
     pub ciphertext: Vec<u8>,
+
+    /// Signature over (wrapped_key || bao_hash) - optional for unsigned files
+    pub signature: Option<MultiSig>,
 }
 
 impl EncryptedFile {
+    /// Compute the signature payload
+    pub fn signature_payload(&self) -> Vec<u8> {
+        let mut payload = self.wrapped_key.to_bytes();
+        payload.extend(&self.bao_hash);
+        payload
+    }
+
+    /// Sign the file with the given keys
+    pub fn sign(&mut self, keys: &SigningKeys) -> CoreResult<()> {
+        let payload = self.signature_payload();
+        self.signature = Some(crate::sign::sign_message(&payload, keys)?);
+        Ok(())
+    }
+
+    /// Verify the signature
+    pub fn verify_signature(&self, pks: &VerifyingKeys) -> CoreResult<bool> {
+        match &self.signature {
+            Some(sig) => {
+                let payload = self.signature_payload();
+                crate::sign::verify_message(&payload, sig, pks)
+            }
+            None => Err(crate::error::CoreError::Verification(
+                "No signature present".into(),
+            )),
+        }
+    }
+
     /// Serialize to bytes (simplified—full wire format in Phase 3)
     pub fn to_bytes(&self) -> Vec<u8> {
         let wrapped = self.wrapped_key.to_bytes();

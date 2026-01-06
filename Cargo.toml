@@ -4,6 +4,7 @@ members = [
   "crates/dcypher-ffi",
   "crates/dcypher-openfhe-sys",
   "crates/dcypher-core",
+  "crates/dcypher-proto",
   # "crates/dcypher-hdprint",  # parallel track
 ]
 
