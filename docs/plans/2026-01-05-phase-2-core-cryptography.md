@@ -48,19 +48,19 @@ A production-ready `dcypher-core` crate that:
 
 #### Automated:
 
-- [ ] All unit tests pass: `cargo test -p dcypher-core`
-- [ ] Property tests pass: `cargo test -p dcypher-core --features proptest`
-- [ ] Benchmarks baseline established: `cargo bench -p dcypher-core`
-- [ ] Clippy clean: `cargo clippy -p dcypher-core -- -D warnings`
-- [ ] Doc tests pass: `cargo test -p dcypher-core --doc`
+- [x] All unit tests pass: `cargo test -p dcypher-core`
+- [x] Property tests pass: `cargo test -p dcypher-core --features proptest`
+- [x] Benchmarks baseline established: `cargo bench -p dcypher-core`
+- [x] Clippy clean: `cargo clippy -p dcypher-core -- -D warnings`
+- [x] Doc tests pass: `cargo test -p dcypher-core --doc`
 
 #### Manual:
 
-- [ ] Full Alice→Bob→Carol recryption flow works
-- [ ] Encrypted files decrypt to correct plaintext
-- [ ] Multi-signature verification catches tampered messages
-- [ ] Mock backend allows fast iteration without OpenFHE overhead
-- [ ] Documentation examples compile and run
+- [x] Full Alice→Bob→Carol recryption flow works
+- [x] Encrypted files decrypt to correct plaintext
+- [x] Multi-signature verification catches tampered messages
+- [x] Mock backend allows fast iteration without OpenFHE overhead
+- [x] Documentation examples compile and run
 
 **Implementation Note:** After completing each phase and all automated checks pass, pause for manual confirmation before proceeding.
 

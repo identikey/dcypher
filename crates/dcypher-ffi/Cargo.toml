@@ -14,7 +14,11 @@ thiserror.workspace = true
 dcypher-openfhe-sys = { path = "../dcypher-openfhe-sys", optional = true }
 
 # Post-quantum signatures via liboqs
-oqs = { version = "0.11", optional = true }
+# We disable OpenSSL to avoid system dependency; liboqs has fallback implementations
+oqs = { version = "0.11", default-features = false, features = [
+  "ml_dsa",
+  "std",
+], optional = true }
 
 [build-dependencies]
 cxx-build = "1.0"

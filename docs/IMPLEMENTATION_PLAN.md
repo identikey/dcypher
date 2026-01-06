@@ -1113,11 +1113,11 @@ python-prototype/
 
 ### Phase 2 Complete When:
 
-- [ ] Core crypto API stable and documented
-- [ ] Property-based tests passing
-- [ ] Known-answer tests for regression
-- [ ] Benchmarks baseline established
-- [ ] Documentation with examples
+- [x] Core crypto API stable and documented
+- [x] Property-based tests passing
+- [x] Known-answer tests for regression
+- [x] Benchmarks baseline established
+- [x] Documentation with examples
 
 ### Phase 3 Complete When:
 
@@ -1189,7 +1189,7 @@ python-prototype/
 
 **Phase 0:** 2-3 days (design decisions) ✅ COMPLETE  
 **Phase 1:** 3-5 days (FFI bindings) ✅ COMPLETE  
-**Phase 2:** 4-5 days (core crypto)  
+**Phase 2:** 4-5 days (core crypto) ✅ COMPLETE  
 **Phase 3:** 3-4 days (protocol)  
 **Phase 4:** 3-4 days (storage client)  
 **Phase 4b:** 3-4 days (auth service)  

@@ -64,6 +64,7 @@ fn main() {
         // Suppress some OpenFHE warnings
         .flag_if_supported("-Wno-unused-parameter")
         .flag_if_supported("-Wno-sign-compare")
+        .flag_if_supported("-Wno-missing-field-initializers")
         .compile("dcypher_openfhe_sys");
 
     // Link OpenFHE static libraries (order matters for static linking!)
