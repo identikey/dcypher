@@ -1,0 +1,34 @@
+[package]
+name = "identikey-storage-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Authorization layer for content-addressed storage"
+
+[features]
+default = []
+sqlite = ["rusqlite"]
+
+[dependencies]
+# Workspace
+dcypher-core = { path = "../dcypher-core" }
+dcypher-proto = { path = "../dcypher-proto" }
+thiserror.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+
+# Hashing
+blake3 = "1"
+bs58.workspace = true
+
+# Serialization
+serde_json.workspace = true
+
+# SQLite (optional)
+rusqlite = { workspace = true, optional = true }
+
+[dev-dependencies]
+dcypher-ffi = { path = "../dcypher-ffi" }
+dcypher-storage = { path = "../dcypher-storage" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tempfile = "3"

@@ -6,6 +6,7 @@ members = [
   "crates/dcypher-core",
   "crates/dcypher-proto",
   "crates/dcypher-storage",
+  "crates/identikey-storage-auth",
   # "crates/dcypher-hdprint",  # parallel track
 ]
 
@@ -35,6 +36,10 @@ async-trait = "0.1"
 bs58 = "0.5"
 aws-sdk-s3 = "1"
 aws-config = "1"
+
+# Auth service (Phase 4b)
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde_json = "1"
 
 [profile.release]
 lto = true

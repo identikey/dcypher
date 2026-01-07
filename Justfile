@@ -236,3 +236,26 @@ check-storage:
     cargo clippy -p dcypher-storage -- -D warnings
     cargo clippy -p dcypher-storage --features s3 -- -D warnings
 
+# =============================================================================
+# Auth Service (Phase 4b)
+# =============================================================================
+
+# Run auth service tests (in-memory only)
+test-auth:
+    cargo test -p identikey-storage-auth -- --test-threads=1
+
+# Run auth service tests with SQLite
+test-auth-sqlite:
+    cargo test -p identikey-storage-auth --features sqlite -- --test-threads=1
+
+# Check auth service crate
+check-auth:
+    cargo check -p identikey-storage-auth
+    cargo check -p identikey-storage-auth --features sqlite
+    cargo clippy -p identikey-storage-auth -- -D warnings
+    cargo clippy -p identikey-storage-auth --features sqlite -- -D warnings
+
+# Generate auth service docs
+docs-auth:
+    cargo doc -p identikey-storage-auth --no-deps --open
+

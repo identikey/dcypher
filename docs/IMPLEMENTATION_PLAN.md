@@ -1151,19 +1151,26 @@ python-prototype/
 
 ### Phase 4 Complete When:
 
-- [ ] Local file storage working
-- [ ] Minio integration functional
-- [ ] S3 integration tested
-- [ ] Docker compose dev environment
-- [ ] Concurrent access patterns validated
+- [x] Local file storage working
+- [x] Minio integration functional
+- [x] S3 integration tested
+- [x] Docker compose dev environment
+- [x] Concurrent access patterns validated (thread-safe via RwLock, async throughout)
 
 ### Phase 4b Complete When:
 
-- [ ] Ownership registration working
-- [ ] Capability issuance and verification working
-- [ ] Hash → provider URL lookup working
-- [ ] Access grant/revoke flow working
-- [ ] Integration with dcypher-storage validated
+- [x] `OwnershipStore` trait with `InMemoryOwnershipStore` and `SqliteOwnershipStore`
+- [x] `ProviderIndex` trait with `InMemoryProviderIndex` and `SqliteProviderIndex`
+- [x] `Capability` domain type with signing and verification
+- [x] `AccessGrant` for tracking delegated access
+- [x] Ownership registration, transfer, and revocation working
+- [x] Capability issuance, expiry checking, and verification working
+- [x] Hash → provider URL lookup and migration working
+- [x] Access grant/revoke flow working
+- [x] Integration tests with dcypher-storage validated
+- [x] SQLite persistence layer functional
+
+**Plan:** `docs/plans/2026-01-06-phase-4b-storage-auth.md`
 
 ### Phase 5 Complete When:
 
@@ -1213,8 +1220,8 @@ python-prototype/
 **Phase 1:** 3-5 days (FFI bindings) ✅ COMPLETE  
 **Phase 2:** 4-5 days (core crypto) ✅ COMPLETE  
 **Phase 3:** 3-4 days (protocol) ✅ COMPLETE  
-**Phase 4:** 3-4 days (storage client)  
-**Phase 4b:** 3-4 days (auth service)  
+**Phase 4:** 3-4 days (storage client) ✅ COMPLETE  
+**Phase 4b:** 3-4 days (auth service) ✅ COMPLETE  
 **Phase 5:** 2-3 days (HDprint) — can parallelize with 1-4  
 **Phase 6:** 4-5 days (recryption proxy server)  
 **Phase 7:** 3-4 days (CLI)  
