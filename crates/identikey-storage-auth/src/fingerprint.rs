@@ -1,15 +1,12 @@
 //! Public key fingerprint type
 //!
-//! Currently uses raw Blake3 hash of public key bytes.
-//! TODO: Replace with HDprint when Phase 5 is complete.
+//! Uses Blake3 hash of public key bytes for compact, collision-resistant identification.
 
 use std::fmt;
 
 /// A fingerprint uniquely identifying a public key
 ///
-/// # Future Work
-/// This is currently a raw Blake3 hash. When HDprint (Phase 5) is complete,
-/// this should be replaced with the self-correcting HDprint format.
+/// Blake3 hash provides 256-bit collision resistance, Base58 encoding for readability.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PublicKeyFingerprint([u8; 32]);
 
@@ -20,8 +17,6 @@ impl PublicKeyFingerprint {
     }
 
     /// Create from a public key (Blake3 hash)
-    ///
-    /// TODO: Replace with HDprint generation when available
     pub fn from_public_key(pubkey_bytes: &[u8]) -> Self {
         let hash = blake3::hash(pubkey_bytes);
         Self(*hash.as_bytes())

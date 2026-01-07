@@ -39,12 +39,12 @@ The crate provides traits with pluggable backends (in-memory for tests, SQLite f
 
 ### Key Design Decisions
 
-| Decision           | Choice                     | Rationale                                                  |
-| ------------------ | -------------------------- | ---------------------------------------------------------- |
-| Fingerprint format | Raw pubkey hash (32 bytes) | HDprint not ready; swap later                              |
-| Capability scope   | File-level                 | Chunk-level is unnecessary complexity                      |
-| Persistence        | In-memory + SQLite         | SQLite for single-node; trait design allows Postgres later |
-| HTTP API           | Deferred to Phase 6        | Separation of concerns                                     |
+| Decision           | Choice                 | Rationale                                                  |
+| ------------------ | ---------------------- | ---------------------------------------------------------- |
+| Fingerprint format | Blake3 hash (32 bytes) | Simple, collision-resistant, no fancy error correction     |
+| Capability scope   | File-level             | Chunk-level is unnecessary complexity                      |
+| Persistence        | In-memory + SQLite     | SQLite for single-node; trait design allows Postgres later |
+| HTTP API           | Deferred to Phase 6    | Separation of concerns                                     |
 
 ---
 
@@ -72,8 +72,7 @@ cargo test -p identikey-storage-auth --features sqlite  # SQLite tests
 
 - ❌ HTTP API endpoints (Phase 6)
 - ❌ Postgres backend (future enhancement)
-- ❌ HDprint fingerprints (Phase 5 parallel track — **TODO: swap in later**)
-- ❌ Rate limiting (Phase 6)
+- ❌ Rate limiting (Phase 5)
 - ❌ Distributed consensus (future enhancement)
 
 ---
@@ -86,7 +85,7 @@ identikey-storage-auth/
 ├── src/
 │   ├── lib.rs              # Re-exports
 │   ├── error.rs            # AuthError
-│   ├── fingerprint.rs      # PublicKeyFingerprint (placeholder for HDprint)
+│   ├── fingerprint.rs      # PublicKeyFingerprint (Blake3 hash)
 │   ├── capability.rs       # Capability domain type + verification
 │   ├── ownership.rs        # OwnershipStore trait
 │   ├── provider.rs         # ProviderIndex trait
@@ -319,16 +318,13 @@ Define `PublicKeyFingerprint`, `Operation`, `Capability`, and `AccessGrant`.
 ```rust
 //! Public key fingerprint type
 //!
-//! Currently uses raw Blake3 hash of public key bytes.
-//! TODO: Replace with HDprint when Phase 5 is complete.
+//! Uses Blake3 hash of public key bytes for compact, collision-resistant identification.
 
 use std::fmt;
 
 /// A fingerprint uniquely identifying a public key
 ///
-/// # Future Work
-/// This is currently a raw Blake3 hash. When HDprint (Phase 5) is complete,
-/// this should be replaced with the self-correcting HDprint format.
+/// Blake3 hash provides 256-bit collision resistance, Base58 encoding for readability.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PublicKeyFingerprint([u8; 32]);
 
@@ -339,8 +335,6 @@ impl PublicKeyFingerprint {
     }
 
     /// Create from a public key (Blake3 hash)
-    ///
-    /// TODO: Replace with HDprint generation when available
     pub fn from_public_key(pubkey_bytes: &[u8]) -> Self {
         let hash = blake3::hash(pubkey_bytes);
         Self(*hash.as_bytes())
@@ -2509,12 +2503,7 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 ## Future Work
 
-### Phase 5 Integration
-
-- **TODO**: Replace `PublicKeyFingerprint::from_public_key()` with HDprint generation
-- Update fingerprint display format to use HDprint segments
-
-### Phase 6 HTTP API
+### Phase 5 HTTP API
 
 - Expose ownership, capability, provider operations via REST
 - Add rate limiting middleware

@@ -7,7 +7,7 @@
 
 ## Summary
 
-All hashing uses **Blake3** exclusively, with one exception: HMAC-SHA3-512 remains in HDprint for keyed fingerprint generation (see `hmac-analysis.md`).
+All hashing uses **Blake3** exclusively.
 
 ---
 
@@ -66,14 +66,13 @@ The `blake3` crate is:
 
 ## Migration from Python Prototype
 
-| Python Usage                     | Rust Replacement          |
-| -------------------------------- | ------------------------- |
-| `hashlib.blake2b(data).digest()` | `blake3::hash(data)`      |
-| `MerkleTree` (manual)            | `bao::encode::Encoder`    |
-| Chunk hashes                     | `blake3::hash(chunk)`     |
-| Content addressing               | `blake3::hash(plaintext)` |
-
-**Exception:** HDprint preprocessing and fingerprint chain use HMAC-SHA3-512 (unchanged from Python).
+| Python Usage                     | Rust Replacement                |
+| -------------------------------- | ------------------------------- |
+| `hashlib.blake2b(data).digest()` | `blake3::hash(data)`            |
+| `MerkleTree` (manual)            | `bao::encode::Encoder`          |
+| Chunk hashes                     | `blake3::hash(chunk)`           |
+| Content addressing               | `blake3::hash(plaintext)`       |
+| Public key fingerprints          | `blake3::hash(pubkey)` → Base58 |
 
 ---
 
@@ -115,8 +114,6 @@ Blake3 supports keyed mode for MAC-like operations:
 let key: [u8; 32] = /* ... */;
 let mac = blake3::keyed_hash(&key, data);
 ```
-
-However, prefer HMAC-SHA3-512 for HDprint (see `hmac-analysis.md`).
 
 ---
 

@@ -115,8 +115,8 @@ message PqPublicKey {
 }
 
 message RecryptKey {
-    bytes from_pubkey_fingerprint = 1;  // HDprint of source
-    bytes to_pubkey_fingerprint = 2;    // HDprint of destination
+    bytes from_pubkey_fingerprint = 1;  // Blake3 fingerprint of source
+    bytes to_pubkey_fingerprint = 2;    // Blake3 fingerprint of destination
     bytes key_data = 3;                 // Serialized OpenFHE rekey
 }
 

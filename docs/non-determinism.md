@@ -195,21 +195,18 @@ proptest! {
 
 ### Pattern 3: Known-Answer Tests (for deterministic components)
 
-HDprint fingerprints ARE deterministic (same key → same fingerprint):
+Blake3 fingerprints ARE deterministic (same key → same fingerprint):
 
 ```rust
 #[test]
-fn test_hdprint_deterministic() {
+fn test_fingerprint_deterministic() {
     let pubkey = hex::decode("0123456789abcdef...").unwrap();
 
-    let fp1 = generate_fingerprint(&pubkey, "medium");
-    let fp2 = generate_fingerprint(&pubkey, "medium");
+    let fp1 = PublicKeyFingerprint::from_public_key(&pubkey);
+    let fp2 = PublicKeyFingerprint::from_public_key(&pubkey);
 
-    // HDprint IS deterministic
+    // Blake3 IS deterministic
     assert_eq!(fp1, fp2);
-
-    // Can use known-answer test
-    assert_eq!(fp1, "Ab3DeF_Xy9ZmP7q_R2sK1M4V");
 }
 ```
 
@@ -245,14 +242,14 @@ fn good_encrypt_decrypt(data: &[u8]) {
 
 ## Summary Table
 
-| Operation   | Deterministic? | Test Strategy                             |
-| ----------- | -------------- | ----------------------------------------- |
-| Encrypt     | ❌             | Roundtrip: decrypt(encrypt(x)) == x       |
-| Serialize   | ❌             | Roundtrip: deserialize(serialize(x)) ≡ x  |
-| PQ Sign     | ❌             | Verify: verify(sign(m)) == true           |
-| Blake3 hash | ✅             | Direct comparison                         |
-| HDprint     | ✅             | Known-answer tests                        |
-| Bao encode  | ✅             | Direct comparison (same data → same root) |
+| Operation    | Deterministic? | Test Strategy                             |
+| ------------ | -------------- | ----------------------------------------- |
+| Encrypt      | ❌             | Roundtrip: decrypt(encrypt(x)) == x       |
+| Serialize    | ❌             | Roundtrip: deserialize(serialize(x)) ≡ x  |
+| PQ Sign      | ❌             | Verify: verify(sign(m)) == true           |
+| Blake3 hash  | ✅             | Direct comparison                         |
+| Fingerprints | ✅             | Known-answer tests (Blake3 → Base58)      |
+| Bao encode   | ✅             | Direct comparison (same data → same root) |
 
 ---
 

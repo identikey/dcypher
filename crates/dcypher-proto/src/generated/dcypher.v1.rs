@@ -54,10 +54,10 @@ pub struct RecryptKeyProto {
     pub version: u32,
     #[prost(enumeration = "BackendId", tag = "2")]
     pub backend: i32,
-    /// HDprint of source
+    /// Blake3 fingerprint of source
     #[prost(bytes = "vec", tag = "3")]
     pub from_pubkey_fingerprint: ::prost::alloc::vec::Vec<u8>,
-    /// HDprint of destination
+    /// Blake3 fingerprint of destination
     #[prost(bytes = "vec", tag = "4")]
     pub to_pubkey_fingerprint: ::prost::alloc::vec::Vec<u8>,
     /// Backend-specific serialization
@@ -145,7 +145,7 @@ pub struct FileMetadata {
     /// Unix timestamp
     #[prost(uint64, tag = "4")]
     pub created_at: u64,
-    /// HDprint of owner's pubkey
+    /// Blake3 fingerprint of owner's pubkey
     #[prost(bytes = "vec", tag = "5")]
     pub owner_fingerprint: ::prost::alloc::vec::Vec<u8>,
     /// PRE backend used

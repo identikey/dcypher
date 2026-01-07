@@ -21,7 +21,6 @@ Production Rust implementation of dCypher, a quantum-resistant proxy recryption 
 - ✅ Proxy recryption via OpenFHE lattice crypto
 - ✅ Post-quantum signatures (ML-DSA-87, etc via liboqs)
 - ✅ Dual classical keys (ED25519 only, **dropping ECDSA/SECP256k1**)
-- ✅ HDprint self-correcting identifiers
 - ✅ Multi-signature authorization pattern
 - ✅ Nonce-based replay prevention
 - ✅ Chunked streaming architecture
@@ -33,7 +32,6 @@ Production Rust implementation of dCypher, a quantum-resistant proxy recryption 
 - ❌ **No IDK ASCII armor as primary format** - More efficient wire protocol needed
 - ✅ **Hybrid encryption** - KEM-DEM with pluggable PRE backends (lattice for PQ, EC for classical)
 - ✅ **Blake3 everywhere** - Standardized hashing (faster, Bao integration)
-- ✅ **HMAC for HDprint only** - Plain Blake3 elsewhere
 - ✅ **Blake3/Bao tree mode** - Streaming chunk verification
 
 ### What We're Building New
@@ -94,29 +92,12 @@ Production Rust implementation of dCypher, a quantum-resistant proxy recryption 
 **Migration from Python:**
 
 - Blake2b (Merkle, chunks) → Blake3
-- Blake3 (HDprint preprocessing) → Blake3 (unchanged)
-- HMAC-SHA3-512 (HDprint fingerprint) → Keep (see HMAC decision)
 
 **Document in:** `docs/hashing-standard.md`
 
 ---
 
-### 3. HMAC Usage Review ✅ DECIDED: HDprint Only
-
-**Decision:** Retain **HMAC-SHA3-512 for HDprint only**; use plain Blake3 elsewhere.
-
-**Rationale:**
-
-- HDprint requires keyed fingerprints bound to public key
-- HMAC provides PRF property for uniform base58 distribution
-- Collision-finding without key is computationally infeasible
-- Plain Blake3 sufficient for: content hashes, Merkle/Bao trees, wire integrity
-
-**Document in:** `docs/hmac-analysis.md`
-
----
-
-### 4. Hierarchical Verification ✅ DECIDED: Blake3/Bao Tree Mode
+### 3. Hierarchical Verification ✅ DECIDED: Blake3/Bao Tree Mode
 
 **Decision:** Use **Blake3's built-in Bao tree mode** for streaming verification.
 
@@ -226,72 +207,18 @@ decoder.write_all(&chunk)?;  // verifies incrementally
 
 ---
 
-## HDprint System: Full Specification
+## Public Key Fingerprints
 
-### What It Is
+Public key fingerprints use **plain Blake3 hashing** with Base58 encoding:
 
-Self-correcting hierarchical identifier system combining:
-
-- **Paiready checksum:** BCH error-correcting, Base58L lowercase
-- **HDprint fingerprint:** HMAC-SHA3-512 chain, hierarchical scaling
-
-### Format
-
-```
-{paiready}_{hdprint}
-myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
+```rust
+let fingerprint = blake3::hash(pubkey_bytes);
+let display = bs58::encode(fingerprint.as_bytes()).into_string();
 ```
 
-### Key Benefits
+**Rationale:** HDprint (a self-correcting hierarchical identifier system with BCH error correction and HMAC chains) was considered but deemed over-engineered for our use cases. Modern UX patterns (QR codes, copy-paste, deep links) make manual transcription rare, and the complexity cost wasn't justified. Plain Blake3 → Base58 provides 256-bit collision resistance with zero implementation overhead.
 
-**1. Error Correction**
-
-- Single character typos automatically corrected
-- User types: `1pk2bdr_...` (2 errors in checksum)
-- System corrects to: `4pkabdr_...`
-- Implementation: 5× BCH(t=1, m=7) interleaved codes
-
-**2. Case Insensitivity**
-
-- User types everything lowercase: `myzgemb_5ubrza_t9w1ljrx_hegmdyam`
-- System restores proper case: `myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM`
-- Implementation: Case bit field encoded in checksum
-
-**3. Hierarchical Scaling**
-
-- TINY: 17.6 bits security (testing)
-- SMALL: 64.4 bits (low security)
-- MEDIUM: 111.3 bits (standard)
-- RACK: 158.2 bits (high security)
-- Multiple racks for even higher security
-
-**4. Human Friendly**
-
-- Base58 encoding (no confusing chars: 0/O, 1/l)
-- Underscore separators for visual parsing
-- Meaningful structure: checksum first, then hierarchical segments
-
-### Use Cases in dCypher
-
-- Public key fingerprints (human-verifiable)
-- File content addressing (error-resistant)
-- Share IDs (user can manually enter/verify)
-- API tokens (built-in integrity checking)
-
-### Security Properties
-
-- **Collision Resistance:** HMAC-SHA3-512 base provides >256-bit security
-- **Preimage Resistance:** Can't reverse engineer source from identifier
-- **Second Preimage Resistance:** Can't find different input with same identifier
-
-### Implementation Notes
-
-- **Algorithm:** BLAKE3 preprocessing → HMAC-SHA3-512 iterative chain
-- **Key Material:** Can use public key, file hash, or any unique data
-- **Deterministic:** Same input → same identifier (important for testing)
-- **Efficient:** Sub-millisecond generation for MEDIUM size
-
-**Document in:** `docs/hdprint-specification.md`
+**Archived:** See `docs/archive/hdprint-specification.md` for the original spec.
 
 ---
 
@@ -303,7 +230,7 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 **Deliverables:**
 
 - ✅ This master plan
-- ✅ Answer all 7 design questions above
+- ✅ Answer all 6 design questions above
 - ✅ Architecture decision records for each question
 - ✅ Rust workspace structure defined
 - ✅ Dependency analysis (crates needed)
@@ -317,7 +244,6 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
 5. ✅ `docs/non-determinism.md` - Testing strategy for non-deterministic crypto
 6. ✅ `docs/storage-design.md` - S3 integration architecture
 7. ✅ `docs/wire-protocol.md` - Binary protocol specification
-8. ✅ `docs/hdprint-specification.md` - Full HDprint writeup
 
 ---
 
@@ -337,8 +263,7 @@ myzgemb_5ubrZa_T9w1LJRx_hEGmdyaM
    │   ├── dcypher-ffi/      # START HERE
    │   ├── dcypher-core/
    │   ├── dcypher-proto/
-   │   ├── dcypher-storage/
-   │   └── dcypher-hdprint/
+   │   └── dcypher-storage/
    ├── dcypher-cli/
    ├── dcypher-server/
    └── docs/
@@ -694,52 +619,7 @@ GET    /auth/locate/{hash}     - Resolve hash to storage URL(s)
 
 ---
 
-### Phase 5: HDprint Implementation (dcypher-hdprint)
-
-**Duration:** 2-3 days  
-**Goal:** Self-correcting identifier system
-
-**⚡ Parallelization Note:** HDprint has NO dependencies on Phases 1-4b. Can start immediately alongside FFI work.
-
-**Architecture:**
-
-```rust
-dcypher-hdprint/
-├── src/
-│   ├── lib.rs
-│   ├── hdprint.rs      // Hierarchical fingerprint generation
-│   ├── paiready.rs     // BCH error-correcting checksum
-│   ├── bch.rs          // BCH codec implementation
-│   └── base58.rs       // Base58/Base58L encoding
-└── tests/
-    ├── generation.rs   // Deterministic identifier generation
-    ├── correction.rs   // Error correction validation
-    └── roundtrip.rs    // Case restoration
-```
-
-**Python Reference:**
-
-- Most implementation in `src/dcypher/hdprint/`
-- Can mostly port directly, well-contained
-- May need Rust BCH library or port from Python
-
-**Key Features to Preserve:**
-
-- Deterministic generation (same input → same output)
-- Single char error correction in checksum
-- Case restoration from lowercase input
-- Hierarchical scaling (tiny/small/medium/rack)
-
-**Testing:**
-
-- Known-answer tests from Python prototype
-- Error correction: inject typos, verify correction
-- Case round-trip: lowercase input → proper case output
-- Performance: generation should be <1ms for MEDIUM size
-
----
-
-### Phase 6: Recryption Proxy Server (dcypher-server)
+### Phase 5: Recryption Proxy Server (dcypher-server)
 
 **Duration:** 4-5 days  
 **Goal:** Production recryption proxy with REST API (Axum)
@@ -779,7 +659,7 @@ dcypher-server/
 
 **Integration with Phase 3:**
 
-Phase 6 will leverage protocol types from `dcypher-proto`:
+Phase 5 will leverage protocol types from `dcypher-proto`:
 
 - Content negotiation via `detect_format()` (protobuf/JSON/armor)
 - Request/response serialization using `MultiFormat` trait
@@ -838,7 +718,7 @@ pub struct Config {
 
 ---
 
-### Phase 7: CLI Application (dcypher-cli)
+### Phase 6: CLI Application (dcypher-cli)
 
 **Duration:** 3-4 days  
 **Goal:** User-friendly command-line interface
@@ -921,7 +801,7 @@ dcypher server start [--config server.toml]
 
 ---
 
-### Phase 8: Minimal Rad TUI (dcypher-tui)
+### Phase 7: Minimal Rad TUI (dcypher-tui)
 
 **Duration:** 2-3 days  
 **Goal:** Inherit spirit, lose bloat
@@ -980,11 +860,7 @@ dcypher/
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │
-│   ├── dcypher-storage/            # S3-compatible storage layer
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │
-│   └── dcypher-hdprint/            # Self-correcting identifiers
+│   └── dcypher-storage/            # S3-compatible storage layer
 │       ├── Cargo.toml
 │       └── src/
 │
@@ -1012,8 +888,7 @@ dcypher/
 │   ├── non-determinism.md
 │   ├── storage-design.md
 │   ├── wire-protocol.md
-│   ├── hmac-analysis.md
-│   └── hdprint-specification.md
+│   └── archive/                    # Archived specs (HDprint, HMAC analysis)
 │
 ├── python-prototype/               # ARCHIVED: Original Python implementation
 │   └── [all existing Python code]
@@ -1081,7 +956,6 @@ dcypher/
 python-prototype/
 ├── src/dcypher/lib/pre.py          # Core crypto operations
 ├── src/dcypher/lib/idk_message.py  # Message format (needs revision)
-├── src/dcypher/hdprint/            # HDprint implementation (port directly)
 ├── src/dcypher/routers/            # API endpoint logic
 └── docs/spec.md                    # Original IDK spec (update for Rust)
 ```
@@ -1174,21 +1048,13 @@ python-prototype/
 
 ### Phase 5 Complete When:
 
-- [ ] HDprint generation deterministic
-- [ ] Error correction working
-- [ ] Case restoration working
-- [ ] All Python test vectors passing (ported to Rust)
-- [ ] Performance benchmarks met (<1ms for MEDIUM)
-
-### Phase 6 Complete When:
-
 - [ ] All API routes functional
 - [ ] Multi-sig verification working
 - [ ] Nonce replay prevention validated
 - [ ] E2E Alice->Bob sharing flow works
 - [ ] Load testing baseline established
 
-### Phase 7 Complete When:
+### Phase 6 Complete When:
 
 - [ ] All CLI commands functional
 - [ ] Interactive mode polished
@@ -1196,7 +1062,7 @@ python-prototype/
 - [ ] Integration with server validated
 - [ ] Shell completions generated
 
-### Phase 8 Complete When:
+### Phase 7 Complete When:
 
 - [ ] All TUI screens functional
 - [ ] Keyboard navigation smooth
@@ -1222,12 +1088,11 @@ python-prototype/
 **Phase 3:** 3-4 days (protocol) ✅ COMPLETE  
 **Phase 4:** 3-4 days (storage client) ✅ COMPLETE  
 **Phase 4b:** 3-4 days (auth service) ✅ COMPLETE  
-**Phase 5:** 2-3 days (HDprint) — can parallelize with 1-4  
-**Phase 6:** 4-5 days (recryption proxy server)  
-**Phase 7:** 3-4 days (CLI)  
-**Phase 8:** 2-3 days (TUI)
+**Phase 5:** 4-5 days (recryption proxy server)  
+**Phase 6:** 3-4 days (CLI)  
+**Phase 7:** 2-3 days (TUI)
 
-**Total:** 29-40 days (~6-8 weeks)
+**Total:** 27-38 days (~5-7 weeks)
 
 **With buffer for unknowns:** 10-12 weeks to production-ready
 
@@ -1249,7 +1114,7 @@ python-prototype/
 - **Context is precious:** Keep crypto context alive for related operations
 - **Recryption not re-encryption:** Consistent terminology throughout
 - **S3 is flexible:** Easy to swap storage backends via trait
-- **HDprint is magical:** Don't mess with it unless you understand BCH codes
+- **Blake3 fingerprints are simple:** `blake3(pubkey) → base58` — no fancy error correction needed
 - **Security over performance:** But both are achievable with good design
 
 ---

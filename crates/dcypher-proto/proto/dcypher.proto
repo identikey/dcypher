@@ -47,8 +47,8 @@ message PqSecretKey {
 message RecryptKeyProto {
     uint32 version = 1;
     BackendId backend = 2;
-    bytes from_pubkey_fingerprint = 3;  // HDprint of source
-    bytes to_pubkey_fingerprint = 4;    // HDprint of destination
+    bytes from_pubkey_fingerprint = 3;  // Blake3 fingerprint of source
+    bytes to_pubkey_fingerprint = 4;    // Blake3 fingerprint of destination
     bytes key_data = 5;                 // Backend-specific serialization
 }
 
@@ -106,7 +106,7 @@ message FileMetadata {
     bytes file_hash = 2;                // Blake3 of ciphertext (content address)
     uint64 total_size = 3;              // Ciphertext size
     uint64 created_at = 4;              // Unix timestamp
-    bytes owner_fingerprint = 5;        // HDprint of owner's pubkey
+    bytes owner_fingerprint = 5;        // Blake3 fingerprint of owner's pubkey
     BackendId backend = 6;              // PRE backend used
 }
 
