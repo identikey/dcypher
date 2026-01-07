@@ -1508,19 +1508,9 @@ tempfile = "3"
 
 ## Follow-up: Fix Hex Usage in dcypher-proto
 
-**Not in Phase 4 scope**, but noted for future cleanup:
+**Status:** ✅ DONE
 
-`crates/dcypher-proto/src/impls.rs` uses `hex::encode`/`hex::decode` for JSON serialization. Should switch to `bs58` for consistency and compactness:
-
-```rust
-// Before (wasteful)
-bao_hash: hex::encode(self.bao_hash),  // 64 chars
-
-// After (compact)
-bao_hash: bs58::encode(&self.bao_hash).into_string(),  // ~44 chars
-```
-
-This is a separate PR — doesn't block storage layer.
+Switched from `hex` to `bs58` encoding for JSON serialization — more compact (~44 chars vs 64 for 32-byte hashes) and consistent with fingerprint encoding.
 
 ---
 

@@ -14,7 +14,7 @@ serde_json = "1"
 
 # Encoding
 base64 = "0.22"
-hex = "0.4"
+bs58 = "0.5"
 
 # Core types (we serialize these)
 dcypher-core = { path = "../dcypher-core" }

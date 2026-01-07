@@ -49,11 +49,11 @@ impl MultiFormat for EncryptedFile {
             wrapped_key: JsonCiphertext {
                 backend: format!("{:?}", self.wrapped_key.backend()),
                 level: self.wrapped_key.level() as u32,
-                data: hex::encode(self.wrapped_key.as_bytes()),
+                data: bs58::encode(self.wrapped_key.as_bytes()).into_string(),
             },
-            bao_hash: hex::encode(self.bao_hash),
-            bao_outboard: hex::encode(&self.bao_outboard),
-            ciphertext: hex::encode(&self.ciphertext),
+            bao_hash: bs58::encode(self.bao_hash).into_string(),
+            bao_outboard: bs58::encode(&self.bao_outboard).into_string(),
+            ciphertext: bs58::encode(&self.ciphertext).into_string(),
         };
 
         Ok(serde_json::to_string_pretty(&json)?)
@@ -99,7 +99,8 @@ impl MultiFormat for EncryptedFile {
             }
         };
 
-        let bao_hash: [u8; 32] = hex::decode(&json.bao_hash)?
+        let bao_hash: [u8; 32] = bs58::decode(&json.bao_hash)
+            .into_vec()?
             .try_into()
             .map_err(|_| ProtoError::InvalidFormat("bao_hash must be 32 bytes".into()))?;
 
@@ -107,11 +108,11 @@ impl MultiFormat for EncryptedFile {
             wrapped_key: dcypher_core::pre::Ciphertext::new(
                 backend,
                 json.wrapped_key.level as u8,
-                hex::decode(&json.wrapped_key.data)?,
+                bs58::decode(&json.wrapped_key.data).into_vec()?,
             ),
             bao_hash,
-            bao_outboard: hex::decode(&json.bao_outboard)?,
-            ciphertext: hex::decode(&json.ciphertext)?,
+            bao_outboard: bs58::decode(&json.bao_outboard).into_vec()?,
+            ciphertext: bs58::decode(&json.ciphertext).into_vec()?,
             signature: None, // JSON format doesn't include signature for now
         })
     }
