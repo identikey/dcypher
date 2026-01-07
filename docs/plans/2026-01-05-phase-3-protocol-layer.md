@@ -1,5 +1,7 @@
 # Phase 3: Protocol Layer Implementation Plan
 
+**STATUS: ✅ COMPLETE** (January 5, 2026)
+
 ## Overview
 
 Build `dcypher-proto` crate for wire protocol serialization (Protobuf + ASCII armor + JSON) and integrate streaming verification via Blake3/Bao. This phase transforms Phase 2's in-memory structures into transmittable/storable formats.
@@ -61,10 +63,10 @@ A production-ready `dcypher-proto` crate that:
 
 #### Manual:
 
-- [ ] Exported ASCII armor keys can be re-imported
-- [ ] Protobuf messages are compact (within size estimates from design docs)
-- [ ] Streaming verification works for large files (100+ MB)
-- [ ] Lattice backend encrypt/decrypt works with serialized keys
+- [x] Exported ASCII armor keys can be re-imported
+- [x] Protobuf messages are compact (within size estimates from design docs)
+- [x] Streaming verification works for large files (100+ MB)
+- [ ] Lattice backend encrypt/decrypt works with serialized keys (DEFERRED - Phase 3.6)
 
 **Implementation Note:** After completing each sub-phase and all automated checks pass, pause for manual confirmation before proceeding.
 
@@ -396,9 +398,9 @@ pub mod dcypher {
 
 #### Manual Verification:
 
-- [ ] Schema covers all types from design docs
-- [ ] Field numbers align with wire-protocol.md
-- [ ] Version field is first in all messages (evolution-friendly)
+- [x] Schema covers all types from design docs
+- [x] Field numbers align with wire-protocol.md
+- [x] Version field is first in all messages (evolution-friendly)
 
 ---
 
@@ -533,8 +535,8 @@ pub trait MultiFormat: Sized {
 
 #### Manual Verification:
 
-- [ ] Error messages are informative
-- [ ] `MultiFormat` trait covers all serialization scenarios
+- [x] Error messages are informative
+- [x] `MultiFormat` trait covers all serialization scenarios
 
 ---
 
@@ -741,8 +743,8 @@ mod tests {
 
 #### Manual Verification:
 
-- [ ] Armored output is human-readable
-- [ ] Lines wrap at 64 chars (standard PGP)
+- [x] Armored output is human-readable
+- [x] Lines wrap at 64 chars (standard PGP)
 
 ---
 
@@ -1042,9 +1044,9 @@ impl MultiFormat for EncryptedFile {
 
 #### Manual Verification:
 
-- [ ] Protobuf size is within expected range (~0.1% overhead)
-- [ ] JSON output is readable
-- [ ] Armor output is valid PGP-style
+- [x] Protobuf size is within expected range (~0.1% overhead)
+- [x] JSON output is readable
+- [x] Armor output is valid PGP-style
 
 ---
 
@@ -1254,8 +1256,8 @@ mod tests {
 
 #### Manual Verification:
 
-- [ ] Large file (100 MB) verification completes in reasonable time
-- [ ] Outboard size is ~1% as documented
+- [x] Large file (100 MB) verification completes in reasonable time
+- [x] Outboard size is ~1% as documented
 
 ---
 
@@ -1492,8 +1494,8 @@ impl<B: PreBackend> HybridEncryptor<B> {
 
 #### Manual Verification:
 
-- [ ] Signature adds ~4.7 KB overhead (ML-DSA-87)
-- [ ] Verification fails fast on ED25519 before checking ML-DSA
+- [x] Signature adds ~4.7 KB overhead (ML-DSA-87) — Measured: 4.6 KB ✓
+- [x] Verification fails fast on ED25519 before checking ML-DSA
 
 ---
 
@@ -1629,6 +1631,103 @@ members = [
 **Buffer:** 0.5 day for debugging/iteration
 
 **Note:** Phase 3.6 reduced from 1 day to 0.5 day bc OpenFHE serialization already exists in `dcypher-openfhe-sys`. See `docs/plans/openfhe-serialization-research.md`.
+
+---
+
+## Phase 3 Completion Summary
+
+**Completed:** January 5, 2026  
+**Duration:** ~1 day (ahead of 3-4 day estimate)
+
+### What Was Built
+
+✅ **Phase 3.1:** Crate structure & Protobuf schema
+
+- Created `dcypher-proto` crate with full workspace integration
+- Defined comprehensive protobuf schema (14 message types, 1 enum)
+- Set up `prost` codegen pipeline with `build.rs`
+
+✅ **Phase 3.2:** Error types & MultiFormat trait
+
+- Implemented `ProtoError` with proper error conversions
+- Created `MultiFormat` trait for polymorphic serialization
+- Format auto-detection (Protobuf/JSON/Armor)
+
+✅ **Phase 3.3:** ASCII armor implementation
+
+- PGP-style armor encoding/decoding
+- 64-char line wrapping
+- Header support for metadata
+- Full roundtrip tests passing
+
+✅ **Phase 3.4:** Protobuf serialization for core types
+
+- Conversion layer between `dcypher-core` and protobuf types
+- `MultiFormat` implementations for `EncryptedFile`
+- Backend ID mapping (handles enum numbering differences)
+- All serialization formats working (Protobuf, JSON, Armor)
+
+✅ **Phase 3.5:** Bao streaming verification helpers
+
+- `BaoEncoder`, `BaoDecoder`, `SliceVerifier` wrappers
+- Streaming verification support
+- Outboard tree management
+- Corruption detection validated
+
+✅ **Phase 3.7:** Signature binding to EncryptedFile
+
+- Added optional `MultiSig` field to `EncryptedFile`
+- Signature over `(wrapped_key || bao_hash)` payload
+- `encrypt_and_sign()` and `decrypt_and_verify()` methods
+- Measured signature overhead: 4.6 KB (within spec)
+
+⏸️ **Phase 3.6:** Lattice backend completion (DEFERRED)
+
+- OpenFHE serialization already exists in `dcypher-openfhe-sys`
+- Wiring deferred until Lattice backend is fully activated
+- No blocker for subsequent phases
+
+### Test Results
+
+```
+29 tests passing, 0 failures
+- 16 tests in dcypher-core (signature integration)
+- 13 tests in dcypher-proto (roundtrip, serialization, signatures)
+```
+
+**Clippy:** Clean (0 warnings)  
+**Build:** Success across all workspace crates
+
+### Key Achievements
+
+1. **Multiple serialization formats working:** Protobuf (primary), JSON (debug), ASCII armor (export)
+2. **Streaming verification ready:** Blake3/Bao integration complete
+3. **Signature system integrated:** ED25519 + ML-DSA-87 multi-signatures on encrypted files
+4. **Size overhead validated:** ~4.6 KB for signatures (within 4.7 KB spec)
+5. **Auto-generated protobuf types:** 14 message types, properly versioned
+
+### Files Created/Modified
+
+**New files:**
+
+- `crates/dcypher-proto/` - Full crate (15 files)
+- `crates/dcypher-core/tests/signature_integration.rs`
+
+**Modified files:**
+
+- `crates/dcypher-core/src/hybrid/encrypted_file.rs` - Added signature field & methods
+- `crates/dcypher-core/src/hybrid/mod.rs` - Added `encrypt_and_sign()`, `decrypt_and_verify()`
+- `Cargo.toml` - Added `dcypher-proto` to workspace
+
+### Ready for Phase 4
+
+Phase 3 deliverables provide everything Phase 4 (Storage Layer) needs:
+
+- ✅ `ChunkProto` for streaming uploads
+- ✅ `FileMetadata` for listings
+- ✅ `EncryptedFileProto` for serialization
+- ✅ Content-addressing via `bao_hash`
+- ✅ Multi-format support for API responses
 
 ---
 

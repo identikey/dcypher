@@ -560,6 +560,15 @@ pub trait ChunkStorage {
 }
 ```
 
+**Integration with Phase 3:**
+
+Phase 4 will use the protocol types from `dcypher-proto`:
+
+- `ChunkProto` for streaming uploads (already defined in protobuf schema)
+- `FileMetadata` for file listings (ready to use)
+- `EncryptedFileProto` for complete file serialization
+- Content-addressing via `bao_hash` from `EncryptedFile`
+
 **Implementations:**
 
 1. **MinioStorage** - Development environment
@@ -766,7 +775,17 @@ dcypher-server/
 
 **Framework:** Axum (modern, fast, well-integrated with Tower)
 
-**Dependencies:** Uses `dcypher-core` (crypto), `dcypher-storage` (S3 client), `identikey-storage-auth` (access control)
+**Dependencies:** Uses `dcypher-core` (crypto), `dcypher-proto` (serialization), `dcypher-storage` (S3 client), `identikey-storage-auth` (access control)
+
+**Integration with Phase 3:**
+
+Phase 6 will leverage protocol types from `dcypher-proto`:
+
+- Content negotiation via `detect_format()` (protobuf/JSON/armor)
+- Request/response serialization using `MultiFormat` trait
+- `CapabilityProto` for access tokens (already defined)
+- `RecryptRequest`/`RecryptResponse` for transformation API
+- Streaming protobuf responses for efficient wire transfer
 
 **API Routes:**
 
@@ -1121,11 +1140,14 @@ python-prototype/
 
 ### Phase 3 Complete When:
 
-- [ ] Wire protocol defined and implemented
-- [ ] Merkle tree/Blake3 tree verification working
-- [ ] Message serialization round-trips
-- [ ] Signature verification integrated
-- [ ] Streaming verification functional
+- [x] Wire protocol defined and implemented (Protobuf + ASCII armor + JSON)
+- [x] Blake3/Bao tree verification working
+- [x] Message serialization round-trips (all formats)
+- [x] Signature verification integrated (wrapped_key || bao_hash)
+- [x] Streaming verification functional
+- [x] MultiFormat trait for polymorphic serialization
+- [x] 29 tests passing, 0 failures
+- [ ] Lattice backend serialization (DEFERRED - exists in openfhe-sys, wiring when activated)
 
 ### Phase 4 Complete When:
 
@@ -1190,7 +1212,7 @@ python-prototype/
 **Phase 0:** 2-3 days (design decisions) ✅ COMPLETE  
 **Phase 1:** 3-5 days (FFI bindings) ✅ COMPLETE  
 **Phase 2:** 4-5 days (core crypto) ✅ COMPLETE  
-**Phase 3:** 3-4 days (protocol)  
+**Phase 3:** 3-4 days (protocol) ✅ COMPLETE  
 **Phase 4:** 3-4 days (storage client)  
 **Phase 4b:** 3-4 days (auth service)  
 **Phase 5:** 2-3 days (HDprint) — can parallelize with 1-4  

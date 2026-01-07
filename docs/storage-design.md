@@ -138,28 +138,35 @@ Storage layer verifies:
 
 ### Bucket Structure
 
-Single bucket, flat namespace by hash:
+Single bucket, content-addressed by algorithm-prefixed hash:
 
 ```
 s3://dcypher-storage/
   ├── chunks/
-  │   ├── {blake3_hash_1}
-  │   ├── {blake3_hash_2}
-  │   └── ...
+  │   └── b3/                              # Blake3 algorithm prefix
+  │       ├── 2DrjgbLkLvvE6wvQyYCe9XN2Xm9L8dT3FJgKr2HJvAP1
+  │       ├── 4Qn8kYr5pW3mVxN7tZ9aB2cD6eF8gH1jK4lM0nPqR3sU
+  │       └── ...
   └── metadata/  (if storing metadata in S3)
-      ├── {file_hash_1}.meta
-      ├── {file_hash_2}.meta
-      └── ...
+      └── b3/
+          ├── {file_hash_base58}.meta
+          └── ...
 ```
 
 ### Object Naming
 
 ```
-chunks/{blake3_hex_hash}
+chunks/{algorithm}/{hash_base58}
 
 Example:
-chunks/af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262
+chunks/b3/2DrjgbLkLvvE6wvQyYCe9XN2Xm9L8dT3FJgKr2HJvAP1
 ```
+
+**Format rationale:**
+
+- `b3` prefix = Blake3 (enables future hash algorithm agility)
+- Base58 encoding = ~31% shorter than hex, still human-readable
+- No ambiguous characters (0/O, 1/l excluded)
 
 ### Storage Trait
 
