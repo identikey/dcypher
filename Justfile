@@ -207,3 +207,32 @@ show-deps:
     echo ""
     echo "ℹ️  liboqs: using oqs crate (no vendored build needed)"
 
+# =============================================================================
+# Storage Layer (Phase 4)
+# =============================================================================
+
+# Start Minio for development
+minio-up:
+    docker-compose -f docker/docker-compose.dev.yml up -d minio
+    @echo "Minio console: http://localhost:9001 (minioadmin/minioadmin)"
+
+# Stop Minio
+minio-down:
+    docker-compose -f docker/docker-compose.dev.yml down
+
+# Run storage tests (in-memory + local only)
+test-storage:
+    cargo test -p dcypher-storage
+
+# Run storage tests including S3/Minio integration
+test-storage-s3: minio-up
+    sleep 2  # Wait for Minio to be ready
+    cargo test -p dcypher-storage --features s3-tests
+
+# Check storage crate
+check-storage:
+    cargo check -p dcypher-storage
+    cargo check -p dcypher-storage --features s3
+    cargo clippy -p dcypher-storage -- -D warnings
+    cargo clippy -p dcypher-storage --features s3 -- -D warnings
+

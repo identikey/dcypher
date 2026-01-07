@@ -1,0 +1,28 @@
+[package]
+name = "dcypher-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+s3 = ["aws-sdk-s3", "aws-config"]
+s3-tests = ["s3"]
+
+[dependencies]
+# Workspace
+thiserror.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+
+# Hashing & encoding
+blake3 = "1"
+bs58.workspace = true
+
+# S3 (optional)
+aws-sdk-s3 = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tempfile = "3"

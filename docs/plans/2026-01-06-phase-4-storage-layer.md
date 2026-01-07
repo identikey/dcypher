@@ -324,13 +324,13 @@ pub trait ChunkStorage: Send + Sync {
 
 #### Automated Verification:
 
-- [ ] `cargo check -p dcypher-storage` compiles
-- [ ] `cargo check -p dcypher-storage --features s3` compiles (no S3 impl yet, but deps resolve)
-- [ ] `cargo doc -p dcypher-storage` generates docs
+- [x] `cargo check -p dcypher-storage` compiles
+- [x] `cargo check -p dcypher-storage --features s3` compiles (no S3 impl yet, but deps resolve)
+- [x] `cargo doc -p dcypher-storage` generates docs
 
 #### Manual Verification:
 
-- [ ] Trait design reviewed and approved
+- [x] Trait design reviewed and approved
 
 ---
 
@@ -708,12 +708,12 @@ async fn test_local_not_found() {
 
 #### Automated Verification:
 
-- [ ] `cargo test -p dcypher-storage` — all tests pass
-- [ ] `cargo clippy -p dcypher-storage` — no warnings
+- [x] `cargo test -p dcypher-storage` — all tests pass
+- [x] `cargo clippy -p dcypher-storage` — no warnings
 
 #### Manual Verification:
 
-- [ ] Code reviewed for thread safety (RwLock usage)
+- [x] Code reviewed for thread safety (RwLock usage)
 
 ---
 
@@ -1101,14 +1101,14 @@ async fn test_s3_hash_mismatch() {
 
 #### Automated Verification:
 
-- [ ] `cargo check -p dcypher-storage --features s3` compiles
-- [ ] `docker-compose -f docker/docker-compose.dev.yml up -d minio` starts successfully
-- [ ] `cargo test -p dcypher-storage --features s3-tests` — all S3 tests pass
+- [x] `cargo check -p dcypher-storage --features s3` compiles
+- [x] `docker-compose -f docker/docker-compose.dev.yml up -d minio` starts successfully
+- [x] `cargo test -p dcypher-storage --features s3-tests` — all S3 tests pass
 
 #### Manual Verification:
 
-- [ ] Minio console accessible at http://localhost:9001
-- [ ] Chunks visible in Minio UI after tests
+- [x] Minio console accessible at http://localhost:9001
+- [x] Chunks visible in Minio UI after tests
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation that Minio integration works before proceeding to chunking utilities.
 
@@ -1338,12 +1338,12 @@ mod tests {
 
 #### Automated Verification:
 
-- [ ] `cargo test -p dcypher-storage chunking` — all chunking tests pass
-- [ ] `cargo test -p dcypher-storage` — full test suite passes
+- [x] `cargo test -p dcypher-storage chunking` — all chunking tests pass
+- [x] `cargo test -p dcypher-storage` — full test suite passes
 
 #### Manual Verification:
 
-- [ ] Reviewed for edge cases (empty input, exact chunk boundaries)
+- [x] Reviewed for edge cases (empty input, exact chunk boundaries)
 
 ---
 
@@ -1436,13 +1436,13 @@ jobs:
 
 #### Automated Verification:
 
-- [ ] `just test-storage` passes
-- [ ] `just test-storage-s3` passes (with Minio running)
-- [ ] `just check-storage` passes (clippy clean)
+- [x] `just test-storage` passes
+- [x] `just test-storage-s3` passes (with Minio running)
+- [x] `just check-storage` passes (clippy clean)
 
 #### Manual Verification:
 
-- [ ] `just minio-up` / `just minio-down` work correctly
+- [x] `just minio-up` / `just minio-down` work correctly
 
 ---
 

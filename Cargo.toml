@@ -5,6 +5,7 @@ members = [
   "crates/dcypher-openfhe-sys",
   "crates/dcypher-core",
   "crates/dcypher-proto",
+  "crates/dcypher-storage",
   # "crates/dcypher-hdprint",  # parallel track
 ]
 
@@ -27,6 +28,13 @@ anyhow = "1"
 
 # Testing
 proptest = "1"
+
+# Storage (Phase 4)
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+bs58 = "0.5"
+aws-sdk-s3 = "1"
+aws-config = "1"
 
 [profile.release]
 lto = true
