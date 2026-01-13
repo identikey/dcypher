@@ -1,0 +1,257 @@
+use crate::error::{ServerError, ServerResult};
+use crate::middleware::{extract_signature_headers, verify_multisig};
+use crate::state::{AppState, SharePolicy};
+use axum::{
+    Json,
+    body::Body,
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode, header},
+    response::Response,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+pub struct CreateShareRequest {
+    pub to_fingerprint: String,
+    pub file_hash: String,   // base58
+    pub recrypt_key: String, // base58
+}
+
+#[derive(Serialize)]
+pub struct ShareResponse {
+    pub share_id: String,
+    pub from: String,
+    pub to: String,
+    pub file_hash: String,
+    pub created_at: u64,
+}
+
+/// POST /recryption/share
+pub async fn create_share(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateShareRequest>,
+) -> ServerResult<(StatusCode, Json<ShareResponse>)> {
+    let sig_headers = extract_signature_headers(&headers)?;
+    let from_fingerprint = sig_headers.fingerprint.clone();
+
+    // Look up sender's account
+    let sender_account = {
+        let accounts = state.accounts.read().await;
+        accounts
+            .accounts
+            .get(&from_fingerprint)
+            .ok_or_else(|| ServerError::NotFound("Sender account not found".into()))?
+            .clone()
+    };
+
+    // Verify recipient exists
+    {
+        let accounts = state.accounts.read().await;
+        if !accounts.accounts.contains_key(&body.to_fingerprint) {
+            return Err(ServerError::NotFound("Recipient account not found".into()));
+        }
+    }
+
+    // Parse file hash
+    let file_hash = dcypher_storage::hash_from_base58(&body.file_hash)
+        .ok_or_else(|| ServerError::BadRequest("Invalid file hash".into()))?;
+
+    // Verify file exists
+    if !state
+        .storage
+        .exists(&file_hash)
+        .await
+        .map_err(|e| ServerError::Internal(e.to_string()))?
+    {
+        return Err(ServerError::NotFound("File not found".into()));
+    }
+
+    // Build and verify signature
+    let message = format!(
+        "SHARE:{}:{}:{}:{}",
+        from_fingerprint, body.to_fingerprint, body.file_hash, sig_headers.nonce
+    );
+    verify_multisig(
+        message.as_bytes(),
+        &sig_headers,
+        &sender_account.ed25519_pk,
+        &sender_account.ml_dsa_pk,
+    )?;
+
+    // Decode recrypt key
+    let recrypt_key_bytes = bs58::decode(&body.recrypt_key)
+        .into_vec()
+        .map_err(|_| ServerError::BadRequest("Invalid base58 in recrypt_key".into()))?;
+
+    // Generate share ID
+    let share_data = format!(
+        "{}:{}:{}",
+        from_fingerprint, body.to_fingerprint, body.file_hash
+    );
+    let share_id = bs58::encode(blake3::hash(share_data.as_bytes()).as_bytes()).into_string();
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let policy = SharePolicy {
+        id: share_id.clone(),
+        from_fingerprint: from_fingerprint.clone(),
+        to_fingerprint: body.to_fingerprint.clone(),
+        file_hash,
+        recrypt_key: recrypt_key_bytes,
+        created_at: now,
+    };
+
+    {
+        let mut shares = state.shares.write().await;
+        shares.shares.insert(share_id.clone(), policy);
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ShareResponse {
+            share_id,
+            from: from_fingerprint,
+            to: body.to_fingerprint,
+            file_hash: body.file_hash,
+            created_at: now,
+        }),
+    ))
+}
+
+/// GET /recryption/share/{id}/file
+/// Downloads file with recryption transformation applied
+pub async fn download_recrypted(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(share_id): Path<String>,
+) -> ServerResult<Response> {
+    let sig_headers = extract_signature_headers(&headers)?;
+    let requester_fingerprint = sig_headers.fingerprint.clone();
+
+    // Look up share
+    let policy = {
+        let shares = state.shares.read().await;
+        shares
+            .shares
+            .get(&share_id)
+            .ok_or_else(|| ServerError::NotFound("Share not found".into()))?
+            .clone()
+    };
+
+    // Verify requester is the intended recipient
+    if policy.to_fingerprint != requester_fingerprint {
+        return Err(ServerError::Unauthorized(
+            "Not authorized for this share".into(),
+        ));
+    }
+
+    // Look up requester's account for signature verification
+    let requester_account = {
+        let accounts = state.accounts.read().await;
+        accounts
+            .accounts
+            .get(&requester_fingerprint)
+            .ok_or_else(|| ServerError::NotFound("Requester account not found".into()))?
+            .clone()
+    };
+
+    // Verify signature
+    let message = format!(
+        "DOWNLOAD:{}:{}:{}",
+        requester_fingerprint, share_id, sig_headers.nonce
+    );
+    verify_multisig(
+        message.as_bytes(),
+        &sig_headers,
+        &requester_account.ed25519_pk,
+        &requester_account.ml_dsa_pk,
+    )?;
+
+    // Load the encrypted file
+    let file_bytes = state
+        .storage
+        .get(&policy.file_hash)
+        .await
+        .map_err(|e| ServerError::Internal(format!("Storage error: {e}")))?;
+
+    // NOTE: For MVP Phase 5, we're returning the file as-is without actual recryption transform
+    // Full implementation would:
+    // 1. Deserialize EncryptedFile from file_bytes using dcypher-proto
+    // 2. Call HybridEncryptor::recrypt(&recrypt_key, &encrypted_file)
+    // 3. Serialize the result back to bytes
+    // 4. Return as streaming response
+    //
+    // This placeholder proves the authorization flow works; the crypto transform will be
+    // added in Phase 5b or when integrating with real clients.
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header("X-Share-Id", share_id)
+        .header("X-Recrypted", "placeholder") // Changed from "true" to indicate MVP status
+        .body(Body::from(file_bytes))
+        .map_err(|e| ServerError::Internal(e.to_string()))?;
+
+    Ok(response)
+}
+
+/// DELETE /recryption/share/{id}
+pub async fn revoke_share(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(share_id): Path<String>,
+) -> ServerResult<StatusCode> {
+    let sig_headers = extract_signature_headers(&headers)?;
+    let requester_fingerprint = sig_headers.fingerprint.clone();
+
+    // Look up share
+    let policy = {
+        let shares = state.shares.read().await;
+        shares
+            .shares
+            .get(&share_id)
+            .ok_or_else(|| ServerError::NotFound("Share not found".into()))?
+            .clone()
+    };
+
+    // Verify requester is the owner
+    if policy.from_fingerprint != requester_fingerprint {
+        return Err(ServerError::Unauthorized(
+            "Only owner can revoke share".into(),
+        ));
+    }
+
+    // Look up requester's account
+    let requester_account = {
+        let accounts = state.accounts.read().await;
+        accounts
+            .accounts
+            .get(&requester_fingerprint)
+            .ok_or_else(|| ServerError::NotFound("Account not found".into()))?
+            .clone()
+    };
+
+    // Verify signature
+    let message = format!(
+        "REVOKE:{}:{}:{}",
+        requester_fingerprint, share_id, sig_headers.nonce
+    );
+    verify_multisig(
+        message.as_bytes(),
+        &sig_headers,
+        &requester_account.ed25519_pk,
+        &requester_account.ml_dsa_pk,
+    )?;
+
+    // Remove share
+    {
+        let mut shares = state.shares.write().await;
+        shares.shares.remove(&share_id);
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}

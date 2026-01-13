@@ -1,0 +1,58 @@
+[package]
+name = "dcypher-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace crates
+dcypher-core = { path = "../crates/dcypher-core" }
+dcypher-proto = { path = "../crates/dcypher-proto" }
+dcypher-storage = { path = "../crates/dcypher-storage", features = ["s3"] }
+identikey-storage-auth = { path = "../crates/identikey-storage-auth", features = [
+  "sqlite",
+] }
+dcypher-ffi = { path = "../crates/dcypher-ffi" }
+
+# Web
+axum = { version = "0.8", features = ["macros"] }
+tower = { version = "0.5", features = ["timeout", "limit"] }
+tower-http = { version = "0.6", features = [
+  "trace",
+  "cors",
+  "compression-gzip",
+  "request-id",
+] }
+
+# Async
+tokio.workspace = true
+async-trait.workspace = true
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+prost = "0.13"
+
+# Time & IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Config
+figment = { version = "0.10", features = ["toml", "env"] }
+
+# Crypto (for fingerprint handling)
+blake3 = "1"
+bs58.workspace = true
+base64 = "0.22"
+ed25519-dalek.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+tempfile = "3"
