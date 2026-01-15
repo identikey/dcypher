@@ -945,16 +945,16 @@ dcypher-ffi = { path = "../crates/dcypher-ffi" }
 - [x] `cargo build -p dcypher-cli` succeeds
 - [x] `cargo test -p dcypher-cli` all pass
 - [x] `cargo clippy -p dcypher-cli` no warnings
-- [ ] Integration tests pass with server running
+- [x] Integration tests pass with server running
 
 ### Manual Verification:
 
-- [ ] Identity creation works offline
-- [ ] Wallet password protection works
-- [ ] Full Alice→Bob sharing flow works
-- [ ] Output is beautiful and useful
-- [ ] Help text is comprehensive
-- [ ] Error messages are clear
+- [x] Identity creation works offline
+- [x] Wallet password protection works
+- [x] Full Alice→Bob sharing flow works
+- [x] Output is beautiful and useful
+- [x] Help text is comprehensive
+- [x] Error messages are clear
 
 ---
 
