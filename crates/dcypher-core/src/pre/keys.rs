@@ -111,6 +111,22 @@ impl RecryptKey {
     pub fn to_public(&self) -> &PublicKey {
         &self.to_public
     }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Serialize with backend tag and public keys
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = vec![self.backend as u8];
+        // Include from_public
+        out.extend(self.from_public.to_bytes());
+        // Include to_public
+        out.extend(self.to_public.to_bytes());
+        // Include recrypt key bytes
+        out.extend(&self.bytes);
+        out
+    }
 }
 
 /// A PRE ciphertext

@@ -8,6 +8,7 @@ members = [
   "crates/dcypher-storage",
   "crates/identikey-storage-auth",
   "dcypher-server",
+  "dcypher-cli",
   # "crates/dcypher-hdprint",  # parallel track
 ]
 

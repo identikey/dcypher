@@ -136,3 +136,36 @@ fn compute_fingerprint(pk: &[u8]) -> String {
     let hash = blake3::hash(pk);
     bs58::encode(hash.as_bytes()).into_string()
 }
+
+/// GET /accounts/{fingerprint}/files
+/// List all files owned by this account
+pub async fn list_files(
+    State(state): State<AppState>,
+    Path(fingerprint): Path<String>,
+) -> ServerResult<Json<Vec<FileInfo>>> {
+    use blake3::Hash;
+    use identikey_storage_auth::PublicKeyFingerprint;
+
+    let fp = PublicKeyFingerprint::from_base58(&fingerprint)
+        .ok_or_else(|| ServerError::BadRequest("Invalid fingerprint".into()))?;
+
+    let file_hashes = state
+        .ownership
+        .list_owned(&fp)
+        .await
+        .map_err(|e| ServerError::Internal(format!("Failed to list files: {e}")))?;
+
+    let files: Vec<FileInfo> = file_hashes
+        .into_iter()
+        .map(|hash: Hash| FileInfo {
+            hash: bs58::encode(hash.as_bytes()).into_string(),
+        })
+        .collect();
+
+    Ok(Json(files))
+}
+
+#[derive(serde::Serialize)]
+pub struct FileInfo {
+    pub hash: String,
+}

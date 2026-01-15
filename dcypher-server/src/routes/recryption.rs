@@ -255,3 +255,85 @@ pub async fn revoke_share(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+/// GET /accounts/{fingerprint}/shares
+/// List shares (from or to this fingerprint)
+pub async fn list_shares(
+    State(state): State<AppState>,
+    Path(fingerprint): Path<String>,
+    headers: HeaderMap,
+) -> ServerResult<Json<ShareListResponse>> {
+    // Extract and verify signature
+    let sig_headers = extract_signature_headers(&headers)?;
+
+    // Verify requester owns this fingerprint
+    if sig_headers.fingerprint != fingerprint {
+        return Err(ServerError::Unauthorized(
+            "Can only list your own shares".into(),
+        ));
+    }
+
+    // Look up account
+    let account = {
+        let accounts = state.accounts.read().await;
+        accounts
+            .accounts
+            .get(&fingerprint)
+            .ok_or_else(|| ServerError::NotFound("Account not found".into()))?
+            .clone()
+    };
+
+    // Verify signature
+    let message = format!("LIST_SHARES:{}:{}", fingerprint, sig_headers.nonce);
+    verify_multisig(
+        message.as_bytes(),
+        &sig_headers,
+        &account.ed25519_pk,
+        &account.ml_dsa_pk,
+    )?;
+
+    // Filter shares
+    let shares = state.shares.read().await;
+    let outgoing: Vec<ShareInfo> = shares
+        .shares
+        .iter()
+        .filter(|(_, policy)| policy.from_fingerprint == fingerprint)
+        .map(|(id, policy)| ShareInfo {
+            share_id: id.clone(),
+            from_fingerprint: policy.from_fingerprint.clone(),
+            to_fingerprint: policy.to_fingerprint.clone(),
+            file_hash: bs58::encode(policy.file_hash.as_bytes()).into_string(),
+            created_at: policy.created_at,
+        })
+        .collect();
+
+    let incoming: Vec<ShareInfo> = shares
+        .shares
+        .iter()
+        .filter(|(_, policy)| policy.to_fingerprint == fingerprint)
+        .map(|(id, policy)| ShareInfo {
+            share_id: id.clone(),
+            from_fingerprint: policy.from_fingerprint.clone(),
+            to_fingerprint: policy.to_fingerprint.clone(),
+            file_hash: bs58::encode(policy.file_hash.as_bytes()).into_string(),
+            created_at: policy.created_at,
+        })
+        .collect();
+
+    Ok(Json(ShareListResponse { outgoing, incoming }))
+}
+
+#[derive(serde::Serialize)]
+pub struct ShareListResponse {
+    pub outgoing: Vec<ShareInfo>,
+    pub incoming: Vec<ShareInfo>,
+}
+
+#[derive(serde::Serialize)]
+pub struct ShareInfo {
+    pub share_id: String,
+    pub from_fingerprint: String,
+    pub to_fingerprint: String,
+    pub file_hash: String,
+    pub created_at: u64,
+}

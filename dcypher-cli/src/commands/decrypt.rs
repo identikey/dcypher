@@ -1,0 +1,122 @@
+use anyhow::{Context as AnyhowContext, Result};
+use clap::Args;
+use indicatif::{ProgressBar, ProgressStyle};
+use serde::Serialize;
+use std::fs;
+
+use dcypher_core::pre::backends::MockBackend;
+use dcypher_core::HybridEncryptor;
+use dcypher_proto::MultiFormat;
+
+use super::Context;
+use crate::config::Config;
+use crate::output::{print_json, print_success};
+use crate::wallet::Wallet;
+
+#[derive(Args)]
+pub struct DecryptArgs {
+    /// File to decrypt
+    pub file: String,
+    /// Output file
+    #[arg(long)]
+    pub output: Option<String>,
+}
+
+pub async fn run(args: DecryptArgs, ctx: &Context) -> Result<()> {
+    let wallet = Wallet::load(ctx.wallet_override.as_deref())?;
+
+    // Determine which identity to use
+    let identity_name = resolve_identity(ctx, &wallet)?;
+    let identity = wallet
+        .data
+        .identities
+        .get(&identity_name)
+        .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
+
+    // Parse PRE secret key
+    let pre_sk_bytes = bs58::decode(&identity.pre.secret)
+        .into_vec()
+        .context("Failed to decode PRE secret key")?;
+
+    let pre_sk =
+        dcypher_core::pre::SecretKey::new(dcypher_core::pre::BackendId::Mock, pre_sk_bytes);
+
+    // Read encrypted file
+    let encrypted_bytes =
+        fs::read(&args.file).with_context(|| format!("Failed to read {}", args.file))?;
+
+    // Deserialize
+    let encrypted = dcypher_core::EncryptedFile::from_protobuf(&encrypted_bytes)
+        .context("Failed to parse encrypted file (invalid format?)")?;
+
+    // Decrypt
+    let backend = MockBackend;
+    let encryptor = HybridEncryptor::new(backend);
+
+    let pb = if !ctx.json_output {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner());
+        pb.set_message("Decrypting...");
+        Some(pb)
+    } else {
+        None
+    };
+
+    let plaintext = encryptor
+        .decrypt(&pre_sk, &encrypted)
+        .context("Decryption failed (wrong key or corrupted file?)")?;
+
+    if let Some(pb) = &pb {
+        pb.finish_and_clear();
+    }
+
+    // Determine output path
+    let output_path = args.output.unwrap_or_else(|| {
+        if args.file.ends_with(".enc") {
+            args.file.trim_end_matches(".enc").to_string()
+        } else {
+            format!("{}.decrypted", args.file)
+        }
+    });
+
+    fs::write(&output_path, &plaintext)
+        .with_context(|| format!("Failed to write {output_path}"))?;
+
+    if ctx.json_output {
+        #[derive(Serialize)]
+        struct Output {
+            input: String,
+            output: String,
+            size: usize,
+        }
+        print_json(&Output {
+            input: args.file,
+            output: output_path,
+            size: plaintext.len(),
+        })?;
+    } else {
+        print_success(format!(
+            "Decrypted {} → {} ({} bytes)",
+            args.file,
+            output_path,
+            plaintext.len()
+        ));
+    }
+
+    Ok(())
+}
+
+fn resolve_identity(ctx: &Context, _wallet: &Wallet) -> Result<String> {
+    if let Some(ref name) = ctx.identity_override {
+        return Ok(name.clone());
+    }
+
+    let config = Config::load()?;
+    if let Some(ref name) = config.active_identity {
+        return Ok(name.clone());
+    }
+
+    anyhow::bail!(
+        "No identity specified. Use --identity <name> or set with: dcypher identity use <name>"
+    )
+}

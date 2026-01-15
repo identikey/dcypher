@@ -552,9 +552,9 @@ pub fn decrypt_wallet(data: &[u8], password: &str) -> Result<WalletData> {
 
 **Automated Verification:**
 
-- [ ] `cargo build -p dcypher-cli` compiles
-- [ ] `cargo test -p dcypher-cli` passes wallet encryption roundtrip tests
-- [ ] `./target/debug/dcypher --help` shows all commands
+- [x] `cargo build -p dcypher-cli` compiles
+- [x] `cargo test -p dcypher-cli` passes wallet encryption roundtrip tests
+- [x] `./target/debug/dcypher --help` shows all commands
 
 **Manual Verification:**
 
@@ -942,9 +942,9 @@ dcypher-ffi = { path = "../crates/dcypher-ffi" }
 
 ### Automated Verification:
 
-- [ ] `cargo build -p dcypher-cli` succeeds
-- [ ] `cargo test -p dcypher-cli` all pass
-- [ ] `cargo clippy -p dcypher-cli` no warnings
+- [x] `cargo build -p dcypher-cli` succeeds
+- [x] `cargo test -p dcypher-cli` all pass
+- [x] `cargo clippy -p dcypher-cli` no warnings
 - [ ] Integration tests pass with server running
 
 ### Manual Verification:

@@ -15,6 +15,10 @@ mod recryption;
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/accounts", post(accounts::create_account))
+        .route(
+            "/accounts/{fingerprint}/shares",
+            get(recryption::list_shares),
+        )
         .route("/files", post(files::upload_file))
         .route("/files/{hash}", delete(files::delete_file))
         .route("/recryption/share", post(recryption::create_share))
@@ -32,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(health::health_check))
         .route("/nonce", get(nonce::get_nonce))
         .route("/accounts/{fingerprint}", get(accounts::get_account))
+        .route("/accounts/{fingerprint}/files", get(accounts::list_files))
         .route("/files/{hash}", get(files::download_file));
 
     Router::new()
