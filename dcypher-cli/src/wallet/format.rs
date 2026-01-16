@@ -52,6 +52,8 @@ impl Default for WalletData {
     }
 }
 
+/// Encrypt wallet with password (for tests and backward compat)
+#[cfg(test)]
 pub fn encrypt_wallet(data: &WalletData, password: &str) -> Result<Vec<u8>> {
     let json = serde_json::to_vec(data)?;
 
@@ -87,12 +89,44 @@ pub fn encrypt_wallet(data: &WalletData, password: &str) -> Result<Vec<u8>> {
     Ok(output)
 }
 
+/// Decrypt wallet with password (for tests and backward compat)
+#[cfg(test)]
 pub fn decrypt_wallet(data: &[u8], password: &str) -> Result<WalletData> {
+    let salt = extract_salt(data)?;
+    let key = derive_key(password, &salt)?;
+    decrypt_wallet_with_key(data, &key)
+}
+
+/// Extract salt from encrypted wallet header (for key derivation)
+pub fn extract_salt(data: &[u8]) -> Result<[u8; 32]> {
+    if data.len() < 4 + 1 + 32 {
+        return Err(anyhow!("Wallet file too short for salt extraction"));
+    }
+    if &data[0..4] != MAGIC {
+        return Err(anyhow!("Invalid wallet file (bad magic)"));
+    }
+    let mut salt = [0u8; 32];
+    salt.copy_from_slice(&data[5..37]);
+    Ok(salt)
+}
+
+/// Derive encryption key from password and salt using Argon2id
+pub fn derive_key(password: &str, salt: &[u8; 32]) -> Result<[u8; 32]> {
+    let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(32))
+        .map_err(|e| anyhow!("Invalid Argon2 parameters: {e:?}"))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut key = [0u8; 32];
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|e| anyhow!("Argon2 key derivation failed: {e:?}"))?;
+    Ok(key)
+}
+
+/// Decrypt wallet with pre-derived key (no password prompt needed)
+pub fn decrypt_wallet_with_key(data: &[u8], key: &[u8; 32]) -> Result<WalletData> {
     if data.len() < 4 + 1 + 32 + 24 + 16 {
         return Err(anyhow!("Wallet file too short"));
     }
-
-    // Parse header
     if &data[0..4] != MAGIC {
         return Err(anyhow!("Invalid wallet file (bad magic)"));
     }
@@ -101,28 +135,43 @@ pub fn decrypt_wallet(data: &[u8], password: &str) -> Result<WalletData> {
         return Err(anyhow!("Unsupported wallet version: {version}"));
     }
 
-    let salt = &data[5..37];
     let nonce = &data[37..61];
     let ciphertext = &data[61..];
 
-    // Derive key
-    let params = Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(32))
-        .map_err(|e| anyhow!("Invalid Argon2 parameters: {e:?}"))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = [0u8; 32];
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut key)
-        .map_err(|e| anyhow!("Argon2 key derivation failed: {e:?}"))?;
-
-    // Decrypt
-    let cipher = XChaCha20Poly1305::new_from_slice(&key)?;
+    let cipher = XChaCha20Poly1305::new_from_slice(key)?;
     let nonce_arr: [u8; 24] = nonce.try_into()?;
     let plaintext = cipher
         .decrypt(&nonce_arr.into(), ciphertext)
-        .map_err(|_| anyhow!("Decryption failed (wrong password?)"))?;
+        .map_err(|_| anyhow!("Decryption failed (wrong key?)"))?;
 
     let wallet: WalletData = serde_json::from_slice(&plaintext)?;
     Ok(wallet)
+}
+
+/// Encrypt wallet with pre-derived key and salt (no password prompt needed)
+pub fn encrypt_wallet_with_key(
+    data: &WalletData,
+    key: &[u8; 32],
+    salt: &[u8; 32],
+) -> Result<Vec<u8>> {
+    let json = serde_json::to_vec(data)?;
+
+    let mut nonce = [0u8; 24];
+    rand::thread_rng().fill_bytes(&mut nonce);
+
+    let cipher = XChaCha20Poly1305::new_from_slice(key)?;
+    let ciphertext = cipher
+        .encrypt(&nonce.into(), json.as_slice())
+        .map_err(|e| anyhow!("Encryption failed: {e}"))?;
+
+    let mut output = Vec::with_capacity(4 + 1 + 32 + 24 + ciphertext.len());
+    output.extend_from_slice(MAGIC);
+    output.push(VERSION);
+    output.extend_from_slice(salt);
+    output.extend_from_slice(&nonce);
+    output.extend_from_slice(&ciphertext);
+
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -167,7 +216,7 @@ mod tests {
         let result = decrypt_wallet(&encrypted, "wrong-password");
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("wrong password"));
+        assert!(result.unwrap_err().to_string().contains("wrong key"));
     }
 
     #[test]
@@ -179,5 +228,57 @@ mod tests {
         let result = decrypt_wallet(&encrypted, "password");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("bad magic"));
+    }
+
+    #[test]
+    fn test_extract_salt() {
+        let wallet = WalletData::new();
+        let encrypted = encrypt_wallet(&wallet, "password").unwrap();
+        let salt = extract_salt(&encrypted).unwrap();
+        assert_eq!(salt.len(), 32);
+    }
+
+    #[test]
+    fn test_derive_key_deterministic() {
+        let salt = [0x42u8; 32];
+        let key1 = derive_key("password", &salt).unwrap();
+        let key2 = derive_key("password", &salt).unwrap();
+        assert_eq!(key1, key2);
+
+        let key3 = derive_key("different", &salt).unwrap();
+        assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_with_key() {
+        let mut wallet = WalletData::new();
+        wallet.identities.insert(
+            "test".to_string(),
+            Identity {
+                created_at: 1704067200,
+                fingerprint: "test-fp".to_string(),
+                ed25519: KeyPair {
+                    public: "ed-pub".to_string(),
+                    secret: "ed-sec".to_string(),
+                },
+                ml_dsa: KeyPair {
+                    public: "ml-pub".to_string(),
+                    secret: "ml-sec".to_string(),
+                },
+                pre: KeyPair {
+                    public: "pre-pub".to_string(),
+                    secret: "pre-sec".to_string(),
+                },
+            },
+        );
+
+        let key = [0xABu8; 32];
+        let salt = [0xCDu8; 32];
+
+        let encrypted = encrypt_wallet_with_key(&wallet, &key, &salt).unwrap();
+        let decrypted = decrypt_wallet_with_key(&encrypted, &key).unwrap();
+
+        assert_eq!(wallet.identities.len(), decrypted.identities.len());
+        assert!(decrypted.identities.contains_key("test"));
     }
 }

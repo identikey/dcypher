@@ -68,7 +68,7 @@ async fn create(file_hash: String, to_fingerprint: String, ctx: &Context) -> Res
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     // Fetch recipient's account to get their PRE public key
     let client = ApiClient::new(server_url);
@@ -132,7 +132,7 @@ async fn list(filter_from: bool, filter_to: bool, ctx: &Context) -> Result<()> {
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
     let client = ApiClient::new(server_url);
 
     let response = client.list_shares(identity).await?;
@@ -148,26 +148,22 @@ async fn list(filter_from: bool, filter_to: bool, ctx: &Context) -> Result<()> {
         }
     } else {
         // Pretty output
-        if !filter_to {
-            if !response.outgoing.is_empty() {
-                println!("{}", "Outgoing shares (you shared):".bold());
-                for share in &response.outgoing {
-                    println!("  {}", share.share_id.bright_cyan());
-                    println!("    {}: {}", "To".dimmed(), share.to_fingerprint);
-                    println!("    {}: {}", "File".dimmed(), share.file_hash);
-                }
-                println!();
+        if !filter_to && !response.outgoing.is_empty() {
+            println!("{}", "Outgoing shares (you shared):".bold());
+            for share in &response.outgoing {
+                println!("  {}", share.share_id.bright_cyan());
+                println!("    {}: {}", "To".dimmed(), share.to_fingerprint);
+                println!("    {}: {}", "File".dimmed(), share.file_hash);
             }
+            println!();
         }
 
-        if !filter_from {
-            if !response.incoming.is_empty() {
-                println!("{}", "Incoming shares (shared with you):".bold());
-                for share in &response.incoming {
-                    println!("  {}", share.share_id.bright_cyan());
-                    println!("    {}: {}", "From".dimmed(), share.from_fingerprint);
-                    println!("    {}: {}", "File".dimmed(), share.file_hash);
-                }
+        if !filter_from && !response.incoming.is_empty() {
+            println!("{}", "Incoming shares (shared with you):".bold());
+            for share in &response.incoming {
+                println!("  {}", share.share_id.bright_cyan());
+                println!("    {}: {}", "From".dimmed(), share.from_fingerprint);
+                println!("    {}: {}", "File".dimmed(), share.file_hash);
             }
         }
 
@@ -190,7 +186,7 @@ async fn download(share_id: String, output_override: Option<String>, ctx: &Conte
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     // Download share
     let client = ApiClient::new(server_url);
@@ -236,7 +232,7 @@ async fn revoke(share_id: String, ctx: &Context) -> Result<()> {
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     let client = ApiClient::new(server_url);
     client.revoke_share(identity, &share_id).await?;

@@ -11,6 +11,7 @@
 ## Overview
 
 Current state: every `Wallet::load()` calls `dialoguer::Password` for password input. This breaks:
+
 - **Automated tests** – prompts hang in CI
 - **User experience** – typing password for every `dcypher files list` is maddening
 - **Scriptability** – piping commands impossible
@@ -23,11 +24,11 @@ We'll decouple key derivation from key usage via a `CredentialProvider` abstract
 
 ### What Exists
 
-| File | Current Behavior |
-|------|------------------|
+| File                   | Current Behavior                                                           |
+| ---------------------- | -------------------------------------------------------------------------- |
 | `wallet/storage.rs:35` | `Password::new().with_prompt("Wallet password").interact()?` on every load |
-| `wallet/storage.rs:56` | Same prompt on every save |
-| `wallet/format.rs` | Argon2id key derivation + XChaCha20-Poly1305 encryption |
+| `wallet/storage.rs:56` | Same prompt on every save                                                  |
+| `wallet/format.rs`     | Argon2id key derivation + XChaCha20-Poly1305 encryption                    |
 
 ### The Problem
 
@@ -42,16 +43,16 @@ Every command that touches the wallet requires a password. Unacceptable.
 
 ### Key Discovery: Wallet Access Patterns
 
-| Command | Needs Wallet? | Needs Secret Keys? |
-|---------|---------------|-------------------|
-| `identity list` | Yes (read) | No (only public info) |
-| `identity show` | Yes (read) | No |
-| `identity new` | Yes (write) | No |
-| `encrypt --for` | Yes (read) | No (only recipient's public key) |
-| `decrypt` | Yes (read) | Yes (PRE secret key) |
-| `account register` | Yes (read) | Yes (signing) |
-| `files upload` | Yes (read) | Yes (signing) |
-| `share create` | Yes (read) | Yes (recrypt key generation) |
+| Command            | Needs Wallet? | Needs Secret Keys?               |
+| ------------------ | ------------- | -------------------------------- |
+| `identity list`    | Yes (read)    | No (only public info)            |
+| `identity show`    | Yes (read)    | No                               |
+| `identity new`     | Yes (write)   | No                               |
+| `encrypt --for`    | Yes (read)    | No (only recipient's public key) |
+| `decrypt`          | Yes (read)    | Yes (PRE secret key)             |
+| `account register` | Yes (read)    | Yes (signing)                    |
+| `files upload`     | Yes (read)    | Yes (signing)                    |
+| `share create`     | Yes (read)    | Yes (recrypt key generation)     |
 
 **Insight**: All wallet access is authenticated equally, even read-only operations. This is correct for an encrypted wallet—you can't selectively decrypt.
 
@@ -141,11 +142,13 @@ DCYPHER_WALLET_KEY=$(base64 < /dev/urandom | head -c 44) dcypher identity list
 ### What Gets Stored
 
 **Stored in keyring:**
+
 - Service name: `dcypher`
 - Account name: `wallet-key`
 - Secret: 32 bytes, base64-encoded
 
 **NOT stored:**
+
 - The user's password (never)
 - The wallet file itself (stays on disk, encrypted)
 
@@ -193,16 +196,16 @@ const ACCOUNT_NAME: &str = "wallet-key";
 pub trait CredentialProvider: Send + Sync {
     /// Store the wallet encryption key
     fn store_key(&self, key: &[u8; 32]) -> Result<()>;
-    
+
     /// Retrieve cached key, if any
     fn get_key(&self) -> Result<Option<[u8; 32]>>;
-    
+
     /// Clear cached key (lock wallet)
     fn clear_key(&self) -> Result<()>;
-    
+
     /// Check if this provider is available on the current system
     fn is_available(&self) -> bool;
-    
+
     /// Human-readable name for diagnostics
     fn name(&self) -> &'static str;
 }
@@ -215,7 +218,7 @@ impl KeyringProvider {
     pub fn new() -> Self {
         Self
     }
-    
+
     fn entry(&self) -> Result<keyring::Entry> {
         keyring::Entry::new(SERVICE_NAME, ACCOUNT_NAME)
             .map_err(|e| anyhow!("Keyring error: {e}"))
@@ -228,7 +231,7 @@ impl CredentialProvider for KeyringProvider {
         self.entry()?.set_password(&encoded)
             .map_err(|e| anyhow!("Failed to store key in keyring: {e}"))
     }
-    
+
     fn get_key(&self) -> Result<Option<[u8; 32]>> {
         match self.entry()?.get_password() {
             Ok(encoded) => {
@@ -246,18 +249,18 @@ impl CredentialProvider for KeyringProvider {
             Err(e) => Err(anyhow!("Keyring error: {e}")),
         }
     }
-    
+
     fn clear_key(&self) -> Result<()> {
         match self.entry()?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(anyhow!("Failed to clear keyring: {e}")),
         }
     }
-    
+
     fn is_available(&self) -> bool {
         self.entry().is_ok()
     }
-    
+
     fn name(&self) -> &'static str {
         #[cfg(target_os = "macos")]
         { "macOS Keychain" }
@@ -280,7 +283,7 @@ impl EnvProvider {
     pub fn new(var_name: &str) -> Self {
         Self { var_name: var_name.to_string() }
     }
-    
+
     pub fn default() -> Self {
         Self::new("DCYPHER_WALLET_KEY")
     }
@@ -291,7 +294,7 @@ impl CredentialProvider for EnvProvider {
         // Can't set env var at runtime, silently succeed
         Ok(())
     }
-    
+
     fn get_key(&self) -> Result<Option<[u8; 32]>> {
         match std::env::var(&self.var_name) {
             Ok(encoded) => {
@@ -300,8 +303,8 @@ impl CredentialProvider for EnvProvider {
                     .map_err(|e| anyhow!("Invalid {} encoding: {e}", self.var_name))?;
                 if bytes.len() != 32 {
                     return Err(anyhow!(
-                        "{} must be exactly 32 bytes (got {})", 
-                        self.var_name, 
+                        "{} must be exactly 32 bytes (got {})",
+                        self.var_name,
                         bytes.len()
                     ));
                 }
@@ -313,16 +316,16 @@ impl CredentialProvider for EnvProvider {
             Err(e) => Err(anyhow!("Failed to read {}: {e}", self.var_name)),
         }
     }
-    
+
     fn clear_key(&self) -> Result<()> {
         // Can't clear env var, silently succeed
         Ok(())
     }
-    
+
     fn is_available(&self) -> bool {
         std::env::var(&self.var_name).is_ok()
     }
-    
+
     fn name(&self) -> &'static str {
         "Environment Variable"
     }
@@ -344,7 +347,7 @@ impl MemoryProvider {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create with pre-loaded key (for tests)
     pub fn with_key(key: [u8; 32]) -> Self {
         Self { key: RwLock::new(Some(key)) }
@@ -356,20 +359,20 @@ impl CredentialProvider for MemoryProvider {
         *self.key.write().unwrap() = Some(*key);
         Ok(())
     }
-    
+
     fn get_key(&self) -> Result<Option<[u8; 32]>> {
         Ok(*self.key.read().unwrap())
     }
-    
+
     fn clear_key(&self) -> Result<()> {
         *self.key.write().unwrap() = None;
         Ok(())
     }
-    
+
     fn is_available(&self) -> bool {
         true
     }
-    
+
     fn name(&self) -> &'static str {
         "Memory"
     }
@@ -384,13 +387,13 @@ pub fn default_provider() -> Box<dyn CredentialProvider> {
     if env.is_available() {
         return Box::new(env);
     }
-    
+
     // 2. Try OS keyring
     let keyring = KeyringProvider::new();
     if keyring.is_available() {
         return Box::new(keyring);
     }
-    
+
     // 3. Fall back to memory (per-process only)
     Box::new(MemoryProvider::new())
 }
@@ -398,29 +401,29 @@ pub fn default_provider() -> Box<dyn CredentialProvider> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_memory_provider_roundtrip() {
         let provider = MemoryProvider::new();
         let key = [42u8; 32];
-        
+
         assert!(provider.get_key().unwrap().is_none());
         provider.store_key(&key).unwrap();
         assert_eq!(provider.get_key().unwrap(), Some(key));
         provider.clear_key().unwrap();
         assert!(provider.get_key().unwrap().is_none());
     }
-    
+
     #[test]
     fn test_env_provider_with_valid_key() {
         let key = [0xABu8; 32];
         let encoded = base64::engine::general_purpose::STANDARD.encode(key);
         std::env::set_var("TEST_WALLET_KEY", &encoded);
-        
+
         let provider = EnvProvider::new("TEST_WALLET_KEY");
         assert!(provider.is_available());
         assert_eq!(provider.get_key().unwrap(), Some(key));
-        
+
         std::env::remove_var("TEST_WALLET_KEY");
     }
 }
@@ -444,13 +447,13 @@ pub use storage::Wallet;
 
 #### Automated Verification:
 
-- [ ] `cargo build -p dcypher-cli` compiles
-- [ ] `cargo test -p dcypher-cli wallet::credential` passes
-- [ ] No new clippy warnings: `cargo clippy -p dcypher-cli`
+- [x] `cargo build -p dcypher-cli` compiles
+- [x] `cargo test -p dcypher-cli wallet::credential` passes
+- [x] No new clippy warnings: `cargo clippy -p dcypher-cli`
 
 #### Manual Verification:
 
-- [ ] None yet (providers not wired in)
+- [x] None yet (providers not wired in)
 
 ---
 
@@ -554,7 +557,7 @@ use std::path::PathBuf;
 
 use super::credential::{default_provider, CredentialProvider};
 use super::format::{
-    decrypt_wallet_with_key, derive_key, encrypt_wallet_with_key, 
+    decrypt_wallet_with_key, derive_key, encrypt_wallet_with_key,
     extract_salt, WalletData,
 };
 
@@ -570,7 +573,7 @@ impl Wallet {
     pub fn load(override_path: Option<&str>) -> Result<Self> {
         Self::load_with_provider(override_path, default_provider().as_ref())
     }
-    
+
     /// Load wallet with explicit credential provider (for testing)
     pub fn load_with_provider(
         override_path: Option<&str>,
@@ -630,7 +633,7 @@ impl Wallet {
     pub fn save(&self, is_new: bool) -> Result<()> {
         self.save_with_provider(is_new, default_provider().as_ref())
     }
-    
+
     /// Save wallet with explicit provider (for testing)
     pub fn save_with_provider(
         &self,
@@ -653,12 +656,12 @@ impl Wallet {
             let mut salt = [0u8; 32];
             rand::thread_rng().fill_bytes(&mut salt);
             let key = derive_key(&pass1, &salt)?;
-            
+
             // Cache for future use
             if let Err(e) = provider.store_key(&key) {
                 eprintln!("Warning: couldn't cache key in {}: {e}", provider.name());
             }
-            
+
             (key, salt)
         } else {
             // Existing wallet: use cached key (should have been loaded)
@@ -704,15 +707,23 @@ impl Wallet {
 
 #### Automated Verification:
 
-- [ ] `cargo build -p dcypher-cli` compiles
-- [ ] `cargo test -p dcypher-cli` all pass
-- [ ] Existing CLI behavior unchanged (password prompt on first access)
+- [x] `cargo build -p dcypher-cli` compiles
+- [x] `cargo test -p dcypher-cli` all pass (15 tests)
+- [x] `cargo clippy -p dcypher-cli -- -D warnings` passes
 
 #### Manual Verification:
 
-- [ ] First `dcypher identity list` prompts for password
+- [ ] First `dcypher identity list` prompts for password (SINGLE prompt, not double)
 - [ ] Second `dcypher identity list` does NOT prompt (key cached in keyring)
 - [ ] Verify with `security find-generic-password -s dcypher` (macOS)
+
+**Note (2026-01-15):** Fixed double-prompt issue on macOS by switching from `keyring` crate's `apple-native` backend to direct `security-framework` crate usage. The `keyring` crate's apple-native backend was triggering two separate Security framework prompts (one for "confidential information" and one for "key"). Using `security_framework::passwords::{get,set,delete}_generic_password()` directly results in a single prompt.
+
+**Migration:** If you previously had the keychain item created by the old implementation, you may need to delete it first:
+
+```bash
+security delete-generic-password -s dcypher
+```
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the caching works correctly before proceeding.
 
@@ -763,7 +774,7 @@ pub async fn run(action: WalletCommand, ctx: &Context) -> Result<()> {
 
 async fn unlock(ctx: &Context) -> Result<()> {
     let provider = default_provider();
-    
+
     // Check if already unlocked
     if provider.get_key()?.is_some() {
         if ctx.json_output {
@@ -775,28 +786,28 @@ async fn unlock(ctx: &Context) -> Result<()> {
         }
         return Ok(());
     }
-    
+
     // Load wallet (will prompt for password and cache key)
     let _ = Wallet::load_with_provider(ctx.wallet_override.as_deref(), provider.as_ref())?;
-    
+
     if ctx.json_output {
         #[derive(Serialize)]
         struct Output { unlocked: bool, provider: String }
-        print_json(&Output { 
-            unlocked: true, 
-            provider: provider.name().to_string() 
+        print_json(&Output {
+            unlocked: true,
+            provider: provider.name().to_string()
         })?;
     } else {
         print_success(format!("Wallet unlocked (cached in {})", provider.name()));
     }
-    
+
     Ok(())
 }
 
 async fn lock(ctx: &Context) -> Result<()> {
     let provider = default_provider();
     provider.clear_key()?;
-    
+
     if ctx.json_output {
         #[derive(Serialize)]
         struct Output { locked: bool }
@@ -804,18 +815,18 @@ async fn lock(ctx: &Context) -> Result<()> {
     } else {
         print_success("Wallet locked");
     }
-    
+
     Ok(())
 }
 
 async fn status(ctx: &Context) -> Result<()> {
     let provider = default_provider();
     let is_unlocked = provider.get_key()?.is_some();
-    
+
     let wallet_path = Wallet::load(ctx.wallet_override.as_deref())
         .map(|w| w.path().display().to_string())
         .unwrap_or_else(|_| "Not found".to_string());
-    
+
     if ctx.json_output {
         #[derive(Serialize)]
         struct Output {
@@ -838,13 +849,13 @@ async fn status(ctx: &Context) -> Result<()> {
         println!("  {}: {}", "Provider".dimmed(), provider.name());
         println!("  {}: {}", "Path".dimmed(), wallet_path);
     }
-    
+
     Ok(())
 }
 
 async fn path(ctx: &Context) -> Result<()> {
     use directories::ProjectDirs;
-    
+
     let path = match &ctx.wallet_override {
         Some(p) => std::path::PathBuf::from(p),
         None => {
@@ -853,18 +864,18 @@ async fn path(ctx: &Context) -> Result<()> {
             dirs.data_dir().join("wallet.dcyw")
         }
     };
-    
+
     if ctx.json_output {
         #[derive(Serialize)]
         struct Output { path: String, exists: bool }
-        print_json(&Output { 
+        print_json(&Output {
             path: path.display().to_string(),
             exists: path.exists(),
         })?;
     } else {
         println!("{}", path.display());
     }
-    
+
     Ok(())
 }
 ```
@@ -938,7 +949,7 @@ pub fn test_wallet() -> (Wallet, Arc<MemoryProvider>, NamedTempFile) {
     let key = [0x42u8; 32];
     let salt = [0x24u8; 32];
     let provider = Arc::new(MemoryProvider::with_key(key));
-    
+
     let mut data = WalletData::new();
     data.identities.insert(
         "test-identity".to_string(),
@@ -959,17 +970,17 @@ pub fn test_wallet() -> (Wallet, Arc<MemoryProvider>, NamedTempFile) {
             },
         },
     );
-    
+
     // Create encrypted wallet file
     let encrypted = encrypt_wallet_with_key(&data, &key, &salt).unwrap();
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), encrypted).unwrap();
-    
+
     let wallet = Wallet::load_with_provider(
         Some(file.path().to_str().unwrap()),
         provider.as_ref(),
     ).unwrap();
-    
+
     (wallet, provider, file)
 }
 
@@ -1003,7 +1014,7 @@ use dcypher_cli::wallet::test_utils::test_wallet;
 #[test]
 fn test_wallet_identity_operations() {
     let (mut wallet, provider, _file) = test_wallet();
-    
+
     // Add new identity
     wallet.data.identities.insert(
         "new-identity".to_string(),
@@ -1024,16 +1035,16 @@ fn test_wallet_identity_operations() {
             },
         },
     );
-    
+
     // Save without password prompt
     wallet.save_with_provider(false, provider.as_ref()).unwrap();
-    
+
     // Reload and verify
     let reloaded = dcypher_cli::wallet::Wallet::load_with_provider(
         Some(wallet.path().to_str().unwrap()),
         provider.as_ref(),
     ).unwrap();
-    
+
     assert!(reloaded.data.identities.contains_key("new-identity"));
 }
 ```
@@ -1082,12 +1093,12 @@ env:
 
 ### Threat Model
 
-| Threat | Before Phase 6b | After Phase 6b |
-|--------|----------------|----------------|
-| Disk theft (powered off) | ✅ Wallet encrypted | ✅ Same |
-| Malware (user context) | ⚠️ Could steal wallet file | ⚠️ Same + could access keyring |
-| Memory dump (root) | ⚠️ Key in memory during use | ⚠️ Same |
-| Shoulder surfing | ❌ Password visible | ✅ No repeated password entry |
+| Threat                   | Before Phase 6b             | After Phase 6b                 |
+| ------------------------ | --------------------------- | ------------------------------ |
+| Disk theft (powered off) | ✅ Wallet encrypted         | ✅ Same                        |
+| Malware (user context)   | ⚠️ Could steal wallet file  | ⚠️ Same + could access keyring |
+| Memory dump (root)       | ⚠️ Key in memory during use | ⚠️ Same                        |
+| Shoulder surfing         | ❌ Password visible         | ✅ No repeated password entry  |
 
 ### Key Points:
 

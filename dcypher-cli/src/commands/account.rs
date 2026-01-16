@@ -12,11 +12,7 @@ use crate::wallet::Wallet;
 #[derive(Subcommand)]
 pub enum AccountCommand {
     /// Register account on server
-    Register {
-        /// Server URL
-        #[arg(long)]
-        server: Option<String>,
-    },
+    Register,
     /// Show account details
     Show {
         /// Account fingerprint (optional, uses current identity if not provided)
@@ -26,12 +22,12 @@ pub enum AccountCommand {
 
 pub async fn run(action: AccountCommand, ctx: &Context) -> Result<()> {
     match action {
-        AccountCommand::Register { server } => register(server, ctx).await,
+        AccountCommand::Register => register(ctx).await,
         AccountCommand::Show { fingerprint } => show(fingerprint, ctx).await,
     }
 }
 
-async fn register(server_override: Option<String>, ctx: &Context) -> Result<()> {
+async fn register(ctx: &Context) -> Result<()> {
     let wallet = Wallet::load(ctx.wallet_override.as_deref())?;
     let config = Config::load()?;
 
@@ -44,7 +40,7 @@ async fn register(server_override: Option<String>, ctx: &Context) -> Result<()> 
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
     // Resolve server URL
-    let server_url = resolve_server_url(server_override, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     // Register
     let client = ApiClient::new(server_url.clone());
@@ -79,7 +75,7 @@ async fn show(fingerprint_override: Option<String>, ctx: &Context) -> Result<()>
     };
 
     // Resolve server URL
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     // Get account
     let client = ApiClient::new(server_url);

@@ -18,9 +18,6 @@ pub enum FileCommand {
     Upload {
         /// File to upload
         file: String,
-        /// Server URL
-        #[arg(long)]
-        server: Option<String>,
     },
     /// Download a file
     Download {
@@ -31,11 +28,7 @@ pub enum FileCommand {
         output: Option<String>,
     },
     /// List files
-    List {
-        /// Server URL
-        #[arg(long)]
-        server: Option<String>,
-    },
+    List,
     /// Delete a file
     Delete {
         /// File hash
@@ -45,14 +38,14 @@ pub enum FileCommand {
 
 pub async fn run(action: FileCommand, ctx: &Context) -> Result<()> {
     match action {
-        FileCommand::Upload { file, server } => upload(file, server, ctx).await,
+        FileCommand::Upload { file } => upload(file, ctx).await,
         FileCommand::Download { hash, output } => download(hash, output, ctx).await,
-        FileCommand::List { server } => list(server, ctx).await,
+        FileCommand::List => list(ctx).await,
         FileCommand::Delete { hash } => delete(hash, ctx).await,
     }
 }
 
-async fn upload(file_path: String, server_override: Option<String>, ctx: &Context) -> Result<()> {
+async fn upload(file_path: String, ctx: &Context) -> Result<()> {
     let wallet = Wallet::load(ctx.wallet_override.as_deref())?;
     let config = Config::load()?;
 
@@ -63,7 +56,7 @@ async fn upload(file_path: String, server_override: Option<String>, ctx: &Contex
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(server_override, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     // Read file
     let file_data = fs::read(&file_path).with_context(|| format!("Failed to read {file_path}"))?;
@@ -100,7 +93,7 @@ async fn upload(file_path: String, server_override: Option<String>, ctx: &Contex
 
 async fn download(hash: String, output_override: Option<String>, ctx: &Context) -> Result<()> {
     let config = Config::load()?;
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     let pb = if !ctx.json_output {
         let pb = ProgressBar::new_spinner();
@@ -148,7 +141,7 @@ async fn download(hash: String, output_override: Option<String>, ctx: &Context) 
     Ok(())
 }
 
-async fn list(server_override: Option<String>, ctx: &Context) -> Result<()> {
+async fn list(ctx: &Context) -> Result<()> {
     let wallet = Wallet::load(ctx.wallet_override.as_deref())?;
     let config = Config::load()?;
 
@@ -159,24 +152,22 @@ async fn list(server_override: Option<String>, ctx: &Context) -> Result<()> {
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(server_override, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     let client = ApiClient::new(server_url);
     let files = client.list_files(&identity.fingerprint).await?;
 
     if ctx.json_output {
         print_json(&files)?;
+    } else if files.is_empty() {
+        println!("{}", "No files found.".dimmed());
     } else {
-        if files.is_empty() {
-            println!("{}", "No files found.".dimmed());
-        } else {
-            println!("{}", "Files:".bold());
-            for file in &files {
-                println!("  {}", file.hash.bright_cyan());
-            }
-            println!();
-            println!("{} file(s)", files.len());
+        println!("{}", "Files:".bold());
+        for file in &files {
+            println!("  {}", file.hash.bright_cyan());
         }
+        println!();
+        println!("{} file(s)", files.len());
     }
 
     Ok(())
@@ -193,7 +184,7 @@ async fn delete(hash: String, ctx: &Context) -> Result<()> {
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    let server_url = resolve_server_url(None, ctx, &config)?;
+    let server_url = resolve_server_url(ctx, &config)?;
 
     let client = ApiClient::new(server_url);
     client.delete_file(identity, &hash).await?;

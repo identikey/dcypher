@@ -259,3 +259,29 @@ check-auth:
 docs-auth:
     cargo doc -p identikey-storage-auth --no-deps --open
 
+# =============================================================================
+# CLI Wallet Utilities (Phase 6b)
+# =============================================================================
+
+# Show wallet/config paths (macOS: ~/Library/Application Support/io.identikey.dcypher/)
+cli-paths:
+    @echo "Wallet file (macOS):  ~/Library/Application Support/io.identikey.dcypher/wallet.recrypt"
+    @echo "Config file (macOS):  ~/Library/Application Support/io.identikey.dcypher/config.toml"
+    @echo "Keychain entry:       service=dcypher, account=wallet-key"
+
+# [macOS] Find cached wallet key in Keychain
+keychain-find:
+    security find-generic-password -s dcypher -a wallet-key
+
+# [macOS] Delete cached wallet key from Keychain (will prompt for password on next CLI use)
+keychain-delete:
+    security delete-generic-password -s dcypher -a wallet-key
+
+# [macOS] Delete wallet file (WARNING: loses all identities!)
+wallet-delete:
+    rm -i ~/Library/Application\ Support/io.identikey.dcypher/wallet.recrypt
+
+# [macOS] Show wallet directory contents
+wallet-dir:
+    ls -la ~/Library/Application\ Support/io.identikey.dcypher/
+

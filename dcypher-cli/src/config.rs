@@ -37,7 +37,11 @@ impl Config {
     }
 
     fn config_path() -> Result<PathBuf> {
-        let dirs = ProjectDirs::from("com", "identikey", "dcypher")
+        // Uses platform-specific config directories:
+        //   macOS:   ~/Library/Application Support/io.identikey.dcypher/
+        //   Linux:   ~/.config/dcypher/
+        //   Windows: C:\Users\<user>\AppData\Roaming\identikey\dcypher\
+        let dirs = ProjectDirs::from("io", "identikey", "dcypher")
             .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
         Ok(dirs.config_dir().join("config.toml"))
     }

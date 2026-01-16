@@ -23,15 +23,8 @@ pub fn resolve_identity(ctx: &Context, _wallet: &Wallet) -> Result<String> {
     )
 }
 
-pub fn resolve_server_url(
-    server_override: Option<String>,
-    ctx: &Context,
-    config: &Config,
-) -> Result<String> {
-    if let Some(server) = server_override {
-        return Ok(server);
-    }
-
+pub fn resolve_server_url(ctx: &Context, config: &Config) -> Result<String> {
+    // Priority: --server flag > $DCYPHER_SERVER env > config.default_server
     if let Some(ref server) = ctx.server_override {
         return Ok(server.clone());
     }
