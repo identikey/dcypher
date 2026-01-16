@@ -1,10 +1,19 @@
 # Phase 6b: Secure Credential Storage Implementation Plan
 
-**Status:** 📋 Planned  
+**Status:** ✅ Complete (wallet commands deferred)  
 **Duration:** 2-3 days  
 **Goal:** OS-native secure storage for wallet encryption keys, eliminating per-invocation password prompts
 
 **Prerequisites:** Phase 6 ✅ Complete
+
+**Completed:**
+
+- ✅ Phase 6b.1: Credential Provider Architecture
+- ✅ Phase 6b.2: Key Caching (macOS Keychain via security-framework, Linux/Windows via keyring)
+
+**Remaining:**
+
+- ⬜ Phase 6b.3: Wallet Commands (lock/unlock/status) — OPTIONAL, can be added later
 
 ---
 
@@ -64,12 +73,12 @@ After Phase 6b:
 
 1. ✅ First wallet access: password prompt, key derived and cached in OS keyring
 2. ✅ Subsequent access: key fetched from keyring, no prompt
-3. ✅ `dcypher wallet lock` clears cached key
-4. ✅ `dcypher wallet unlock` explicitly caches key
-5. ✅ `dcypher wallet status` shows lock state
+3. ⬜ `dcypher wallet lock` clears cached key (DEFERRED - can use `just keychain-delete`)
+4. ⬜ `dcypher wallet unlock` explicitly caches key (DEFERRED - automatic on first access)
+5. ⬜ `dcypher wallet status` shows lock state (DEFERRED)
 6. ✅ `DCYPHER_WALLET_KEY` env var for CI (base64-encoded 32-byte key)
 7. ✅ Tests use in-memory provider, no prompts
-8. ✅ macOS Keychain, Linux Secret Service, Windows Credential Manager supported
+8. ✅ macOS Keychain (security-framework), Linux Secret Service, Windows Credential Manager (keyring crate)
 
 **Verification:**
 
@@ -713,9 +722,9 @@ impl Wallet {
 
 #### Manual Verification:
 
-- [ ] First `dcypher identity list` prompts for password (SINGLE prompt, not double)
-- [ ] Second `dcypher identity list` does NOT prompt (key cached in keyring)
-- [ ] Verify with `security find-generic-password -s dcypher` (macOS)
+- [x] First `dcypher identity list` prompts for password (SINGLE prompt, not double)
+- [x] Second `dcypher identity list` does NOT prompt (key cached in keyring)
+- [x] Verify with `security find-generic-password -s dcypher` (macOS)
 
 **Note (2026-01-15):** Fixed double-prompt issue on macOS by switching from `keyring` crate's `apple-native` backend to direct `security-framework` crate usage. The `keyring` crate's apple-native backend was triggering two separate Security framework prompts (one for "confidential information" and one for "key"). Using `security_framework::passwords::{get,set,delete}_generic_password()` directly results in a single prompt.
 

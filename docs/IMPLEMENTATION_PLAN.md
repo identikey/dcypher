@@ -801,10 +801,13 @@ dcypher server start [--config server.toml]
 
 ---
 
-### Phase 7: Minimal Rad TUI (dcypher-tui)
+### Phase 7: Minimal Rad TUI (dcypher-tui) — ⏸️ DEFERRED
 
-**Duration:** 2-3 days  
+**Status:** Deferred until after production deployment  
+**Duration:** 2-3 days (when resumed)  
 **Goal:** Inherit spirit, lose bloat
+
+**Rationale for deferral:** CLI provides full functionality. TUI is a nice-to-have enhancement for power users, not a launch blocker.
 
 **Framework:** `ratatui` (formerly tui-rs) - lightweight, no heavy deps
 
@@ -815,26 +818,77 @@ dcypher server start [--config server.toml]
 3. **Sharing** - Create/revoke shares
 4. **Keys** - Identity management
 
-**What We're NOT Building:**
+---
 
-- ❌ CPU/memory monitoring widgets
-- ❌ ASCII art animations
-- ❌ Matrix rain effects
-- ❌ Extensive profiling UI
+### Phase 8: Documentation & Deployment
 
-**Rad Spirit Elements:**
+**Duration:** 2-3 days  
+**Goal:** Production-ready documentation and deployment guides
 
-- ✅ Clean cyberpunk color scheme
-- ✅ Clear visual hierarchy
-- ✅ Real-time operation feedback
-- ✅ Keyboard-first navigation
-- ✅ Instant responsiveness
+**Deliverables:**
 
-**Testing:**
+1. **User Guide** (`docs/user-guide.md`)
 
-- UI component tests
-- Integration tests with mock backend
-- Snapshot tests for layout
+   - CLI command reference
+   - Common workflows (encrypt, share, revoke)
+   - Wallet management
+   - Configuration options
+
+2. **API Documentation** (`docs/api-reference.md`)
+
+   - Server endpoints
+   - Authentication flow
+   - Request/response formats
+   - Error codes
+
+3. **Deployment Guide** (`docs/deployment.md`)
+
+   - Docker deployment
+   - Systemd service setup
+   - Cloud deployment (AWS, GCP, etc.)
+   - Configuration reference
+   - Backup and recovery
+
+4. **Operations Guide** (`docs/operations.md`)
+   - Monitoring and logging
+   - Troubleshooting
+   - Performance tuning
+
+---
+
+### Phase 9: E2E Testing & Security Audit Prep
+
+**Duration:** 1-2 days  
+**Goal:** Validate full system and prepare for security review
+
+**E2E Test Scenarios:**
+
+1. Alice creates identity, registers on server
+2. Alice encrypts file locally
+3. Alice uploads encrypted file to server
+4. Alice shares file with Bob (creates recryption key)
+5. Bob downloads and decrypts file via recryption
+6. Alice revokes Bob's access
+7. Bob can no longer access file
+
+**Security Audit Prep:**
+
+1. **Threat Model** (`docs/security/threat-model.md`)
+
+   - Assets and trust boundaries
+   - Attack vectors
+   - Mitigations
+
+2. **Cryptographic Design Review** (`docs/security/crypto-review.md`)
+
+   - Algorithm choices and rationale
+   - Key management
+   - Known limitations
+
+3. **Audit Checklist** (`docs/security/audit-checklist.md`)
+   - Code areas requiring review
+   - Dependencies with crypto
+   - FFI boundary considerations
 
 ---
 
@@ -1058,31 +1112,53 @@ python-prototype/
 
 ### Phase 6 Complete When:
 
-- [ ] Identity management (new, list, show, use, delete, export, import)
-- [ ] Password-encrypted wallet functional
-- [ ] Local encrypt/decrypt working
-- [ ] HTTP client for server API
-- [ ] Account register/show working
-- [ ] Files upload/download/list/delete working
-- [ ] Share create/list/download/revoke working
-- [ ] Server list endpoints added
-- [ ] Pretty and JSON output modes
-- [ ] Config file management working
+- [x] Identity management (new, list, show, use, delete, export, import)
+- [x] Password-encrypted wallet functional
+- [x] Local encrypt/decrypt working
+- [x] HTTP client for server API
+- [x] Account register/show working
+- [x] Files upload/download/list/delete working
+- [x] Share create/list/download/revoke working
+- [x] Server list endpoints added
+- [x] Pretty and JSON output modes
+- [x] Config file management working
 
-**Plan:** `docs/plans/2026-01-13-phase-6-cli-application.md` 🚧 IN PROGRESS
+**Plan:** `docs/plans/2026-01-13-phase-6-cli-application.md` ✅ COMPLETE
 
-### Phase 7 Complete When:
+### Phase 6b Complete When:
 
-- [ ] All TUI screens functional
-- [ ] Keyboard navigation smooth
-- [ ] Real-time updates working
-- [ ] Clean visual design
-- [ ] No performance regressions
+- [x] CredentialProvider trait abstraction
+- [x] macOS Keychain integration (via security-framework crate)
+- [x] Linux Secret Service integration (via keyring crate)
+- [x] Windows Credential Manager integration (via keyring crate)
+- [x] EnvProvider for CI (`DCYPHER_WALLET_KEY`)
+- [x] MemoryProvider for tests
+- [x] Key caching works (no password prompt on subsequent runs)
+- [ ] Wallet lock/unlock/status commands (OPTIONAL)
+
+**Plan:** `docs/plans/2026-01-14-phase-6b-secure-credential-storage.md` ✅ COMPLETE (wallet commands optional)
+
+### Phase 7: TUI — ⏸️ DEFERRED
+
+TUI development deferred until after production deployment. CLI provides full functionality.
+
+### Phase 8 Complete When:
+
+- [ ] User guide (CLI usage, common workflows)
+- [ ] API documentation (server endpoints)
+- [ ] Deployment guide (Docker, systemd, cloud)
+- [ ] Configuration reference
+
+### Phase 9 Complete When:
+
+- [ ] Full Alice→Bob E2E flow tested CLI-to-CLI via server
+- [ ] Security audit prep document ready
+- [ ] Threat model documented
+- [ ] Key management best practices documented
 
 ### Overall Complete When:
 
 - [ ] Full Alice->Bob E2E flow works CLI-to-CLI via server
-- [ ] TUI provides full functionality
 - [ ] Documentation complete (user guide + API docs)
 - [ ] Deployment guide written
 - [ ] Security audit prep document ready
@@ -1098,22 +1174,21 @@ python-prototype/
 **Phase 4:** 3-4 days (storage client) ✅ COMPLETE  
 **Phase 4b:** 3-4 days (auth service) ✅ COMPLETE  
 **Phase 5:** 4-5 days (recryption proxy server) ✅ COMPLETE  
-**Phase 6:** 4-5 days (CLI) 🚧 IN PROGRESS  
-**Phase 7:** 2-3 days (TUI)
+**Phase 6:** 4-5 days (CLI) ✅ COMPLETE  
+**Phase 6b:** 2-3 days (secure credential storage) ✅ COMPLETE  
+**Phase 7:** ⏸️ DEFERRED (TUI)  
+**Phase 8:** 2-3 days (documentation & deployment)  
+**Phase 9:** 1-2 days (E2E testing & security audit prep)
 
-**Total:** 27-38 days (~5-7 weeks)
-
-**With buffer for unknowns:** 10-12 weeks to production-ready
+**Total:** ~30 days to production-ready (excluding TUI)
 
 ---
 
 ## Next Steps
 
-1. **Immediate:** Archive Python prototype into subdirectory
-2. **This Week:** Answer all design questions, write architecture docs
-3. **Next Week:** Begin Phase 1 (FFI bindings)
-4. **Regular Reviews:** Weekly check-ins on progress + blockers
-5. **Documentation:** Update this plan as we learn
+1. **Now:** Complete Phase 8 — Documentation & Deployment Guide
+2. **Then:** Phase 9 — Full E2E testing & Security Audit Prep
+3. **Future:** Phase 7 TUI (post-launch enhancement)
 
 ---
 
