@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-dCypher uses **hybrid encryption** for all file/message encryption:
+Recrypt uses **hybrid encryption** for all file/message encryption:
 
 1. **KEM (Key Encapsulation):** PRE-encrypt a random symmetric key
 2. **DEM (Data Encapsulation):** Symmetric-encrypt the payload with that key
@@ -41,7 +41,7 @@ This architecture is mandatory for lattice-based PRE (due to ciphertext expansio
 
 ### IND-CPA vs IND-CCA Acceptability
 
-PRE schemes typically provide IND-CPA (chosen-plaintext) security, not IND-CCA (chosen-ciphertext). This is acceptable for dCypher because:
+PRE schemes typically provide IND-CPA (chosen-plaintext) security, not IND-CCA (chosen-ciphertext). This is acceptable for Recrypt because:
 
 1. **Content-addressing:** Ciphertext hash = storage key. Tampering → different hash → not found
 2. **Signatures:** All messages are signed. Forged/modified ciphertexts fail verification
@@ -393,7 +393,7 @@ An attacker cannot:
 
 ### Content-Addressing Bonus
 
-In dCypher, files are stored by `bao_root` hash. This means:
+In Recrypt, files are stored by `bao_root` hash. This means:
 
 - Tampered ciphertext → different hash → file not found at original address
 - Additional layer of integrity beyond cryptographic verification

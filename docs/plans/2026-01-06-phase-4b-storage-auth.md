@@ -4,7 +4,7 @@
 **Duration:** 1 day (planned 3-4 days)  
 **Goal:** Core auth logic for content-addressed storage — ownership, capabilities, provider index
 
-**Prerequisites:** Phase 4 (dcypher-storage) ✅ Complete
+**Prerequisites:** Phase 4 (recrypt-storage) ✅ Complete
 
 ---
 
@@ -24,10 +24,10 @@ The crate provides traits with pluggable backends (in-memory for tests, SQLite f
 
 ### What Exists
 
-- **dcypher-storage**: `ChunkStorage` trait with working backends
-- **dcypher-proto**: `CapabilityProto` already defined with all fields
-- **dcypher-core**: Multi-signature (`sign_message`, `verify_message`)
-- **Pattern**: Proto ↔ domain type conversions in `dcypher-proto/src/convert.rs`
+- **recrypt-storage**: `ChunkStorage` trait with working backends
+- **recrypt-proto**: `CapabilityProto` already defined with all fields
+- **recrypt-core**: Multi-signature (`sign_message`, `verify_message`)
+- **Pattern**: Proto ↔ domain type conversions in `recrypt-proto/src/convert.rs`
 
 ### What's Missing
 
@@ -56,7 +56,7 @@ After Phase 4b:
 2. ✅ `ProviderIndex` trait with `InMemoryProviderIndex` and `SqliteProviderIndex`
 3. ✅ `Capability` domain type with signing and verification
 4. ✅ `AccessGrant` for tracking delegated access
-5. ✅ Integration tests with `dcypher-storage`
+5. ✅ Integration tests with `recrypt-storage`
 6. ✅ SQLite schema and migrations
 
 **Verification:**
@@ -124,11 +124,11 @@ Add to workspace members and dependencies:
 ```toml
 [workspace]
 members = [
-  "crates/dcypher-ffi",
-  "crates/dcypher-openfhe-sys",
-  "crates/dcypher-core",
-  "crates/dcypher-proto",
-  "crates/dcypher-storage",
+  "crates/recrypt-ffi",
+  "crates/recrypt-openfhe-sys",
+  "crates/recrypt-core",
+  "crates/recrypt-proto",
+  "crates/recrypt-storage",
   "crates/identikey-storage-auth",  # NEW
 ]
 
@@ -157,8 +157,8 @@ sqlite = ["rusqlite"]
 
 [dependencies]
 # Workspace
-dcypher-core.path = "../dcypher-core"
-dcypher-proto.path = "../dcypher-proto"
+recrypt-core.path = "../recrypt-core"
+recrypt-proto.path = "../recrypt-proto"
 thiserror.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -228,7 +228,7 @@ pub enum AuthError {
 //! identikey-storage-auth: Authorization for content-addressed storage
 //!
 //! Provides ownership tracking, capability issuance, and provider indexing
-//! for the dCypher storage layer.
+//! for the Recrypt storage layer.
 //!
 //! ## Features
 //!
@@ -2486,8 +2486,8 @@ docs-auth:
 
 ```toml
 [dependencies]
-dcypher-core = { path = "../dcypher-core" }
-dcypher-proto = { path = "../dcypher-proto" }
+recrypt-core = { path = "../recrypt-core" }
+recrypt-proto = { path = "../recrypt-proto" }
 blake3 = "1"
 bs58 = "0.5"
 tokio = { version = "1", features = ["full"] }
@@ -2507,7 +2507,7 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 - Expose ownership, capability, provider operations via REST
 - Add rate limiting middleware
-- Integrate with `dcypher-server`
+- Integrate with `recrypt-server`
 
 ### Postgres Backend (Future)
 
@@ -2521,5 +2521,5 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 - Design doc: `docs/storage-design.md`
 - Phase 4 plan: `docs/plans/2026-01-06-phase-4-storage-layer.md`
-- Proto schema: `crates/dcypher-proto/proto/dcypher.proto` (CapabilityProto)
-- Multi-sig: `crates/dcypher-core/src/sign/mod.rs`
+- Proto schema: `crates/recrypt-proto/proto/dcypher.proto` (CapabilityProto)
+- Multi-sig: `crates/recrypt-core/src/sign/mod.rs`

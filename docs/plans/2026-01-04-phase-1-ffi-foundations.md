@@ -5,8 +5,8 @@
 > All phases implemented and verified. 16 tests passing. Notable deviation: used `oqs` crate v0.11 instead of vendored liboqs.
 
 > **Historical Note:** This plan originally referenced `vendor/openfhe-rs/` which has since been
-> **deleted**. We created minimal custom bindings in `crates/dcypher-openfhe-sys/` instead.
-> See `crates/dcypher-ffi/src/lib.rs` for the current architecture.
+> **deleted**. We created minimal custom bindings in `crates/recrypt-openfhe-sys/` instead.
+> See `crates/recrypt-ffi/src/lib.rs` for the current architecture.
 
 ## Overview
 
@@ -50,7 +50,7 @@ Build the Rust FFI layer that wraps OpenFHE (lattice PRE) and liboqs (PQ signatu
 
 ## Desired End State
 
-A `dcypher-ffi` crate that provides:
+A `recrypt-ffi` crate that provides:
 
 ```rust
 // OpenFHE PRE operations
@@ -75,7 +75,7 @@ pub fn ed25519_verify(pk: &Ed25519PublicKey, msg: &[u8], sig: &Ed25519Signature)
 ### Verification
 
 ```bash
-cargo test -p dcypher-ffi
+cargo test -p recrypt-ffi
 # All smoke tests pass:
 # - PRE encrypt/decrypt roundtrip
 # - PRE recryption flow (Alice→Bob)
@@ -115,7 +115,7 @@ Create the Rust workspace structure and get a minimal build working.
 [workspace]
 resolver = "2"
 members = [
-    "crates/dcypher-ffi",
+    "crates/recrypt-ffi",
     "crates/dcypher-hdprint",  # parallel track
 ]
 
@@ -144,10 +144,10 @@ lto = true
 codegen-units = 1
 ```
 
-#### 2. Create dcypher-ffi Crate Structure
+#### 2. Create recrypt-ffi Crate Structure
 
 ```
-crates/dcypher-ffi/
+crates/recrypt-ffi/
 ├── Cargo.toml
 ├── build.rs
 └── src/
@@ -168,11 +168,11 @@ crates/dcypher-ffi/
 
 #### 3. Create Initial Cargo.toml
 
-**File**: `crates/dcypher-ffi/Cargo.toml`
+**File**: `crates/recrypt-ffi/Cargo.toml`
 
 ```toml
 [package]
-name = "dcypher-ffi"
+name = "recrypt-ffi"
 version.workspace = true
 edition.workspace = true
 
@@ -200,9 +200,9 @@ liboqs = []
 
 #### Automated Verification
 
-- [x] `cargo build -p dcypher-ffi` compiles (even with stub implementations)
-- [x] Workspace structure matches spec: `ls crates/dcypher-ffi/src/`
-- [x] `cargo clippy -p dcypher-ffi` passes
+- [x] `cargo build -p recrypt-ffi` compiles (even with stub implementations)
+- [x] Workspace structure matches spec: `ls crates/recrypt-ffi/src/`
+- [x] `cargo clippy -p recrypt-ffi` passes
 
 #### Manual Verification
 
@@ -216,7 +216,7 @@ liboqs = []
 
 ### Overview
 
-Create minimal OpenFHE bindings (`dcypher-openfhe-sys`) tailored for PRE operations.
+Create minimal OpenFHE bindings (`recrypt-openfhe-sys`) tailored for PRE operations.
 
 ### Decision: Minimal Custom Bindings
 
@@ -227,7 +227,7 @@ After analysis (see `docs/plans/openfhe-minimal-bindings-analysis.md`):
 - We only need ~15% of the openfhe-rs API surface
 - openfhe-rs is a git submodule—editing it directly is problematic
 
-**Decision: Create `dcypher-openfhe-sys` with minimal bindings**
+**Decision: Create `recrypt-openfhe-sys` with minimal bindings**
 
 Benefits:
 
@@ -275,13 +275,13 @@ fn deserialize_*() -> Result<T>;
 #### 1. Copy OpenFHE Bindings
 
 ```bash
-cp -r vendor/openfhe-rs crates/dcypher-ffi/openfhe-sys
+cp -r vendor/openfhe-rs crates/recrypt-ffi/openfhe-sys
 # Rename to internal crate
 ```
 
 #### 2. Create PRE Wrapper
 
-**File**: `crates/dcypher-ffi/src/openfhe/pre.rs`
+**File**: `crates/recrypt-ffi/src/openfhe/pre.rs`
 
 ```rust
 //! Proxy recryption operations via OpenFHE BFV scheme
@@ -386,7 +386,7 @@ fn coefficients_to_bytes(coeffs: &[i64]) -> Vec<u8> {
 
 #### 3. Update build.rs
 
-**File**: `crates/dcypher-ffi/build.rs`
+**File**: `crates/recrypt-ffi/build.rs`
 
 ```rust
 fn main() {
@@ -418,7 +418,7 @@ fn main() {
 
 #### Automated Verification
 
-- [x] `cargo build -p dcypher-ffi --features openfhe` compiles
+- [x] `cargo build -p recrypt-ffi --features openfhe` compiles
 - [x] OpenFHE smoke test passes:
 
 ```rust
@@ -480,7 +480,7 @@ Known options:
 
 #### 2. Create liboqs Bindings (if needed)
 
-**File**: `crates/dcypher-ffi/src/liboqs/bindings.rs`
+**File**: `crates/recrypt-ffi/src/liboqs/bindings.rs`
 
 ```rust
 //! Raw FFI bindings to liboqs
@@ -528,7 +528,7 @@ extern "C" {
 
 #### 3. Safe Wrapper
 
-**File**: `crates/dcypher-ffi/src/liboqs/sig.rs`
+**File**: `crates/recrypt-ffi/src/liboqs/sig.rs`
 
 ```rust
 //! Post-quantum signature operations
@@ -588,7 +588,7 @@ pub fn pq_verify(
 
 #### Automated Verification
 
-- [x] `cargo build -p dcypher-ffi --features liboqs` compiles (via `oqs` crate v0.11)
+- [x] `cargo build -p recrypt-ffi --features liboqs` compiles (via `oqs` crate v0.11)
 - [x] PQ signature test passes:
 
 ```rust
@@ -620,7 +620,7 @@ Integrate `ed25519-dalek` for classical signature fallback.
 
 ### Changes Required
 
-**File**: `crates/dcypher-ffi/src/ed25519.rs`
+**File**: `crates/recrypt-ffi/src/ed25519.rs`
 
 ```rust
 //! ED25519 classical signatures via ed25519-dalek
@@ -683,10 +683,10 @@ Final integration testing of all three crypto subsystems.
 
 ### Changes Required
 
-**File**: `crates/dcypher-ffi/tests/integration.rs`
+**File**: `crates/recrypt-ffi/tests/integration.rs`
 
 ```rust
-//! Integration tests for dcypher-ffi
+//! Integration tests for recrypt-ffi
 
 use dcypher_ffi::openfhe::PreContext;
 use dcypher_ffi::liboqs::{pq_keygen, pq_sign, pq_verify, PqAlgorithm};
@@ -733,9 +733,9 @@ fn test_dual_signature_flow() {
 
 #### Automated Verification
 
-- [x] All tests pass: `cargo test -p dcypher-ffi` — 16 tests passing
-- [x] No clippy warnings: `cargo clippy -p dcypher-ffi -- -D warnings`
-- [x] Documentation builds: `cargo doc -p dcypher-ffi`
+- [x] All tests pass: `cargo test -p recrypt-ffi` — 16 tests passing
+- [x] No clippy warnings: `cargo clippy -p recrypt-ffi -- -D warnings`
+- [x] Documentation builds: `cargo doc -p recrypt-ffi`
 
 #### Manual Verification
 

@@ -1,6 +1,6 @@
 # OpenFHE Threading Model
 
-> **Audience**: Developers building multi-tenant/concurrent services using dcypher-ffi
+> **Audience**: Developers building multi-tenant/concurrent services using recrypt-ffi
 
 ## TL;DR
 

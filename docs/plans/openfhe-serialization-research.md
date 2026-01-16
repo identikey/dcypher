@@ -3,8 +3,8 @@
 ## TL;DR
 
 **OpenFHE serialization already works.** The C++ layer uses Cereal's `PortableBinaryOutputArchive` via `std::stringstream`. We just need to:
-1. Wire up the existing FFI functions to `dcypher-ffi`
-2. Complete the Lattice backend in `dcypher-core`
+1. Wire up the existing FFI functions to `recrypt-ffi`
+2. Complete the Lattice backend in `recrypt-core`
 3. Treat serialized OpenFHE blobs as opaque `bytes` in our protobuf schema
 
 No need to "manhandle" anything—just plumb it through.
@@ -15,7 +15,7 @@ No need to "manhandle" anything—just plumb it through.
 
 ### What Exists
 
-**`dcypher-openfhe-sys/src/wrapper.cc`** already implements in-memory serialization:
+**`recrypt-openfhe-sys/src/wrapper.cc`** already implements in-memory serialization:
 
 ```cpp
 rust::Vec<uint8_t> serialize_ciphertext(const Ciphertext &ct) {
@@ -31,7 +31,7 @@ rust::Vec<uint8_t> serialize_ciphertext(const Ciphertext &ct) {
 }
 ```
 
-**`dcypher-openfhe-sys/src/lib.rs`** exposes these via CXX FFI:
+**`recrypt-openfhe-sys/src/lib.rs`** exposes these via CXX FFI:
 
 ```rust
 fn serialize_ciphertext(ct: &Ciphertext) -> Vec<u8>;
@@ -46,8 +46,8 @@ fn deserialize_recrypt_key(ctx: &CryptoContext, data: &[u8]) -> UniquePtr<Recryp
 
 ### What's Missing
 
-1. **`dcypher-ffi`** doesn't expose serialization—only raw operations
-2. **`dcypher-core`'s Lattice backend** has stubs returning errors like:
+1. **`recrypt-ffi`** doesn't expose serialization—only raw operations
+2. **`recrypt-core`'s Lattice backend** has stubs returning errors like:
    ```rust
    Err(PreError::Encryption("Lattice encryption requires serialization (Phase 3)".into()))
    ```
@@ -152,9 +152,9 @@ For wire protocol:
 
 ## Implementation Plan
 
-### Step 1: Wire Serialization Through dcypher-ffi
+### Step 1: Wire Serialization Through recrypt-ffi
 
-Add to `crates/dcypher-ffi/src/openfhe/mod.rs`:
+Add to `crates/recrypt-ffi/src/openfhe/mod.rs`:
 
 ```rust
 impl PreContext {
@@ -175,7 +175,7 @@ impl PreContext {
 
 ### Step 2: Complete Lattice Backend
 
-Update `crates/dcypher-core/src/pre/backends/lattice.rs`:
+Update `crates/recrypt-core/src/pre/backends/lattice.rs`:
 
 ```rust
 impl PreBackend for LatticeBackend {
@@ -231,7 +231,7 @@ Recommendation: Single global context with fixed BFV parameters. Document the pa
 
 ## Testing the Serialization
 
-Add to `dcypher-openfhe-sys` tests:
+Add to `recrypt-openfhe-sys` tests:
 
 ```rust
 #[test]
@@ -265,7 +265,7 @@ fn test_ciphertext_serialization_roundtrip() {
 | Do we need to modify the format? | **No**, treat as opaque bytes |
 | Is it compatible with protobuf? | **Yes**, just use `bytes` field |
 | What about CryptoContext size? | Share context, don't serialize per-message |
-| What's left to implement? | Wire FFI → dcypher-ffi → Lattice backend |
+| What's left to implement? | Wire FFI → recrypt-ffi → Lattice backend |
 
 **Effort estimate:** 0.5-1 day to wire it up (much less than the 1 day budgeted in Phase 3.6).
 
@@ -273,8 +273,8 @@ fn test_ciphertext_serialization_roundtrip() {
 
 ## References
 
-- `crates/dcypher-openfhe-sys/src/wrapper.cc` - Existing serialization
-- `crates/dcypher-openfhe-sys/src/lib.rs` - FFI bindings
+- `crates/recrypt-openfhe-sys/src/wrapper.cc` - Existing serialization
+- `crates/recrypt-openfhe-sys/src/lib.rs` - FFI bindings
 - `vendor/openfhe-development/src/core/include/utils/serial.h` - OpenFHE's Serial API
 - [Cereal documentation](https://uscilab.github.io/cereal/)
 

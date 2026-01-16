@@ -1,4 +1,4 @@
-# DCypher Rust Development Tasks
+# Recrypt Rust Development Tasks
 #
 # Build system for Rust FFI bindings to OpenFHE and liboqs
 
@@ -23,13 +23,13 @@ build-release:
 test:
     cargo test -- --test-threads=1
 
-# Run tests for dcypher-ffi specifically
+# Run tests for recrypt-ffi specifically
 test-ffi:
-    cargo test -p dcypher-ffi -- --test-threads=1
+    cargo test -p recrypt-ffi -- --test-threads=1
 
-# Run tests for dcypher-openfhe-sys (must be sequential due to OpenFHE global state)
+# Run tests for recrypt-openfhe-sys (must be sequential due to OpenFHE global state)
 test-openfhe:
-    cargo test -p dcypher-openfhe-sys -- --test-threads=1
+    cargo test -p recrypt-openfhe-sys -- --test-threads=1
 
 # Run clippy lints
 lint:
@@ -222,19 +222,19 @@ minio-down:
 
 # Run storage tests (in-memory + local only)
 test-storage:
-    cargo test -p dcypher-storage
+    cargo test -p recrypt-storage
 
 # Run storage tests including S3/Minio integration
 test-storage-s3: minio-up
     sleep 2  # Wait for Minio to be ready
-    cargo test -p dcypher-storage --features s3-tests
+    cargo test -p recrypt-storage --features s3-tests
 
 # Check storage crate
 check-storage:
-    cargo check -p dcypher-storage
-    cargo check -p dcypher-storage --features s3
-    cargo clippy -p dcypher-storage -- -D warnings
-    cargo clippy -p dcypher-storage --features s3 -- -D warnings
+    cargo check -p recrypt-storage
+    cargo check -p recrypt-storage --features s3
+    cargo clippy -p recrypt-storage -- -D warnings
+    cargo clippy -p recrypt-storage --features s3 -- -D warnings
 
 # =============================================================================
 # Auth Service (Phase 4b)
@@ -263,25 +263,25 @@ docs-auth:
 # CLI Wallet Utilities (Phase 6b)
 # =============================================================================
 
-# Show wallet/config paths (macOS: ~/Library/Application Support/io.identikey.dcypher/)
+# Show wallet/config paths (macOS: ~/Library/Application Support/io.identikey.recrypt/)
 cli-paths:
-    @echo "Wallet file (macOS):  ~/Library/Application Support/io.identikey.dcypher/wallet.recrypt"
-    @echo "Config file (macOS):  ~/Library/Application Support/io.identikey.dcypher/config.toml"
-    @echo "Keychain entry:       service=dcypher, account=wallet-key"
+    @echo "Wallet file (macOS):  ~/Library/Application Support/io.identikey.recrypt/wallet.recrypt"
+    @echo "Config file (macOS):  ~/Library/Application Support/io.identikey.recrypt/config.toml"
+    @echo "Keychain entry:       service=recrypt, account=wallet-key"
 
 # [macOS] Find cached wallet key in Keychain
 keychain-find:
-    security find-generic-password -s dcypher -a wallet-key
+    security find-generic-password -s recrypt -a wallet-key
 
 # [macOS] Delete cached wallet key from Keychain (will prompt for password on next CLI use)
 keychain-delete:
-    security delete-generic-password -s dcypher -a wallet-key
+    security delete-generic-password -s recrypt -a wallet-key
 
 # [macOS] Delete wallet file (WARNING: loses all identities!)
 wallet-delete:
-    rm -i ~/Library/Application\ Support/io.identikey.dcypher/wallet.recrypt
+    rm -i ~/Library/Application\ Support/io.identikey.recrypt/wallet.recrypt
 
 # [macOS] Show wallet directory contents
 wallet-dir:
-    ls -la ~/Library/Application\ Support/io.identikey.dcypher/
+    ls -la ~/Library/Application\ Support/io.identikey.recrypt/
 

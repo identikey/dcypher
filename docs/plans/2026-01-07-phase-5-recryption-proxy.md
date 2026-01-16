@@ -10,16 +10,16 @@
 
 ## Overview
 
-Build `dcypher-server`: the internet-connected recryption proxy that transforms wrapped keys (KEM ciphertext) without ever seeing plaintext. Semi-trusted service that users can self-host for additional security.
+Build `recrypt-server`: the internet-connected recryption proxy that transforms wrapped keys (KEM ciphertext) without ever seeing plaintext. Semi-trusted service that users can self-host for additional security.
 
-**What dcypher-server IS:**
+**What recrypt-server IS:**
 
 - Holds recrypt keys (generated client-side, uploaded by delegator)
 - Transforms wrapped_key on download (recipient gets recrypted file)
 - Verifies multi-signatures on all sensitive operations
 - Prevents replay attacks via nonce validation
 
-**What dcypher-server IS NOT:**
+**What recrypt-server IS NOT:**
 
 - Does NOT hold user secret keys
 - Does NOT see plaintext (only transforms encrypted key material)
@@ -29,7 +29,7 @@ Build `dcypher-server`: the internet-connected recryption proxy that transforms 
 
 ## Encoding Standard
 
-**dcypher-server uses the following encoding conventions:**
+**recrypt-server uses the following encoding conventions:**
 
 - **Keys** (ed25519_pk, ml_dsa_pk, pre_pk, recrypt_key): **base58** - Human-readable, compact, no ambiguous characters
 - **Signatures**: **base64** - Efficient for binary data that doesn't need to be typed
@@ -37,7 +37,7 @@ Build `dcypher-server`: the internet-connected recryption proxy that transforms 
 - **Hashes & Fingerprints**: **base58** - Already used throughout the codebase
 - **Never use hex** - Wasteful (2x size of base58, 33% larger than base64)
 
-This ensures consistency with the rest of the dCypher ecosystem and optimal space efficiency.
+This ensures consistency with the rest of the Recrypt ecosystem and optimal space efficiency.
 
 ---
 
@@ -47,9 +47,9 @@ This ensures consistency with the rest of the dCypher ecosystem and optimal spac
 
 | Crate                    | Provides                                                                    | Status   |
 | ------------------------ | --------------------------------------------------------------------------- | -------- |
-| `dcypher-core`           | `HybridEncryptor::recrypt()`, `MultiSig` verification                       | ✅ Ready |
-| `dcypher-proto`          | Wire types (`EncryptedFileProto`, `RecryptRequest`, etc.), format detection | ✅ Ready |
-| `dcypher-storage`        | `ChunkStorage` trait (InMemory, Local, S3)                                  | ✅ Ready |
+| `recrypt-core`           | `HybridEncryptor::recrypt()`, `MultiSig` verification                       | ✅ Ready |
+| `recrypt-proto`          | Wire types (`EncryptedFileProto`, `RecryptRequest`, etc.), format detection | ✅ Ready |
+| `recrypt-storage`        | `ChunkStorage` trait (InMemory, Local, S3)                                  | ✅ Ready |
 | `identikey-storage-auth` | `OwnershipStore`, `Capability`, `ProviderIndex`                             | ✅ Ready |
 
 ### Key Dependencies to Add
@@ -98,7 +98,7 @@ After Phase 5:
 
 ```bash
 # Unit tests
-cargo test -p dcypher-server
+cargo test -p recrypt-server
 
 # Integration tests (requires Minio)
 just test-server-integration
@@ -124,7 +124,7 @@ curl http://localhost:7222/health
 ## Architecture
 
 ```
-dcypher-server/
+recrypt-server/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs              # Entry point, server setup
@@ -260,23 +260,23 @@ DELETE /recryption/share/{id}       # Revoke share
 ```toml
 members = [
   # ... existing ...
-  "dcypher-server",
+  "recrypt-server",
 ]
 ```
 
-**File**: `dcypher-server/Cargo.toml`
+**File**: `recrypt-server/Cargo.toml`
 
 ```toml
 [package]
-name = "dcypher-server"
+name = "recrypt-server"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 # Workspace crates
-dcypher-core = { path = "../crates/dcypher-core" }
-dcypher-proto = { path = "../crates/dcypher-proto" }
-dcypher-storage = { path = "../crates/dcypher-storage", features = ["s3"] }
+recrypt-core = { path = "../crates/recrypt-core" }
+recrypt-proto = { path = "../crates/recrypt-proto" }
+recrypt-storage = { path = "../crates/recrypt-storage", features = ["s3"] }
 identikey-storage-auth = { path = "../crates/identikey-storage-auth", features = ["sqlite"] }
 
 # Web
@@ -318,7 +318,7 @@ reqwest = { version = "0.12", features = ["json"] }
 tempfile = "3"
 ```
 
-**File**: `dcypher-server/src/main.rs`
+**File**: `recrypt-server/src/main.rs`
 
 ```rust
 use std::net::SocketAddr;
@@ -350,7 +350,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Start server
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
-    tracing::info!("Starting dcypher-server on {}", addr);
+    tracing::info!("Starting recrypt-server on {}", addr);
 
     let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -359,7 +359,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-**File**: `dcypher-server/src/config.rs`
+**File**: `recrypt-server/src/config.rs`
 
 ```rust
 use figment::{Figment, providers::{Env, Format, Toml}};
@@ -408,7 +408,7 @@ fn default_nonce_window_secs() -> u64 { 300 } // 5 minutes
 impl Config {
     pub fn load() -> anyhow::Result<Self> {
         let config: Config = Figment::new()
-            .merge(Toml::file("dcypher-server.toml"))
+            .merge(Toml::file("recrypt-server.toml"))
             .merge(Env::prefixed("DCYPHER_"))
             .extract()?;
         Ok(config)
@@ -416,7 +416,7 @@ impl Config {
 }
 ```
 
-**File**: `dcypher-server/src/state.rs`
+**File**: `recrypt-server/src/state.rs`
 
 ```rust
 use std::sync::Arc;
@@ -559,7 +559,7 @@ impl AppState {
 }
 ```
 
-**File**: `dcypher-server/src/error.rs`
+**File**: `recrypt-server/src/error.rs`
 
 ```rust
 use axum::{
@@ -616,7 +616,7 @@ impl IntoResponse for ServerError {
 pub type ServerResult<T> = Result<T, ServerError>;
 ```
 
-**File**: `dcypher-server/src/routes/mod.rs`
+**File**: `recrypt-server/src/routes/mod.rs`
 
 ```rust
 use axum::{Router, routing::get};
@@ -633,7 +633,7 @@ pub fn router(state: AppState) -> Router {
 }
 ```
 
-**File**: `dcypher-server/src/routes/health.rs`
+**File**: `recrypt-server/src/routes/health.rs`
 
 ```rust
 use axum::Json;
@@ -647,10 +647,10 @@ pub async fn health_check() -> Json<Value> {
 }
 ```
 
-**File**: `dcypher-server/src/lib.rs`
+**File**: `recrypt-server/src/lib.rs`
 
 ```rust
-//! dcypher-server: Recryption proxy with REST API
+//! recrypt-server: Recryption proxy with REST API
 
 pub mod config;
 pub mod error;
@@ -662,14 +662,14 @@ pub mod state;
 
 **Automated Verification:**
 
-- [x] `cargo check -p dcypher-server` passes
-- [x] `cargo build -p dcypher-server` succeeds
-- [x] `cargo test -p dcypher-server` passes (health check test)
-- [x] `cargo clippy -p dcypher-server -- -D warnings` passes
+- [x] `cargo check -p recrypt-server` passes
+- [x] `cargo build -p recrypt-server` succeeds
+- [x] `cargo test -p recrypt-server` passes (health check test)
+- [x] `cargo clippy -p recrypt-server -- -D warnings` passes
 
 **Manual Verification:**
 
-- [ ] `cargo run -p dcypher-server` starts without error
+- [ ] `cargo run -p recrypt-server` starts without error
 - [ ] `curl http://localhost:7222/health` returns `{"status":"ok",...}`
 
 ---
@@ -680,7 +680,7 @@ pub mod state;
 
 #### Changes Required:
 
-**File**: `dcypher-server/src/routes/nonce.rs`
+**File**: `recrypt-server/src/routes/nonce.rs`
 
 ```rust
 use axum::{Json, extract::State};
@@ -707,7 +707,7 @@ pub async fn get_nonce(State(state): State<AppState>) -> Json<NonceResponse> {
 }
 ```
 
-**File**: `dcypher-server/src/middleware/auth.rs`
+**File**: `recrypt-server/src/middleware/auth.rs`
 
 ```rust
 use axum::{
@@ -808,7 +808,7 @@ pub fn verify_multisig(
 }
 ```
 
-**File**: `dcypher-server/src/middleware/nonce.rs`
+**File**: `recrypt-server/src/middleware/nonce.rs`
 
 ```rust
 use axum::{
@@ -852,7 +852,7 @@ pub async fn validate_nonce(
 }
 ```
 
-**File**: `dcypher-server/src/middleware/mod.rs`
+**File**: `recrypt-server/src/middleware/mod.rs`
 
 ```rust
 pub mod auth;
@@ -862,7 +862,7 @@ pub use auth::{SignatureHeaders, VerifiedIdentity, extract_signature_headers, ve
 pub use nonce::validate_nonce;
 ```
 
-Update `dcypher-server/src/lib.rs`:
+Update `recrypt-server/src/lib.rs`:
 
 ```rust
 pub mod config;
@@ -878,7 +878,7 @@ pub mod state;
 
 - [x] Unit tests for nonce validation pass
 - [x] Unit tests for signature header extraction pass
-- [x] `cargo test -p dcypher-server` all pass
+- [x] `cargo test -p recrypt-server` all pass
 
 ---
 
@@ -888,7 +888,7 @@ pub mod state;
 
 #### Changes Required:
 
-**File**: `dcypher-server/src/routes/accounts.rs`
+**File**: `recrypt-server/src/routes/accounts.rs`
 
 ```rust
 use axum::{
@@ -1080,7 +1080,7 @@ This is the core functionality. The recryption route:
 
 #### Changes Required:
 
-**File**: `dcypher-server/src/routes/recryption.rs`
+**File**: `recrypt-server/src/routes/recryption.rs`
 
 ```rust
 use axum::{
@@ -1252,13 +1252,13 @@ pub async fn download_recrypted(
         .map_err(|e| ServerError::Internal(format!("Storage error: {e}")))?;
 
     // Deserialize to EncryptedFile
-    // Note: In production, this would use dcypher-proto for proper deserialization
+    // Note: In production, this would use recrypt-proto for proper deserialization
     // For MVP, we'll use a simplified approach with MockBackend
     let backend = MockBackend;
     let encryptor = HybridEncryptor::new(backend);
 
     // Deserialize recrypt key (backend-specific)
-    // TODO: proper deserialization via dcypher-proto
+    // TODO: proper deserialization via recrypt-proto
     let recrypt_key = RecryptKey {
         from_public: dcypher_core::PublicKey(vec![]),  // placeholder
         to_public: dcypher_core::PublicKey(vec![]),    // placeholder
@@ -1367,7 +1367,7 @@ let protected = Router::new()
 
 **Goal:** Basic file storage endpoints
 
-**File**: `dcypher-server/src/routes/files.rs`
+**File**: `recrypt-server/src/routes/files.rs`
 
 ```rust
 use axum::{
@@ -1539,7 +1539,7 @@ pub async fn delete_file(
 
 **Goal:** Full Alice→Bob flow working
 
-**File**: `dcypher-server/tests/e2e_test.rs`
+**File**: `recrypt-server/tests/e2e_test.rs`
 
 ```rust
 //! End-to-end test: Alice uploads, shares with Bob, Bob downloads (recrypted)
@@ -1629,7 +1629,7 @@ async fn revoke_share(...) { todo!() }
 async fn try_download_recrypted(...) -> Result<Vec<u8>, ()> { todo!() }
 ```
 
-**File**: `dcypher-server/tests/common/mod.rs`
+**File**: `recrypt-server/tests/common/mod.rs`
 
 ```rust
 use std::net::SocketAddr;
@@ -1671,7 +1671,7 @@ impl TestServer {
 
 **Automated Verification:**
 
-- [x] `cargo test -p dcypher-server -- --test-threads=1` passes
+- [x] `cargo test -p recrypt-server -- --test-threads=1` passes
 - [x] E2E test completes full flow
 - [x] All unit tests pass
 
@@ -1734,21 +1734,21 @@ impl TestServer {
 
 # Run server in development mode
 server-dev:
-    RUST_LOG=dcypher_server=debug,tower_http=debug cargo run -p dcypher-server
+    RUST_LOG=dcypher_server=debug,tower_http=debug cargo run -p recrypt-server
 
 # Run server tests
 test-server:
-    cargo test -p dcypher-server -- --test-threads=1
+    cargo test -p recrypt-server -- --test-threads=1
 
 # Run server integration tests (requires Minio)
 test-server-integration: minio-up
     sleep 2
-    cargo test -p dcypher-server --features s3-tests -- --test-threads=1
+    cargo test -p recrypt-server --features s3-tests -- --test-threads=1
 
 # Check server crate
 check-server:
-    cargo check -p dcypher-server
-    cargo clippy -p dcypher-server -- -D warnings
+    cargo check -p recrypt-server
+    cargo clippy -p recrypt-server -- -D warnings
 ```
 
 ---

@@ -1,22 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/dcypher-ffi",
-  "crates/dcypher-openfhe-sys",
-  "crates/dcypher-core",
-  "crates/dcypher-proto",
-  "crates/dcypher-storage",
+  "crates/recrypt-ffi",
+  "crates/recrypt-openfhe-sys",
+  "crates/recrypt-core",
+  "crates/recrypt-proto",
+  "crates/recrypt-storage",
   "crates/identikey-storage-auth",
-  "dcypher-server",
-  "dcypher-cli",
-  # "crates/dcypher-hdprint",  # parallel track
+  "recrypt-server",
+  "recrypt-cli",
+  # "crates/recrypt-hdprint",  # parallel track
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/identikey/dcypher"
+repository = "https://github.com/identikey/recrypt"
 
 [workspace.dependencies]
 # Crypto

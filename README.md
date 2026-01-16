@@ -1,4 +1,4 @@
-# dCypher: Quantum-Resistant Proxy Recryption System
+# Recrypt: Quantum-Resistant Proxy Recryption System
 
 **Status:** 🚀 Implementation Phase  
 **Version:** 2.0 (Rust)
@@ -7,7 +7,7 @@
 
 ## Overview
 
-dCypher is a production-ready proxy recryption system enabling secure, revocable file sharing with untrusted storage providers. Built on lattice-based cryptography (OpenFHE) with post-quantum signatures (liboqs), it provides end-to-end encryption where files can be shared without exposing private keys or plaintext.
+Recrypt is a production-ready proxy recryption system enabling secure, revocable file sharing with untrusted storage providers. Built on lattice-based cryptography (OpenFHE) with post-quantum signatures (liboqs), it provides end-to-end encryption where files can be shared without exposing private keys or plaintext.
 
 ### Core Innovation
 
@@ -48,7 +48,7 @@ dCypher is a production-ready proxy recryption system enabling secure, revocable
 ## Repository Structure
 
 ```
-dcypher/
+recrypt/
 ├── README.md
 ├── docs/
 │   ├── IMPLEMENTATION_PLAN.md    # 📋 Master plan - READ THIS FIRST
@@ -59,7 +59,7 @@ dcypher/
 │   └── ...                       # Other design docs
 │
 ├── python-prototype/             # 📦 ARCHIVED: Reference implementation
-│   ├── src/dcypher/
+│   ├── src/recrypt/
 │   ├── tests/
 │   └── docs/
 │
@@ -70,14 +70,14 @@ dcypher/
 │
 └── [Rust workspace - Phase 1+]
     ├── crates/
-    │   ├── dcypher-ffi/
-    │   ├── dcypher-core/
-    │   ├── dcypher-proto/
-    │   ├── dcypher-storage/
-    │   └── dcypher-hdprint/
-    ├── dcypher-cli/
-    ├── dcypher-server/
-    ├── dcypher-tui/
+    │   ├── recrypt-ffi/
+    │   ├── recrypt-core/
+    │   ├── recrypt-proto/
+    │   ├── recrypt-storage/
+    │   └── recrypt-hdprint/
+    ├── recrypt-cli/
+    ├── recrypt-server/
+    ├── recrypt-tui/
     └── identikey-storage-auth/
 ```
 
@@ -90,16 +90,16 @@ dcypher/
 cargo build --release
 
 # Generate identity
-dcypher identity new --output alice.json
+recrypt identity new --output alice.json
 
 # Encrypt file
-dcypher encrypt myfile.txt --for <bob-pubkey> --output myfile.enc
+recrypt encrypt myfile.txt --for <bob-pubkey> --output myfile.enc
 
 # Share with Bob (generates recryption key)
-dcypher share create <file-hash> --to <bob-pubkey>
+recrypt share create <file-hash> --to <bob-pubkey>
 
 # Bob downloads (server recrypts on-the-fly)
-dcypher share download <share-id> --output myfile.txt
+recrypt share download <share-id> --output myfile.txt
 ```
 
 ---
@@ -222,20 +222,20 @@ This terminology is standardized throughout the Rust implementation.
 
 | Crate                    | Purpose                                     |
 | ------------------------ | ------------------------------------------- |
-| `dcypher-ffi`            | OpenFHE + liboqs FFI bindings               |
-| `dcypher-core`           | PRE backends, hybrid encryption, signatures |
-| `dcypher-proto`          | Wire protocol (Protobuf + Bao)              |
-| `dcypher-storage`        | S3-compatible storage client                |
-| `dcypher-hdprint`        | Self-correcting identifiers                 |
+| `recrypt-ffi`            | OpenFHE + liboqs FFI bindings               |
+| `recrypt-core`           | PRE backends, hybrid encryption, signatures |
+| `recrypt-proto`          | Wire protocol (Protobuf + Bao)              |
+| `recrypt-storage`        | S3-compatible storage client                |
+| `recrypt-hdprint`        | Self-correcting identifiers                 |
 | `identikey-storage-auth` | Auth service for storage access             |
 
 ### Binaries
 
 | Binary           | Purpose                                                       |
 | ---------------- | ------------------------------------------------------------- |
-| `dcypher-server` | Recryption proxy (streams KEM ciphertext, holds recrypt keys) |
-| `dcypher-cli`    | Command-line interface                                        |
-| `dcypher-tui`    | Minimal terminal UI                                           |
+| `recrypt-server` | Recryption proxy (streams KEM ciphertext, holds recrypt keys) |
+| `recrypt-cli`    | Command-line interface                                        |
+| `recrypt-tui`    | Minimal terminal UI                                           |
 
 ---
 

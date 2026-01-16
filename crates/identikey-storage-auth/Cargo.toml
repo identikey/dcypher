@@ -11,8 +11,8 @@ sqlite = ["rusqlite"]
 
 [dependencies]
 # Workspace
-dcypher-core = { path = "../dcypher-core" }
-dcypher-proto = { path = "../dcypher-proto" }
+recrypt-core = { path = "../recrypt-core" }
+recrypt-proto = { path = "../recrypt-proto" }
 thiserror.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -28,7 +28,7 @@ serde_json.workspace = true
 rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]
-dcypher-ffi = { path = "../dcypher-ffi" }
-dcypher-storage = { path = "../dcypher-storage" }
+recrypt-ffi = { path = "../recrypt-ffi" }
+recrypt-storage = { path = "../recrypt-storage" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tempfile = "3"

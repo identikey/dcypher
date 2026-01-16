@@ -264,7 +264,7 @@ Each character depends on all previous via HMAC chain:
 
 ---
 
-## Use Cases in dCypher
+## Use Cases in Recrypt
 
 1. **Public key fingerprints:** Human-verifiable identity
 2. **File content addressing:** Error-resistant hashes

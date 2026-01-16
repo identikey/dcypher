@@ -1,9 +1,9 @@
 //! Integration tests: auth + storage working together
 
-use dcypher_core::sign::{SigningKeys, VerifyingKeys};
-use dcypher_ffi::ed25519::ed25519_keygen;
-use dcypher_ffi::liboqs::{PqAlgorithm, pq_keygen};
-use dcypher_storage::{ChunkStorage, InMemoryStorage};
+use recrypt_core::sign::{SigningKeys, VerifyingKeys};
+use recrypt_ffi::ed25519::ed25519_keygen;
+use recrypt_ffi::liboqs::{PqAlgorithm, pq_keygen};
+use recrypt_storage::{ChunkStorage, InMemoryStorage};
 use identikey_storage_auth::{
     AccessGrant, Capability, InMemoryOwnershipStore, InMemoryProviderIndex, Operation,
     OwnershipStore, ProviderIndex, PublicKeyFingerprint,

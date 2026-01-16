@@ -35,9 +35,9 @@ Phase 4 successfully delivered a production-ready content-addressed storage laye
 
 **Automated Verification:**
 
-- ✅ `cargo check -p dcypher-storage` compiles
-- ✅ `cargo check -p dcypher-storage --features s3` compiles
-- ✅ `cargo doc -p dcypher-storage` generates docs
+- ✅ `cargo check -p recrypt-storage` compiles
+- ✅ `cargo check -p recrypt-storage --features s3` compiles
+- ✅ `cargo doc -p recrypt-storage` generates docs
 
 **Manual Verification:**
 
@@ -62,8 +62,8 @@ Phase 4 successfully delivered a production-ready content-addressed storage laye
 
 **Automated Verification:**
 
-- ✅ `cargo test -p dcypher-storage` — 15 tests pass
-- ✅ `cargo clippy -p dcypher-storage` — no warnings
+- ✅ `cargo test -p recrypt-storage` — 15 tests pass
+- ✅ `cargo clippy -p recrypt-storage` — no warnings
 
 **Manual Verification:**
 
@@ -98,9 +98,9 @@ Phase 4 successfully delivered a production-ready content-addressed storage laye
 
 **Automated Verification:**
 
-- ✅ `cargo check -p dcypher-storage --features s3` compiles
+- ✅ `cargo check -p recrypt-storage --features s3` compiles
 - ✅ `docker-compose -f docker/docker-compose.dev.yml up -d minio` starts successfully
-- ✅ `cargo test -p dcypher-storage --features s3-tests` — all 5 S3 tests pass
+- ✅ `cargo test -p recrypt-storage --features s3-tests` — all 5 S3 tests pass
 
 **Manual Verification:**
 
@@ -203,13 +203,13 @@ Phase 4 successfully delivered a production-ready content-addressed storage laye
 ### Automated Verification: ✅ ALL PASS
 
 ```bash
-✅ cargo check -p dcypher-storage
-✅ cargo check -p dcypher-storage --features s3
-✅ cargo doc -p dcypher-storage
-✅ cargo test -p dcypher-storage (15 tests)
-✅ cargo test -p dcypher-storage --features s3-tests (20 tests)
-✅ cargo clippy -p dcypher-storage -- -D warnings
-✅ cargo clippy -p dcypher-storage --features s3 -- -D warnings
+✅ cargo check -p recrypt-storage
+✅ cargo check -p recrypt-storage --features s3
+✅ cargo doc -p recrypt-storage
+✅ cargo test -p recrypt-storage (15 tests)
+✅ cargo test -p recrypt-storage --features s3-tests (20 tests)
+✅ cargo clippy -p recrypt-storage -- -D warnings
+✅ cargo clippy -p recrypt-storage --features s3 -- -D warnings
 ✅ just test-storage
 ✅ just test-storage-s3
 ✅ just check-storage
@@ -270,16 +270,16 @@ Phase 4 successfully delivered a production-ready content-addressed storage laye
 
 ### Created:
 
-- `crates/dcypher-storage/Cargo.toml`
-- `crates/dcypher-storage/src/lib.rs`
-- `crates/dcypher-storage/src/error.rs`
-- `crates/dcypher-storage/src/traits.rs`
-- `crates/dcypher-storage/src/memory.rs`
-- `crates/dcypher-storage/src/local.rs`
-- `crates/dcypher-storage/src/s3.rs`
-- `crates/dcypher-storage/src/chunking.rs`
-- `crates/dcypher-storage/tests/local_storage.rs`
-- `crates/dcypher-storage/tests/s3_integration.rs`
+- `crates/recrypt-storage/Cargo.toml`
+- `crates/recrypt-storage/src/lib.rs`
+- `crates/recrypt-storage/src/error.rs`
+- `crates/recrypt-storage/src/traits.rs`
+- `crates/recrypt-storage/src/memory.rs`
+- `crates/recrypt-storage/src/local.rs`
+- `crates/recrypt-storage/src/s3.rs`
+- `crates/recrypt-storage/src/chunking.rs`
+- `crates/recrypt-storage/tests/local_storage.rs`
+- `crates/recrypt-storage/tests/s3_integration.rs`
 - `docker/docker-compose.dev.yml`
 
 ### Modified:

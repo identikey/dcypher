@@ -4,16 +4,16 @@
 
 ## Overview
 
-Build `dcypher-proto` crate for wire protocol serialization (Protobuf + ASCII armor + JSON) and integrate streaming verification via Blake3/Bao. This phase transforms Phase 2's in-memory structures into transmittable/storable formats.
+Build `recrypt-proto` crate for wire protocol serialization (Protobuf + ASCII armor + JSON) and integrate streaming verification via Blake3/Bao. This phase transforms Phase 2's in-memory structures into transmittable/storable formats.
 
 **Duration:** 3-4 days  
-**Prerequisites:** Phase 2 complete (`dcypher-core` functional with Mock + Lattice backends)
+**Prerequisites:** Phase 2 complete (`recrypt-core` functional with Mock + Lattice backends)
 
 ## Current State Analysis
 
 Phase 2 delivered:
 
-- ✅ `dcypher-core` with pluggable PRE backends (Mock functional, Lattice wrapper)
+- ✅ `recrypt-core` with pluggable PRE backends (Mock functional, Lattice wrapper)
 - ✅ Hybrid encryption (XChaCha20 + Bao)
 - ✅ Multi-signatures (ED25519 + ML-DSA-87)
 - ✅ Property-based tests passing
@@ -22,10 +22,10 @@ Phase 2 delivered:
 
 **Key Files:**
 
-- `crates/dcypher-core/src/hybrid/encrypted_file.rs` - `EncryptedFile` with basic `to_bytes()`
-- `crates/dcypher-core/src/hybrid/keymaterial.rs` - `KeyMaterial` (96 bytes, fixed format)
-- `crates/dcypher-core/src/pre/keys.rs` - `PublicKey`, `SecretKey`, `Ciphertext`, `RecryptKey`
-- `crates/dcypher-core/src/sign/mod.rs` - `MultiSig` (ED25519 + ML-DSA)
+- `crates/recrypt-core/src/hybrid/encrypted_file.rs` - `EncryptedFile` with basic `to_bytes()`
+- `crates/recrypt-core/src/hybrid/keymaterial.rs` - `KeyMaterial` (96 bytes, fixed format)
+- `crates/recrypt-core/src/pre/keys.rs` - `PublicKey`, `SecretKey`, `Ciphertext`, `RecryptKey`
+- `crates/recrypt-core/src/sign/mod.rs` - `MultiSig` (ED25519 + ML-DSA)
 
 **Missing (Phase 3 scope):**
 
@@ -40,7 +40,7 @@ Phase 2 delivered:
 
 ## Desired End State
 
-A production-ready `dcypher-proto` crate that:
+A production-ready `recrypt-proto` crate that:
 
 1. **Defines Protobuf schema** for all message types (files, keys, signatures, capabilities)
 2. **Implements `MultiFormat` trait** enabling protobuf/JSON/armor serialization
@@ -53,13 +53,13 @@ A production-ready `dcypher-proto` crate that:
 
 #### Automated:
 
-- [x] All unit tests pass: `cargo test -p dcypher-proto`
+- [x] All unit tests pass: `cargo test -p recrypt-proto`
 - [x] Protobuf roundtrip tests pass for all message types
 - [x] ASCII armor parse/emit roundtrip for keys
 - [x] JSON serialization matches expected schema
-- [x] Integration with `dcypher-core` compiles: `cargo build -p dcypher-core -p dcypher-proto`
-- [x] Clippy clean: `cargo clippy -p dcypher-proto -- -D warnings`
-- [x] Doc tests pass: `cargo test -p dcypher-proto --doc`
+- [x] Integration with `recrypt-core` compiles: `cargo build -p recrypt-core -p recrypt-proto`
+- [x] Clippy clean: `cargo clippy -p recrypt-proto -- -D warnings`
+- [x] Doc tests pass: `cargo test -p recrypt-proto --doc`
 
 #### Manual:
 
@@ -96,7 +96,7 @@ A production-ready `dcypher-proto` crate that:
 
 - **Protobuf via prost** (compile-time codegen, zero-copy where possible)
 - **serde for JSON/config** (ecosystem standard)
-- **Custom ASCII armor** (PGP-inspired but dCypher-specific headers)
+- **Custom ASCII armor** (PGP-inspired but Recrypt-specific headers)
 - **Version field first** in all messages (future evolution)
 - **Backend tag in serialized form** (Lattice vs EC vs Mock distinguishable)
 
@@ -106,17 +106,17 @@ A production-ready `dcypher-proto` crate that:
 
 ### Overview
 
-Create `dcypher-proto` crate and define Protobuf schema for all message types.
+Create `recrypt-proto` crate and define Protobuf schema for all message types.
 
 ### Changes Required
 
 #### 1. Create crate structure
 
-**File**: `crates/dcypher-proto/Cargo.toml`
+**File**: `crates/recrypt-proto/Cargo.toml`
 
 ```toml
 [package]
-name = "dcypher-proto"
+name = "recrypt-proto"
 version.workspace = true
 edition.workspace = true
 
@@ -134,7 +134,7 @@ base64 = "0.22"
 hex = "0.4"
 
 # Core types (we serialize these)
-dcypher-core = { path = "../dcypher-core" }
+recrypt-core = { path = "../recrypt-core" }
 
 # Error handling
 thiserror.workspace = true
@@ -150,7 +150,7 @@ prost-build = "0.13"
 proptest.workspace = true
 ```
 
-**File**: `crates/dcypher-proto/build.rs`
+**File**: `crates/recrypt-proto/build.rs`
 
 ```rust
 use std::io::Result;
@@ -165,10 +165,10 @@ fn main() -> Result<()> {
 }
 ```
 
-**File**: `crates/dcypher-proto/src/lib.rs`
+**File**: `crates/recrypt-proto/src/lib.rs`
 
 ```rust
-//! dcypher-proto: Wire protocol and serialization formats
+//! recrypt-proto: Wire protocol and serialization formats
 //!
 //! Provides:
 //! - Protobuf serialization (primary wire format)
@@ -200,11 +200,11 @@ pub use generated::dcypher::v1 as proto;
 
 #### 2. Protobuf schema
 
-**File**: `crates/dcypher-proto/proto/dcypher.proto`
+**File**: `crates/recrypt-proto/proto/dcypher.proto`
 
 ```protobuf
 syntax = "proto3";
-package dcypher.v1;
+package recrypt.v1;
 
 // =============================================================================
 // Core Cryptographic Types
@@ -365,7 +365,7 @@ message RecryptResponse {
 
 #### 3. Create generated module
 
-**File**: `crates/dcypher-proto/src/generated/mod.rs`
+**File**: `crates/recrypt-proto/src/generated/mod.rs`
 
 ```rust
 //! Auto-generated protobuf types
@@ -374,26 +374,26 @@ message RecryptResponse {
 
 pub mod dcypher {
     pub mod v1 {
-        include!("dcypher.v1.rs");
+        include!("recrypt.v1.rs");
     }
 }
 ```
 
-**Note:** The actual `dcypher.v1.rs` file will be generated by `build.rs`. Create placeholder initially:
+**Note:** The actual `recrypt.v1.rs` file will be generated by `build.rs`. Create placeholder initially:
 
-**File**: `crates/dcypher-proto/src/generated/dcypher.v1.rs` (placeholder)
+**File**: `crates/recrypt-proto/src/generated/recrypt.v1.rs` (placeholder)
 
 ```rust
 // This file will be auto-generated by prost-build
-// Run `cargo build -p dcypher-proto` to generate
+// Run `cargo build -p recrypt-proto` to generate
 ```
 
 ### Success Criteria
 
 #### Automated Verification:
 
-- [x] Crate compiles: `cargo build -p dcypher-proto`
-- [x] Protobuf types generated: `ls crates/dcypher-proto/src/generated/dcypher.v1.rs`
+- [x] Crate compiles: `cargo build -p recrypt-proto`
+- [x] Protobuf types generated: `ls crates/recrypt-proto/src/generated/recrypt.v1.rs`
 - [x] Generated code has expected types: grep for `EncryptedFileProto`
 
 #### Manual Verification:
@@ -414,7 +414,7 @@ Define error types and the `MultiFormat` trait for polymorphic serialization.
 
 #### 1. Error types
 
-**File**: `crates/dcypher-proto/src/error.rs`
+**File**: `crates/recrypt-proto/src/error.rs`
 
 ```rust
 use thiserror::Error;
@@ -457,7 +457,7 @@ pub type ProtoResult<T> = Result<T, ProtoError>;
 
 #### 2. Format detection and MultiFormat trait
 
-**File**: `crates/dcypher-proto/src/format.rs`
+**File**: `crates/recrypt-proto/src/format.rs`
 
 ```rust
 //! Multi-format serialization support
@@ -530,7 +530,7 @@ pub trait MultiFormat: Sized {
 
 #### Automated Verification:
 
-- [x] Error types compile: `cargo build -p dcypher-proto`
+- [x] Error types compile: `cargo build -p recrypt-proto`
 - [x] Format detection tests pass
 
 #### Manual Verification:
@@ -550,7 +550,7 @@ Implement PGP-style ASCII armor for human-readable key export.
 
 #### 1. Armor module
 
-**File**: `crates/dcypher-proto/src/armor.rs`
+**File**: `crates/recrypt-proto/src/armor.rs`
 
 ````rust
 //! ASCII armor format for human-readable export
@@ -709,7 +709,7 @@ mod tests {
 
     #[test]
     fn test_armor_roundtrip() {
-        let payload = b"Hello, dCypher!";
+        let payload = b"Hello, Recrypt!";
         let headers = [
             ("Version", "1"),
             ("Algorithm", "ED25519+ML-DSA-87"),
@@ -738,7 +738,7 @@ mod tests {
 
 #### Automated Verification:
 
-- [x] Armor tests pass: `cargo test -p dcypher-proto armor`
+- [x] Armor tests pass: `cargo test -p recrypt-proto armor`
 - [x] Roundtrip preserves all data
 
 #### Manual Verification:
@@ -758,10 +758,10 @@ Implement `MultiFormat` for `EncryptedFile`, `PublicKey`, and other core types.
 
 #### 1. Conversion traits between core and proto types
 
-**File**: `crates/dcypher-proto/src/convert.rs`
+**File**: `crates/recrypt-proto/src/convert.rs`
 
 ```rust
-//! Conversions between dcypher-core types and protobuf types
+//! Conversions between recrypt-core types and protobuf types
 
 use crate::error::{ProtoError, ProtoResult};
 use crate::proto::*;
@@ -896,7 +896,7 @@ impl TryFrom<MultiSignatureProto> for MultiSig {
 
 #### 2. MultiFormat implementations
 
-**File**: `crates/dcypher-proto/src/impls.rs`
+**File**: `crates/recrypt-proto/src/impls.rs`
 
 ```rust
 //! MultiFormat trait implementations for core types
@@ -913,7 +913,7 @@ use serde::{Serialize, Deserialize};
 // EncryptedFile serialization
 impl MultiFormat for EncryptedFile {
     fn proto_name() -> &'static str {
-        "dcypher.v1.EncryptedFileProto"
+        "recrypt.v1.EncryptedFileProto"
     }
 
     fn to_protobuf(&self) -> ProtoResult<Vec<u8>> {
@@ -1037,7 +1037,7 @@ impl MultiFormat for EncryptedFile {
 
 #### Automated Verification:
 
-- [x] Conversion tests pass: `cargo test -p dcypher-proto convert`
+- [x] Conversion tests pass: `cargo test -p recrypt-proto convert`
 - [x] Protobuf roundtrip for EncryptedFile works
 - [x] JSON roundtrip works
 - [x] Armor roundtrip works
@@ -1060,7 +1060,7 @@ Wrap Blake3/Bao for streaming verification with slice extraction.
 
 #### 1. Bao streaming module
 
-**File**: `crates/dcypher-proto/src/bao_stream.rs`
+**File**: `crates/recrypt-proto/src/bao_stream.rs`
 
 ```rust
 //! Streaming verification via Blake3/Bao
@@ -1250,7 +1250,7 @@ mod tests {
 
 #### Automated Verification:
 
-- [x] Bao tests pass: `cargo test -p dcypher-proto bao`
+- [x] Bao tests pass: `cargo test -p recrypt-proto bao`
 - [x] Corruption detection works
 - [x] Slice extraction works
 
@@ -1265,13 +1265,13 @@ mod tests {
 
 ### Overview
 
-**Good news:** OpenFHE serialization already exists in `dcypher-openfhe-sys`! The C++ wrapper uses Cereal's `PortableBinaryOutputArchive` via `std::stringstream`. We just need to wire it through `dcypher-ffi` and complete the Lattice backend stubs.
+**Good news:** OpenFHE serialization already exists in `recrypt-openfhe-sys`! The C++ wrapper uses Cereal's `PortableBinaryOutputArchive` via `std::stringstream`. We just need to wire it through `recrypt-ffi` and complete the Lattice backend stubs.
 
 See `docs/plans/openfhe-serialization-research.md` for full analysis.
 
 ### What Already Exists
 
-**`dcypher-openfhe-sys/src/wrapper.cc`** already implements:
+**`recrypt-openfhe-sys/src/wrapper.cc`** already implements:
 
 ```cpp
 rust::Vec<uint8_t> serialize_ciphertext(const Ciphertext &ct);
@@ -1279,13 +1279,13 @@ std::unique_ptr<Ciphertext> deserialize_ciphertext(const CryptoContext &ctx, rus
 // ... same for public_key, private_key, recrypt_key
 ```
 
-**`dcypher-openfhe-sys/src/lib.rs`** exposes these via CXX FFI.
+**`recrypt-openfhe-sys/src/lib.rs`** exposes these via CXX FFI.
 
 ### Changes Required
 
-#### 1. Expose serialization in dcypher-ffi
+#### 1. Expose serialization in recrypt-ffi
 
-**File**: `crates/dcypher-ffi/src/openfhe/mod.rs` (additions)
+**File**: `crates/recrypt-ffi/src/openfhe/mod.rs` (additions)
 
 ```rust
 impl PreContext {
@@ -1317,9 +1317,9 @@ impl PreContext {
 }
 ```
 
-#### 2. Complete Lattice backend in dcypher-core
+#### 2. Complete Lattice backend in recrypt-core
 
-**File**: `crates/dcypher-core/src/pre/backends/lattice.rs`
+**File**: `crates/recrypt-core/src/pre/backends/lattice.rs`
 
 Replace stubs with actual implementations:
 
@@ -1383,8 +1383,8 @@ impl PreBackend for LatticeBackend {
 
 #### Automated Verification:
 
-- [ ] Lattice backend tests pass: `cargo test -p dcypher-core --features openfhe lattice`
-- [ ] Serialization roundtrip: `cargo test -p dcypher-openfhe-sys serialization`
+- [ ] Lattice backend tests pass: `cargo test -p recrypt-core --features openfhe lattice`
+- [ ] Serialization roundtrip: `cargo test -p recrypt-openfhe-sys serialization`
 - [ ] Full encrypt→serialize→deserialize→decrypt works
 
 #### Manual Verification:
@@ -1407,7 +1407,7 @@ Add signature field to `EncryptedFile` that signs `(wrapped_key || bao_hash)`.
 
 #### 1. Update EncryptedFile structure
 
-**File**: `crates/dcypher-core/src/hybrid/encrypted_file.rs`
+**File**: `crates/recrypt-core/src/hybrid/encrypted_file.rs`
 
 ```rust
 use crate::sign::MultiSig;
@@ -1453,7 +1453,7 @@ impl EncryptedFile {
 
 #### 2. Update HybridEncryptor to optionally sign
 
-**File**: `crates/dcypher-core/src/hybrid/mod.rs` (additions)
+**File**: `crates/recrypt-core/src/hybrid/mod.rs` (additions)
 
 ```rust
 impl<B: PreBackend> HybridEncryptor<B> {
@@ -1488,7 +1488,7 @@ impl<B: PreBackend> HybridEncryptor<B> {
 
 #### Automated Verification:
 
-- [x] Signature tests pass: `cargo test -p dcypher-core signature`
+- [x] Signature tests pass: `cargo test -p recrypt-core signature`
 - [x] Signed file roundtrip works
 - [x] Tampering detected (modify wrapped_key or bao_hash)
 
@@ -1590,7 +1590,7 @@ Phase 6 (Server) will need:
 ## Dependencies
 
 ```toml
-# New dependencies for dcypher-proto
+# New dependencies for recrypt-proto
 prost = "0.13"
 prost-types = "0.13"
 prost-build = "0.13"  # build-dependency
@@ -1607,10 +1607,10 @@ Add to workspace:
 ```toml
 [workspace]
 members = [
-  "crates/dcypher-ffi",
-  "crates/dcypher-openfhe-sys",
-  "crates/dcypher-core",
-  "crates/dcypher-proto",  # NEW
+  "crates/recrypt-ffi",
+  "crates/recrypt-openfhe-sys",
+  "crates/recrypt-core",
+  "crates/recrypt-proto",  # NEW
 ]
 ```
 
@@ -1630,7 +1630,7 @@ members = [
 
 **Buffer:** 0.5 day for debugging/iteration
 
-**Note:** Phase 3.6 reduced from 1 day to 0.5 day bc OpenFHE serialization already exists in `dcypher-openfhe-sys`. See `docs/plans/openfhe-serialization-research.md`.
+**Note:** Phase 3.6 reduced from 1 day to 0.5 day bc OpenFHE serialization already exists in `recrypt-openfhe-sys`. See `docs/plans/openfhe-serialization-research.md`.
 
 ---
 
@@ -1643,7 +1643,7 @@ members = [
 
 ✅ **Phase 3.1:** Crate structure & Protobuf schema
 
-- Created `dcypher-proto` crate with full workspace integration
+- Created `recrypt-proto` crate with full workspace integration
 - Defined comprehensive protobuf schema (14 message types, 1 enum)
 - Set up `prost` codegen pipeline with `build.rs`
 
@@ -1662,7 +1662,7 @@ members = [
 
 ✅ **Phase 3.4:** Protobuf serialization for core types
 
-- Conversion layer between `dcypher-core` and protobuf types
+- Conversion layer between `recrypt-core` and protobuf types
 - `MultiFormat` implementations for `EncryptedFile`
 - Backend ID mapping (handles enum numbering differences)
 - All serialization formats working (Protobuf, JSON, Armor)
@@ -1683,7 +1683,7 @@ members = [
 
 ⏸️ **Phase 3.6:** Lattice backend completion (DEFERRED)
 
-- OpenFHE serialization already exists in `dcypher-openfhe-sys`
+- OpenFHE serialization already exists in `recrypt-openfhe-sys`
 - Wiring deferred until Lattice backend is fully activated
 - No blocker for subsequent phases
 
@@ -1691,8 +1691,8 @@ members = [
 
 ```
 29 tests passing, 0 failures
-- 16 tests in dcypher-core (signature integration)
-- 13 tests in dcypher-proto (roundtrip, serialization, signatures)
+- 16 tests in recrypt-core (signature integration)
+- 13 tests in recrypt-proto (roundtrip, serialization, signatures)
 ```
 
 **Clippy:** Clean (0 warnings)  
@@ -1710,14 +1710,14 @@ members = [
 
 **New files:**
 
-- `crates/dcypher-proto/` - Full crate (15 files)
-- `crates/dcypher-core/tests/signature_integration.rs`
+- `crates/recrypt-proto/` - Full crate (15 files)
+- `crates/recrypt-core/tests/signature_integration.rs`
 
 **Modified files:**
 
-- `crates/dcypher-core/src/hybrid/encrypted_file.rs` - Added signature field & methods
-- `crates/dcypher-core/src/hybrid/mod.rs` - Added `encrypt_and_sign()`, `decrypt_and_verify()`
-- `Cargo.toml` - Added `dcypher-proto` to workspace
+- `crates/recrypt-core/src/hybrid/encrypted_file.rs` - Added signature field & methods
+- `crates/recrypt-core/src/hybrid/mod.rs` - Added `encrypt_and_sign()`, `decrypt_and_verify()`
+- `Cargo.toml` - Added `recrypt-proto` to workspace
 
 ### Ready for Phase 4
 

@@ -20,7 +20,7 @@ The trait hierarchy allows swapping PRE backends without changing application lo
 ### `PreBackend` — The Main Abstraction
 
 ```rust
-//! dcypher-core/src/pre/traits.rs
+//! recrypt-core/src/pre/traits.rs
 
 use async_trait::async_trait;
 use zeroize::Zeroizing;
@@ -131,7 +131,7 @@ pub trait PreBackend: Send + Sync {
 ### Key Types
 
 ```rust
-//! dcypher-core/src/pre/keys.rs
+//! recrypt-core/src/pre/keys.rs
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -273,7 +273,7 @@ impl Ciphertext {
 ## Hybrid Encryption Layer
 
 ```rust
-//! dcypher-core/src/hybrid.rs
+//! recrypt-core/src/hybrid.rs
 //!
 //! Hybrid encryption using XChaCha20 + Blake3/Bao for streaming verification.
 //! No Poly1305—authenticity comes from signatures on the Bao root.
@@ -500,7 +500,7 @@ impl<B: PreBackend> HybridEncryptor<B> {
 ### Mock Backend (for testing)
 
 ```rust
-//! dcypher-core/src/pre/backends/mock.rs
+//! recrypt-core/src/pre/backends/mock.rs
 
 use crate::pre::*;
 use chacha20::XChaCha20;
@@ -633,7 +633,7 @@ impl PreBackend for MockBackend {
 ### Lattice Backend (OpenFHE via FFI)
 
 ```rust
-//! dcypher-core/src/pre/backends/lattice.rs
+//! recrypt-core/src/pre/backends/lattice.rs
 //!
 //! OpenFHE BFV/PRE backend for post-quantum security
 
@@ -714,7 +714,7 @@ impl PreBackend for LatticeBackend {
 ### EC Pairing Backend (recrypt crate)
 
 ```rust
-//! dcypher-core/src/pre/backends/ec_pairing.rs
+//! recrypt-core/src/pre/backends/ec_pairing.rs
 //!
 //! IronCore recrypt backend (BN254 pairing-based)
 
@@ -861,7 +861,7 @@ impl PreBackend for EcPairingBackend {
 ## Backend Registry
 
 ```rust
-//! dcypher-core/src/pre/registry.rs
+//! recrypt-core/src/pre/registry.rs
 
 use std::sync::Arc;
 use crate::pre::{PreBackend, BackendId, PreResult, PreError};
@@ -940,7 +940,7 @@ pub fn default_registry() -> BackendRegistry {
 ## Module Structure
 
 ```
-dcypher-core/
+recrypt-core/
 ├── Cargo.toml
 └── src/
     ├── lib.rs
@@ -1015,7 +1015,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```toml
 [package]
-name = "dcypher-core"
+name = "recrypt-core"
 version = "0.1.0"
 edition = "2021"
 

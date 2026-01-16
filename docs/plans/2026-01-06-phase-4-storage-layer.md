@@ -10,7 +10,7 @@
 
 ## Overview
 
-Build `dcypher-storage` crate: a pure async storage client for content-addressed blobs. No authorization logic — that lives in the Auth Service (Phase 4b). S3 bucket is "dumb" storage; security comes from:
+Build `recrypt-storage` crate: a pure async storage client for content-addressed blobs. No authorization logic — that lives in the Auth Service (Phase 4b). S3 bucket is "dumb" storage; security comes from:
 
 1. **Discovery control** — Auth service mediates who learns which hashes exist
 2. **Decryption control** — Only key holders can unwrap ciphertext
@@ -31,14 +31,14 @@ This follows the IPFS model: ciphertext is publicly fetchable if you know the ha
 
 ### What Exists
 
-- **dcypher-proto**: `ChunkProto`, `FileMetadata`, `EncryptedFileProto` defined
-- **dcypher-core**: `EncryptedFile` with `bao_hash`, `bao_outboard`, `ciphertext`
-- **Workspace**: Ready for new crate at `crates/dcypher-storage`
+- **recrypt-proto**: `ChunkProto`, `FileMetadata`, `EncryptedFileProto` defined
+- **recrypt-core**: `EncryptedFile` with `bao_hash`, `bao_outboard`, `ciphertext`
+- **Workspace**: Ready for new crate at `crates/recrypt-storage`
 - **Docs**: `storage-design.md` with architecture, bucket structure, trait sketch
 
 ### What's Missing
 
-- `dcypher-storage` crate doesn't exist
+- `recrypt-storage` crate doesn't exist
 - No `ChunkStorage` trait implementation
 - No S3/Minio integration
 - No chunking utilities
@@ -70,9 +70,9 @@ After Phase 4:
 **Verification:**
 
 ```bash
-cargo test -p dcypher-storage                    # Unit tests (in-memory, local)
+cargo test -p recrypt-storage                    # Unit tests (in-memory, local)
 docker-compose -f docker/docker-compose.dev.yml up -d minio
-cargo test -p dcypher-storage --features s3-tests  # Integration tests
+cargo test -p recrypt-storage --features s3-tests  # Integration tests
 ```
 
 ---
@@ -101,7 +101,7 @@ cargo test -p dcypher-storage --features s3-tests  # Integration tests
 
 ### Overview
 
-Create `dcypher-storage` crate with trait definitions and error types.
+Create `recrypt-storage` crate with trait definitions and error types.
 
 ### Changes Required
 
@@ -114,11 +114,11 @@ Add to workspace members:
 ```toml
 [workspace]
 members = [
-  "crates/dcypher-ffi",
-  "crates/dcypher-openfhe-sys",
-  "crates/dcypher-core",
-  "crates/dcypher-proto",
-  "crates/dcypher-storage",  # NEW
+  "crates/recrypt-ffi",
+  "crates/recrypt-openfhe-sys",
+  "crates/recrypt-core",
+  "crates/recrypt-proto",
+  "crates/recrypt-storage",  # NEW
 ]
 
 [workspace.dependencies]
@@ -134,11 +134,11 @@ aws-config = "1"
 
 #### 2. Crate Cargo.toml
 
-**File**: `crates/dcypher-storage/Cargo.toml`
+**File**: `crates/recrypt-storage/Cargo.toml`
 
 ```toml
 [package]
-name = "dcypher-storage"
+name = "recrypt-storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -169,10 +169,10 @@ tempfile = "3"
 
 #### 3. Crate Structure
 
-**File**: `crates/dcypher-storage/src/lib.rs`
+**File**: `crates/recrypt-storage/src/lib.rs`
 
 ````rust
-//! dcypher-storage: Content-addressed blob storage
+//! recrypt-storage: Content-addressed blob storage
 //!
 //! Provides async storage backends for encrypted chunks, keyed by Blake3 hash.
 //! No authorization logic — that lives in the Auth Service.
@@ -229,7 +229,7 @@ pub use s3::S3Storage;
 
 #### 4. Error Types
 
-**File**: `crates/dcypher-storage/src/error.rs`
+**File**: `crates/recrypt-storage/src/error.rs`
 
 ```rust
 //! Storage error types
@@ -263,7 +263,7 @@ pub enum StorageError {
 
 #### 5. Trait Definition
 
-**File**: `crates/dcypher-storage/src/traits.rs`
+**File**: `crates/recrypt-storage/src/traits.rs`
 
 ```rust
 //! Storage trait definitions
@@ -326,9 +326,9 @@ pub trait ChunkStorage: Send + Sync {
 
 #### Automated Verification:
 
-- [x] `cargo check -p dcypher-storage` compiles
-- [x] `cargo check -p dcypher-storage --features s3` compiles (no S3 impl yet, but deps resolve)
-- [x] `cargo doc -p dcypher-storage` generates docs
+- [x] `cargo check -p recrypt-storage` compiles
+- [x] `cargo check -p recrypt-storage --features s3` compiles (no S3 impl yet, but deps resolve)
+- [x] `cargo doc -p recrypt-storage` generates docs
 
 #### Manual Verification:
 
@@ -346,7 +346,7 @@ Implement `InMemoryStorage` and `LocalFileStorage` — fast backends for testing
 
 #### 1. InMemoryStorage
 
-**File**: `crates/dcypher-storage/src/memory.rs`
+**File**: `crates/recrypt-storage/src/memory.rs`
 
 ```rust
 //! In-memory storage backend (for testing)
@@ -435,7 +435,7 @@ impl ChunkStorage for InMemoryStorage {
 
 #### 2. LocalFileStorage
 
-**File**: `crates/dcypher-storage/src/local.rs`
+**File**: `crates/recrypt-storage/src/local.rs`
 
 ```rust
 //! Local filesystem storage backend
@@ -551,7 +551,7 @@ impl ChunkStorage for LocalFileStorage {
 
 #### 3. Unit Tests
 
-**File**: `crates/dcypher-storage/src/memory.rs` (append)
+**File**: `crates/recrypt-storage/src/memory.rs` (append)
 
 ```rust
 #[cfg(test)]
@@ -638,7 +638,7 @@ mod tests {
 }
 ```
 
-**File**: `crates/dcypher-storage/tests/local_storage.rs`
+**File**: `crates/recrypt-storage/tests/local_storage.rs`
 
 ```rust
 //! Integration tests for LocalFileStorage
@@ -710,8 +710,8 @@ async fn test_local_not_found() {
 
 #### Automated Verification:
 
-- [x] `cargo test -p dcypher-storage` — all tests pass
-- [x] `cargo clippy -p dcypher-storage` — no warnings
+- [x] `cargo test -p recrypt-storage` — all tests pass
+- [x] `cargo clippy -p recrypt-storage` — no warnings
 
 #### Manual Verification:
 
@@ -729,7 +729,7 @@ Implement `S3Storage` using `aws-sdk-s3`. Works with both Minio (dev) and AWS S3
 
 #### 1. S3 Storage Implementation
 
-**File**: `crates/dcypher-storage/src/s3.rs`
+**File**: `crates/recrypt-storage/src/s3.rs`
 
 ````rust
 //! S3-compatible storage backend (Minio, AWS S3, Backblaze, etc.)
@@ -1005,12 +1005,12 @@ volumes:
 
 #### 3. Integration Tests
 
-**File**: `crates/dcypher-storage/tests/s3_integration.rs`
+**File**: `crates/recrypt-storage/tests/s3_integration.rs`
 
 ```rust
 //! S3/Minio integration tests
 //!
-//! Run with: cargo test -p dcypher-storage --features s3-tests
+//! Run with: cargo test -p recrypt-storage --features s3-tests
 //! Requires Minio running: docker-compose -f docker/docker-compose.dev.yml up -d minio
 
 #![cfg(feature = "s3-tests")]
@@ -1103,9 +1103,9 @@ async fn test_s3_hash_mismatch() {
 
 #### Automated Verification:
 
-- [x] `cargo check -p dcypher-storage --features s3` compiles
+- [x] `cargo check -p recrypt-storage --features s3` compiles
 - [x] `docker-compose -f docker/docker-compose.dev.yml up -d minio` starts successfully
-- [x] `cargo test -p dcypher-storage --features s3-tests` — all S3 tests pass
+- [x] `cargo test -p recrypt-storage --features s3-tests` — all S3 tests pass
 
 #### Manual Verification:
 
@@ -1126,7 +1126,7 @@ Utilities for splitting large files into chunks and reassembling them. Aligns wi
 
 #### 1. Chunking Module
 
-**File**: `crates/dcypher-storage/src/chunking.rs`
+**File**: `crates/recrypt-storage/src/chunking.rs`
 
 ```rust
 //! Chunking utilities for large file storage
@@ -1340,8 +1340,8 @@ mod tests {
 
 #### Automated Verification:
 
-- [x] `cargo test -p dcypher-storage chunking` — all chunking tests pass
-- [x] `cargo test -p dcypher-storage` — full test suite passes
+- [x] `cargo test -p recrypt-storage chunking` — all chunking tests pass
+- [x] `cargo test -p recrypt-storage` — full test suite passes
 
 #### Manual Verification:
 
@@ -1377,19 +1377,19 @@ minio-down:
 
 # Run storage tests (in-memory + local only)
 test-storage:
-    cargo test -p dcypher-storage
+    cargo test -p recrypt-storage
 
 # Run storage tests including S3/Minio integration
 test-storage-s3: minio-up
     sleep 2  # Wait for Minio to be ready
-    cargo test -p dcypher-storage --features s3-tests
+    cargo test -p recrypt-storage --features s3-tests
 
 # Check storage crate
 check-storage:
-    cargo check -p dcypher-storage
-    cargo check -p dcypher-storage --features s3
-    cargo clippy -p dcypher-storage -- -D warnings
-    cargo clippy -p dcypher-storage --features s3 -- -D warnings
+    cargo check -p recrypt-storage
+    cargo check -p recrypt-storage --features s3
+    cargo clippy -p recrypt-storage -- -D warnings
+    cargo clippy -p recrypt-storage --features s3 -- -D warnings
 ```
 
 #### 2. GitHub Actions (optional — if CI exists)
@@ -1402,11 +1402,11 @@ name: Storage Tests
 on:
   push:
     paths:
-      - "crates/dcypher-storage/**"
+      - "crates/recrypt-storage/**"
       - "docker/docker-compose.dev.yml"
   pull_request:
     paths:
-      - "crates/dcypher-storage/**"
+      - "crates/recrypt-storage/**"
 
 jobs:
   test:
@@ -1426,10 +1426,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Run unit tests
-        run: cargo test -p dcypher-storage
+        run: cargo test -p recrypt-storage
 
       - name: Run S3 integration tests
-        run: cargo test -p dcypher-storage --features s3-tests
+        run: cargo test -p recrypt-storage --features s3-tests
         env:
           MINIO_ENDPOINT: http://localhost:9000
 ```
@@ -1506,7 +1506,7 @@ tempfile = "3"
 
 ---
 
-## Follow-up: Fix Hex Usage in dcypher-proto
+## Follow-up: Fix Hex Usage in recrypt-proto
 
 **Status:** ✅ DONE
 
@@ -1517,6 +1517,6 @@ Switched from `hex` to `bs58` encoding for JSON serialization — more compact (
 ## References
 
 - Design doc: `docs/storage-design.md`
-- Proto types: `crates/dcypher-proto/proto/dcypher.proto` (ChunkProto, FileMetadata)
+- Proto types: `crates/recrypt-proto/proto/dcypher.proto` (ChunkProto, FileMetadata)
 - AWS SDK: https://docs.rs/aws-sdk-s3
 - Blake3: https://docs.rs/blake3

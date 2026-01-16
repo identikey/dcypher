@@ -171,7 +171,7 @@ DCYPHER_WALLET_KEY=$(base64 < /dev/urandom | head -c 44) dcypher identity list
 
 #### 1. Add keyring dependency
 
-**File:** `dcypher-cli/Cargo.toml`
+**File:** `recrypt-cli/Cargo.toml`
 
 Add to `[dependencies]`:
 
@@ -191,7 +191,7 @@ keyring = { version = "3", features = ["windows-native"] }
 
 #### 2. Create credential provider module
 
-**File:** `dcypher-cli/src/wallet/credential.rs`
+**File:** `recrypt-cli/src/wallet/credential.rs`
 
 ```rust
 use anyhow::{anyhow, Result};
@@ -440,7 +440,7 @@ mod tests {
 
 #### 3. Update wallet/mod.rs
 
-**File:** `dcypher-cli/src/wallet/mod.rs`
+**File:** `recrypt-cli/src/wallet/mod.rs`
 
 ```rust
 pub mod credential;
@@ -456,9 +456,9 @@ pub use storage::Wallet;
 
 #### Automated Verification:
 
-- [x] `cargo build -p dcypher-cli` compiles
-- [x] `cargo test -p dcypher-cli wallet::credential` passes
-- [x] No new clippy warnings: `cargo clippy -p dcypher-cli`
+- [x] `cargo build -p recrypt-cli` compiles
+- [x] `cargo test -p recrypt-cli wallet::credential` passes
+- [x] No new clippy warnings: `cargo clippy -p recrypt-cli`
 
 #### Manual Verification:
 
@@ -472,7 +472,7 @@ pub use storage::Wallet;
 
 #### 1. Add key extraction helper to format.rs
 
-**File:** `dcypher-cli/src/wallet/format.rs`
+**File:** `recrypt-cli/src/wallet/format.rs`
 
 Add new functions:
 
@@ -553,7 +553,7 @@ pub fn encrypt_wallet_with_key(data: &WalletData, key: &[u8; 32], salt: &[u8; 32
 
 #### 2. Refactor storage.rs
 
-**File:** `dcypher-cli/src/wallet/storage.rs`
+**File:** `recrypt-cli/src/wallet/storage.rs`
 
 Complete rewrite:
 
@@ -716,9 +716,9 @@ impl Wallet {
 
 #### Automated Verification:
 
-- [x] `cargo build -p dcypher-cli` compiles
-- [x] `cargo test -p dcypher-cli` all pass (15 tests)
-- [x] `cargo clippy -p dcypher-cli -- -D warnings` passes
+- [x] `cargo build -p recrypt-cli` compiles
+- [x] `cargo test -p recrypt-cli` all pass (15 tests)
+- [x] `cargo clippy -p recrypt-cli -- -D warnings` passes
 
 #### Manual Verification:
 
@@ -744,7 +744,7 @@ security delete-generic-password -s dcypher
 
 #### 1. Create wallet command module
 
-**File:** `dcypher-cli/src/commands/wallet_cmd.rs`
+**File:** `recrypt-cli/src/commands/wallet_cmd.rs`
 
 ```rust
 use anyhow::Result;
@@ -891,7 +891,7 @@ async fn path(ctx: &Context) -> Result<()> {
 
 #### 2. Wire into main.rs
 
-**File:** `dcypher-cli/src/commands/mod.rs`
+**File:** `recrypt-cli/src/commands/mod.rs`
 
 Add:
 
@@ -899,7 +899,7 @@ Add:
 pub mod wallet_cmd;
 ```
 
-**File:** `dcypher-cli/src/main.rs`
+**File:** `recrypt-cli/src/main.rs`
 
 Add to Commands enum:
 
@@ -942,7 +942,7 @@ Add to match:
 
 #### 1. Create test utilities
 
-**File:** `dcypher-cli/src/wallet/test_utils.rs`
+**File:** `recrypt-cli/src/wallet/test_utils.rs`
 
 ```rust
 #![cfg(test)]
@@ -1015,7 +1015,7 @@ pub mod test_utils;
 
 #### 3. Example test using new infrastructure
 
-**File:** `dcypher-cli/tests/wallet_tests.rs`
+**File:** `recrypt-cli/tests/wallet_tests.rs`
 
 ```rust
 use dcypher_cli::wallet::test_utils::test_wallet;
@@ -1062,7 +1062,7 @@ fn test_wallet_identity_operations() {
 
 #### Automated Verification:
 
-- [ ] `cargo test -p dcypher-cli` passes without any password prompts
+- [ ] `cargo test -p recrypt-cli` passes without any password prompts
 - [ ] Tests complete in < 30 seconds (no Argon2 delays per test)
 - [ ] CI can run with `DCYPHER_WALLET_KEY` env var
 
@@ -1139,7 +1139,7 @@ env:
 
 - Phase 6 plan: `docs/plans/2026-01-13-phase-6-cli-application.md`
 - keyring crate: https://docs.rs/keyring/latest/keyring/
-- Current wallet code: `dcypher-cli/src/wallet/`
+- Current wallet code: `recrypt-cli/src/wallet/`
 
 ---
 
@@ -1147,9 +1147,9 @@ env:
 
 ### Automated Verification:
 
-- [ ] `cargo build -p dcypher-cli` succeeds
-- [ ] `cargo test -p dcypher-cli` passes without prompts
-- [ ] `cargo clippy -p dcypher-cli` no warnings
+- [ ] `cargo build -p recrypt-cli` succeeds
+- [ ] `cargo test -p recrypt-cli` passes without prompts
+- [ ] `cargo clippy -p recrypt-cli` no warnings
 - [ ] CI tests pass with `DCYPHER_WALLET_KEY` env var
 
 ### Manual Verification:

@@ -2,7 +2,7 @@
 
 use crate::error::{AuthError, AuthResult};
 use crate::fingerprint::PublicKeyFingerprint;
-use dcypher_core::sign::{MultiSig, SigningKeys, VerifyingKeys, sign_message, verify_message};
+use recrypt_core::sign::{MultiSig, SigningKeys, VerifyingKeys, sign_message, verify_message};
 
 /// Operations that can be granted via capability
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -195,8 +195,8 @@ impl Capability {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dcypher_ffi::ed25519::ed25519_keygen;
-    use dcypher_ffi::liboqs::{PqAlgorithm, pq_keygen};
+    use recrypt_ffi::ed25519::ed25519_keygen;
+    use recrypt_ffi::liboqs::{PqAlgorithm, pq_keygen};
 
     fn test_keys() -> (SigningKeys, VerifyingKeys) {
         let ed_kp = ed25519_keygen();

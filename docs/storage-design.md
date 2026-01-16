@@ -141,7 +141,7 @@ Storage layer verifies:
 Single bucket, content-addressed by algorithm-prefixed hash:
 
 ```
-s3://dcypher-storage/
+s3://recrypt-storage/
   ├── chunks/
   │   └── b3/                              # Blake3 algorithm prefix
   │       ├── 2DrjgbLkLvvE6wvQyYCe9XN2Xm9L8dT3FJgKr2HJvAP1
@@ -250,7 +250,7 @@ The proxy:
 ### Option A: Inline in S3
 
 ```
-s3://dcypher-storage/
+s3://recrypt-storage/
   └── metadata/{file_hash}.meta
 ```
 
@@ -375,7 +375,7 @@ services:
       - minio_data:/data
 
   auth-service:
-    build: ./dcypher-server
+    build: ./recrypt-server
     ports:
       - "8080:8080"
     environment:

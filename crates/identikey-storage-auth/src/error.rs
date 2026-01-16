@@ -31,7 +31,7 @@ pub enum AuthError {
     Storage(String),
 
     #[error("Signature error: {0}")]
-    Signature(#[from] dcypher_core::error::CoreError),
+    Signature(#[from] recrypt_core::error::CoreError),
 
     #[cfg(feature = "sqlite")]
     #[error("Database error: {0}")]

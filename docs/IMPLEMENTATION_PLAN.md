@@ -1,4 +1,4 @@
-# dCypher Implementation Plan
+# Recrypt Implementation Plan
 
 **Status:** 🚀 Implementation Phase (Phase 0 Complete)  
 **Target:** Production-ready quantum-resistant proxy recryption system  
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Production Rust implementation of dCypher, a quantum-resistant proxy recryption system. Architecturally sound, performant, and production-ready with proper separation of concerns.
+Production Rust implementation of Recrypt, a quantum-resistant proxy recryption system. Architecturally sound, performant, and production-ready with proper separation of concerns.
 
 **Core Innovation:** Proxy recryption enables untrusted storage where files stay encrypted end-to-end but can be shared/revoked via cryptographic transformation rather than key sharing.
 
@@ -180,7 +180,7 @@ decoder.write_all(&chunk)?;  // verifies incrementally
 
 - Files referenced by hash (hosting-agnostic, like IPFS)
 - Auth service (`identikey-storage-auth`) returns capabilities for accessing specific hashes
-- Recryption proxy (`dcypher-server`) is the main service—streams KEM ciphertext, holds recrypt keys
+- Recryption proxy (`recrypt-server`) is the main service—streams KEM ciphertext, holds recrypt keys
 - Auth service is part of Identikey suite; implementing in this repo for now, will split later
 
 **Document in:** `docs/storage-design.md`
@@ -260,19 +260,19 @@ let display = bs58::encode(fingerprint.as_bytes()).into_string();
    dcypher-rust/
    ├── Cargo.toml (workspace)
    ├── crates/
-   │   ├── dcypher-ffi/      # START HERE
-   │   ├── dcypher-core/
-   │   ├── dcypher-proto/
-   │   └── dcypher-storage/
-   ├── dcypher-cli/
-   ├── dcypher-server/
+   │   ├── recrypt-ffi/      # START HERE
+   │   ├── recrypt-core/
+   │   ├── recrypt-proto/
+   │   └── recrypt-storage/
+   ├── recrypt-cli/
+   ├── recrypt-server/
    └── docs/
    ```
 
-2. **dcypher-ffi crate:**
+2. **recrypt-ffi crate:**
 
    - OpenFHE bindings via cxx
-   - OpenFHE bindings: `crates/dcypher-openfhe-sys/` (custom minimal wrapper)
+   - OpenFHE bindings: `crates/recrypt-openfhe-sys/` (custom minimal wrapper)
    - liboqs bindings (check crates.io first, may exist)
    - ED25519 via libsodium or RustCrypto
    - Build system: `build.rs` with cxx-build
@@ -300,7 +300,7 @@ let display = bs58::encode(fingerprint.as_bytes()).into_string();
 
 ---
 
-### Phase 2: Core Cryptography (dcypher-core)
+### Phase 2: Core Cryptography (recrypt-core)
 
 **Duration:** 4-5 days  
 **Goal:** Production-ready crypto operations library
@@ -308,7 +308,7 @@ let display = bs58::encode(fingerprint.as_bytes()).into_string();
 **Architecture:**
 
 ```rust
-dcypher-core/
+recrypt-core/
 ├── src/
 │   ├── lib.rs
 │   ├── hybrid.rs           // HybridEncryptor (KEM-DEM pattern)
@@ -388,7 +388,7 @@ See `docs/pre-backend-traits.md` for full trait hierarchy and backend implementa
 
 ---
 
-### Phase 3: Protocol Layer (dcypher-proto)
+### Phase 3: Protocol Layer (recrypt-proto)
 
 **Duration:** 3-4 days  
 **Goal:** Wire protocol for serialization/deserialization
@@ -396,7 +396,7 @@ See `docs/pre-backend-traits.md` for full trait hierarchy and backend implementa
 **Architecture:**
 
 ```rust
-dcypher-proto/
+recrypt-proto/
 ├── src/
 │   ├── lib.rs
 │   ├── wire.rs         // Protobuf serialization
@@ -452,7 +452,7 @@ pub struct KeyMaterial {
 
 ---
 
-### Phase 4: Storage Layer (dcypher-storage)
+### Phase 4: Storage Layer (recrypt-storage)
 
 **Duration:** 3-4 days  
 **Goal:** S3-compatible storage abstraction
@@ -460,7 +460,7 @@ pub struct KeyMaterial {
 **Architecture:**
 
 ```rust
-dcypher-storage/
+recrypt-storage/
 ├── src/
 │   ├── lib.rs
 │   ├── traits.rs       // Storage trait abstraction
@@ -487,7 +487,7 @@ pub trait ChunkStorage {
 
 **Integration with Phase 3:**
 
-Phase 4 will use the protocol types from `dcypher-proto`:
+Phase 4 will use the protocol types from `recrypt-proto`:
 
 - `ChunkProto` for streaming uploads (already defined in protobuf schema)
 - `FileMetadata` for file listings (ready to use)
@@ -619,12 +619,12 @@ GET    /auth/locate/{hash}     - Resolve hash to storage URL(s)
 
 ---
 
-### Phase 5: Recryption Proxy Server (dcypher-server)
+### Phase 5: Recryption Proxy Server (recrypt-server)
 
 **Duration:** 4-5 days  
 **Goal:** Production recryption proxy with REST API (Axum)
 
-**What dcypher-server IS:**
+**What recrypt-server IS:**
 
 - The internet-connected recryption proxy
 - Holds recrypt keys (semi-trusted—users can self-host)
@@ -635,7 +635,7 @@ GET    /auth/locate/{hash}     - Resolve hash to storage URL(s)
 **Architecture:**
 
 ```rust
-dcypher-server/
+recrypt-server/
 ├── src/
 │   ├── main.rs
 │   ├── routes/
@@ -655,11 +655,11 @@ dcypher-server/
 
 **Framework:** Axum (modern, fast, well-integrated with Tower)
 
-**Dependencies:** Uses `dcypher-core` (crypto), `dcypher-proto` (serialization), `dcypher-storage` (S3 client), `identikey-storage-auth` (access control)
+**Dependencies:** Uses `recrypt-core` (crypto), `recrypt-proto` (serialization), `recrypt-storage` (S3 client), `identikey-storage-auth` (access control)
 
 **Integration with Phase 3:**
 
-Phase 5 will leverage protocol types from `dcypher-proto`:
+Phase 5 will leverage protocol types from `recrypt-proto`:
 
 - Content negotiation via `detect_format()` (protobuf/JSON/armor)
 - Request/response serialization using `MultiFormat` trait
@@ -718,7 +718,7 @@ pub struct Config {
 
 ---
 
-### Phase 6: CLI Application (dcypher-cli)
+### Phase 6: CLI Application (recrypt-cli)
 
 **Duration:** 3-4 days  
 **Goal:** User-friendly command-line interface
@@ -726,7 +726,7 @@ pub struct Config {
 **Architecture:**
 
 ```rust
-dcypher-cli/
+recrypt-cli/
 ├── src/
 │   ├── main.rs
 │   ├── commands/
@@ -901,28 +901,28 @@ dcypher/
 ├── Cargo.lock
 │
 ├── crates/
-│   ├── dcypher-ffi/                # OpenFHE + liboqs FFI bindings
+│   ├── recrypt-ffi/                # OpenFHE + liboqs FFI bindings
 │   │   ├── Cargo.toml
 │   │   ├── build.rs                # cxx-build integration
 │   │   └── src/
 │   │
-│   ├── dcypher-core/               # Core crypto operations
+│   ├── recrypt-core/               # Core crypto operations
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │
-│   ├── dcypher-proto/              # Wire protocol + serialization
+│   ├── recrypt-proto/              # Wire protocol + serialization
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │
-│   └── dcypher-storage/            # S3-compatible storage layer
+│   └── recrypt-storage/            # S3-compatible storage layer
 │       ├── Cargo.toml
 │       └── src/
 │
-├── dcypher-cli/                    # CLI binary
+├── recrypt-cli/                    # CLI binary
 │   ├── Cargo.toml
 │   └── src/
 │
-├── dcypher-server/                 # Recryption proxy + HTTP API (streams KEM ciphertext)
+├── recrypt-server/                 # Recryption proxy + HTTP API (streams KEM ciphertext)
 │   ├── Cargo.toml
 │   └── src/
 │
@@ -1095,7 +1095,7 @@ python-prototype/
 - [x] Capability issuance, expiry checking, and verification working
 - [x] Hash → provider URL lookup and migration working
 - [x] Access grant/revoke flow working
-- [x] Integration tests with dcypher-storage validated
+- [x] Integration tests with recrypt-storage validated
 - [x] SQLite persistence layer functional
 
 **Plan:** `docs/plans/2026-01-06-phase-4b-storage-auth.md`
@@ -1144,7 +1144,7 @@ TUI development deferred until after production deployment. CLI provides full fu
 
 ### Phase 8 Complete When:
 
-- [ ] User guide (CLI usage, common workflows)
+- [x] User guide (CLI usage, common workflows) — `docs/user-guide.md`
 - [ ] API documentation (server endpoints)
 - [ ] Deployment guide (Docker, systemd, cloud)
 - [ ] Configuration reference
@@ -1203,4 +1203,4 @@ TUI development deferred until after production deployment. CLI provides full fu
 
 ---
 
-**This document is the source of truth for dCypher implementation. Update as progress is made.**
+**This document is the source of truth for Recrypt implementation. Update as progress is made.**

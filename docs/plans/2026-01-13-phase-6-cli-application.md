@@ -2,7 +2,7 @@
 
 **Status:** 🚧 In Progress  
 **Duration:** 4-5 days  
-**Goal:** User-friendly CLI for local crypto operations and dcypher-server interaction
+**Goal:** User-friendly CLI for local crypto operations and recrypt-server interaction
 
 **Prerequisites:** Phases 1-5 ✅ Complete
 
@@ -10,19 +10,19 @@
 
 ## Overview
 
-Build `dcypher-cli`: a command-line interface for managing identities, encrypting/decrypting files locally, and interacting with dcypher-server for file storage and sharing. Designed for air-gapped operation where possible, with a wallet system for multi-identity management.
+Build `recrypt-cli`: a command-line interface for managing identities, encrypting/decrypting files locally, and interacting with recrypt-server for file storage and sharing. Designed for air-gapped operation where possible, with a wallet system for multi-identity management.
 
-**What dcypher-cli IS:**
+**What recrypt-cli IS:**
 
 - Local identity/key management (air-gapped capable)
 - Local encryption/decryption using HybridEncryptor
-- HTTP client for dcypher-server API
+- HTTP client for recrypt-server API
 - Multi-identity wallet with password encryption
 - Human-friendly and scriptable output
 
-**What dcypher-cli IS NOT:**
+**What recrypt-cli IS NOT:**
 
-- A server (dcypher-server remains separate binary)
+- A server (recrypt-server remains separate binary)
 - A GUI (Phase 7 TUI is separate)
 - A hardware wallet manager (deferred)
 
@@ -34,10 +34,10 @@ Build `dcypher-cli`: a command-line interface for managing identities, encryptin
 
 | Crate            | Provides                                      | Status   |
 | ---------------- | --------------------------------------------- | -------- |
-| `dcypher-core`   | `HybridEncryptor`, `MultiSig`, key generation | ✅ Ready |
-| `dcypher-proto`  | Wire types, serialization, format detection   | ✅ Ready |
-| `dcypher-ffi`    | ED25519, ML-DSA keygen/sign, OpenFHE PRE ops  | ✅ Ready |
-| `dcypher-server` | REST API for accounts, files, recryption      | ✅ Ready |
+| `recrypt-core`   | `HybridEncryptor`, `MultiSig`, key generation | ✅ Ready |
+| `recrypt-proto`  | Wire types, serialization, format detection   | ✅ Ready |
+| `recrypt-ffi`    | ED25519, ML-DSA keygen/sign, OpenFHE PRE ops  | ✅ Ready |
+| `recrypt-server` | REST API for accounts, files, recryption      | ✅ Ready |
 
 ### What's Missing
 
@@ -59,7 +59,7 @@ After Phase 6:
 2. ✅ Can encrypt files locally for any known recipient
 3. ✅ Can decrypt files locally with own keys
 4. ✅ Wallet stores multiple identities with password encryption
-5. ✅ Can register account on dcypher-server
+5. ✅ Can register account on recrypt-server
 6. ✅ Can upload/download/list/delete files
 7. ✅ Can create/list/revoke shares
 8. ✅ Can download and decrypt shared files
@@ -70,7 +70,7 @@ After Phase 6:
 
 ```bash
 # Unit tests
-cargo test -p dcypher-cli
+cargo test -p recrypt-cli
 
 # Integration tests (requires server)
 just test-cli-integration
@@ -95,14 +95,14 @@ dcypher share create <hash> --to <bob-fingerprint>
 - ❌ Real lattice PRE backend (using MockBackend, wiring real backend later)
 - ❌ Shell completions (nice-to-have, deferred)
 - ❌ Streaming large file support (deferred)
-- ❌ Server binary bundling (keeping dcypher-server separate)
+- ❌ Server binary bundling (keeping recrypt-server separate)
 
 ---
 
 ## Architecture
 
 ```
-dcypher-cli/
+recrypt-cli/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs                 # Entry point, clap setup
@@ -121,7 +121,7 @@ dcypher-cli/
 │   │   └── identity.rs         # Identity struct with all key types
 │   ├── client/
 │   │   ├── mod.rs
-│   │   ├── api.rs              # HTTP client for dcypher-server
+│   │   ├── api.rs              # HTTP client for recrypt-server
 │   │   └── auth.rs             # Nonce fetch, message signing, headers
 │   ├── config.rs               # CLI config (~/.config/dcypher/config.toml)
 │   └── output.rs               # Pretty vs JSON output formatting
@@ -267,16 +267,16 @@ When encrypting `--for <target>`:
 
 **Goal:** CLI structure and encrypted wallet working
 
-#### 1. Create dcypher-cli crate
+#### 1. Create recrypt-cli crate
 
-**File:** `dcypher-cli/Cargo.toml`
+**File:** `recrypt-cli/Cargo.toml`
 
 ```toml
 [package]
-name = "dcypher-cli"
+name = "recrypt-cli"
 version = "0.1.0"
 edition = "2021"
-description = "Command-line interface for dCypher proxy recryption"
+description = "Command-line interface for Recrypt proxy recryption"
 
 [[bin]]
 name = "dcypher"
@@ -320,9 +320,9 @@ thiserror = "1"
 anyhow = "1"
 
 # Workspace crates
-dcypher-core = { path = "../crates/dcypher-core" }
-dcypher-proto = { path = "../crates/dcypher-proto" }
-dcypher-ffi = { path = "../crates/dcypher-ffi" }
+recrypt-core = { path = "../crates/recrypt-core" }
+recrypt-proto = { path = "../crates/recrypt-proto" }
+recrypt-ffi = { path = "../crates/recrypt-ffi" }
 
 [dev-dependencies]
 assert_cmd = "2"
@@ -330,7 +330,7 @@ predicates = "3"
 tempfile = "3"
 ```
 
-**File:** `dcypher-cli/src/main.rs`
+**File:** `recrypt-cli/src/main.rs`
 
 ```rust
 use anyhow::Result;
@@ -430,7 +430,7 @@ async fn main() -> Result<()> {
 
 #### 2. Wallet encryption module
 
-**File:** `dcypher-cli/src/wallet/format.rs`
+**File:** `recrypt-cli/src/wallet/format.rs`
 
 Core wallet encryption/decryption using Argon2id + XChaCha20-Poly1305.
 
@@ -552,8 +552,8 @@ pub fn decrypt_wallet(data: &[u8], password: &str) -> Result<WalletData> {
 
 **Automated Verification:**
 
-- [x] `cargo build -p dcypher-cli` compiles
-- [x] `cargo test -p dcypher-cli` passes wallet encryption roundtrip tests
+- [x] `cargo build -p recrypt-cli` compiles
+- [x] `cargo test -p recrypt-cli` passes wallet encryption roundtrip tests
 - [x] `./target/debug/dcypher --help` shows all commands
 
 **Manual Verification:**
@@ -579,7 +579,7 @@ dcypher identity export <name> --output <file>
 dcypher identity import <file> [--name <name>]
 ```
 
-**File:** `dcypher-cli/src/commands/identity.rs`
+**File:** `recrypt-cli/src/commands/identity.rs`
 
 Key generation uses:
 
@@ -626,7 +626,7 @@ dcypher decrypt <file.enc> [--output <file>]
 
 **Implementation:**
 
-Uses `HybridEncryptor<MockBackend>` from dcypher-core.
+Uses `HybridEncryptor<MockBackend>` from recrypt-core.
 
 **Recipient resolution:**
 
@@ -655,9 +655,9 @@ Uses `HybridEncryptor<MockBackend>` from dcypher-core.
 
 ### Phase 6.4: HTTP Client (Day 2-3)
 
-**Goal:** Client library for dcypher-server API
+**Goal:** Client library for recrypt-server API
 
-**File:** `dcypher-cli/src/client/api.rs`
+**File:** `recrypt-cli/src/client/api.rs`
 
 Implements:
 
@@ -665,7 +665,7 @@ Implements:
 - Multi-sig header building (`X-Public-Key`, `X-Nonce`, `X-Signature-ED25519`, `X-Signature-ML-DSA`)
 - All API endpoints
 
-**File:** `dcypher-cli/src/client/auth.rs`
+**File:** `recrypt-cli/src/client/auth.rs`
 
 ```rust
 pub struct AuthHeaders {
@@ -756,7 +756,7 @@ dcypher share revoke <share-id>
 
 **Goal:** Add missing server endpoints for list operations
 
-**File:** `dcypher-server/src/routes/accounts.rs`
+**File:** `recrypt-server/src/routes/accounts.rs`
 
 Add:
 
@@ -780,7 +780,7 @@ pub async fn list_shares(
 }
 ```
 
-**File:** `dcypher-server/src/routes/mod.rs`
+**File:** `recrypt-server/src/routes/mod.rs`
 
 Add routes:
 
@@ -855,7 +855,7 @@ Add routes:
 set -e
 
 # Start server
-cargo run -p dcypher-server &
+cargo run -p recrypt-server &
 SERVER_PID=$!
 sleep 2
 
@@ -931,9 +931,9 @@ thiserror = "1"
 anyhow = "1"
 
 # Workspace
-dcypher-core = { path = "../crates/dcypher-core" }
-dcypher-proto = { path = "../crates/dcypher-proto" }
-dcypher-ffi = { path = "../crates/dcypher-ffi" }
+recrypt-core = { path = "../crates/recrypt-core" }
+recrypt-proto = { path = "../crates/recrypt-proto" }
+recrypt-ffi = { path = "../crates/recrypt-ffi" }
 ```
 
 ---
@@ -942,9 +942,9 @@ dcypher-ffi = { path = "../crates/dcypher-ffi" }
 
 ### Automated Verification:
 
-- [x] `cargo build -p dcypher-cli` succeeds
-- [x] `cargo test -p dcypher-cli` all pass
-- [x] `cargo clippy -p dcypher-cli` no warnings
+- [x] `cargo build -p recrypt-cli` succeeds
+- [x] `cargo test -p recrypt-cli` all pass
+- [x] `cargo clippy -p recrypt-cli` no warnings
 - [x] Integration tests pass with server running
 
 ### Manual Verification:

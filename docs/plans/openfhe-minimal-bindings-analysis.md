@@ -1,7 +1,7 @@
 # OpenFHE Minimal Bindings Analysis
 
 > **Historical Note:** This analysis led to the decision to create custom minimal bindings
-> in `crates/dcypher-openfhe-sys/` instead of using `vendor/openfhe-rs/`. The openfhe-rs
+> in `crates/recrypt-openfhe-sys/` instead of using `vendor/openfhe-rs/`. The openfhe-rs
 > directory has since been **deleted**. This document is preserved for reference.
 
 ## Summary
@@ -165,7 +165,7 @@ fn get_plaintext_modulus(ctx: &CryptoContext) -> u64;
 
 ### Option A: Fork and Strip (Recommended)
 
-1. Fork openfhe-rs to `dcypher-openfhe-sys`
+1. Fork openfhe-rs to `recrypt-openfhe-sys`
 2. Delete all unused bindings
 3. Update remaining bindings for OpenFHE 1.3.0
 4. Add byte-based serialization (using stringstream instead of file)
@@ -209,13 +209,13 @@ For production, static linking is strongly recommended.
 
 ## Next Steps
 
-1. [ ] Create `crates/dcypher-openfhe-sys/` 
+1. [ ] Create `crates/recrypt-openfhe-sys/` 
 2. [ ] Copy minimal subset from openfhe-rs
 3. [ ] Update for OpenFHE 1.3.0 compatibility
 4. [ ] Implement byte-based serialization
 5. [ ] Add static linking option
 6. [ ] Write smoke tests
-7. [ ] Update dcypher-ffi to use new bindings
+7. [ ] Update recrypt-ffi to use new bindings
 
 ## References
 

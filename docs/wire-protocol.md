@@ -69,7 +69,7 @@ Used for:
 
 ```protobuf
 syntax = "proto3";
-package dcypher.v1;
+package recrypt.v1;
 
 // Core message types
 

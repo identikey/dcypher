@@ -2,7 +2,7 @@
 
 ## Overview
 
-Build the `dcypher-core` crate on top of Phase 1's FFI bindings (`dcypher-ffi`). This provides production-ready cryptographic operations through a pluggable backend system supporting both post-quantum (lattice) and classical (EC) proxy Recryption.
+Build the `recrypt-core` crate on top of Phase 1's FFI bindings (`recrypt-ffi`). This provides production-ready cryptographic operations through a pluggable backend system supporting both post-quantum (lattice) and classical (EC) proxy Recryption.
 
 **Duration:** 4-5 days  
 **Prerequisites:** Phase 1 complete (FFI bindings functional)
@@ -11,7 +11,7 @@ Build the `dcypher-core` crate on top of Phase 1's FFI bindings (`dcypher-ffi`).
 
 Phase 1 delivered:
 
-- ✅ `dcypher-ffi` crate with OpenFHE BFV/PRE bindings
+- ✅ `recrypt-ffi` crate with OpenFHE BFV/PRE bindings
 - ✅ liboqs ML-DSA signatures (44/65/87 variants)
 - ✅ ED25519 classical signatures
 - ✅ 16 passing tests for all primitives
@@ -19,10 +19,10 @@ Phase 1 delivered:
 
 **Key Files:**
 
-- `crates/dcypher-ffi/src/openfhe/mod.rs` - OpenFHE PRE operations
-- `crates/dcypher-ffi/src/liboqs/sig.rs` - Post-quantum signatures
-- `crates/dcypher-ffi/src/ed25519.rs` - Classical signatures
-- `crates/dcypher-ffi/src/error.rs` - Error types
+- `crates/recrypt-ffi/src/openfhe/mod.rs` - OpenFHE PRE operations
+- `crates/recrypt-ffi/src/liboqs/sig.rs` - Post-quantum signatures
+- `crates/recrypt-ffi/src/ed25519.rs` - Classical signatures
+- `crates/recrypt-ffi/src/error.rs` - Error types
 
 **Missing:**
 
@@ -34,7 +34,7 @@ Phase 1 delivered:
 
 ## Desired End State
 
-A production-ready `dcypher-core` crate that:
+A production-ready `recrypt-core` crate that:
 
 1. **Abstracts crypto primitives** behind clean Rust APIs
 2. **Implements hybrid encryption** (KEM-DEM with XChaCha20 + Bao)
@@ -48,11 +48,11 @@ A production-ready `dcypher-core` crate that:
 
 #### Automated:
 
-- [x] All unit tests pass: `cargo test -p dcypher-core`
-- [x] Property tests pass: `cargo test -p dcypher-core --features proptest`
-- [x] Benchmarks baseline established: `cargo bench -p dcypher-core`
-- [x] Clippy clean: `cargo clippy -p dcypher-core -- -D warnings`
-- [x] Doc tests pass: `cargo test -p dcypher-core --doc`
+- [x] All unit tests pass: `cargo test -p recrypt-core`
+- [x] Property tests pass: `cargo test -p recrypt-core --features proptest`
+- [x] Benchmarks baseline established: `cargo bench -p recrypt-core`
+- [x] Clippy clean: `cargo clippy -p recrypt-core -- -D warnings`
+- [x] Doc tests pass: `cargo test -p recrypt-core --doc`
 
 #### Manual:
 
@@ -80,7 +80,7 @@ A production-ready `dcypher-core` crate that:
 1. **Start with types** - Keys, ciphertexts, errors (foundation)
 2. **Build trait layer** - `PreBackend` abstraction
 3. **Implement mock backend** - Fast testing without FFI
-4. **Wrap FFI backend** - Lattice backend using `dcypher-ffi`
+4. **Wrap FFI backend** - Lattice backend using `recrypt-ffi`
 5. **Add hybrid layer** - KEM-DEM with XChaCha20 + Bao
 6. **Build signature layer** - Multi-sig (ED25519 + ML-DSA)
 7. **Write comprehensive tests** - Property-based + semantic validation
@@ -102,13 +102,13 @@ Establish core types and the `PreBackend` trait that all implementations will sa
 
 ### Changes Required
 
-#### 1. Create `dcypher-core` crate structure
+#### 1. Create `recrypt-core` crate structure
 
-**File**: `crates/dcypher-core/Cargo.toml`
+**File**: `crates/recrypt-core/Cargo.toml`
 
 ```toml
 [package]
-name = "dcypher-core"
+name = "recrypt-core"
 version.workspace = true
 edition.workspace = true
 
@@ -131,7 +131,7 @@ zeroize = { version = "1.7", features = ["derive"] }
 async-trait = "0.1"
 
 # FFI binding (our Phase 1 crate)
-dcypher-ffi = { path = "../dcypher-ffi" }
+recrypt-ffi = { path = "../recrypt-ffi" }
 
 [dev-dependencies]
 proptest.workspace = true
@@ -142,10 +142,10 @@ default = []
 proptest = ["dep:proptest"]
 ```
 
-**File**: `crates/dcypher-core/src/lib.rs`
+**File**: `crates/recrypt-core/src/lib.rs`
 
 ```rust
-//! dcypher-core: Production cryptography for proxy Recryption
+//! recrypt-core: Production cryptography for proxy Recryption
 //!
 //! This crate provides:
 //! - Pluggable PRE backend trait system
@@ -167,7 +167,7 @@ pub use sign::{MultiSig, SigningKeys, VerifyingKeys};
 
 #### 2. Error Types
 
-**File**: `crates/dcypher-core/src/error.rs`
+**File**: `crates/recrypt-core/src/error.rs`
 
 ```rust
 use thiserror::Error;
@@ -234,7 +234,7 @@ pub type PreResult<T> = Result<T, PreError>;
 
 #### 3. Key Types
 
-**File**: `crates/dcypher-core/src/pre/keys.rs`
+**File**: `crates/recrypt-core/src/pre/keys.rs`
 
 ```rust
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -397,7 +397,7 @@ impl Ciphertext {
 
 #### 4. Backend Trait
 
-**File**: `crates/dcypher-core/src/pre/traits.rs`
+**File**: `crates/recrypt-core/src/pre/traits.rs`
 
 ```rust
 use async_trait::async_trait;
@@ -459,7 +459,7 @@ pub trait PreBackend: Send + Sync {
 
 #### 5. Backend ID enum
 
-**File**: `crates/dcypher-core/src/pre/mod.rs`
+**File**: `crates/recrypt-core/src/pre/mod.rs`
 
 ```rust
 pub mod keys;
@@ -504,9 +504,9 @@ impl TryFrom<u8> for BackendId {
 
 #### Automated Verification:
 
-- [ ] Crate compiles: `cargo build -p dcypher-core`
-- [ ] Types are publicly exported: `cargo doc -p dcypher-core --no-deps --open`
-- [ ] No clippy warnings: `cargo clippy -p dcypher-core`
+- [ ] Crate compiles: `cargo build -p recrypt-core`
+- [ ] Types are publicly exported: `cargo doc -p recrypt-core --no-deps --open`
+- [ ] No clippy warnings: `cargo clippy -p recrypt-core`
 
 #### Manual Verification:
 
@@ -526,7 +526,7 @@ Implement a simple mock PRE backend using XChaCha20 for fast testing without Ope
 
 #### 1. Mock Backend
 
-**File**: `crates/dcypher-core/src/pre/backends/mock.rs`
+**File**: `crates/recrypt-core/src/pre/backends/mock.rs`
 
 ```rust
 //! Mock PRE backend for testing
@@ -684,7 +684,7 @@ mod tests {
 }
 ```
 
-**File**: `crates/dcypher-core/src/pre/backends/mod.rs`
+**File**: `crates/recrypt-core/src/pre/backends/mod.rs`
 
 ```rust
 pub mod mock;
@@ -697,8 +697,8 @@ pub use mock::MockBackend;
 
 #### Automated Verification:
 
-- [ ] Mock tests pass: `cargo test -p dcypher-core mock`
-- [ ] Property test with mock backend: `cargo test -p dcypher-core --features proptest mock_properties`
+- [ ] Mock tests pass: `cargo test -p recrypt-core mock`
+- [ ] Property test with mock backend: `cargo test -p recrypt-core --features proptest mock_properties`
 
 #### Manual Verification:
 
@@ -717,7 +717,7 @@ Wrap Phase 1's OpenFHE FFI into the `PreBackend` trait.
 
 #### 1. Lattice Backend
 
-**File**: `crates/dcypher-core/src/pre/backends/lattice.rs`
+**File**: `crates/recrypt-core/src/pre/backends/lattice.rs`
 
 ```rust
 //! OpenFHE lattice-based PRE backend (post-quantum)
@@ -880,7 +880,7 @@ mod tests {
 }
 ```
 
-**Update**: `crates/dcypher-core/src/pre/backends/mod.rs`
+**Update**: `crates/recrypt-core/src/pre/backends/mod.rs`
 
 ```rust
 pub mod mock;
@@ -894,8 +894,8 @@ pub use lattice::LatticeBackend;
 
 #### Automated Verification:
 
-- [ ] Lattice backend compiles: `cargo build -p dcypher-core`
-- [ ] Basic instantiation test passes: `cargo test -p dcypher-core lattice_backend_creation`
+- [ ] Lattice backend compiles: `cargo build -p recrypt-core`
+- [ ] Basic instantiation test passes: `cargo test -p recrypt-core lattice_backend_creation`
 
 #### Manual Verification:
 
@@ -916,7 +916,7 @@ Implement KEM-DEM hybrid encryption using XChaCha20 + Bao with encrypted plainte
 
 #### 1. Key Material Bundle
 
-**File**: `crates/dcypher-core/src/hybrid/keymaterial.rs`
+**File**: `crates/recrypt-core/src/hybrid/keymaterial.rs`
 
 ```rust
 //! Key material bundle encrypted inside wrapped_key
@@ -993,7 +993,7 @@ mod tests {
 
 #### 2. Encrypted File Structure
 
-**File**: `crates/dcypher-core/src/hybrid/encrypted_file.rs`
+**File**: `crates/recrypt-core/src/hybrid/encrypted_file.rs`
 
 ```rust
 //! Encrypted file with streaming-verifiable integrity
@@ -1049,7 +1049,7 @@ impl EncryptedFile {
 
 #### 3. Hybrid Encryptor
 
-**File**: `crates/dcypher-core/src/hybrid/mod.rs`
+**File**: `crates/recrypt-core/src/hybrid/mod.rs`
 
 ```rust
 //! Hybrid encryption using XChaCha20 + Blake3/Bao
@@ -1245,9 +1245,9 @@ mod tests {
 
 #### Automated Verification:
 
-- [ ] Hybrid tests pass: `cargo test -p dcypher-core hybrid`
+- [ ] Hybrid tests pass: `cargo test -p recrypt-core hybrid`
 - [ ] Tamper detection works: test `test_tampered_ciphertext_detected` passes
-- [ ] Property tests with mock backend: `cargo test -p dcypher-core --features proptest`
+- [ ] Property tests with mock backend: `cargo test -p recrypt-core --features proptest`
 
 #### Manual Verification:
 
@@ -1267,7 +1267,7 @@ Implement multi-signature combining ED25519 (fast classical) + ML-DSA-87 (post-q
 
 #### 1. Signature Types
 
-**File**: `crates/dcypher-core/src/sign/mod.rs`
+**File**: `crates/recrypt-core/src/sign/mod.rs`
 
 ```rust
 //! Multi-signature system (ED25519 + ML-DSA)
@@ -1412,7 +1412,7 @@ mod tests {
 
 #### Automated Verification:
 
-- [ ] Multi-sig tests pass: `cargo test -p dcypher-core sign`
+- [ ] Multi-sig tests pass: `cargo test -p recrypt-core sign`
 - [ ] Tamper detection works in multi-sig tests
 - [ ] Wrong key detection works
 
@@ -1434,7 +1434,7 @@ Comprehensive property-based testing using `proptest` to validate semantic corre
 
 #### 1. Property Tests
 
-**File**: `crates/dcypher-core/tests/properties.rs`
+**File**: `crates/recrypt-core/tests/properties.rs`
 
 ```rust
 //! Property-based tests for cryptographic operations
@@ -1510,7 +1510,7 @@ mod proptest_suite {
 
 #### 2. Known-Answer Tests
 
-**File**: `crates/dcypher-core/tests/regression.rs`
+**File**: `crates/recrypt-core/tests/regression.rs`
 
 ```rust
 //! Known-answer tests for regression detection
@@ -1574,8 +1574,8 @@ fn test_recryption_level_tracking() {
 
 #### Automated Verification:
 
-- [ ] Property tests pass: `cargo test -p dcypher-core --features proptest`
-- [ ] Regression tests pass: `cargo test -p dcypher-core regression`
+- [ ] Property tests pass: `cargo test -p recrypt-core --features proptest`
+- [ ] Regression tests pass: `cargo test -p recrypt-core regression`
 - [ ] All tests complete in reasonable time (<30s)
 
 #### Manual Verification:
@@ -1595,14 +1595,14 @@ Comprehensive documentation with runnable examples.
 
 #### 1. Crate-Level Docs
 
-**Update**: `crates/dcypher-core/src/lib.rs`
+**Update**: `crates/recrypt-core/src/lib.rs`
 
 Add documentation at the top:
 
 ````rust
-//! # dcypher-core: Production Cryptography for Proxy Recryption
+//! # recrypt-core: Production Cryptography for Proxy Recryption
 //!
-//! This crate provides production-ready cryptographic operations for the dCypher
+//! This crate provides production-ready cryptographic operations for the Recrypt
 //! proxy Recryption system.
 //!
 //! ## Features
@@ -1625,7 +1625,7 @@ Add documentation at the top:
 //! let kp = encryptor.backend().generate_keypair()?;
 //!
 //! // Encrypt
-//! let plaintext = b"Hello, dCypher!";
+//! let plaintext = b"Hello, Recrypt!";
 //! let encrypted = encryptor.encrypt(&kp.public, plaintext)?;
 //!
 //! // Decrypt
@@ -1689,9 +1689,9 @@ Add doc comments to all public modules (see implementation files above).
 
 #### Automated Verification:
 
-- [ ] Doc tests pass: `cargo test -p dcypher-core --doc`
-- [ ] Docs build: `cargo doc -p dcypher-core --no-deps`
-- [ ] No missing doc warnings: `RUSTDOCFLAGS="-D warnings" cargo doc -p dcypher-core --no-deps`
+- [ ] Doc tests pass: `cargo test -p recrypt-core --doc`
+- [ ] Docs build: `cargo doc -p recrypt-core --no-deps`
+- [ ] No missing doc warnings: `RUSTDOCFLAGS="-D warnings" cargo doc -p recrypt-core --no-deps`
 
 #### Manual Verification:
 
@@ -1721,7 +1721,7 @@ Add doc comments to all public modules (see implementation files above).
 
 - `benches/crypto_ops.rs` - Baseline timings for encrypt/decrypt/recrypt/sign
 
-**File**: `crates/dcypher-core/benches/crypto_ops.rs`
+**File**: `crates/recrypt-core/benches/crypto_ops.rs`
 
 ```rust
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -1818,7 +1818,7 @@ criterion = "0.5"
 
 ### From Phase 1
 
-- ✅ `dcypher-ffi` crate fully functional
+- ✅ `recrypt-ffi` crate fully functional
 - ✅ All FFI primitives tested
 - ✅ Error handling established
 

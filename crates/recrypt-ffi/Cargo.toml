@@ -1,0 +1,32 @@
+[package]
+name = "recrypt-ffi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cxx.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
+rand_core.workspace = true
+thiserror.workspace = true
+
+# OpenFHE bindings
+recrypt-openfhe-sys = { path = "../recrypt-openfhe-sys", optional = true }
+
+# Post-quantum signatures via liboqs
+# We disable OpenSSL to avoid system dependency; liboqs has fallback implementations
+oqs = { version = "0.11", default-features = false, features = [
+  "ml_dsa",
+  "std",
+], optional = true }
+
+[build-dependencies]
+cxx-build = "1.0"
+
+[dev-dependencies]
+proptest.workspace = true
+
+[features]
+default = ["openfhe", "liboqs"]
+openfhe = ["dep:recrypt-openfhe-sys"]
+liboqs = ["dep:oqs"]

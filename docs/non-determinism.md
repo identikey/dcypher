@@ -7,7 +7,7 @@
 
 ## Summary
 
-Several cryptographic operations in dCypher produce non-deterministic output. This is **expected and secure**, but requires careful handling in testing and content addressing.
+Several cryptographic operations in Recrypt produce non-deterministic output. This is **expected and secure**, but requires careful handling in testing and content addressing.
 
 ---
 
