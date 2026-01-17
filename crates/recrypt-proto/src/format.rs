@@ -13,7 +13,7 @@ pub enum Format {
 
 /// Detect format from raw bytes
 pub fn detect_format(data: &[u8]) -> Format {
-    if data.starts_with(b"----- BEGIN DCYPHER") {
+    if data.starts_with(b"----- BEGIN RECRYPT") {
         Format::Armor
     } else if data.first() == Some(&b'{') {
         Format::Json

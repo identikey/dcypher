@@ -3,7 +3,7 @@
 use recrypt_core::{HybridEncryptor, pre::PreBackend, pre::backends::MockBackend};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔐 dCypher: Basic Encryption Demo");
+    println!("🔐 Recrypt: Basic Encryption Demo");
     println!("   (MockBackend - production will use LatticeBackend)\n");
 
     let encryptor = HybridEncryptor::new(MockBackend);
@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Encrypt some data
     let messages = vec![
-        b"Hello, dCypher!" as &[u8],
+        b"Hello, Recrypt!" as &[u8],
         b"Short msg",
         b"This is a longer message with more bytes to test the hybrid encryption system.",
     ];

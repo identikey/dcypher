@@ -1,4 +1,4 @@
-//! Conversions between dcypher-core types and protobuf types
+//! Conversions between recrypt-core types and protobuf types
 
 use crate::error::{ProtoError, ProtoResult};
 use crate::proto;

@@ -1,6 +1,6 @@
 //! S3/Minio integration tests
 //!
-//! Run with: cargo test -p dcypher-storage --features s3-tests
+//! Run with: cargo test -p recrypt-storage --features s3-tests
 //! Requires Minio running: docker-compose -f docker/docker-compose.dev.yml up -d minio
 
 #![cfg(feature = "s3-tests")]
@@ -8,7 +8,7 @@
 use recrypt_storage::{ChunkStorage, S3Storage, StorageError};
 
 async fn setup() -> S3Storage {
-    let storage = S3Storage::minio("dcypher-test").await.unwrap();
+    let storage = S3Storage::minio("recrypt-test").await.unwrap();
     storage.ensure_bucket().await.unwrap();
     storage
 }

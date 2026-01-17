@@ -12,6 +12,35 @@ use super::format::{
     decrypt_wallet_with_key, derive_key, encrypt_wallet_with_key, extract_salt, WalletData,
 };
 
+/// Environment variable for non-interactive password input (scripting/CI)
+const PASSWORD_ENV_VAR: &str = "RECRYPT_WALLET_PASSWORD";
+
+/// Get password from env var or interactive prompt
+fn get_password(prompt: &str) -> Result<String> {
+    if let Ok(password) = std::env::var(PASSWORD_ENV_VAR) {
+        return Ok(password);
+    }
+    Ok(Password::new().with_prompt(prompt).interact()?)
+}
+
+/// Get password with confirmation from env var or interactive prompts
+fn get_password_with_confirm() -> Result<String> {
+    if let Ok(password) = std::env::var(PASSWORD_ENV_VAR) {
+        return Ok(password);
+    }
+
+    let pass1 = Password::new()
+        .with_prompt("New wallet password")
+        .interact()?;
+    let pass2 = Password::new().with_prompt("Confirm password").interact()?;
+
+    if pass1 != pass2 {
+        anyhow::bail!("Passwords do not match");
+    }
+
+    Ok(pass1)
+}
+
 pub struct Wallet {
     pub data: WalletData,
     path: PathBuf,
@@ -62,9 +91,8 @@ impl Wallet {
             // Cached key didn't work (different wallet?), fall through to password prompt
         }
 
-        // No cached key or it was invalid, prompt for password
-        let password = Password::new().with_prompt("Wallet password").interact()?;
-
+        // No cached key or it was invalid, get password from env or prompt
+        let password = get_password("Wallet password")?;
         let key = derive_key(&password, &salt)?;
         let data = decrypt_wallet_with_key(&encrypted, &key)
             .context("Failed to decrypt wallet (wrong password?)")?;
@@ -94,19 +122,12 @@ impl Wallet {
         provider: &dyn CredentialProvider,
     ) -> Result<()> {
         let (key, salt) = if is_new {
-            // New wallet: prompt for password and derive key
-            let pass1 = Password::new()
-                .with_prompt("New wallet password")
-                .interact()?;
-            let pass2 = Password::new().with_prompt("Confirm password").interact()?;
-
-            if pass1 != pass2 {
-                anyhow::bail!("Passwords do not match");
-            }
+            // New wallet: get password from env or prompt with confirmation
+            let password = get_password_with_confirm()?;
 
             let mut salt = [0u8; 32];
             rand::thread_rng().fill_bytes(&mut salt);
-            let key = derive_key(&pass1, &salt)?;
+            let key = derive_key(&password, &salt)?;
 
             // Update self with new key/salt
             self.key = key;
@@ -192,6 +213,7 @@ mod tests {
                     public: "pre-pub".to_string(),
                     secret: "pre-sec".to_string(),
                 },
+                pre_backend: recrypt_core::pre::BackendId::Mock,
             },
         );
 
@@ -240,6 +262,7 @@ mod tests {
                     public: "p".to_string(),
                     secret: "s".to_string(),
                 },
+                pre_backend: recrypt_core::pre::BackendId::Mock,
             },
         );
         let encrypted = encrypt_wallet_with_key(&data, &derived_key, &salt).unwrap();
@@ -285,6 +308,7 @@ mod tests {
                     public: "pub".to_string(),
                     secret: "sec".to_string(),
                 },
+                pre_backend: recrypt_core::pre::BackendId::Mock,
             },
         );
 

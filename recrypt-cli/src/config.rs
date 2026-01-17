@@ -11,6 +11,9 @@ pub struct Config {
     pub active_identity: Option<String>,
     pub output_format: Option<String>,
     pub wallet_path: Option<String>,
+    /// Default PRE backend for new identities
+    /// Valid values: "lattice" (post-quantum), "mock" (testing only)
+    pub default_backend: Option<String>,
 }
 
 impl Config {

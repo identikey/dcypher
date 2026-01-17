@@ -7,7 +7,14 @@
 #include "rust/cxx.h"
 
 // OpenFHE headers
+// MUST include scheme-specific headers for serialization to work
 #include "openfhe.h"
+
+// Serialization headers for BFV/PRE
+#include "ciphertext-ser.h"
+#include "cryptocontext-ser.h"
+#include "key/key-ser.h"
+#include "scheme/bfvrns/bfvrns-ser.h"
 
 namespace recrypt_openfhe {
 

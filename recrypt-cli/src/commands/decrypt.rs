@@ -4,7 +4,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::fs;
 
-use recrypt_core::pre::backends::MockBackend;
 use recrypt_core::HybridEncryptor;
 use recrypt_proto::MultiFormat;
 
@@ -33,13 +32,13 @@ pub async fn run(args: DecryptArgs, ctx: &Context) -> Result<()> {
         .get(&identity_name)
         .ok_or_else(|| anyhow::anyhow!("Identity '{identity_name}' not found"))?;
 
-    // Parse PRE secret key
+    // Parse PRE secret key using the identity's stored backend
     let pre_sk_bytes = bs58::decode(&identity.pre.secret)
         .into_vec()
         .context("Failed to decode PRE secret key")?;
 
-    let pre_sk =
-        recrypt_core::pre::SecretKey::new(recrypt_core::pre::BackendId::Mock, pre_sk_bytes);
+    let backend_id = identity.pre_backend;
+    let pre_sk = recrypt_core::pre::SecretKey::new(backend_id, pre_sk_bytes);
 
     // Read encrypted file
     let encrypted_bytes =
@@ -49,8 +48,8 @@ pub async fn run(args: DecryptArgs, ctx: &Context) -> Result<()> {
     let encrypted = recrypt_core::EncryptedFile::from_protobuf(&encrypted_bytes)
         .context("Failed to parse encrypted file (invalid format?)")?;
 
-    // Decrypt
-    let backend = MockBackend;
+    // Create backend matching the identity
+    let backend = super::create_backend_from_id(backend_id)?;
     let encryptor = HybridEncryptor::new(backend);
 
     let pb = if !ctx.json_output {

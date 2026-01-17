@@ -1,7 +1,7 @@
 //! identikey-storage-auth: Authorization for content-addressed storage
 //!
 //! Provides ownership tracking, capability issuance, and provider indexing
-//! for the dCypher storage layer.
+//! for the Recrypt storage layer.
 //!
 //! ## Features
 //!

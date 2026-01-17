@@ -5,7 +5,7 @@ use recrypt_ffi::ed25519::ed25519_keygen;
 use recrypt_ffi::liboqs::{PqAlgorithm, pq_keygen};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔐 dCypher: Multi-Signature Demo");
+    println!("🔐 Recrypt: Multi-Signature Demo");
     println!("   (ED25519 Classical + ML-DSA-87 Post-Quantum)\n");
 
     // Generate signing keys

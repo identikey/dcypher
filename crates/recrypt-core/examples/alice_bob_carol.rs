@@ -3,7 +3,7 @@
 use recrypt_core::{HybridEncryptor, pre::PreBackend, pre::backends::MockBackend};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔐 dCypher: Alice → Bob → Carol Recryption Demo");
+    println!("🔐 Recrypt: Alice → Bob → Carol Recryption Demo");
     println!("   (MockBackend - production will use LatticeBackend)\n");
 
     // Initialize with MockBackend (LatticeBackend needs serialization from Phase 3)
@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✓ Alice, Bob, and Carol have keypairs\n");
 
     // 2. Alice encrypts data
-    let plaintext = b"The secret is: dCypher rules!";
+    let plaintext = b"The secret is: Recrypt rules!";
     println!(
         "2️⃣  Alice encrypts: {:?}",
         std::str::from_utf8(plaintext).unwrap()

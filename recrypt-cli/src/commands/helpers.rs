@@ -6,12 +6,12 @@ use crate::wallet::Wallet;
 use anyhow::Result;
 
 pub fn resolve_identity(ctx: &Context, _wallet: &Wallet) -> Result<String> {
-    // Priority: --identity flag > $DCYPHER_IDENTITY env > config.active_identity
+    // Priority: --identity flag > $RECRYPT_IDENTITY env > config.active_identity
     if let Some(ref name) = ctx.identity_override {
         return Ok(name.clone());
     }
 
-    // $DCYPHER_IDENTITY already handled by clap in ctx.identity_override
+    // $RECRYPT_IDENTITY already handled by clap in ctx.identity_override
 
     let config = Config::load()?;
     if let Some(ref name) = config.active_identity {
@@ -24,7 +24,7 @@ pub fn resolve_identity(ctx: &Context, _wallet: &Wallet) -> Result<String> {
 }
 
 pub fn resolve_server_url(ctx: &Context, config: &Config) -> Result<String> {
-    // Priority: --server flag > $DCYPHER_SERVER env > config.default_server
+    // Priority: --server flag > $RECRYPT_SERVER env > config.default_server
     if let Some(ref server) = ctx.server_override {
         return Ok(server.clone());
     }

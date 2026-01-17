@@ -180,7 +180,7 @@ pub async fn download_recrypted(
 
     // NOTE: For MVP Phase 5, we're returning the file as-is without actual recryption transform
     // Full implementation would:
-    // 1. Deserialize EncryptedFile from file_bytes using dcypher-proto
+    // 1. Deserialize EncryptedFile from file_bytes using recrypt-proto
     // 2. Call HybridEncryptor::recrypt(&recrypt_key, &encrypted_file)
     // 3. Serialize the result back to bytes
     // 4. Return as streaming response

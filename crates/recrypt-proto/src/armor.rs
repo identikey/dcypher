@@ -2,7 +2,7 @@
 //!
 //! Format:
 //! ```text
-//! ----- BEGIN DCYPHER PUBLIC KEY -----
+//! ----- BEGIN RECRYPT PUBLIC KEY -----
 //! Version: 1
 //! Algorithm: ED25519+ML-DSA-87+PRE
 //! Fingerprint: a3k7x5a_Ab3DeF_Xy9ZmP7q_R2sK1M4V
@@ -10,7 +10,7 @@
 //!
 //! eyJlZDI1NTE5IjoiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FF...
 //! (base64 continues)
-//! ----- END DCYPHER PUBLIC KEY -----
+//! ----- END RECRYPT PUBLIC KEY -----
 //! ```
 
 use crate::error::{ProtoError, ProtoResult};
@@ -67,7 +67,7 @@ pub fn armor_encode(armor_type: ArmorType, headers: &[(&str, &str)], payload: &[
 
     // Begin line
     result.push_str(&format!(
-        "----- BEGIN DCYPHER {} -----\n",
+        "----- BEGIN RECRYPT {} -----\n",
         armor_type.label()
     ));
 
@@ -87,7 +87,7 @@ pub fn armor_encode(armor_type: ArmorType, headers: &[(&str, &str)], payload: &[
     }
 
     // End line
-    result.push_str(&format!("----- END DCYPHER {} -----\n", armor_type.label()));
+    result.push_str(&format!("----- END RECRYPT {} -----\n", armor_type.label()));
 
     result
 }
@@ -99,13 +99,13 @@ pub fn armor_decode(s: &str) -> ProtoResult<ArmorBlock> {
     // Find BEGIN line
     let begin_idx = lines
         .iter()
-        .position(|l| l.starts_with("----- BEGIN DCYPHER"))
+        .position(|l| l.starts_with("----- BEGIN RECRYPT"))
         .ok_or_else(|| ProtoError::ArmorParse("Missing BEGIN line".into()))?;
 
     // Parse armor type from BEGIN line
     let begin_line = lines[begin_idx];
     let type_str = begin_line
-        .strip_prefix("----- BEGIN DCYPHER ")
+        .strip_prefix("----- BEGIN RECRYPT ")
         .and_then(|s| s.strip_suffix(" -----"))
         .ok_or_else(|| ProtoError::ArmorParse("Invalid BEGIN format".into()))?;
 
@@ -113,7 +113,7 @@ pub fn armor_decode(s: &str) -> ProtoResult<ArmorBlock> {
         .ok_or_else(|| ProtoError::ArmorParse(format!("Unknown armor type: {type_str}")))?;
 
     // Find END line
-    let end_marker = format!("----- END DCYPHER {} -----", armor_type.label());
+    let end_marker = format!("----- END RECRYPT {} -----", armor_type.label());
     let end_idx = lines
         .iter()
         .position(|l| *l == end_marker)
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_armor_roundtrip() {
-        let payload = b"Hello, dCypher!";
+        let payload = b"Hello, Recrypt!";
         let headers = [("Version", "1"), ("Algorithm", "ED25519+ML-DSA-87")];
 
         let armored = armor_encode(ArmorType::PublicKey, &headers, payload);

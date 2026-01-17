@@ -58,8 +58,8 @@ fn default_nonce_window_secs() -> u64 {
 impl Config {
     pub fn load() -> anyhow::Result<Self> {
         let config: Config = Figment::new()
-            .merge(Toml::file("dcypher-server.toml"))
-            .merge(Env::prefixed("DCYPHER_"))
+            .merge(Toml::file("recrypt-server.toml"))
+            .merge(Env::prefixed("RECRYPT_"))
             .extract()?;
         Ok(config)
     }

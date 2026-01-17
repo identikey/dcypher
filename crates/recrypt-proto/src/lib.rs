@@ -1,4 +1,4 @@
-//! dcypher-proto: Wire protocol and serialization formats
+//! recrypt-proto: Wire protocol and serialization formats
 //!
 //! Provides:
 //! - Protobuf serialization (primary wire format)

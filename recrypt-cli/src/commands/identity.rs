@@ -4,7 +4,6 @@ use colored::Colorize;
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use recrypt_core::pre::backends::MockBackend;
 use recrypt_core::pre::PreBackend;
 use recrypt_ffi::ed25519;
 use recrypt_ffi::liboqs::{pq_keygen, PqAlgorithm};
@@ -105,10 +104,13 @@ async fn new_identity(name: Option<String>, ctx: &Context) -> Result<()> {
     let ml_dsa_kp =
         pq_keygen(PqAlgorithm::MlDsa87).context("Failed to generate ML-DSA-87 keypair")?;
 
+    // Resolve which PRE backend to use
+    let backend_id = ctx.resolve_backend_id()?;
+    let backend = super::create_backend_from_id(backend_id)?;
+
     if ctx.verbose {
-        print_info("Generating PRE keypair (Mock backend)...");
+        print_info(format!("Generating PRE keypair ({})...", backend.name()));
     }
-    let backend = MockBackend;
     let pre_kp = backend
         .generate_keypair()
         .context("Failed to generate PRE keypair")?;
@@ -135,6 +137,7 @@ async fn new_identity(name: Option<String>, ctx: &Context) -> Result<()> {
             public: bs58::encode(pre_kp.public.as_bytes()).into_string(),
             secret: bs58::encode(pre_kp.secret.as_bytes()).into_string(),
         },
+        pre_backend: backend_id,
     };
 
     wallet
@@ -238,6 +241,7 @@ async fn show_identity(name: Option<String>, ctx: &Context) -> Result<()> {
             ed25519_public: String,
             ml_dsa_public: String,
             pre_public: String,
+            pre_backend: String,
         }
         print_json(&Output {
             name: identity_name,
@@ -246,6 +250,7 @@ async fn show_identity(name: Option<String>, ctx: &Context) -> Result<()> {
             ed25519_public: identity.ed25519.public.clone(),
             ml_dsa_public: identity.ml_dsa.public.clone(),
             pre_public: identity.pre.public.clone(),
+            pre_backend: identity.pre_backend.to_string(),
         })?;
     } else {
         println!("{}", format!("Identity: {identity_name}").bold());
@@ -255,6 +260,7 @@ async fn show_identity(name: Option<String>, ctx: &Context) -> Result<()> {
             "Created".dimmed(),
             format_timestamp(identity.created_at)
         );
+        println!("  {}: {}", "PRE Backend".dimmed(), identity.pre_backend);
         println!("  {}:", "Public Keys".dimmed());
         println!(
             "    {}: {}",

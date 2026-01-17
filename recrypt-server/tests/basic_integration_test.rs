@@ -1,4 +1,4 @@
-//! Basic integration tests for dcypher-server
+//! Basic integration tests for recrypt-server
 
 use reqwest::Client;
 

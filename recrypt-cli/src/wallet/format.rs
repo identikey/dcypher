@@ -29,6 +29,13 @@ pub struct Identity {
     pub ed25519: KeyPair,
     pub ml_dsa: KeyPair,
     pub pre: KeyPair,
+    /// PRE backend used for this identity (defaults to "mock" for backward compat)
+    #[serde(default = "default_backend")]
+    pub pre_backend: recrypt_core::pre::BackendId,
+}
+
+fn default_backend() -> recrypt_core::pre::BackendId {
+    recrypt_core::pre::BackendId::Mock
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

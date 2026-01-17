@@ -1,4 +1,4 @@
-//! Error types for dcypher-ffi operations
+//! Error types for recrypt-ffi operations
 
 use thiserror::Error;
 

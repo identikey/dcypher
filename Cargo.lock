@@ -3195,6 +3195,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_core 0.6.4",
  "recrypt-ffi",
+ "serde",
  "thiserror 2.0.17",
  "tokio",
  "zeroize",

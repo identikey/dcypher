@@ -1,4 +1,4 @@
-//! dcypher-server: Recryption proxy with REST API
+//! recrypt-server: Recryption proxy with REST API
 
 pub mod config;
 pub mod error;

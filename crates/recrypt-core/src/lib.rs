@@ -1,6 +1,6 @@
-//! # dcypher-core: Production Cryptography for Proxy Recryption
+//! # recrypt-core: Production Cryptography for Proxy Recryption
 //!
-//! This crate provides production-ready cryptographic operations for the dCypher
+//! This crate provides production-ready cryptographic operations for the Recrypt
 //! proxy recryption system.
 //!
 //! ## Features
@@ -23,7 +23,7 @@
 //! let kp = encryptor.backend().generate_keypair()?;
 //!
 //! // Encrypt
-//! let plaintext = b"Hello, dCypher!";
+//! let plaintext = b"Hello, Recrypt!";
 //! let encrypted = encryptor.encrypt(&kp.public, plaintext)?;
 //!
 //! // Decrypt

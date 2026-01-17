@@ -188,7 +188,7 @@ impl CredentialProvider for KeyringProvider {
 
 /// Environment variable provider for CI/testing.
 ///
-/// Reads `DCYPHER_WALLET_KEY` (or custom var) as base64-encoded 32-byte key.
+/// Reads `RECRYPT_WALLET_KEY` (or custom var) as base64-encoded 32-byte key.
 /// Cannot store or clear keys (env vars are read-only at runtime).
 pub struct EnvProvider {
     var_name: String,
@@ -204,7 +204,7 @@ impl EnvProvider {
 
 impl Default for EnvProvider {
     fn default() -> Self {
-        Self::new("DCYPHER_WALLET_KEY")
+        Self::new("RECRYPT_WALLET_KEY")
     }
 }
 
@@ -310,7 +310,7 @@ impl CredentialProvider for MemoryProvider {
 /// Select the best available credential provider.
 ///
 /// Priority:
-/// 1. `DCYPHER_WALLET_KEY` env var (CI mode)
+/// 1. `RECRYPT_WALLET_KEY` env var (CI mode)
 /// 2. OS keyring (interactive use)
 /// 3. Memory fallback (per-process only, for headless systems without keyring)
 pub fn default_provider() -> Box<dyn CredentialProvider> {
@@ -377,13 +377,13 @@ mod tests {
         let key = [0xABu8; 32];
         let encoded = base64::engine::general_purpose::STANDARD.encode(key);
         // Use a unique var name to avoid test interference
-        std::env::set_var("TEST_DCYPHER_WALLET_KEY_VALID", &encoded);
+        std::env::set_var("TEST_RECRYPT_WALLET_KEY_VALID", &encoded);
 
-        let provider = EnvProvider::new("TEST_DCYPHER_WALLET_KEY_VALID");
+        let provider = EnvProvider::new("TEST_RECRYPT_WALLET_KEY_VALID");
         assert!(provider.is_available());
         assert_eq!(provider.get_key().unwrap(), Some(key));
 
-        std::env::remove_var("TEST_DCYPHER_WALLET_KEY_VALID");
+        std::env::remove_var("TEST_RECRYPT_WALLET_KEY_VALID");
     }
 
     #[test]
@@ -397,13 +397,13 @@ mod tests {
     fn test_env_provider_invalid_length() {
         let short_key = [0u8; 16]; // Only 16 bytes, should fail
         let encoded = base64::engine::general_purpose::STANDARD.encode(short_key);
-        std::env::set_var("TEST_DCYPHER_WALLET_KEY_SHORT", &encoded);
+        std::env::set_var("TEST_RECRYPT_WALLET_KEY_SHORT", &encoded);
 
-        let provider = EnvProvider::new("TEST_DCYPHER_WALLET_KEY_SHORT");
+        let provider = EnvProvider::new("TEST_RECRYPT_WALLET_KEY_SHORT");
         let result = provider.get_key();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("32 bytes"));
 
-        std::env::remove_var("TEST_DCYPHER_WALLET_KEY_SHORT");
+        std::env::remove_var("TEST_RECRYPT_WALLET_KEY_SHORT");
     }
 }

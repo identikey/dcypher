@@ -17,16 +17,20 @@ struct Cli {
     json: bool,
 
     /// Identity to use
-    #[arg(long, global = true, env = "DCYPHER_IDENTITY")]
+    #[arg(long, global = true, env = "RECRYPT_IDENTITY")]
     identity: Option<String>,
 
     /// Server URL
-    #[arg(long, global = true, env = "DCYPHER_SERVER")]
+    #[arg(long, global = true, env = "RECRYPT_SERVER")]
     server: Option<String>,
 
     /// Wallet path
-    #[arg(long, global = true, env = "DCYPHER_WALLET")]
+    #[arg(long, global = true, env = "RECRYPT_WALLET")]
     wallet: Option<String>,
+
+    /// PRE backend: "lattice" (post-quantum, default), "mock" (testing only)
+    #[arg(long, global = true, env = "RECRYPT_BACKEND")]
+    backend: Option<String>,
 
     /// Verbose output
     #[arg(short, long, global = true)]
@@ -78,6 +82,7 @@ async fn main() -> Result<()> {
         identity_override: cli.identity,
         server_override: cli.server,
         wallet_override: cli.wallet,
+        backend_override: cli.backend,
         verbose: cli.verbose,
     };
 

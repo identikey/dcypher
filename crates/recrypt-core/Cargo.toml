@@ -22,7 +22,10 @@ zeroize = { version = "1.7", features = ["derive"] }
 ed25519-dalek.workspace = true
 
 # FFI binding (our Phase 1 crate)
-recrypt-ffi = { path = "../recrypt-ffi" }
+recrypt-ffi = { path = "../recrypt-ffi", default-features = false }
+
+# Serialization for BackendId
+serde = { version = "1.0", features = ["derive"] }
 
 # Property testing (optional)
 proptest = { workspace = true, optional = true }
@@ -32,7 +35,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 criterion = "0.5"
 
 [features]
-default = []
+default = ["openfhe", "liboqs"]
+openfhe = ["recrypt-ffi/openfhe"]
+liboqs = ["recrypt-ffi/liboqs"]
 proptest = ["dep:proptest"]
 
 [[bench]]

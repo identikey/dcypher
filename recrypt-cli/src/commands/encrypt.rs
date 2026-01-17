@@ -4,7 +4,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::fs;
 
-use recrypt_core::pre::backends::MockBackend;
 use recrypt_core::HybridEncryptor;
 use recrypt_proto::MultiFormat;
 
@@ -36,22 +35,21 @@ pub async fn run(args: EncryptArgs, ctx: &Context) -> Result<()> {
         )
     })?;
 
-    // Parse recipient's PRE public key
+    // Parse recipient's PRE public key using their stored backend
     let recipient_pre_pk_bytes = bs58::decode(&recipient_identity.pre.public)
         .into_vec()
         .context("Failed to decode recipient PRE public key")?;
 
-    let recipient_pre_pk = recrypt_core::pre::PublicKey::new(
-        recrypt_core::pre::BackendId::Mock,
-        recipient_pre_pk_bytes,
-    );
+    let recipient_backend_id = recipient_identity.pre_backend;
+    let recipient_pre_pk =
+        recrypt_core::pre::PublicKey::new(recipient_backend_id, recipient_pre_pk_bytes);
 
     // Read plaintext
     let plaintext =
         fs::read(&args.file).with_context(|| format!("Failed to read {}", args.file))?;
 
-    // Encrypt
-    let backend = MockBackend;
+    // Create backend matching the recipient's identity
+    let backend = super::create_backend_from_id(recipient_backend_id)?;
     let encryptor = HybridEncryptor::new(backend);
 
     let pb = if !ctx.json_output {

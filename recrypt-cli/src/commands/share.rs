@@ -4,8 +4,7 @@ use colored::Colorize;
 use serde::Serialize;
 use std::fs;
 
-use recrypt_core::pre::backends::MockBackend;
-use recrypt_core::pre::{BackendId, PreBackend, PublicKey, SecretKey};
+use recrypt_core::pre::{PreBackend, PublicKey, SecretKey};
 
 use super::helpers::{resolve_identity, resolve_server_url};
 use super::Context;
@@ -77,25 +76,28 @@ async fn create(file_hash: String, to_fingerprint: String, ctx: &Context) -> Res
         .await
         .context("Failed to fetch recipient account")?;
 
-    // Parse keys
+    // Parse keys using the identity's stored backend
+    let my_backend_id = identity.pre_backend;
     let my_pre_sk_bytes = bs58::decode(&identity.pre.secret)
         .into_vec()
         .context("Failed to decode my PRE secret key")?;
 
-    let recipient_pre_pk = recipient_account
+    let recipient_pre_pk_str = recipient_account
         .pre_pk
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Recipient has no PRE public key"))?;
 
-    let recipient_pre_pk_bytes = bs58::decode(recipient_pre_pk)
+    let recipient_pre_pk_bytes = bs58::decode(recipient_pre_pk_str)
         .into_vec()
         .context("Failed to decode recipient PRE public key")?;
 
-    let my_pre_sk = SecretKey::new(BackendId::Mock, my_pre_sk_bytes);
-    let recipient_pre_pk = PublicKey::new(BackendId::Mock, recipient_pre_pk_bytes);
+    // Both keys must use the same backend for recryption to work
+    // TODO: In the future, we might support cross-backend recryption via key translation
+    let my_pre_sk = SecretKey::new(my_backend_id, my_pre_sk_bytes);
+    let recipient_pre_pk = PublicKey::new(my_backend_id, recipient_pre_pk_bytes);
 
-    // Generate recrypt key
-    let backend = MockBackend;
+    // Create backend and generate recrypt key
+    let backend = super::create_backend_from_id(my_backend_id)?;
     let recrypt_key = backend
         .generate_recrypt_key(&my_pre_sk, &recipient_pre_pk)
         .context("Failed to generate recrypt key")?;

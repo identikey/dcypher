@@ -54,3 +54,58 @@ pub trait PreBackend {
     /// Approximate ciphertext size for given plaintext size
     fn ciphertext_size_estimate(&self, plaintext_size: usize) -> usize;
 }
+
+// Allow using Box<dyn PreBackend> as a PreBackend
+impl PreBackend for Box<dyn PreBackend> {
+    fn backend_id(&self) -> BackendId {
+        (**self).backend_id()
+    }
+
+    fn name(&self) -> &'static str {
+        (**self).name()
+    }
+
+    fn is_post_quantum(&self) -> bool {
+        (**self).is_post_quantum()
+    }
+
+    fn generate_keypair(&self) -> PreResult<KeyPair> {
+        (**self).generate_keypair()
+    }
+
+    fn public_key_from_secret(&self, secret: &SecretKey) -> PreResult<PublicKey> {
+        (**self).public_key_from_secret(secret)
+    }
+
+    fn generate_recrypt_key(
+        &self,
+        from_secret: &SecretKey,
+        to_public: &PublicKey,
+    ) -> PreResult<RecryptKey> {
+        (**self).generate_recrypt_key(from_secret, to_public)
+    }
+
+    fn encrypt(&self, recipient: &PublicKey, plaintext: &[u8]) -> PreResult<Ciphertext> {
+        (**self).encrypt(recipient, plaintext)
+    }
+
+    fn decrypt(
+        &self,
+        secret: &SecretKey,
+        ciphertext: &Ciphertext,
+    ) -> PreResult<Zeroizing<Vec<u8>>> {
+        (**self).decrypt(secret, ciphertext)
+    }
+
+    fn recrypt(&self, recrypt_key: &RecryptKey, ciphertext: &Ciphertext) -> PreResult<Ciphertext> {
+        (**self).recrypt(recrypt_key, ciphertext)
+    }
+
+    fn max_plaintext_size(&self) -> usize {
+        (**self).max_plaintext_size()
+    }
+
+    fn ciphertext_size_estimate(&self, plaintext_size: usize) -> usize {
+        (**self).ciphertext_size_estimate(plaintext_size)
+    }
+}

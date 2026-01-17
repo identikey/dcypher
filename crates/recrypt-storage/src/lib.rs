@@ -1,4 +1,4 @@
-//! dcypher-storage: Content-addressed blob storage
+//! recrypt-storage: Content-addressed blob storage
 //!
 //! Provides async storage backends for encrypted chunks, keyed by Blake3 hash.
 //! No authorization logic — that lives in the Auth Service.

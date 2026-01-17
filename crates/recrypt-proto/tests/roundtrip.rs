@@ -11,7 +11,7 @@ fn test_protobuf_roundtrip() {
     let encryptor = HybridEncryptor::new(backend);
     let kp = encryptor.backend().generate_keypair().unwrap();
 
-    let plaintext = b"Hello, dCypher Protocol Layer!";
+    let plaintext = b"Hello, Recrypt Protocol Layer!";
     let encrypted = encryptor.encrypt(&kp.public, plaintext).unwrap();
 
     // Serialize to protobuf
@@ -61,8 +61,8 @@ fn test_armor_roundtrip() {
     let armored = encrypted
         .to_armor(recrypt_proto::armor::ArmorType::EncryptedFile)
         .unwrap();
-    assert!(armored.contains("----- BEGIN DCYPHER ENCRYPTED FILE -----"));
-    assert!(armored.contains("----- END DCYPHER ENCRYPTED FILE -----"));
+    assert!(armored.contains("----- BEGIN RECRYPT ENCRYPTED FILE -----"));
+    assert!(armored.contains("----- END RECRYPT ENCRYPTED FILE -----"));
 
     // Deserialize
     let restored = recrypt_core::hybrid::EncryptedFile::from_armor(&armored).unwrap();

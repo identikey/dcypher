@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Start server
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
-    tracing::info!("Starting dcypher-server on {}", addr);
+    tracing::info!("Starting recrypt-server on {}", addr);
 
     let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
