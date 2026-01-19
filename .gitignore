@@ -35,3 +35,5 @@ target/
 # Static library installs (built via `just build-deps`)
 vendor/openfhe-install/
 vendor/liboqs-install/
+# HumanLayer thoughts (local only)
+thoughts/
