@@ -1134,9 +1134,9 @@ python-prototype/
 - [x] EnvProvider for CI (`DCYPHER_WALLET_KEY`)
 - [x] MemoryProvider for tests
 - [x] Key caching works (no password prompt on subsequent runs)
-- [ ] Wallet lock/unlock/status commands (OPTIONAL)
+- [x] Wallet lock/unlock/status/path commands
 
-**Plan:** `docs/plans/2026-01-14-phase-6b-secure-credential-storage.md` ✅ COMPLETE (wallet commands optional)
+**Plan:** `docs/plans/2026-01-14-phase-6b-secure-credential-storage.md` ✅ COMPLETE
 
 ### Phase 7: TUI — ⏸️ DEFERRED
 

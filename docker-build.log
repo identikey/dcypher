@@ -1,0 +1,2593 @@
+#0 building with "orbstack" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.69kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1-bookworm
+#2 ...
+
+#3 [auth] library/debian:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#4 ...
+
+#2 [internal] load metadata for docker.io/library/rust:1-bookworm
+#2 DONE 1.0s
+
+#4 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#4 DONE 1.2s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 408B done
+#5 DONE 0.0s
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 resolve docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2 0.0s done
+#6 ...
+
+#7 [internal] load build context
+#7 transferring context: 178.92kB 0.1s done
+#7 DONE 0.1s
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2 7.75kB / 7.75kB done
+#6 sha256:6f4766a622f58f6c7d2d75d424caf0505ba1135a09baed69c9c27a1bebe0358c 1.94kB / 1.94kB done
+#6 sha256:d0248ffeaf318840c9f5a6f35a5006adeca8f6d4e25fd3656ad797e2f5bd6932 4.73kB / 4.73kB done
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 0B / 48.37MB 0.2s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 0B / 23.60MB 0.2s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 0B / 64.48MB 0.2s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 3.15MB / 48.37MB 1.0s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 2.10MB / 23.60MB 1.2s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 4.19MB / 23.60MB 1.7s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 4.19MB / 64.48MB 1.7s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 6.29MB / 48.37MB 1.8s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 6.29MB / 23.60MB 2.3s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 9.44MB / 48.37MB 2.8s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 8.39MB / 23.60MB 3.0s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 8.39MB / 64.48MB 3.0s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 10.49MB / 23.60MB 3.6s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 12.58MB / 48.37MB 3.8s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 12.58MB / 23.60MB 4.4s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 12.58MB / 64.48MB 4.4s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 15.73MB / 48.37MB 4.7s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 14.68MB / 23.60MB 5.0s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 16.78MB / 23.60MB 5.5s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 18.87MB / 48.37MB 5.6s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 16.78MB / 64.48MB 5.6s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 18.87MB / 23.60MB 6.1s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 22.02MB / 48.37MB 6.5s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 20.97MB / 23.60MB 6.9s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 20.97MB / 64.48MB 6.9s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 25.17MB / 48.37MB 7.5s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 23.07MB / 23.60MB 7.5s
+#6 sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 23.60MB / 23.60MB 7.6s done
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 0B / 203.01MB 7.7s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 25.17MB / 64.48MB 7.9s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 28.31MB / 48.37MB 8.4s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 29.36MB / 64.48MB 9.1s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 31.46MB / 48.37MB 9.2s
+#6 ...
+
+#8 [openfhe-builder 1/5] FROM docker.io/library/debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+#8 resolve docker.io/library/debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee 0.0s done
+#8 sha256:79abd3da4379967c72ac0c0e2dc9ac2204143b92224fada931ef855b8559df87 1.04kB / 1.04kB done
+#8 sha256:4a529611325fe013af637fbfd567b4b2eab22c524ca197f2ce7c06a46d5ad705 468B / 468B done
+#8 sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee 8.56kB / 8.56kB done
+#8 ...
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 34.60MB / 48.37MB 10.2s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 33.55MB / 64.48MB 10.4s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 37.75MB / 48.37MB 11.2s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 10.49MB / 203.01MB 11.2s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 37.75MB / 64.48MB 11.6s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 40.89MB / 48.37MB 12.2s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 41.94MB / 64.48MB 12.8s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 44.04MB / 48.37MB 13.1s
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 47.19MB / 48.37MB 14.0s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 46.14MB / 64.48MB 14.0s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 20.97MB / 203.01MB 14.2s
+#6 extracting sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d
+#6 sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 48.37MB / 48.37MB 14.4s done
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 0B / 180.39MB 14.5s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 50.33MB / 64.48MB 15.1s
+#6 extracting sha256:1029f5ddc0d24726f1cefbb8def7a88f8ec819a1fdc4c05ce523011b4b73c72d 1.4s done
+#6 extracting sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 54.53MB / 64.48MB 16.4s
+#6 extracting sha256:d72c713ab317dd7f302a6ff5a345af5b61cddc864fca2d96a23e6ef3c90a6657 0.4s done
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 31.46MB / 203.01MB 17.2s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 58.72MB / 64.48MB 17.6s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 9.44MB / 180.39MB 17.6s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 62.91MB / 64.48MB 18.9s
+#6 sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 64.48MB / 64.48MB 19.4s done
+#6 extracting sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 41.94MB / 203.01MB 20.1s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 18.87MB / 180.39MB 20.2s
+#6 extracting sha256:687ad46596f06c934001fa6d7bea3d1508b0bb616cffb71004efd5bada56884f 1.5s done
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 28.31MB / 180.39MB 23.1s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 52.43MB / 203.01MB 23.3s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 37.75MB / 180.39MB 25.9s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 62.91MB / 203.01MB 26.4s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 47.19MB / 180.39MB 28.5s
+#6 ...
+
+#8 [openfhe-builder 1/5] FROM docker.io/library/debian:bookworm-slim@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+#8 sha256:33bdc9671af8942d96d2f78f67aeec06580065dde1272decac3732689ec7c0e8 28.11MB / 28.11MB 28.0s done
+#8 extracting sha256:33bdc9671af8942d96d2f78f67aeec06580065dde1272decac3732689ec7c0e8 0.9s done
+#8 DONE 29.0s
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 73.40MB / 203.01MB 29.1s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 56.62MB / 180.39MB 31.6s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 83.89MB / 203.01MB 33.0s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 66.06MB / 180.39MB 33.9s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 94.37MB / 203.01MB 35.7s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 75.50MB / 180.39MB 36.8s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 104.86MB / 203.01MB 39.0s
+#6 ...
+
+#9 [runtime 2/7] RUN apt-get update && apt-get install -y --no-install-recommends     libgomp1     libssl3     ca-certificates     tini     wget     && rm -rf /var/lib/apt/lists/*
+#9 0.197 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#9 0.260 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#9 0.286 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+#9 0.312 Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8691 kB]
+#9 3.830 Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
+#9 3.833 Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [287 kB]
+#9 4.585 Fetched 9239 kB in 4s (2096 kB/s)
+#9 4.585 Reading package lists...
+#9 4.941 Reading package lists...
+#9 5.281 Building dependency tree...
+#9 5.392 Reading state information...
+#9 5.533 The following additional packages will be installed:
+#9 5.534   libpsl5 openssl
+#9 5.535 Recommended packages:
+#9 5.535   publicsuffix
+#9 5.584 The following NEW packages will be installed:
+#9 5.584   ca-certificates libgomp1 libpsl5 libssl3 openssl tini wget
+#9 5.603 0 upgraded, 7 newly installed, 0 to remove and 0 not upgraded.
+#9 5.603 Need to get 4679 kB of archives.
+#9 5.603 After this operation, 13.7 MB of additional disk space will be used.
+#9 5.603 Get:1 http://deb.debian.org/debian bookworm/main arm64 libssl3 arm64 3.0.18-1~deb12u1 [1817 kB]
+#9 6.231 Get:2 http://deb.debian.org/debian bookworm/main arm64 openssl arm64 3.0.18-1~deb12u1 [1399 kB]
+#9 6.789 Get:3 http://deb.debian.org/debian bookworm/main arm64 ca-certificates all 20230311+deb12u1 [155 kB]
+#9 6.846 Get:4 http://deb.debian.org/debian bookworm/main arm64 libpsl5 arm64 0.21.2-1 [58.6 kB]
+#9 6.871 Get:5 http://deb.debian.org/debian bookworm/main arm64 wget arm64 1.21.3-1+deb12u1 [922 kB]
+#9 7.238 Get:6 http://deb.debian.org/debian bookworm/main arm64 libgomp1 arm64 12.2.0-14+deb12u1 [104 kB]
+#9 7.282 Get:7 http://deb.debian.org/debian bookworm/main arm64 tini arm64 0.19.0-1+b3 [224 kB]
+#9 7.454 debconf: delaying package configuration, since apt-utils is not installed
+#9 7.476 Fetched 4679 kB in 2s (2626 kB/s)
+#9 7.509 Selecting previously unselected package libssl3:arm64.
+#9 7.509 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6090 files and directories currently installed.)
+#9 7.514 Preparing to unpack .../0-libssl3_3.0.18-1~deb12u1_arm64.deb ...
+#9 7.537 Unpacking libssl3:arm64 (3.0.18-1~deb12u1) ...
+#9 7.653 Selecting previously unselected package openssl.
+#9 7.654 Preparing to unpack .../1-openssl_3.0.18-1~deb12u1_arm64.deb ...
+#9 7.658 Unpacking openssl (3.0.18-1~deb12u1) ...
+#9 7.760 Selecting previously unselected package ca-certificates.
+#9 7.761 Preparing to unpack .../2-ca-certificates_20230311+deb12u1_all.deb ...
+#9 7.765 Unpacking ca-certificates (20230311+deb12u1) ...
+#9 7.809 Selecting previously unselected package libpsl5:arm64.
+#9 7.810 Preparing to unpack .../3-libpsl5_0.21.2-1_arm64.deb ...
+#9 7.814 Unpacking libpsl5:arm64 (0.21.2-1) ...
+#9 7.842 Selecting previously unselected package wget.
+#9 7.843 Preparing to unpack .../4-wget_1.21.3-1+deb12u1_arm64.deb ...
+#9 7.847 Unpacking wget (1.21.3-1+deb12u1) ...
+#9 7.915 Selecting previously unselected package libgomp1:arm64.
+#9 7.916 Preparing to unpack .../5-libgomp1_12.2.0-14+deb12u1_arm64.deb ...
+#9 7.920 Unpacking libgomp1:arm64 (12.2.0-14+deb12u1) ...
+#9 7.955 Selecting previously unselected package tini.
+#9 7.956 Preparing to unpack .../6-tini_0.19.0-1+b3_arm64.deb ...
+#9 7.962 Unpacking tini (0.19.0-1+b3) ...
+#9 7.998 Setting up libpsl5:arm64 (0.21.2-1) ...
+#9 8.009 Setting up wget (1.21.3-1+deb12u1) ...
+#9 8.024 Setting up libssl3:arm64 (3.0.18-1~deb12u1) ...
+#9 8.035 Setting up libgomp1:arm64 (12.2.0-14+deb12u1) ...
+#9 8.047 Setting up tini (0.19.0-1+b3) ...
+#9 8.057 Setting up openssl (3.0.18-1~deb12u1) ...
+#9 8.071 Setting up ca-certificates (20230311+deb12u1) ...
+#9 8.112 debconf: unable to initialize frontend: Dialog
+#9 8.112 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#9 8.112 debconf: falling back to frontend: Readline
+#9 8.112 debconf: unable to initialize frontend: Readline
+#9 8.112 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/aarch64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/aarch64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/aarch64-linux-gnu/perl-base /usr/lib/aarch64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#9 8.112 debconf: falling back to frontend: Teletype
+#9 8.295 Updating certificates in /etc/ssl/certs...
+#9 8.542 142 added, 0 removed; done.
+#9 8.609 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#9 8.624 Processing triggers for ca-certificates (20230311+deb12u1) ...
+#9 8.628 Updating certificates in /etc/ssl/certs...
+#9 8.825 0 added, 0 removed; done.
+#9 8.825 Running hooks in /etc/ca-certificates/update.d...
+#9 8.826 done.
+#9 ...
+
+#10 [openfhe-builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     git     libomp-dev     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#10 0.196 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#10 0.260 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#10 0.286 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+#10 0.312 Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8691 kB]
+#10 3.830 Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
+#10 3.833 Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [287 kB]
+#10 4.595 Fetched 9239 kB in 4s (2091 kB/s)
+#10 4.595 Reading package lists...
+#10 4.964 Reading package lists...
+#10 5.316 Building dependency tree...
+#10 5.424 Reading state information...
+#10 5.568 The following additional packages will be installed:
+#10 5.568   binutils binutils-aarch64-linux-gnu binutils-common bzip2 cmake-data cpp
+#10 5.568   cpp-12 dpkg-dev g++ g++-12 gcc gcc-12 git-man libarchive13 libasan8
+#10 5.568   libatomic1 libbinutils libbrotli1 libbsd0 libc-dev-bin libc6-dev libcc1-0
+#10 5.568   libcrypt-dev libctf-nobfd0 libctf0 libcurl3-gnutls libcurl4 libdpkg-perl
+#10 5.568   libedit2 libelf1 liberror-perl libexpat1 libgcc-12-dev libgdbm-compat4
+#10 5.568   libgdbm6 libgomp1 libgprofng0 libgssapi-krb5-2 libhwasan0 libicu72 libisl23
+#10 5.568   libitm1 libjansson4 libjsoncpp25 libk5crypto3 libkeyutils1 libkrb5-3
+#10 5.568   libkrb5support0 libldap-2.5-0 libllvm14 liblsan0 libmpc3 libmpfr6
+#10 5.568   libncursesw6 libnghttp2-14 libnsl-dev libnsl2 libomp-14-dev libomp5-14
+#10 5.568   libperl5.36 libproc2-0 libpsl5 librhash0 librtmp1 libsasl2-2
+#10 5.568   libsasl2-modules-db libssh2-1 libssl3 libstdc++-12-dev libtirpc-common
+#10 5.568   libtirpc-dev libtirpc3 libtsan2 libubsan1 libuv1 libxml2 libz3-4
+#10 5.568   linux-libc-dev make openssl patch perl perl-modules-5.36 procps rpcsvc-proto
+#10 5.568   xz-utils
+#10 5.569 Suggested packages:
+#10 5.569   binutils-doc bzip2-doc cmake-doc cmake-format elpa-cmake-mode ninja-build
+#10 5.569   cpp-doc gcc-12-locales cpp-12-doc debian-keyring gcc-12-doc gcc-multilib
+#10 5.569   manpages-dev autoconf automake libtool flex bison gdb gcc-doc gettext-base
+#10 5.569   git-daemon-run | git-daemon-sysvinit git-doc git-email git-gui gitk gitweb
+#10 5.569   git-cvs git-mediawiki git-svn lrzip glibc-doc gnupg | sq | sqop
+#10 5.569   | pgpainless-cli sensible-utils bzr gdbm-l10n krb5-doc krb5-user
+#10 5.569   libomp-14-doc libstdc++-12-doc make-doc ed diffutils-doc perl-doc
+#10 5.569   libterm-readline-gnu-perl | libterm-readline-perl-perl
+#10 5.569   libtap-harness-archive-perl
+#10 5.569 Recommended packages:
+#10 5.569   fakeroot gnupg | sq | sqop | pgpainless-cli libalgorithm-merge-perl less
+#10 5.569   ssh-client manpages manpages-dev libc-devtools libfile-fcntllock-perl
+#10 5.569   liblocale-gettext-perl krb5-locales libldap-common libgpm2 publicsuffix
+#10 5.569   libsasl2-modules netbase psmisc
+#10 5.887 The following NEW packages will be installed:
+#10 5.887   binutils binutils-aarch64-linux-gnu binutils-common build-essential bzip2
+#10 5.887   ca-certificates cmake cmake-data cpp cpp-12 dpkg-dev g++ g++-12 gcc gcc-12
+#10 5.887   git git-man libarchive13 libasan8 libatomic1 libbinutils libbrotli1 libbsd0
+#10 5.887   libc-dev-bin libc6-dev libcc1-0 libcrypt-dev libctf-nobfd0 libctf0
+#10 5.887   libcurl3-gnutls libcurl4 libdpkg-perl libedit2 libelf1 liberror-perl
+#10 5.887   libexpat1 libgcc-12-dev libgdbm-compat4 libgdbm6 libgomp1 libgprofng0
+#10 5.887   libgssapi-krb5-2 libhwasan0 libicu72 libisl23 libitm1 libjansson4
+#10 5.887   libjsoncpp25 libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0
+#10 5.887   libldap-2.5-0 libllvm14 liblsan0 libmpc3 libmpfr6 libncursesw6 libnghttp2-14
+#10 5.887   libnsl-dev libnsl2 libomp-14-dev libomp-dev libomp5-14 libperl5.36
+#10 5.887   libproc2-0 libpsl5 librhash0 librtmp1 libsasl2-2 libsasl2-modules-db
+#10 5.887   libssh2-1 libssl3 libstdc++-12-dev libtirpc-common libtirpc-dev libtirpc3
+#10 5.888   libtsan2 libubsan1 libuv1 libxml2 libz3-4 linux-libc-dev make openssl patch
+#10 5.888   perl perl-modules-5.36 procps rpcsvc-proto xz-utils
+#10 5.911 0 upgraded, 91 newly installed, 0 to remove and 0 not upgraded.
+#10 5.911 Need to get 128 MB of archives.
+#10 5.911 After this operation, 579 MB of additional disk space will be used.
+#10 5.911 Get:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.36.0-7+deb12u3 [2815 kB]
+#10 7.040 Get:2 http://deb.debian.org/debian bookworm/main arm64 libgdbm6 arm64 1.23-3 [70.9 kB]
+#10 7.068 Get:3 http://deb.debian.org/debian bookworm/main arm64 libgdbm-compat4 arm64 1.23-3 [48.0 kB]
+#10 7.092 Get:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3 [4009 kB]
+#10 8.359 Get:5 http://deb.debian.org/debian bookworm/main arm64 perl arm64 5.36.0-7+deb12u3 [239 kB]
+#10 8.432 Get:6 http://deb.debian.org/debian bookworm/main arm64 libncursesw6 arm64 6.4-4 [122 kB]
+#10 8.468 Get:7 http://deb.debian.org/debian bookworm/main arm64 libproc2-0 arm64 2:4.0.2-3 [60.1 kB]
+#10 8.491 Get:8 http://deb.debian.org/debian bookworm/main arm64 procps arm64 2:4.0.2-3 [698 kB]
+#10 8.698 Get:9 http://deb.debian.org/debian bookworm/main arm64 bzip2 arm64 1.0.8-5+b1 [48.9 kB]
+#10 8.712 Get:10 http://deb.debian.org/debian bookworm/main arm64 libssl3 arm64 3.0.18-1~deb12u1 [1817 kB]
+#10 9.306 Get:11 http://deb.debian.org/debian bookworm/main arm64 openssl arm64 3.0.18-1~deb12u1 [1399 kB]
+#10 9.686 Get:12 http://deb.debian.org/debian bookworm/main arm64 ca-certificates all 20230311+deb12u1 [155 kB]
+#10 9.735 Get:13 http://deb.debian.org/debian bookworm/main arm64 xz-utils arm64 5.4.1-1 [469 kB]
+#10 9.873 Get:14 http://deb.debian.org/debian bookworm/main arm64 binutils-common arm64 2.40-2 [2487 kB]
+#10 ...
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 84.93MB / 180.39MB 39.7s
+#6 ...
+
+#9 [runtime 2/7] RUN apt-get update && apt-get install -y --no-install-recommends     libgomp1     libssl3     ca-certificates     tini     wget     && rm -rf /var/lib/apt/lists/*
+#9 DONE 13.3s
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 115.34MB / 203.01MB 42.4s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 94.37MB / 180.39MB 42.4s
+#6 ...
+
+#11 [runtime 3/7] RUN groupadd -r recrypt && useradd -r -g recrypt recrypt
+#11 DONE 0.2s
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 ...
+
+#12 [runtime 4/7] WORKDIR /app
+#12 DONE 0.1s
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 103.81MB / 180.39MB 45.2s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 125.83MB / 203.01MB 45.5s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 113.25MB / 180.39MB 48.1s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 136.31MB / 203.01MB 48.9s
+#6 ...
+
+#10 [openfhe-builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     git     libomp-dev     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#10 10.62 Get:15 http://deb.debian.org/debian bookworm/main arm64 libbinutils arm64 2.40-2 [645 kB]
+#10 10.86 Get:16 http://deb.debian.org/debian bookworm/main arm64 libctf-nobfd0 arm64 2.40-2 [144 kB]
+#10 10.91 Get:17 http://deb.debian.org/debian bookworm/main arm64 libctf0 arm64 2.40-2 [79.2 kB]
+#10 10.93 Get:18 http://deb.debian.org/debian bookworm/main arm64 libgprofng0 arm64 2.40-2 [680 kB]
+#10 11.13 Get:19 http://deb.debian.org/debian bookworm/main arm64 libjansson4 arm64 2.14-2 [40.2 kB]
+#10 11.14 Get:20 http://deb.debian.org/debian bookworm/main arm64 binutils-aarch64-linux-gnu arm64 2.40-2 [2637 kB]
+#10 11.94 Get:21 http://deb.debian.org/debian bookworm/main arm64 binutils arm64 2.40-2 [64.9 kB]
+#10 11.94 Get:22 http://deb.debian.org/debian bookworm/main arm64 libc-dev-bin arm64 2.36-9+deb12u13 [46.5 kB]
+#10 11.96 Get:23 http://deb.debian.org/debian bookworm/main arm64 linux-libc-dev arm64 6.1.159-1 [2191 kB]
+#10 12.62 Get:24 http://deb.debian.org/debian bookworm/main arm64 libcrypt-dev arm64 1:4.4.33-2 [121 kB]
+#10 13.15 Get:25 http://deb.debian.org/debian bookworm/main arm64 libkrb5support0 arm64 1.20.1-2+deb12u4 [32.5 kB]
+#10 13.16 Get:26 http://deb.debian.org/debian bookworm/main arm64 libk5crypto3 arm64 1.20.1-2+deb12u4 [80.2 kB]
+#10 13.16 Get:27 http://deb.debian.org/debian bookworm/main arm64 libkeyutils1 arm64 1.6.3-2 [8844 B]
+#10 13.17 Get:28 http://deb.debian.org/debian bookworm/main arm64 libkrb5-3 arm64 1.20.1-2+deb12u4 [314 kB]
+#10 13.61 Get:29 http://deb.debian.org/debian bookworm/main arm64 libgssapi-krb5-2 arm64 1.20.1-2+deb12u4 [124 kB]
+#10 13.61 Get:30 http://deb.debian.org/debian bookworm/main arm64 libtirpc-common all 1.3.3+ds-1 [14.0 kB]
+#10 13.61 Get:31 http://deb.debian.org/debian bookworm/main arm64 libtirpc3 arm64 1.3.3+ds-1 [80.9 kB]
+#10 13.62 Get:32 http://deb.debian.org/debian bookworm/main arm64 libnsl2 arm64 1.3.0-2 [36.9 kB]
+#10 13.62 Get:33 http://deb.debian.org/debian bookworm/main arm64 libtirpc-dev arm64 1.3.3+ds-1 [194 kB]
+#10 13.62 Get:34 http://deb.debian.org/debian bookworm/main arm64 libnsl-dev arm64 1.3.0-2 [66.1 kB]
+#10 13.62 Get:35 http://deb.debian.org/debian bookworm/main arm64 rpcsvc-proto arm64 1.4.3-1 [59.7 kB]
+#10 13.62 Get:36 http://deb.debian.org/debian bookworm/main arm64 libc6-dev arm64 2.36-9+deb12u13 [1435 kB]
+#10 13.92 Get:37 http://deb.debian.org/debian bookworm/main arm64 libisl23 arm64 0.25-1.1 [610 kB]
+#10 14.05 Get:38 http://deb.debian.org/debian bookworm/main arm64 libmpfr6 arm64 4.2.0-1 [600 kB]
+#10 14.13 Get:39 http://deb.debian.org/debian bookworm/main arm64 libmpc3 arm64 1.3.1-1 [49.2 kB]
+#10 14.14 Get:40 http://deb.debian.org/debian bookworm/main arm64 cpp-12 arm64 12.2.0-14+deb12u1 [8228 kB]
+#10 16.58 Get:41 http://deb.debian.org/debian bookworm/main arm64 cpp arm64 4:12.2.0-3 [6832 B]
+#10 16.58 Get:42 http://deb.debian.org/debian bookworm/main arm64 libcc1-0 arm64 12.2.0-14+deb12u1 [37.7 kB]
+#10 16.58 Get:43 http://deb.debian.org/debian bookworm/main arm64 libgomp1 arm64 12.2.0-14+deb12u1 [104 kB]
+#10 16.61 Get:44 http://deb.debian.org/debian bookworm/main arm64 libitm1 arm64 12.2.0-14+deb12u1 [24.0 kB]
+#10 16.62 Get:45 http://deb.debian.org/debian bookworm/main arm64 libatomic1 arm64 12.2.0-14+deb12u1 [9568 B]
+#10 16.63 Get:46 http://deb.debian.org/debian bookworm/main arm64 libasan8 arm64 12.2.0-14+deb12u1 [2096 kB]
+#10 17.26 Get:47 http://deb.debian.org/debian bookworm/main arm64 liblsan0 arm64 12.2.0-14+deb12u1 [926 kB]
+#10 17.57 Get:48 http://deb.debian.org/debian bookworm/main arm64 libtsan2 arm64 12.2.0-14+deb12u1 [2178 kB]
+#10 18.31 Get:49 http://deb.debian.org/debian bookworm/main arm64 libubsan1 arm64 12.2.0-14+deb12u1 [862 kB]
+#10 18.56 Get:50 http://deb.debian.org/debian bookworm/main arm64 libhwasan0 arm64 12.2.0-14+deb12u1 [999 kB]
+#10 18.91 Get:51 http://deb.debian.org/debian bookworm/main arm64 libgcc-12-dev arm64 12.2.0-14+deb12u1 [956 kB]
+#10 19.19 Get:52 http://deb.debian.org/debian bookworm/main arm64 gcc-12 arm64 12.2.0-14+deb12u1 [16.3 MB]
+#10 ...
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 122.68MB / 180.39MB 51.0s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 146.80MB / 203.01MB 52.0s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 132.12MB / 180.39MB 54.0s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 157.29MB / 203.01MB 55.3s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 141.56MB / 180.39MB 56.7s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 167.77MB / 203.01MB 58.4s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 150.99MB / 180.39MB 59.5s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 178.26MB / 203.01MB 61.8s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 160.43MB / 180.39MB 62.4s
+#6 ...
+
+#10 [openfhe-builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     git     libomp-dev     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#10 24.17 Get:53 http://deb.debian.org/debian bookworm/main arm64 gcc arm64 4:12.2.0-3 [5244 B]
+#10 24.17 Get:54 http://deb.debian.org/debian bookworm/main arm64 libstdc++-12-dev arm64 12.2.0-14+deb12u1 [2007 kB]
+#10 24.51 Get:55 http://deb.debian.org/debian bookworm/main arm64 g++-12 arm64 12.2.0-14+deb12u1 [9072 kB]
+#10 27.24 Get:56 http://deb.debian.org/debian bookworm/main arm64 g++ arm64 4:12.2.0-3 [1336 B]
+#10 27.24 Get:57 http://deb.debian.org/debian bookworm/main arm64 make arm64 4.3-4.1 [391 kB]
+#10 27.31 Get:58 http://deb.debian.org/debian bookworm/main arm64 libdpkg-perl all 1.21.22 [603 kB]
+#10 27.49 Get:59 http://deb.debian.org/debian bookworm/main arm64 patch arm64 2.7.6-7 [121 kB]
+#10 27.53 Get:60 http://deb.debian.org/debian bookworm/main arm64 dpkg-dev all 1.21.22 [1353 kB]
+#10 27.94 Get:61 http://deb.debian.org/debian bookworm/main arm64 build-essential arm64 12.9 [7704 B]
+#10 27.94 Get:62 http://deb.debian.org/debian bookworm/main arm64 libicu72 arm64 72.1-3+deb12u1 [9202 kB]
+#10 30.77 Get:63 http://deb.debian.org/debian bookworm/main arm64 libxml2 arm64 2.9.14+dfsg-1.3~deb12u5 [620 kB]
+#10 30.92 Get:64 http://deb.debian.org/debian bookworm/main arm64 libarchive13 arm64 3.6.2-1+deb12u3 [317 kB]
+#10 31.04 Get:65 http://deb.debian.org/debian bookworm/main arm64 libbrotli1 arm64 1.0.9-2+b6 [269 kB]
+#10 31.14 Get:66 http://deb.debian.org/debian bookworm/main arm64 libsasl2-modules-db arm64 2.1.28+dfsg-10 [20.8 kB]
+#10 31.15 Get:67 http://deb.debian.org/debian bookworm/main arm64 libsasl2-2 arm64 2.1.28+dfsg-10 [58.0 kB]
+#10 31.17 Get:68 http://deb.debian.org/debian bookworm/main arm64 libldap-2.5-0 arm64 2.5.13+dfsg-5 [171 kB]
+#10 31.22 Get:69 http://deb.debian.org/debian bookworm/main arm64 libnghttp2-14 arm64 1.52.0-1+deb12u2 [68.6 kB]
+#10 31.24 Get:70 http://deb.debian.org/debian bookworm/main arm64 libpsl5 arm64 0.21.2-1 [58.6 kB]
+#10 31.27 Get:71 http://deb.debian.org/debian bookworm/main arm64 librtmp1 arm64 2.4+20151223.gitfa8646d.1-2+b2 [59.4 kB]
+#10 31.28 Get:72 http://deb.debian.org/debian bookworm/main arm64 libssh2-1 arm64 1.10.0-3+b1 [172 kB]
+#10 31.33 Get:73 http://deb.debian.org/debian bookworm/main arm64 libcurl4 arm64 7.88.1-10+deb12u14 [367 kB]
+#10 31.44 Get:74 http://deb.debian.org/debian bookworm/main arm64 libexpat1 arm64 2.5.0-1+deb12u2 [86.3 kB]
+#10 31.47 Get:75 http://deb.debian.org/debian bookworm/main arm64 libjsoncpp25 arm64 1.9.5-4 [72.3 kB]
+#10 31.49 Get:76 http://deb.debian.org/debian bookworm/main arm64 librhash0 arm64 1.4.3-3 [131 kB]
+#10 31.53 Get:77 http://deb.debian.org/debian bookworm/main arm64 libuv1 arm64 1.44.2-1+deb12u1 [130 kB]
+#10 31.57 Get:78 http://deb.debian.org/debian bookworm/main arm64 cmake-data all 3.25.1-1 [2026 kB]
+#10 32.22 Get:79 http://deb.debian.org/debian bookworm/main arm64 cmake arm64 3.25.1-1 [6806 kB]
+#10 34.15 Get:80 http://deb.debian.org/debian bookworm/main arm64 libcurl3-gnutls arm64 7.88.1-10+deb12u14 [362 kB]
+#10 34.22 Get:81 http://deb.debian.org/debian bookworm/main arm64 liberror-perl all 0.17029-2 [29.0 kB]
+#10 34.22 Get:82 http://deb.debian.org/debian bookworm/main arm64 git-man all 1:2.39.5-0+deb12u3 [2053 kB]
+#10 ...
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 188.74MB / 203.01MB 65.4s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 169.87MB / 180.39MB 65.4s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 179.31MB / 180.39MB 68.3s
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 199.23MB / 203.01MB 68.5s
+#6 sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 180.39MB / 180.39MB 69.0s done
+#6 sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 203.01MB / 203.01MB 69.6s done
+#6 extracting sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 0.1s
+#6 extracting sha256:f018151ab3f36e399ef489b536713197af8faa14dce771cb623bd750150fc315 3.7s done
+#6 extracting sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72
+#6 ...
+
+#10 [openfhe-builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     git     libomp-dev     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#10 34.64 Get:83 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3 [7153 kB]
+#10 36.87 Get:84 http://deb.debian.org/debian bookworm/main arm64 libbsd0 arm64 0.11.7-2 [115 kB]
+#10 36.87 Get:85 http://deb.debian.org/debian bookworm/main arm64 libedit2 arm64 3.1-20221030-2 [88.1 kB]
+#10 36.89 Get:86 http://deb.debian.org/debian bookworm/main arm64 libelf1 arm64 0.188-2.1 [173 kB]
+#10 36.95 Get:87 http://deb.debian.org/debian bookworm/main arm64 libz3-4 arm64 4.8.12-3.1 [6282 kB]
+#10 38.84 Get:88 http://deb.debian.org/debian bookworm/main arm64 libllvm14 arm64 1:14.0.6-12 [19.3 MB]
+#10 41.70 Get:89 http://deb.debian.org/debian bookworm/main arm64 libomp5-14 arm64 1:14.0.6-12 [317 kB]
+#10 41.74 Get:90 http://deb.debian.org/debian bookworm/main arm64 libomp-14-dev arm64 1:14.0.6-12 [333 kB]
+#10 41.78 Get:91 http://deb.debian.org/debian bookworm/main arm64 libomp-dev arm64 1:14.0-55.7~deb12u1 [4672 B]
+#10 41.88 debconf: delaying package configuration, since apt-utils is not installed
+#10 41.91 Fetched 128 MB in 36s (3565 kB/s)
+#10 41.95 Selecting previously unselected package perl-modules-5.36.
+#10 41.95 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6090 files and directories currently installed.)
+#10 41.96 Preparing to unpack .../00-perl-modules-5.36_5.36.0-7+deb12u3_all.deb ...
+#10 42.00 Unpacking perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#10 42.27 Selecting previously unselected package libgdbm6:arm64.
+#10 42.27 Preparing to unpack .../01-libgdbm6_1.23-3_arm64.deb ...
+#10 42.28 Unpacking libgdbm6:arm64 (1.23-3) ...
+#10 42.31 Selecting previously unselected package libgdbm-compat4:arm64.
+#10 42.31 Preparing to unpack .../02-libgdbm-compat4_1.23-3_arm64.deb ...
+#10 42.31 Unpacking libgdbm-compat4:arm64 (1.23-3) ...
+#10 42.35 Selecting previously unselected package libperl5.36:arm64.
+#10 42.35 Preparing to unpack .../03-libperl5.36_5.36.0-7+deb12u3_arm64.deb ...
+#10 42.36 Unpacking libperl5.36:arm64 (5.36.0-7+deb12u3) ...
+#10 42.64 Selecting previously unselected package perl.
+#10 42.64 Preparing to unpack .../04-perl_5.36.0-7+deb12u3_arm64.deb ...
+#10 42.65 Unpacking perl (5.36.0-7+deb12u3) ...
+#10 42.70 Selecting previously unselected package libncursesw6:arm64.
+#10 42.70 Preparing to unpack .../05-libncursesw6_6.4-4_arm64.deb ...
+#10 42.70 Unpacking libncursesw6:arm64 (6.4-4) ...
+#10 42.74 Selecting previously unselected package libproc2-0:arm64.
+#10 42.74 Preparing to unpack .../06-libproc2-0_2%3a4.0.2-3_arm64.deb ...
+#10 42.75 Unpacking libproc2-0:arm64 (2:4.0.2-3) ...
+#10 42.78 Selecting previously unselected package procps.
+#10 42.78 Preparing to unpack .../07-procps_2%3a4.0.2-3_arm64.deb ...
+#10 42.79 Unpacking procps (2:4.0.2-3) ...
+#10 42.85 Selecting previously unselected package bzip2.
+#10 42.85 Preparing to unpack .../08-bzip2_1.0.8-5+b1_arm64.deb ...
+#10 42.85 Unpacking bzip2 (1.0.8-5+b1) ...
+#10 42.88 Selecting previously unselected package libssl3:arm64.
+#10 42.88 Preparing to unpack .../09-libssl3_3.0.18-1~deb12u1_arm64.deb ...
+#10 42.89 Unpacking libssl3:arm64 (3.0.18-1~deb12u1) ...
+#10 43.00 Selecting previously unselected package openssl.
+#10 43.00 Preparing to unpack .../10-openssl_3.0.18-1~deb12u1_arm64.deb ...
+#10 43.00 Unpacking openssl (3.0.18-1~deb12u1) ...
+#10 43.14 Selecting previously unselected package ca-certificates.
+#10 43.14 Preparing to unpack .../11-ca-certificates_20230311+deb12u1_all.deb ...
+#10 43.14 Unpacking ca-certificates (20230311+deb12u1) ...
+#10 43.19 Selecting previously unselected package xz-utils.
+#10 43.19 Preparing to unpack .../12-xz-utils_5.4.1-1_arm64.deb ...
+#10 43.19 Unpacking xz-utils (5.4.1-1) ...
+#10 43.25 Selecting previously unselected package binutils-common:arm64.
+#10 43.25 Preparing to unpack .../13-binutils-common_2.40-2_arm64.deb ...
+#10 43.25 Unpacking binutils-common:arm64 (2.40-2) ...
+#10 43.44 Selecting previously unselected package libbinutils:arm64.
+#10 43.44 Preparing to unpack .../14-libbinutils_2.40-2_arm64.deb ...
+#10 43.45 Unpacking libbinutils:arm64 (2.40-2) ...
+#10 43.53 Selecting previously unselected package libctf-nobfd0:arm64.
+#10 43.53 Preparing to unpack .../15-libctf-nobfd0_2.40-2_arm64.deb ...
+#10 43.54 Unpacking libctf-nobfd0:arm64 (2.40-2) ...
+#10 43.59 Selecting previously unselected package libctf0:arm64.
+#10 43.59 Preparing to unpack .../16-libctf0_2.40-2_arm64.deb ...
+#10 43.59 Unpacking libctf0:arm64 (2.40-2) ...
+#10 43.63 Selecting previously unselected package libgprofng0:arm64.
+#10 43.63 Preparing to unpack .../17-libgprofng0_2.40-2_arm64.deb ...
+#10 43.63 Unpacking libgprofng0:arm64 (2.40-2) ...
+#10 43.70 Selecting previously unselected package libjansson4:arm64.
+#10 43.70 Preparing to unpack .../18-libjansson4_2.14-2_arm64.deb ...
+#10 43.71 Unpacking libjansson4:arm64 (2.14-2) ...
+#10 43.73 Selecting previously unselected package binutils-aarch64-linux-gnu.
+#10 43.73 Preparing to unpack .../19-binutils-aarch64-linux-gnu_2.40-2_arm64.deb ...
+#10 43.74 Unpacking binutils-aarch64-linux-gnu (2.40-2) ...
+#10 43.94 Selecting previously unselected package binutils.
+#10 43.94 Preparing to unpack .../20-binutils_2.40-2_arm64.deb ...
+#10 43.95 Unpacking binutils (2.40-2) ...
+#10 43.98 Selecting previously unselected package libc-dev-bin.
+#10 43.98 Preparing to unpack .../21-libc-dev-bin_2.36-9+deb12u13_arm64.deb ...
+#10 43.99 Unpacking libc-dev-bin (2.36-9+deb12u13) ...
+#10 44.02 Selecting previously unselected package linux-libc-dev:arm64.
+#10 44.02 Preparing to unpack .../22-linux-libc-dev_6.1.159-1_arm64.deb ...
+#10 44.02 Unpacking linux-libc-dev:arm64 (6.1.159-1) ...
+#10 44.16 Selecting previously unselected package libcrypt-dev:arm64.
+#10 44.16 Preparing to unpack .../23-libcrypt-dev_1%3a4.4.33-2_arm64.deb ...
+#10 44.17 Unpacking libcrypt-dev:arm64 (1:4.4.33-2) ...
+#10 44.24 Selecting previously unselected package libkrb5support0:arm64.
+#10 44.24 Preparing to unpack .../24-libkrb5support0_1.20.1-2+deb12u4_arm64.deb ...
+#10 44.25 Unpacking libkrb5support0:arm64 (1.20.1-2+deb12u4) ...
+#10 44.27 Selecting previously unselected package libk5crypto3:arm64.
+#10 44.27 Preparing to unpack .../25-libk5crypto3_1.20.1-2+deb12u4_arm64.deb ...
+#10 44.28 Unpacking libk5crypto3:arm64 (1.20.1-2+deb12u4) ...
+#10 44.33 Selecting previously unselected package libkeyutils1:arm64.
+#10 44.33 Preparing to unpack .../26-libkeyutils1_1.6.3-2_arm64.deb ...
+#10 44.33 Unpacking libkeyutils1:arm64 (1.6.3-2) ...
+#10 44.37 Selecting previously unselected package libkrb5-3:arm64.
+#10 44.37 Preparing to unpack .../27-libkrb5-3_1.20.1-2+deb12u4_arm64.deb ...
+#10 44.37 Unpacking libkrb5-3:arm64 (1.20.1-2+deb12u4) ...
+#10 44.59 Selecting previously unselected package libgssapi-krb5-2:arm64.
+#10 44.59 Preparing to unpack .../28-libgssapi-krb5-2_1.20.1-2+deb12u4_arm64.deb ...
+#10 44.60 Unpacking libgssapi-krb5-2:arm64 (1.20.1-2+deb12u4) ...
+#10 44.63 Selecting previously unselected package libtirpc-common.
+#10 44.63 Preparing to unpack .../29-libtirpc-common_1.3.3+ds-1_all.deb ...
+#10 44.64 Unpacking libtirpc-common (1.3.3+ds-1) ...
+#10 44.66 Selecting previously unselected package libtirpc3:arm64.
+#10 44.66 Preparing to unpack .../30-libtirpc3_1.3.3+ds-1_arm64.deb ...
+#10 44.67 Unpacking libtirpc3:arm64 (1.3.3+ds-1) ...
+#10 44.70 Selecting previously unselected package libnsl2:arm64.
+#10 44.70 Preparing to unpack .../31-libnsl2_1.3.0-2_arm64.deb ...
+#10 44.71 Unpacking libnsl2:arm64 (1.3.0-2) ...
+#10 44.74 Selecting previously unselected package libtirpc-dev:arm64.
+#10 44.74 Preparing to unpack .../32-libtirpc-dev_1.3.3+ds-1_arm64.deb ...
+#10 44.74 Unpacking libtirpc-dev:arm64 (1.3.3+ds-1) ...
+#10 44.78 Selecting previously unselected package libnsl-dev:arm64.
+#10 44.78 Preparing to unpack .../33-libnsl-dev_1.3.0-2_arm64.deb ...
+#10 44.78 Unpacking libnsl-dev:arm64 (1.3.0-2) ...
+#10 44.81 Selecting previously unselected package rpcsvc-proto.
+#10 ...
+
+#6 [rust-builder  1/11] FROM docker.io/library/rust:1-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
+#6 extracting sha256:de63e4f470eb383e64d062836567417217c6729651659a438ae44cbf1fe68b72 2.0s done
+#6 DONE 76.2s
+
+#10 [openfhe-builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     git     libomp-dev     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#10 44.81 Preparing to unpack .../34-rpcsvc-proto_1.4.3-1_arm64.deb ...
+#10 44.81 Unpacking rpcsvc-proto (1.4.3-1) ...
+#10 44.84 Selecting previously unselected package libc6-dev:arm64.
+#10 44.84 Preparing to unpack .../35-libc6-dev_2.36-9+deb12u13_arm64.deb ...
+#10 44.85 Unpacking libc6-dev:arm64 (2.36-9+deb12u13) ...
+#10 44.97 Selecting previously unselected package libisl23:arm64.
+#10 44.97 Preparing to unpack .../36-libisl23_0.25-1.1_arm64.deb ...
+#10 44.97 Unpacking libisl23:arm64 (0.25-1.1) ...
+#10 45.05 Selecting previously unselected package libmpfr6:arm64.
+#10 45.05 Preparing to unpack .../37-libmpfr6_4.2.0-1_arm64.deb ...
+#10 45.06 Unpacking libmpfr6:arm64 (4.2.0-1) ...
+#10 45.11 Selecting previously unselected package libmpc3:arm64.
+#10 45.11 Preparing to unpack .../38-libmpc3_1.3.1-1_arm64.deb ...
+#10 45.11 Unpacking libmpc3:arm64 (1.3.1-1) ...
+#10 45.14 Selecting previously unselected package cpp-12.
+#10 45.14 Preparing to unpack .../39-cpp-12_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.14 Unpacking cpp-12 (12.2.0-14+deb12u1) ...
+#10 45.62 Selecting previously unselected package cpp.
+#10 45.62 Preparing to unpack .../40-cpp_4%3a12.2.0-3_arm64.deb ...
+#10 45.63 Unpacking cpp (4:12.2.0-3) ...
+#10 45.65 Selecting previously unselected package libcc1-0:arm64.
+#10 45.65 Preparing to unpack .../41-libcc1-0_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.66 Unpacking libcc1-0:arm64 (12.2.0-14+deb12u1) ...
+#10 45.69 Selecting previously unselected package libgomp1:arm64.
+#10 45.69 Preparing to unpack .../42-libgomp1_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.69 Unpacking libgomp1:arm64 (12.2.0-14+deb12u1) ...
+#10 45.73 Selecting previously unselected package libitm1:arm64.
+#10 45.73 Preparing to unpack .../43-libitm1_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.73 Unpacking libitm1:arm64 (12.2.0-14+deb12u1) ...
+#10 45.76 Selecting previously unselected package libatomic1:arm64.
+#10 45.76 Preparing to unpack .../44-libatomic1_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.76 Unpacking libatomic1:arm64 (12.2.0-14+deb12u1) ...
+#10 45.79 Selecting previously unselected package libasan8:arm64.
+#10 45.79 Preparing to unpack .../45-libasan8_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.79 Unpacking libasan8:arm64 (12.2.0-14+deb12u1) ...
+#10 45.95 Selecting previously unselected package liblsan0:arm64.
+#10 45.95 Preparing to unpack .../46-liblsan0_12.2.0-14+deb12u1_arm64.deb ...
+#10 45.95 Unpacking liblsan0:arm64 (12.2.0-14+deb12u1) ...
+#10 46.04 Selecting previously unselected package libtsan2:arm64.
+#10 46.04 Preparing to unpack .../47-libtsan2_12.2.0-14+deb12u1_arm64.deb ...
+#10 46.04 Unpacking libtsan2:arm64 (12.2.0-14+deb12u1) ...
+#10 46.21 Selecting previously unselected package libubsan1:arm64.
+#10 46.21 Preparing to unpack .../48-libubsan1_12.2.0-14+deb12u1_arm64.deb ...
+#10 46.21 Unpacking libubsan1:arm64 (12.2.0-14+deb12u1) ...
+#10 46.30 Selecting previously unselected package libhwasan0:arm64.
+#10 46.30 Preparing to unpack .../49-libhwasan0_12.2.0-14+deb12u1_arm64.deb ...
+#10 46.30 Unpacking libhwasan0:arm64 (12.2.0-14+deb12u1) ...
+#10 46.38 Selecting previously unselected package libgcc-12-dev:arm64.
+#10 46.38 Preparing to unpack .../50-libgcc-12-dev_12.2.0-14+deb12u1_arm64.deb ...
+#10 46.39 Unpacking libgcc-12-dev:arm64 (12.2.0-14+deb12u1) ...
+#10 46.49 Selecting previously unselected package gcc-12.
+#10 46.49 Preparing to unpack .../51-gcc-12_12.2.0-14+deb12u1_arm64.deb ...
+#10 46.50 Unpacking gcc-12 (12.2.0-14+deb12u1) ...
+#10 47.05 Selecting previously unselected package gcc.
+#10 47.05 Preparing to unpack .../52-gcc_4%3a12.2.0-3_arm64.deb ...
+#10 47.06 Unpacking gcc (4:12.2.0-3) ...
+#10 47.09 Selecting previously unselected package libstdc++-12-dev:arm64.
+#10 47.10 Preparing to unpack .../53-libstdc++-12-dev_12.2.0-14+deb12u1_arm64.deb ...
+#10 47.10 Unpacking libstdc++-12-dev:arm64 (12.2.0-14+deb12u1) ...
+#10 47.26 Selecting previously unselected package g++-12.
+#10 47.26 Preparing to unpack .../54-g++-12_12.2.0-14+deb12u1_arm64.deb ...
+#10 47.27 Unpacking g++-12 (12.2.0-14+deb12u1) ...
+#10 47.74 Selecting previously unselected package g++.
+#10 47.74 Preparing to unpack .../55-g++_4%3a12.2.0-3_arm64.deb ...
+#10 47.74 Unpacking g++ (4:12.2.0-3) ...
+#10 47.77 Selecting previously unselected package make.
+#10 47.77 Preparing to unpack .../56-make_4.3-4.1_arm64.deb ...
+#10 47.77 Unpacking make (4.3-4.1) ...
+#10 47.84 Selecting previously unselected package libdpkg-perl.
+#10 47.84 Preparing to unpack .../57-libdpkg-perl_1.21.22_all.deb ...
+#10 47.84 Unpacking libdpkg-perl (1.21.22) ...
+#10 47.91 Selecting previously unselected package patch.
+#10 47.91 Preparing to unpack .../58-patch_2.7.6-7_arm64.deb ...
+#10 47.92 Unpacking patch (2.7.6-7) ...
+#10 47.96 Selecting previously unselected package dpkg-dev.
+#10 47.96 Preparing to unpack .../59-dpkg-dev_1.21.22_all.deb ...
+#10 47.97 Unpacking dpkg-dev (1.21.22) ...
+#10 48.08 Selecting previously unselected package build-essential.
+#10 48.08 Preparing to unpack .../60-build-essential_12.9_arm64.deb ...
+#10 48.08 Unpacking build-essential (12.9) ...
+#10 48.12 Selecting previously unselected package libicu72:arm64.
+#10 48.12 Preparing to unpack .../61-libicu72_72.1-3+deb12u1_arm64.deb ...
+#10 48.13 Unpacking libicu72:arm64 (72.1-3+deb12u1) ...
+#10 48.55 Selecting previously unselected package libxml2:arm64.
+#10 48.55 Preparing to unpack .../62-libxml2_2.9.14+dfsg-1.3~deb12u5_arm64.deb ...
+#10 48.56 Unpacking libxml2:arm64 (2.9.14+dfsg-1.3~deb12u5) ...
+#10 48.64 Selecting previously unselected package libarchive13:arm64.
+#10 48.64 Preparing to unpack .../63-libarchive13_3.6.2-1+deb12u3_arm64.deb ...
+#10 48.64 Unpacking libarchive13:arm64 (3.6.2-1+deb12u3) ...
+#10 48.70 Selecting previously unselected package libbrotli1:arm64.
+#10 48.70 Preparing to unpack .../64-libbrotli1_1.0.9-2+b6_arm64.deb ...
+#10 48.70 Unpacking libbrotli1:arm64 (1.0.9-2+b6) ...
+#10 48.74 Selecting previously unselected package libsasl2-modules-db:arm64.
+#10 48.74 Preparing to unpack .../65-libsasl2-modules-db_2.1.28+dfsg-10_arm64.deb ...
+#10 48.75 Unpacking libsasl2-modules-db:arm64 (2.1.28+dfsg-10) ...
+#10 48.77 Selecting previously unselected package libsasl2-2:arm64.
+#10 48.77 Preparing to unpack .../66-libsasl2-2_2.1.28+dfsg-10_arm64.deb ...
+#10 48.77 Unpacking libsasl2-2:arm64 (2.1.28+dfsg-10) ...
+#10 48.81 Selecting previously unselected package libldap-2.5-0:arm64.
+#10 48.81 Preparing to unpack .../67-libldap-2.5-0_2.5.13+dfsg-5_arm64.deb ...
+#10 48.81 Unpacking libldap-2.5-0:arm64 (2.5.13+dfsg-5) ...
+#10 48.85 Selecting previously unselected package libnghttp2-14:arm64.
+#10 48.86 Preparing to unpack .../68-libnghttp2-14_1.52.0-1+deb12u2_arm64.deb ...
+#10 48.86 Unpacking libnghttp2-14:arm64 (1.52.0-1+deb12u2) ...
+#10 48.89 Selecting previously unselected package libpsl5:arm64.
+#10 48.89 Preparing to unpack .../69-libpsl5_0.21.2-1_arm64.deb ...
+#10 48.90 Unpacking libpsl5:arm64 (0.21.2-1) ...
+#10 48.93 Selecting previously unselected package librtmp1:arm64.
+#10 48.93 Preparing to unpack .../70-librtmp1_2.4+20151223.gitfa8646d.1-2+b2_arm64.deb ...
+#10 48.93 Unpacking librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+#10 48.96 Selecting previously unselected package libssh2-1:arm64.
+#10 48.96 Preparing to unpack .../71-libssh2-1_1.10.0-3+b1_arm64.deb ...
+#10 48.96 Unpacking libssh2-1:arm64 (1.10.0-3+b1) ...
+#10 49.01 Selecting previously unselected package libcurl4:arm64.
+#10 49.01 Preparing to unpack .../72-libcurl4_7.88.1-10+deb12u14_arm64.deb ...
+#10 49.01 Unpacking libcurl4:arm64 (7.88.1-10+deb12u14) ...
+#10 49.06 Selecting previously unselected package libexpat1:arm64.
+#10 49.06 Preparing to unpack .../73-libexpat1_2.5.0-1+deb12u2_arm64.deb ...
+#10 49.06 Unpacking libexpat1:arm64 (2.5.0-1+deb12u2) ...
+#10 49.09 Selecting previously unselected package libjsoncpp25:arm64.
+#10 49.09 Preparing to unpack .../74-libjsoncpp25_1.9.5-4_arm64.deb ...
+#10 49.10 Unpacking libjsoncpp25:arm64 (1.9.5-4) ...
+#10 49.13 Selecting previously unselected package librhash0:arm64.
+#10 49.13 Preparing to unpack .../75-librhash0_1.4.3-3_arm64.deb ...
+#10 49.14 Unpacking librhash0:arm64 (1.4.3-3) ...
+#10 49.17 Selecting previously unselected package libuv1:arm64.
+#10 49.17 Preparing to unpack .../76-libuv1_1.44.2-1+deb12u1_arm64.deb ...
+#10 49.18 Unpacking libuv1:arm64 (1.44.2-1+deb12u1) ...
+#10 49.24 Selecting previously unselected package cmake-data.
+#10 49.24 Preparing to unpack .../77-cmake-data_3.25.1-1_all.deb ...
+#10 49.25 Unpacking cmake-data (3.25.1-1) ...
+#10 49.43 Selecting previously unselected package cmake.
+#10 49.43 Preparing to unpack .../78-cmake_3.25.1-1_arm64.deb ...
+#10 49.44 Unpacking cmake (3.25.1-1) ...
+#10 49.84 Selecting previously unselected package libcurl3-gnutls:arm64.
+#10 49.85 Preparing to unpack .../79-libcurl3-gnutls_7.88.1-10+deb12u14_arm64.deb ...
+#10 49.85 Unpacking libcurl3-gnutls:arm64 (7.88.1-10+deb12u14) ...
+#10 49.90 Selecting previously unselected package liberror-perl.
+#10 49.90 Preparing to unpack .../80-liberror-perl_0.17029-2_all.deb ...
+#10 49.91 Unpacking liberror-perl (0.17029-2) ...
+#10 49.93 Selecting previously unselected package git-man.
+#10 49.93 Preparing to unpack .../81-git-man_1%3a2.39.5-0+deb12u3_all.deb ...
+#10 49.93 Unpacking git-man (1:2.39.5-0+deb12u3) ...
+#10 50.03 Selecting previously unselected package git.
+#10 50.03 Preparing to unpack .../82-git_1%3a2.39.5-0+deb12u3_arm64.deb ...
+#10 50.03 Unpacking git (1:2.39.5-0+deb12u3) ...
+#10 50.30 Selecting previously unselected package libbsd0:arm64.
+#10 50.30 Preparing to unpack .../83-libbsd0_0.11.7-2_arm64.deb ...
+#10 50.32 Unpacking libbsd0:arm64 (0.11.7-2) ...
+#10 50.35 Selecting previously unselected package libedit2:arm64.
+#10 50.35 Preparing to unpack .../84-libedit2_3.1-20221030-2_arm64.deb ...
+#10 50.35 Unpacking libedit2:arm64 (3.1-20221030-2) ...
+#10 50.39 Selecting previously unselected package libelf1:arm64.
+#10 50.39 Preparing to unpack .../85-libelf1_0.188-2.1_arm64.deb ...
+#10 50.39 Unpacking libelf1:arm64 (0.188-2.1) ...
+#10 50.42 Selecting previously unselected package libz3-4:arm64.
+#10 50.42 Preparing to unpack .../86-libz3-4_4.8.12-3.1_arm64.deb ...
+#10 50.42 Unpacking libz3-4:arm64 (4.8.12-3.1) ...
+#10 50.83 Selecting previously unselected package libllvm14:arm64.
+#10 50.83 Preparing to unpack .../87-libllvm14_1%3a14.0.6-12_arm64.deb ...
+#10 50.84 Unpacking libllvm14:arm64 (1:14.0.6-12) ...
+#10 51.49 Selecting previously unselected package libomp5-14:arm64.
+#10 51.49 Preparing to unpack .../88-libomp5-14_1%3a14.0.6-12_arm64.deb ...
+#10 51.50 Unpacking libomp5-14:arm64 (1:14.0.6-12) ...
+#10 51.62 Selecting previously unselected package libomp-14-dev.
+#10 51.62 Preparing to unpack .../89-libomp-14-dev_1%3a14.0.6-12_arm64.deb ...
+#10 51.64 Unpacking libomp-14-dev (1:14.0.6-12) ...
+#10 51.75 Selecting previously unselected package libomp-dev:arm64.
+#10 51.75 Preparing to unpack .../90-libomp-dev_1%3a14.0-55.7~deb12u1_arm64.deb ...
+#10 51.76 Unpacking libomp-dev:arm64 (1:14.0-55.7~deb12u1) ...
+#10 51.86 Setting up libexpat1:arm64 (2.5.0-1+deb12u2) ...
+#10 51.94 Setting up libomp5-14:arm64 (1:14.0.6-12) ...
+#10 51.97 Setting up libkeyutils1:arm64 (1.6.3-2) ...
+#10 51.98 Setting up libpsl5:arm64 (0.21.2-1) ...
+#10 52.00 Setting up libicu72:arm64 (72.1-3+deb12u1) ...
+#10 52.03 Setting up libtirpc-common (1.3.3+ds-1) ...
+#10 52.05 Setting up libbrotli1:arm64 (1.0.9-2+b6) ...
+#10 52.06 Setting up binutils-common:arm64 (2.40-2) ...
+#10 52.07 Setting up libssl3:arm64 (3.0.18-1~deb12u1) ...
+#10 52.08 Setting up libnghttp2-14:arm64 (1.52.0-1+deb12u2) ...
+#10 52.09 Setting up linux-libc-dev:arm64 (6.1.159-1) ...
+#10 52.11 Setting up libctf-nobfd0:arm64 (2.40-2) ...
+#10 52.12 Setting up libgomp1:arm64 (12.2.0-14+deb12u1) ...
+#10 52.14 Setting up bzip2 (1.0.8-5+b1) ...
+#10 52.15 Setting up libjansson4:arm64 (2.14-2) ...
+#10 52.16 Setting up libkrb5support0:arm64 (1.20.1-2+deb12u4) ...
+#10 52.18 Setting up libsasl2-modules-db:arm64 (2.1.28+dfsg-10) ...
+#10 52.19 Setting up perl-modules-5.36 (5.36.0-7+deb12u3) ...
+#10 52.20 Setting up libz3-4:arm64 (4.8.12-3.1) ...
+#10 52.21 Setting up libuv1:arm64 (1.44.2-1+deb12u1) ...
+#10 52.23 Setting up rpcsvc-proto (1.4.3-1) ...
+#10 52.24 Setting up make (4.3-4.1) ...
+#10 52.25 Setting up libmpfr6:arm64 (4.2.0-1) ...
+#10 52.26 Setting up librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+#10 52.28 Setting up xz-utils (5.4.1-1) ...
+#10 52.29 update-alternatives: using /usr/bin/xz to provide /usr/bin/lzma (lzma) in auto mode
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzma.1.gz because associated file /usr/share/man/man1/xz.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/unlzma.1.gz because associated file /usr/share/man/man1/unxz.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzcat.1.gz because associated file /usr/share/man/man1/xzcat.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzmore.1.gz because associated file /usr/share/man/man1/xzmore.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzless.1.gz because associated file /usr/share/man/man1/xzless.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzdiff.1.gz because associated file /usr/share/man/man1/xzdiff.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzcmp.1.gz because associated file /usr/share/man/man1/xzcmp.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzgrep.1.gz because associated file /usr/share/man/man1/xzgrep.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzegrep.1.gz because associated file /usr/share/man/man1/xzegrep.1.gz (of link group lzma) doesn't exist
+#10 52.29 update-alternatives: warning: skip creation of /usr/share/man/man1/lzfgrep.1.gz because associated file /usr/share/man/man1/xzfgrep.1.gz (of link group lzma) doesn't exist
+#10 52.30 Setting up libproc2-0:arm64 (2:4.0.2-3) ...
+#10 52.31 Setting up libmpc3:arm64 (1.3.1-1) ...
+#10 52.33 Setting up libatomic1:arm64 (12.2.0-14+deb12u1) ...
+#10 52.35 Setting up patch (2.7.6-7) ...
+#10 52.37 Setting up libjsoncpp25:arm64 (1.9.5-4) ...
+#10 52.38 Setting up libncursesw6:arm64 (6.4-4) ...
+#10 52.39 Setting up libk5crypto3:arm64 (1.20.1-2+deb12u4) ...
+#10 52.40 Setting up libsasl2-2:arm64 (2.1.28+dfsg-10) ...
+#10 52.41 Setting up libubsan1:arm64 (12.2.0-14+deb12u1) ...
+#10 52.43 Setting up libhwasan0:arm64 (12.2.0-14+deb12u1) ...
+#10 52.44 Setting up librhash0:arm64 (1.4.3-3) ...
+#10 52.45 Setting up libcrypt-dev:arm64 (1:4.4.33-2) ...
+#10 52.46 Setting up libasan8:arm64 (12.2.0-14+deb12u1) ...
+#10 52.47 Setting up procps (2:4.0.2-3) ...
+#10 52.51 Setting up git-man (1:2.39.5-0+deb12u3) ...
+#10 52.52 Setting up libssh2-1:arm64 (1.10.0-3+b1) ...
+#10 52.56 Setting up cmake-data (3.25.1-1) ...
+#10 52.67 Setting up libkrb5-3:arm64 (1.20.1-2+deb12u4) ...
+#10 52.69 Setting up libtsan2:arm64 (12.2.0-14+deb12u1) ...
+#10 52.70 Setting up libbinutils:arm64 (2.40-2) ...
+#10 52.72 Setting up libisl23:arm64 (0.25-1.1) ...
+#10 52.74 Setting up libc-dev-bin (2.36-9+deb12u13) ...
+#10 52.77 Setting up openssl (3.0.18-1~deb12u1) ...
+#10 52.80 Setting up libbsd0:arm64 (0.11.7-2) ...
+#10 52.83 Setting up libelf1:arm64 (0.188-2.1) ...
+#10 52.86 Setting up libxml2:arm64 (2.9.14+dfsg-1.3~deb12u5) ...
+#10 52.91 Setting up libcc1-0:arm64 (12.2.0-14+deb12u1) ...
+#10 52.96 Setting up liblsan0:arm64 (12.2.0-14+deb12u1) ...
+#10 53.02 Setting up libitm1:arm64 (12.2.0-14+deb12u1) ...
+#10 53.08 Setting up libgdbm6:arm64 (1.23-3) ...
+#10 53.12 Setting up libctf0:arm64 (2.40-2) ...
+#10 53.16 Setting up cpp-12 (12.2.0-14+deb12u1) ...
+#10 53.20 Setting up libarchive13:arm64 (3.6.2-1+deb12u3) ...
+#10 53.23 Setting up libedit2:arm64 (3.1-20221030-2) ...
+#10 53.27 Setting up libldap-2.5-0:arm64 (2.5.13+dfsg-5) ...
+#10 53.29 Setting up ca-certificates (20230311+deb12u1) ...
+#10 53.36 debconf: unable to initialize frontend: Dialog
+#10 53.36 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#10 53.36 debconf: falling back to frontend: Readline
+#10 53.36 debconf: unable to initialize frontend: Readline
+#10 53.36 debconf: (This frontend requires a controlling tty.)
+#10 53.36 debconf: falling back to frontend: Teletype
+#10 53.64 Updating certificates in /etc/ssl/certs...
+#10 ...
+
+#13 [rust-builder  2/11] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     libomp-dev     libssl-dev     pkg-config     libclang-dev     protobuf-compiler     ninja-build     && rm -rf /var/lib/apt/lists/*
+#13 0.187 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#13 0.203 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#13 0.213 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+#13 0.267 Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8691 kB]
+#13 1.210 Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
+#13 1.211 Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [287 kB]
+#13 1.975 Fetched 9239 kB in 2s (5079 kB/s)
+#13 1.975 Reading package lists...
+#13 2.352 Reading package lists...
+#13 2.692 Building dependency tree...
+#13 2.792 Reading state information...
+#13 2.909 libssl-dev is already the newest version (3.0.18-1~deb12u1).
+#13 2.909 pkg-config is already the newest version (1.8.1-1).
+#13 2.909 pkg-config set to manually installed.
+#13 2.909 The following additional packages will be installed:
+#13 2.909   cmake-data libarchive13 libclang-14-dev libclang-common-14-dev libclang1-14
+#13 2.909   libgc1 libjsoncpp25 libllvm14 libobjc-12-dev libobjc4 libomp-14-dev
+#13 2.909   libomp5-14 libprotobuf32 libprotoc32 librhash0 libuv1 libz3-4
+#13 2.910 Suggested packages:
+#13 2.910   cmake-doc cmake-format elpa-cmake-mode lrzip libomp-14-doc protobuf-mode-el
+#13 2.910 Recommended packages:
+#13 2.910   libclang-rt-14-dev libprotobuf-dev
+#13 3.031 The following NEW packages will be installed:
+#13 3.031   build-essential cmake cmake-data libarchive13 libclang-14-dev
+#13 3.031   libclang-common-14-dev libclang-dev libclang1-14 libgc1 libjsoncpp25
+#13 3.031   libllvm14 libobjc-12-dev libobjc4 libomp-14-dev libomp-dev libomp5-14
+#13 3.031   libprotobuf32 libprotoc32 librhash0 libuv1 libz3-4 ninja-build
+#13 3.031   protobuf-compiler
+#13 3.061 0 upgraded, 23 newly installed, 0 to remove and 0 not upgraded.
+#13 3.061 Need to get 66.8 MB of archives.
+#13 3.061 After this operation, 482 MB of additional disk space will be used.
+#13 3.061 Get:1 http://deb.debian.org/debian bookworm/main arm64 build-essential arm64 12.9 [7704 B]
+#13 3.071 Get:2 http://deb.debian.org/debian bookworm/main arm64 libarchive13 arm64 3.6.2-1+deb12u3 [317 kB]
+#13 3.109 Get:3 http://deb.debian.org/debian bookworm/main arm64 libjsoncpp25 arm64 1.9.5-4 [72.3 kB]
+#13 3.121 Get:4 http://deb.debian.org/debian bookworm/main arm64 librhash0 arm64 1.4.3-3 [131 kB]
+#13 3.138 Get:5 http://deb.debian.org/debian bookworm/main arm64 libuv1 arm64 1.44.2-1+deb12u1 [130 kB]
+#13 3.154 Get:6 http://deb.debian.org/debian bookworm/main arm64 cmake-data all 3.25.1-1 [2026 kB]
+#13 3.508 Get:7 http://deb.debian.org/debian bookworm/main arm64 cmake arm64 3.25.1-1 [6806 kB]
+#13 4.184 Get:8 http://deb.debian.org/debian bookworm/main arm64 libgc1 arm64 1:8.2.2-3 [239 kB]
+#13 4.208 Get:9 http://deb.debian.org/debian bookworm/main arm64 libobjc4 arm64 12.2.0-14+deb12u1 [39.0 kB]
+#13 4.208 Get:10 http://deb.debian.org/debian bookworm/main arm64 libobjc-12-dev arm64 12.2.0-14+deb12u1 [165 kB]
+#13 4.225 Get:11 http://deb.debian.org/debian bookworm/main arm64 libz3-4 arm64 4.8.12-3.1 [6282 kB]
+#13 4.862 Get:12 http://deb.debian.org/debian bookworm/main arm64 libllvm14 arm64 1:14.0.6-12 [19.3 MB]
+#13 20.45 Get:13 http://deb.debian.org/debian bookworm/main arm64 libclang1-14 arm64 1:14.0.6-12 [5465 kB]
+#13 ...
+
+#10 [openfhe-builder 2/5] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     git     libomp-dev     ca-certificates     && rm -rf /var/lib/apt/lists/*
+#10 67.62 142 added, 0 removed; done.
+#10 67.74 Setting up libgprofng0:arm64 (2.40-2) ...
+#10 67.75 Setting up libgcc-12-dev:arm64 (12.2.0-14+deb12u1) ...
+#10 67.76 Setting up libgssapi-krb5-2:arm64 (1.20.1-2+deb12u4) ...
+#10 67.77 Setting up libgdbm-compat4:arm64 (1.23-3) ...
+#10 67.78 Setting up libllvm14:arm64 (1:14.0.6-12) ...
+#10 67.79 Setting up cpp (4:12.2.0-3) ...
+#10 67.81 Setting up libcurl4:arm64 (7.88.1-10+deb12u14) ...
+#10 67.82 Setting up libomp-14-dev (1:14.0.6-12) ...
+#10 67.83 Setting up libperl5.36:arm64 (5.36.0-7+deb12u3) ...
+#10 67.85 Setting up libomp-dev:arm64 (1:14.0-55.7~deb12u1) ...
+#10 67.86 Setting up libtirpc3:arm64 (1.3.3+ds-1) ...
+#10 67.88 Setting up binutils-aarch64-linux-gnu (2.40-2) ...
+#10 67.89 Setting up libcurl3-gnutls:arm64 (7.88.1-10+deb12u14) ...
+#10 67.90 Setting up binutils (2.40-2) ...
+#10 67.92 Setting up perl (5.36.0-7+deb12u3) ...
+#10 67.94 Setting up libtirpc-dev:arm64 (1.3.3+ds-1) ...
+#10 67.95 Setting up gcc-12 (12.2.0-14+deb12u1) ...
+#10 67.96 Setting up libdpkg-perl (1.21.22) ...
+#10 67.97 Setting up libnsl2:arm64 (1.3.0-2) ...
+#10 67.98 Setting up cmake (3.25.1-1) ...
+#10 68.01 Setting up gcc (4:12.2.0-3) ...
+#10 68.03 Setting up dpkg-dev (1.21.22) ...
+#10 68.05 Setting up liberror-perl (0.17029-2) ...
+#10 68.07 Setting up git (1:2.39.5-0+deb12u3) ...
+#10 68.09 Setting up libnsl-dev:arm64 (1.3.0-2) ...
+#10 68.10 Setting up libc6-dev:arm64 (2.36-9+deb12u13) ...
+#10 68.11 Setting up libstdc++-12-dev:arm64 (12.2.0-14+deb12u1) ...
+#10 68.12 Setting up g++-12 (12.2.0-14+deb12u1) ...
+#10 68.13 Setting up g++ (4:12.2.0-3) ...
+#10 68.14 update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+#10 68.15 Setting up build-essential (12.9) ...
+#10 68.16 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#10 68.18 Processing triggers for ca-certificates (20230311+deb12u1) ...
+#10 68.19 Updating certificates in /etc/ssl/certs...
+#10 68.38 0 added, 0 removed; done.
+#10 68.38 Running hooks in /etc/ca-certificates/update.d...
+#10 68.38 done.
+#10 DONE 73.2s
+
+#14 [openfhe-builder 3/5] WORKDIR /build
+#14 DONE 0.2s
+
+#15 [openfhe-builder 4/5] COPY vendor/openfhe-development ./openfhe-development
+#15 DONE 2.4s
+
+#13 [rust-builder  2/11] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     libomp-dev     libssl-dev     pkg-config     libclang-dev     protobuf-compiler     ninja-build     && rm -rf /var/lib/apt/lists/*
+#13 20.99 Get:14 http://deb.debian.org/debian bookworm/main arm64 libclang-common-14-dev all 1:14.0.6-12 [890 kB]
+#13 21.08 Get:15 http://deb.debian.org/debian bookworm/main arm64 libclang-14-dev arm64 1:14.0.6-12 [22.5 MB]
+#13 25.01 Get:16 http://deb.debian.org/debian bookworm/main arm64 libclang-dev arm64 1:14.0-55.7~deb12u1 [4728 B]
+#13 25.02 Get:17 http://deb.debian.org/debian bookworm/main arm64 libomp5-14 arm64 1:14.0.6-12 [317 kB]
+#13 25.02 Get:18 http://deb.debian.org/debian bookworm/main arm64 libomp-14-dev arm64 1:14.0.6-12 [333 kB]
+#13 25.03 Get:19 http://deb.debian.org/debian bookworm/main arm64 libomp-dev arm64 1:14.0-55.7~deb12u1 [4672 B]
+#13 25.03 Get:20 http://deb.debian.org/debian bookworm/main arm64 libprotobuf32 arm64 3.21.12-3 [821 kB]
+#13 25.04 Get:21 http://deb.debian.org/debian bookworm/main arm64 libprotoc32 arm64 3.21.12-3 [718 kB]
+#13 25.08 Get:22 http://deb.debian.org/debian bookworm/main arm64 ninja-build arm64 1.11.1-2~deb12u1 [126 kB]
+#13 25.09 Get:23 http://deb.debian.org/debian bookworm/main arm64 protobuf-compiler arm64 3.21.12-3 [83.9 kB]
+#13 25.22 debconf: delaying package configuration, since apt-utils is not installed
+#13 25.23 Fetched 66.8 MB in 22s (3027 kB/s)
+#13 26.05 Selecting previously unselected package build-essential.
+#13 26.05 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 23281 files and directories currently installed.)
+#13 26.09 Preparing to unpack .../00-build-essential_12.9_arm64.deb ...
+#13 26.14 Unpacking build-essential (12.9) ...
+#13 26.23 Selecting previously unselected package libarchive13:arm64.
+#13 26.23 Preparing to unpack .../01-libarchive13_3.6.2-1+deb12u3_arm64.deb ...
+#13 26.28 Unpacking libarchive13:arm64 (3.6.2-1+deb12u3) ...
+#13 26.36 Selecting previously unselected package libjsoncpp25:arm64.
+#13 26.37 Preparing to unpack .../02-libjsoncpp25_1.9.5-4_arm64.deb ...
+#13 26.38 Unpacking libjsoncpp25:arm64 (1.9.5-4) ...
+#13 26.42 Selecting previously unselected package librhash0:arm64.
+#13 26.42 Preparing to unpack .../03-librhash0_1.4.3-3_arm64.deb ...
+#13 26.43 Unpacking librhash0:arm64 (1.4.3-3) ...
+#13 26.50 Selecting previously unselected package libuv1:arm64.
+#13 26.50 Preparing to unpack .../04-libuv1_1.44.2-1+deb12u1_arm64.deb ...
+#13 26.51 Unpacking libuv1:arm64 (1.44.2-1+deb12u1) ...
+#13 26.57 Selecting previously unselected package cmake-data.
+#13 26.57 Preparing to unpack .../05-cmake-data_3.25.1-1_all.deb ...
+#13 26.58 Unpacking cmake-data (3.25.1-1) ...
+#13 26.77 Selecting previously unselected package cmake.
+#13 26.77 Preparing to unpack .../06-cmake_3.25.1-1_arm64.deb ...
+#13 26.78 Unpacking cmake (3.25.1-1) ...
+#13 27.21 Selecting previously unselected package libgc1:arm64.
+#13 27.21 Preparing to unpack .../07-libgc1_1%3a8.2.2-3_arm64.deb ...
+#13 27.22 Unpacking libgc1:arm64 (1:8.2.2-3) ...
+#13 27.27 Selecting previously unselected package libobjc4:arm64.
+#13 27.27 Preparing to unpack .../08-libobjc4_12.2.0-14+deb12u1_arm64.deb ...
+#13 27.28 Unpacking libobjc4:arm64 (12.2.0-14+deb12u1) ...
+#13 27.31 Selecting previously unselected package libobjc-12-dev:arm64.
+#13 27.31 Preparing to unpack .../09-libobjc-12-dev_12.2.0-14+deb12u1_arm64.deb ...
+#13 27.31 Unpacking libobjc-12-dev:arm64 (12.2.0-14+deb12u1) ...
+#13 27.35 Selecting previously unselected package libz3-4:arm64.
+#13 27.35 Preparing to unpack .../10-libz3-4_4.8.12-3.1_arm64.deb ...
+#13 27.36 Unpacking libz3-4:arm64 (4.8.12-3.1) ...
+#13 27.83 Selecting previously unselected package libllvm14:arm64.
+#13 27.83 Preparing to unpack .../11-libllvm14_1%3a14.0.6-12_arm64.deb ...
+#13 27.84 Unpacking libllvm14:arm64 (1:14.0.6-12) ...
+#13 28.64 Selecting previously unselected package libclang1-14.
+#13 28.64 Preparing to unpack .../12-libclang1-14_1%3a14.0.6-12_arm64.deb ...
+#13 28.65 Unpacking libclang1-14 (1:14.0.6-12) ...
+#13 28.99 Selecting previously unselected package libclang-common-14-dev.
+#13 28.99 Preparing to unpack .../13-libclang-common-14-dev_1%3a14.0.6-12_all.deb ...
+#13 28.99 Unpacking libclang-common-14-dev (1:14.0.6-12) ...
+#13 ...
+
+#16 [openfhe-builder 5/5] RUN rm -f openfhe-development/.git &&     mkdir -p openfhe-development/build openfhe-install &&     cd openfhe-development/build &&     cmake ..         -DCMAKE_INSTALL_PREFIX=/build/openfhe-install         -DCMAKE_BUILD_TYPE=Release         -DBUILD_STATIC=ON         -DBUILD_UNITTESTS=OFF         -DBUILD_EXAMPLES=OFF         -DBUILD_BENCHMARKS=OFF         -DWITH_OPENMP=ON &&     make -j$(nproc) &&     make install
+#16 0.241 -- The C compiler identification is GNU 12.2.0
+#16 0.296 -- The CXX compiler identification is GNU 12.2.0
+#16 0.303 -- Detecting C compiler ABI info
+#16 0.345 -- Detecting C compiler ABI info - done
+#16 0.352 -- Check for working C compiler: /usr/bin/cc - skipped
+#16 0.352 -- Detecting C compile features
+#16 0.353 -- Detecting C compile features - done
+#16 0.355 -- Detecting CXX compiler ABI info
+#16 0.406 -- Detecting CXX compiler ABI info - done
+#16 0.412 -- Check for working CXX compiler: /usr/bin/c++ - skipped
+#16 0.412 -- Detecting CXX compile features
+#16 0.412 -- Detecting CXX compile features - done
+#16 0.414 -- Building in Release mode
+#16 0.414 -- BUILD_UNITTESTS:    OFF
+#16 0.414 -- BUILD_EXAMPLES:     OFF
+#16 0.414 -- BUILD_BENCHMARKS:   OFF
+#16 0.414 -- BUILD_EXTRAS:       OFF
+#16 0.414 -- BUILD_STATIC:       ON
+#16 0.414 -- BUILD_SHARED:       ON
+#16 0.414 -- GIT_SUBMOD_AUTO:    ON
+#16 0.414 -- WITH_BE2:           OFF
+#16 0.414 -- WITH_BE4:           OFF
+#16 0.414 -- WITH_NTL:           OFF
+#16 0.414 -- WITH_TCM:           OFF
+#16 0.414 -- WITH_OPENMP:        ON
+#16 0.414 -- NATIVE_SIZE:        64
+#16 0.414 -- CKKS_M_FACTOR:      1
+#16 0.414 -- WITH_NATIVEOPT:     OFF
+#16 0.414 -- WITH_COVTEST:       OFF
+#16 0.414 -- WITH_NOISE_DEBUG:   OFF
+#16 0.414 -- WITH_REDUCED_NOISE: OFF
+#16 0.414 -- USE_MACPORTS:       OFF
+#16 0.414 -- BUILTIN_INFO_AVAILABLE is defined
+#16 0.414 ***** INSTALL IS AT /build/openfhe-install; to change, run cmake with -DCMAKE_INSTALL_PREFIX=/your/path
+#16 0.415 -- Architecture is aarch64
+#16 0.416 -- Looking for sys/types.h
+#16 0.478 -- Looking for sys/types.h - found
+#16 0.478 -- Looking for stdint.h
+#16 0.561 -- Looking for stdint.h - found
+#16 0.562 -- Looking for stddef.h
+#16 0.757 -- Looking for stddef.h - found
+#16 0.757 -- Check size of __int128
+#16 0.805 -- Check size of __int128 - done
+#16 0.805 -- Check size of uint64_t
+#16 0.847 -- Check size of uint64_t - done
+#16 0.847 -- NATIVEINT is set to 64
+#16 0.847 -- MATHBACKEND is set to 4
+#16 0.847 -- MATHBACKEND set to 4. Setting WITH_BE4 to ON
+#16 0.995 -- Found OpenMP_C: -fopenmp (found version "4.5") 
+#16 1.051 -- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+#16 1.051 -- Found OpenMP: TRUE (found version "4.5")  
+#16 1.058 -- Configuring done
+#16 1.083 -- Generating done
+#16 1.085 -- Build files have been written to: /build/openfhe-development/build
+#16 1.112 -- Copied demoData files
+#16 1.117 [  0%] Built target third-party
+#16 1.130 [  0%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/lattice/lattice.cpp.o
+#16 1.130 [  1%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/lattice/stdlatticeparms.cpp.o
+#16 1.130 [  2%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/lattice/trapdoor-dcrtpoly.cpp.o
+#16 1.131 [  3%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/lattice/constants-lattice-impl.cpp.o
+#16 1.131 [  4%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/chebyshev.cpp.o
+#16 1.133 [  5%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/lattice/trapdoor-poly.cpp.o
+#16 1.133 [  6%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/dftransform.cpp.o
+#16 1.135 [  7%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/discretegaussiangeneratorgeneric.cpp.o
+#16 1.139 [  8%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/distributiongenerator.cpp.o
+#16 1.141 [  9%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintdyn/be4-math-impl.cpp.o
+#16 2.465 [ 10%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintdyn/mubintvecdyn.cpp.o
+#16 2.558 [ 10%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintdyn/ubintdyn.cpp.o
+#16 2.622 [ 11%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintfxd/be2-math-impl.cpp.o
+#16 2.643 [ 12%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintfxd/mubintvecfxd.cpp.o
+#16 2.666 [ 13%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintfxd/ubintfxd.cpp.o
+#16 2.703 [ 14%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintntl/be6-math-impl.cpp.o
+#16 2.738 [ 15%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintntl/mubintvecntl.cpp.o
+#16 2.827 [ 16%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/bigintntl/ubintntl.cpp.o
+#16 2.860 [ 17%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/intnat/benative-math-impl.cpp.o
+#16 3.016 [ 18%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/hal/intnat/mubintvecnat.cpp.o
+#16 3.046 [ 18%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/matrix.cpp.o
+#16 3.332 [ 19%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/math/nbtheory2.cpp.o
+#16 5.374 [ 20%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/blockAllocator/blockAllocator.cpp.o
+#16 5.571 [ 21%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/blockAllocator/xallocator.cpp.o
+#16 5.781 [ 22%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/debug.cpp.o
+#16 5.963 [ 23%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/demangle.cpp.o
+#16 6.195 [ 24%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/get-call-stack.cpp.o
+#16 6.240 [ 25%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/hashutil.cpp.o
+#16 6.252 [ 26%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/inttypes.cpp.o
+#16 6.270 [ 26%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/memory.cpp.o
+#16 6.456 [ 27%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/openfhebase64.cpp.o
+#16 6.540 [ 28%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/parallel.cpp.o
+#16 6.547 [ 29%] Building C object src/core/CMakeFiles/coreobj.dir/lib/utils/prng/blake2b-ref.c.o
+#16 6.569 [ 30%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/prng/blake2engine.cpp.o
+#16 6.815 [ 31%] Building C object src/core/CMakeFiles/coreobj.dir/lib/utils/prng/blake2xb-ref.c.o
+#16 6.839 [ 32%] Building CXX object src/core/CMakeFiles/coreobj.dir/lib/utils/utilities.cpp.o
+#16 ...
+
+#13 [rust-builder  2/11] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     libomp-dev     libssl-dev     pkg-config     libclang-dev     protobuf-compiler     ninja-build     && rm -rf /var/lib/apt/lists/*
+#13 29.09 Selecting previously unselected package libclang-14-dev.
+#13 29.09 Preparing to unpack .../14-libclang-14-dev_1%3a14.0.6-12_arm64.deb ...
+#13 29.10 Unpacking libclang-14-dev (1:14.0.6-12) ...
+#13 30.99 Selecting previously unselected package libclang-dev.
+#13 30.99 Preparing to unpack .../15-libclang-dev_1%3a14.0-55.7~deb12u1_arm64.deb ...
+#13 31.03 Unpacking libclang-dev (1:14.0-55.7~deb12u1) ...
+#13 31.23 Selecting previously unselected package libomp5-14:arm64.
+#13 31.23 Preparing to unpack .../16-libomp5-14_1%3a14.0.6-12_arm64.deb ...
+#13 31.25 Unpacking libomp5-14:arm64 (1:14.0.6-12) ...
+#13 31.38 Selecting previously unselected package libomp-14-dev.
+#13 31.38 Preparing to unpack .../17-libomp-14-dev_1%3a14.0.6-12_arm64.deb ...
+#13 31.41 Unpacking libomp-14-dev (1:14.0.6-12) ...
+#13 31.68 Selecting previously unselected package libomp-dev:arm64.
+#13 31.68 Preparing to unpack .../18-libomp-dev_1%3a14.0-55.7~deb12u1_arm64.deb ...
+#13 31.73 Unpacking libomp-dev:arm64 (1:14.0-55.7~deb12u1) ...
+#13 31.84 Selecting previously unselected package libprotobuf32:arm64.
+#13 31.84 Preparing to unpack .../19-libprotobuf32_3.21.12-3_arm64.deb ...
+#13 31.87 Unpacking libprotobuf32:arm64 (3.21.12-3) ...
+#13 32.23 Selecting previously unselected package libprotoc32:arm64.
+#13 32.23 Preparing to unpack .../20-libprotoc32_3.21.12-3_arm64.deb ...
+#13 32.28 Unpacking libprotoc32:arm64 (3.21.12-3) ...
+#13 32.51 Selecting previously unselected package ninja-build.
+#13 32.51 Preparing to unpack .../21-ninja-build_1.11.1-2~deb12u1_arm64.deb ...
+#13 32.52 Unpacking ninja-build (1.11.1-2~deb12u1) ...
+#13 32.64 Selecting previously unselected package protobuf-compiler.
+#13 32.65 Preparing to unpack .../22-protobuf-compiler_3.21.12-3_arm64.deb ...
+#13 32.66 Unpacking protobuf-compiler (3.21.12-3) ...
+#13 33.04 Setting up libomp5-14:arm64 (1:14.0.6-12) ...
+#13 33.14 Setting up libarchive13:arm64 (3.6.2-1+deb12u3) ...
+#13 33.20 Setting up ninja-build (1.11.1-2~deb12u1) ...
+#13 33.29 Setting up libz3-4:arm64 (4.8.12-3.1) ...
+#13 33.35 Setting up libuv1:arm64 (1.44.2-1+deb12u1) ...
+#13 33.39 Setting up libjsoncpp25:arm64 (1.9.5-4) ...
+#13 33.45 Setting up libgc1:arm64 (1:8.2.2-3) ...
+#13 33.49 Setting up libllvm14:arm64 (1:14.0.6-12) ...
+#13 33.53 Setting up libprotobuf32:arm64 (3.21.12-3) ...
+#13 33.58 Setting up librhash0:arm64 (1.4.3-3) ...
+#13 33.62 Setting up build-essential (12.9) ...
+#13 33.70 Setting up cmake-data (3.25.1-1) ...
+#13 33.75 Setting up libomp-14-dev (1:14.0.6-12) ...
+#13 33.86 Setting up libomp-dev:arm64 (1:14.0-55.7~deb12u1) ...
+#13 33.97 Setting up libprotoc32:arm64 (3.21.12-3) ...
+#13 34.01 Setting up protobuf-compiler (3.21.12-3) ...
+#13 34.04 Setting up libclang1-14 (1:14.0.6-12) ...
+#13 34.09 Setting up libobjc4:arm64 (12.2.0-14+deb12u1) ...
+#13 34.18 Setting up libclang-common-14-dev (1:14.0.6-12) ...
+#13 34.23 Setting up libobjc-12-dev:arm64 (12.2.0-14+deb12u1) ...
+#13 34.27 Setting up libclang-14-dev (1:14.0.6-12) ...
+#13 34.30 Setting up cmake (3.25.1-1) ...
+#13 34.34 Setting up libclang-dev (1:14.0-55.7~deb12u1) ...
+#13 34.47 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#13 DONE 36.3s
+
+#17 [rust-builder  3/11] WORKDIR /app
+#17 DONE 0.1s
+
+#16 [openfhe-builder 5/5] RUN rm -f openfhe-development/.git &&     mkdir -p openfhe-development/build openfhe-install &&     cd openfhe-development/build &&     cmake ..         -DCMAKE_INSTALL_PREFIX=/build/openfhe-install         -DCMAKE_BUILD_TYPE=Release         -DBUILD_STATIC=ON         -DBUILD_UNITTESTS=OFF         -DBUILD_EXAMPLES=OFF         -DBUILD_BENCHMARKS=OFF         -DWITH_OPENMP=ON &&     make -j$(nproc) &&     make install
+#16 17.11 [ 32%] Built target coreobj
+#16 17.13 [ 35%] Linking CXX static library ../../lib/libOPENFHEcore_static.a
+#16 17.13 [ 35%] Linking CXX shared library ../../lib/libOPENFHEcore.so
+#16 17.20 [ 35%] Built target OPENFHEcore_static
+#16 17.25 [ 35%] Built target OPENFHEcore
+#16 17.30 [ 37%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/lwe-pke.cpp.o
+#16 17.30 [ 38%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/binfhe-base-scheme.cpp.o
+#16 17.30 [ 38%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/binfhe-constants-impl.cpp.o
+#16 17.30 [ 39%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/rgsw-acc-lmkcdey.cpp.o
+#16 17.30 [ 39%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/binfhecontext.cpp.o
+#16 17.30 [ 40%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/rgsw-acc-cggi.cpp.o
+#16 17.30 [ 41%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/rgsw-acc-dm.cpp.o
+#16 17.30 [ 42%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/rgsw-acc.cpp.o
+#16 17.31 [ 43%] Building CXX object src/binfhe/CMakeFiles/binfheobj.dir/lib/rgsw-cryptoparameters.cpp.o
+#16 21.25 [ 43%] Built target binfheobj
+#16 21.26 [ 43%] Linking CXX shared library ../../lib/libOPENFHEbinfhe.so
+#16 21.26 [ 44%] Linking CXX static library ../../lib/libOPENFHEbinfhe_static.a
+#16 21.30 [ 44%] Built target OPENFHEbinfhe_static
+#16 21.35 [ 44%] Built target OPENFHEbinfhe
+#16 21.38 [ 44%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/cryptocontext.cpp.o
+#16 21.38 [ 46%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/ciphertext-impl.cpp.o
+#16 21.38 [ 46%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/constants-impl.cpp.o
+#16 21.38 [ 47%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/encoding/ckkspackedencoding.cpp.o
+#16 21.38 [ 48%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/cryptocontextfactory.cpp.o
+#16 21.38 [ 49%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/encoding/coefpackedencoding.cpp.o
+#16 21.38 [ 50%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/cryptoobject-impl.cpp.o
+#16 21.39 [ 51%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/encoding/packedencoding.cpp.o
+#16 21.39 [ 52%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/encoding/stringencoding.cpp.o
+#16 21.39 [ 53%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/encoding/encodingparams.cpp.o
+#16 22.14 [ 54%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/globals-impl.cpp.o
+#16 22.16 [ 54%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/key/evalkey.cpp.o
+#16 22.52 [ 55%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/key/evalkeyrelin.cpp.o
+#16 24.28 [ 56%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/key/privatekey.cpp.o
+#16 25.23 [ 57%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/key/publickey.cpp.o
+#16 25.35 [ 58%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/keyswitch/keyswitch-base.cpp.o
+#16 25.42 [ 59%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/keyswitch/keyswitch-bv.cpp.o
+#16 25.51 [ 60%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/keyswitch/keyswitch-hybrid.cpp.o
+#16 26.70 [ 61%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bfvrns/bfvrns-cryptoparameters.cpp.o
+#16 26.87 [ 62%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bfvrns/bfvrns-leveledshe.cpp.o
+#16 27.87 [ 62%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bfvrns/bfvrns-multiparty.cpp.o
+#16 28.05 [ 63%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bfvrns/bfvrns-parametergeneration.cpp.o
+#16 28.43 [ 64%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bfvrns/bfvrns-pke.cpp.o
+#16 29.05 [ 65%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bfvrns/bfvrns-scheme.cpp.o
+#16 29.64 [ 67%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bgvrns/bgvrns-cryptoparameters.cpp.o
+#16 30.62 [ 68%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bgvrns/bgvrns-leveledshe.cpp.o
+#16 30.90 [ 69%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bgvrns/bgvrns-multiparty.cpp.o
+#16 32.96 [ 70%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bgvrns/bgvrns-parametergeneration.cpp.o
+#16 33.01 [ 71%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bgvrns/bgvrns-pke.cpp.o
+#16 33.96 [ 72%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/bgvrns/bgvrns-scheme.cpp.o
+#16 34.09 [ 72%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-advancedshe.cpp.o
+#16 34.34 [ 73%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-cryptoparameters.cpp.o
+#16 34.49 [ 74%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-fhe.cpp.o
+#16 35.27 [ 75%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-leveledshe.cpp.o
+#16 36.16 [ 76%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-multiparty.cpp.o
+#16 36.43 [ 77%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-parametergeneration.cpp.o
+#16 38.44 [ 78%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-pke.cpp.o
+#16 38.84 [ 79%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-scheme.cpp.o
+#16 38.98 [ 80%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-schemeswitching.cpp.o
+#16 39.45 [ 80%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/ckksrns/ckksrns-utils.cpp.o
+#16 40.35 [ 81%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/gen-cryptocontext-params-impl.cpp.o
+#16 40.91 [ 82%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/gen-cryptocontext-params-validation.cpp.o
+#16 41.12 [ 83%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/scheme-id-impl.cpp.o
+#16 41.21 [ 84%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/scheme/scheme-swch-params.cpp.o
+#16 41.55 [ 85%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-advancedshe.cpp.o
+#16 41.63 [ 86%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-cryptoparameters.cpp.o
+#16 41.74 [ 87%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-fhe.cpp.o
+#16 42.12 [ 88%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-leveledshe.cpp.o
+#16 42.45 [ 88%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-multiparty.cpp.o
+#16 42.51 [ 89%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-parametergeneration.cpp.o
+#16 42.63 [ 90%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-pke.cpp.o
+#16 43.86 [ 91%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-pre.cpp.o
+#16 44.19 [ 92%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/base-scheme.cpp.o
+#16 44.79 [ 93%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemebase/rlwe-cryptoparameters-impl.cpp.o
+#16 45.95 [ 94%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemerns/rns-cryptoparameters.cpp.o
+#16 46.21 [ 95%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemerns/rns-leveledshe.cpp.o
+#16 47.11 [ 96%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemerns/rns-multiparty.cpp.o
+#16 47.29 [ 97%] Building CXX object src/pke/CMakeFiles/pkeobj.dir/lib/schemerns/rns-pke.cpp.o
+#16 51.36 [ 97%] Built target pkeobj
+#16 51.38 [100%] Linking CXX static library ../../lib/libOPENFHEpke_static.a
+#16 51.38 [100%] Linking CXX shared library ../../lib/libOPENFHEpke.so
+#16 51.55 [100%] Built target OPENFHEpke
+#16 51.61 [100%] Built target OPENFHEpke_static
+#16 51.66 -- demoData folder already exists
+#16 51.66 [  0%] Built target third-party
+#16 51.71 [ 32%] Built target coreobj
+#16 51.73 [ 34%] Built target OPENFHEcore
+#16 51.75 [ 35%] Built target OPENFHEcore_static
+#16 51.77 [ 43%] Built target binfheobj
+#16 51.78 [ 44%] Built target OPENFHEbinfhe_static
+#16 51.79 [ 44%] Built target OPENFHEbinfhe
+#16 51.89 [ 97%] Built target pkeobj
+#16 51.90 [ 98%] Built target OPENFHEpke
+#16 51.91 [100%] Built target OPENFHEpke_static
+#16 51.92 Install the project...
+#16 51.93 -- Install configuration: "Release"
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/core/config_core.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/access.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/archives
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/archives/adapters.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/archives/binary.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/archives/json.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/archives/portable_binary.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/archives/xml.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/cereal.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details/helpers.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details/polymorphic_impl.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details/polymorphic_impl_fwd.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details/static_object.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details/traits.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/details/util.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/LICENSE
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/base64.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/LICENSE
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/allocators.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/cursorstreamwrapper.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/document.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/encodedstream.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/encodings.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/error
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/error/en.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/error/error.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/filereadstream.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/filewritestream.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/fwd.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/biginteger.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/diyfp.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/dtoa.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/ieee754.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/itoa.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/meta.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/pow10.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/regex.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/stack.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/strfunc.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/strtod.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/internal/swap.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/istreamwrapper.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/memorybuffer.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/memorystream.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/msinttypes
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/msinttypes/LICENSE
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/msinttypes/inttypes.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/msinttypes/stdint.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/ostreamwrapper.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/pointer.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/prettywriter.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/rapidjson.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/reader.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/schema.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/stream.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/stringbuffer.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidjson/writer.h
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml/license.txt
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml/manual.html
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml/rapidxml.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml/rapidxml_iterators.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml/rapidxml_print.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/external/rapidxml/rapidxml_utils.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/macros.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/specialize.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/array.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/atomic.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/base_class.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/bitset.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/boost_variant.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/chrono.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/common.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/complex.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/concepts
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/concepts/pair_associative_container.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/deque.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/forward_list.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/functional.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/list.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/map.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/memory.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/optional.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/polymorphic.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/queue.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/set.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/stack.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/string.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/tuple.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/unordered_map.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/unordered_set.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/utility.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/valarray.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/variant.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/types/vector.hpp
+#16 51.93 -- Installing: /build/openfhe-install/include/openfhe/cereal/version.hpp
+#16 51.93 -- Installing: /build/openfhe-install/lib/OpenFHE/OpenFHEConfig.cmake
+#16 51.93 -- Installing: /build/openfhe-install/lib/OpenFHE/OpenFHEConfigVersion.cmake
+#16 51.93 -- Installing: /build/openfhe-install/lib/OpenFHE/OpenFHETargets.cmake
+#16 51.93 -- Installing: /build/openfhe-install/lib/OpenFHE/OpenFHETargets-release.cmake
+#16 51.93 -- Installing: /build/openfhe-install/lib/libOPENFHEcore.so.1.3.0
+#16 51.94 -- Installing: /build/openfhe-install/lib/libOPENFHEcore.so.1
+#16 51.94 -- Installing: /build/openfhe-install/lib/libOPENFHEcore.so
+#16 51.94 -- Installing: /build/openfhe-install/lib/libOPENFHEcore_static.a
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/constants-lattice.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/dgsampling-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/dgsampling.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/field2n-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/field2n.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/dcrtpoly-interface.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default/ildcrtparams.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default/ilparams.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default/poly-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/default/poly.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/elemparams.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/hal/poly-interface.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/ilelement.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/lat-hal.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/matrix-lattice-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/stdlatticeparms.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/trapdoor-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/trapdoor.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/lattice/trapdoorparameters.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/SAMPLING_README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/binaryuniformgenerator-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/binaryuniformgenerator.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/chebyshev.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/dftransform.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/discretegaussiangenerator-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/discretegaussiangenerator.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/discretegaussiangeneratorgeneric.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/discreteuniformgenerator-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/discreteuniformgenerator.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/distrgen.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/distributiongenerator.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/basicint.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintbackend.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintdyn
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintdyn/backenddyn.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintdyn/mubintvecdyn.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintdyn/ubintdyn.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintfxd
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintfxd/backendfxd.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintfxd/mubintvecfxd.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintfxd/transformfxd-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintfxd/transformfxd.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintfxd/ubintfxd.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintntl
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintntl/backendntl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintntl/mubintvecntl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintntl/transformntl-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintntl/transformntl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/bigintntl/ubintntl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/integer.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/intnat
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/intnat/mubintvecnat.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/intnat/ubintnat.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/nativeintbackend.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/transform.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/hal/vector.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/math-hal.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/math_backends.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/matrix-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/matrix.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/matrixstrassen-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/matrixstrassen.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/nbtheory-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/nbtheory.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/ternaryuniformgenerator-impl.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/math/ternaryuniformgenerator.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/openfhecore.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/testdefs.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/utils
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/utils/README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/README.md
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/blockAllocator.h
+#16 51.94 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/stl_allocator.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xallocator.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xlist.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xmap.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xqueue.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xset.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xsstream.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xstring.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/blockAllocator/xvector.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/caller_info.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/debug.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/demangle.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/exception.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/get-call-stack.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/hashutil.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/inttypes.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/memory.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/openfhebase64.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/parallel.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng/CPPLINT.cfg
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng/README.md
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng/blake2-impl.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng/blake2.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng/blake2engine.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/prng/prng.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/serial.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/serializable.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/sertype.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/type_name.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/utilities-int.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/utils/utilities.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/core/version.h
+#16 51.95 -- Installing: /build/openfhe-install/lib/libOPENFHEpke.so.1.3.0
+#16 51.95 -- Installing: /build/openfhe-install/lib/libOPENFHEpke.so.1
+#16 51.95 -- Set runtime path of "/build/openfhe-install/lib/libOPENFHEpke.so.1.3.0" to ""
+#16 51.95 -- Installing: /build/openfhe-install/lib/libOPENFHEpke.so
+#16 51.95 -- Installing: /build/openfhe-install/lib/libOPENFHEpke_static.a
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/README.md
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/ciphertext-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/ciphertext-ser.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/ciphertext.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/constants-defs.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/constants.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/cryptocontext-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/cryptocontext-ser.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/cryptocontext.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/cryptocontextfactory.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/cryptoobject.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/README.md
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/ckkspackedencoding.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/coefpackedencoding.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/encodingparams.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/encodings.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/packedencoding.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/plaintext-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/plaintext.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/plaintextfactory.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/encoding/stringencoding.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/gen-cryptocontext.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/globals.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/README.md
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/evalkey-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/evalkey.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/evalkeyrelin-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/evalkeyrelin.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/key-ser.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/key.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/keypair.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/privatekey-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/privatekey.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/publickey-fwd.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/key/publickey.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/keyswitch
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/keyswitch/README.md
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/keyswitch/keyswitch-base.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/keyswitch/keyswitch-bv.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/keyswitch/keyswitch-hybrid.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/keyswitch/keyswitch-rns.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/metadata-ser.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/metadata.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/openfhe.h
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/README.md
+#16 51.95 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-advancedshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-fhe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-leveledshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-multiparty.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-parametergeneration.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-pke.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-pre.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-scheme.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/bfvrns-ser.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/gen-cryptocontext-bfvrns-internal.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/gen-cryptocontext-bfvrns-params.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bfvrns/gen-cryptocontext-bfvrns.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-advancedshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-fhe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-leveledshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-multiparty.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-parametergeneration.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-pke.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-pre.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-scheme.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/bgvrns-ser.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/gen-cryptocontext-bgvrns-internal.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/gen-cryptocontext-bgvrns-params.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/bgvrns/gen-cryptocontext-bgvrns.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/README.md
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-advancedshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-fhe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-leveledshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-multiparty.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-parametergeneration.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-pke.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-pre.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-scheme.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-schemeswitching.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-ser.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/ckksrns-utils.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/gen-cryptocontext-ckksrns-internal.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/gen-cryptocontext-ckksrns-params.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/ckksrns/gen-cryptocontext-ckksrns.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/gen-cryptocontext-params-defaults.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/gen-cryptocontext-params-validation.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/gen-cryptocontext-params.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/scheme-id.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/scheme-swch-params.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/scheme/scheme-utils.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-advancedshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-fhe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-leveledshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-multiparty.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-parametergeneration.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-pke.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-pre.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-scheme.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/base-ser.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/decrypt-result.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemebase/rlwe-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-advancedshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-fhe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-leveledshe.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-multiparty.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-parametergeneration.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-pke.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-pre.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-scheme.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/schemerns/rns-ser.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/BaseTestCase.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestCCParams.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestCryptoContext.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestException.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestMetadataTest.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestMetadataTestSer.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestReadCSVData.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestSer.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/UnitTestUtils.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/pke/unittest/utils/schemeswitching-data-serializer.h
+#16 51.96 -- Installing: /build/openfhe-install/lib/libOPENFHEbinfhe.so.1.3.0
+#16 51.96 -- Installing: /build/openfhe-install/lib/libOPENFHEbinfhe.so.1
+#16 51.96 -- Set runtime path of "/build/openfhe-install/lib/libOPENFHEbinfhe.so.1.3.0" to ""
+#16 51.96 -- Installing: /build/openfhe-install/lib/libOPENFHEbinfhe.so
+#16 51.96 -- Installing: /build/openfhe-install/lib/libOPENFHEbinfhe_static.a
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/README.md
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/binfhe-base-params.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/binfhe-base-scheme.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/binfhe-constants.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/binfhecontext-ser.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/binfhecontext.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-ciphertext-fwd.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-ciphertext.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-keypair-fwd.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-keypair.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-keyswitchkey-fwd.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-keyswitchkey.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-pke.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-privatekey-fwd.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-privatekey.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-publickey-fwd.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/lwe-publickey.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-acc-cggi.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-acc-dm.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-acc-lmkcdey.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-acc.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-acckey.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-cryptoparameters.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rgsw-evalkey.h
+#16 51.96 -- Installing: /build/openfhe-install/include/openfhe/binfhe/rlwe-ciphertext.h
+#16 DONE 52.2s
+
+#18 [rust-builder  4/11] COPY --from=openfhe-builder /build/openfhe-install ./vendor/openfhe-install
+#18 DONE 0.1s
+
+#19 [rust-builder  5/11] COPY Cargo.toml Cargo.lock ./
+#19 DONE 0.1s
+
+#20 [rust-builder  6/11] COPY crates ./crates
+#20 DONE 0.1s
+
+#21 [rust-builder  7/11] COPY recrypt-server ./recrypt-server
+#21 DONE 0.1s
+
+#22 [rust-builder  8/11] COPY recrypt-cli ./recrypt-cli
+#22 DONE 0.1s
+
+#23 [rust-builder  9/11] RUN cargo fetch --locked
+#23 0.221     Updating crates.io index
+#23 5.366  Downloading crates ...
+#23 5.447   Downloaded toml_write v0.1.2
+#23 5.457   Downloaded windows-strings v0.5.1
+#23 5.475   Downloaded equivalent v1.0.2
+#23 5.487   Downloaded memchr v2.7.6
+#23 5.527   Downloaded tower-layer v0.3.3
+#23 5.557   Downloaded tracing-core v0.1.36
+#23 5.588   Downloaded want v0.3.1
+#23 5.610   Downloaded idna_adapter v1.2.1
+#23 5.641   Downloaded stable_deref_trait v1.2.1
+#23 5.652   Downloaded httpdate v1.0.3
+#23 5.657   Downloaded scopeguard v1.2.0
+#23 5.667   Downloaded zeroize_derive v1.4.3
+#23 5.670   Downloaded windows-registry v0.6.1
+#23 5.673   Downloaded sync_wrapper v1.0.2
+#23 5.675   Downloaded try-lock v0.2.5
+#23 5.677   Downloaded serde_urlencoded v0.7.1
+#23 5.680   Downloaded untrusted v0.9.0
+#23 5.682   Downloaded foreign-types v0.3.2
+#23 5.684   Downloaded compression-core v0.4.31
+#23 5.686   Downloaded pin-utils v0.1.0
+#23 5.688   Downloaded cfg-if v1.0.4
+#23 5.690   Downloaded foreign-types-shared v0.1.1
+#23 5.692   Downloaded errno v0.3.14
+#23 5.694   Downloaded windows-result v0.4.1
+#23 5.696   Downloaded openssl-probe v0.1.6
+#23 5.698   Downloaded futures-core v0.3.31
+#23 5.700   Downloaded foldhash v0.2.0
+#23 5.702   Downloaded windows-targets v0.52.6
+#23 5.704   Downloaded atomic-waker v1.1.2
+#23 5.706   Downloaded itoa v1.0.17
+#23 5.708   Downloaded adler2 v2.0.1
+#23 5.710   Downloaded form_urlencoded v1.2.2
+#23 5.712   Downloaded potential_utf v0.1.4
+#23 5.714   Downloaded zerofrom-derive v0.1.6
+#23 5.716   Downloaded zerofrom v0.1.6
+#23 5.718   Downloaded percent-encoding v2.3.2
+#23 5.720   Downloaded windows-targets v0.53.5
+#23 5.722   Downloaded hyper-tls v0.6.0
+#23 5.724   Downloaded toml_datetime v0.6.11
+#23 5.726   Downloaded system-configuration-sys v0.6.0
+#23 5.729   Downloaded futures-task v0.3.31
+#23 5.730   Downloaded wasm-bindgen-shared v0.2.108
+#23 5.732   Downloaded fnv v1.0.7
+#23 5.734   Downloaded yoke-derive v0.8.1
+#23 5.735   Downloaded subtle v2.6.1
+#23 5.738   Downloaded windows-link v0.2.1
+#23 5.740   Downloaded tower-service v0.3.3
+#23 5.742   Downloaded serde_spanned v0.6.9
+#23 5.744   Downloaded toml v0.8.23
+#23 5.758   Downloaded dunce v1.0.5
+#23 5.760   Downloaded openssl-macros v0.1.1
+#23 5.767   Downloaded scratch v1.0.9
+#23 5.773   Downloaded fastrand v2.3.0
+#23 5.777   Downloaded mime v0.3.17
+#23 5.806   Downloaded winapi-util v0.1.11
+#23 5.808   Downloaded futures-sink v0.3.31
+#23 5.810   Downloaded cxxbridge-flags v1.0.192
+#23 5.812   Downloaded valuable v0.1.1
+#23 5.814   Downloaded tokio-native-tls v0.3.1
+#23 5.816   Downloaded link-cplusplus v1.0.12
+#23 5.825   Downloaded strsim v0.11.1
+#23 5.828   Downloaded is_terminal_polyfill v1.70.2
+#23 5.832   Downloaded utf8parse v0.2.2
+#23 5.835   Downloaded security-framework-sys v2.15.0
+#23 5.841   Downloaded wasi v0.11.1+wasi-snapshot-preview1
+#23 5.848   Downloaded signal-hook-registry v1.4.8
+#23 5.854   Downloaded writeable v0.6.2
+#23 5.858   Downloaded synstructure v0.13.2
+#23 5.860   Downloaded heck v0.5.0
+#23 5.862   Downloaded displaydoc v0.2.5
+#23 5.866   Downloaded yoke v0.8.1
+#23 5.869   Downloaded slab v0.4.11
+#23 5.871   Downloaded anstyle-wincon v3.0.11
+#23 5.873   Downloaded anstyle-query v1.1.5
+#23 5.875   Downloaded once_cell_polyfill v1.70.2
+#23 5.877   Downloaded rustversion v1.0.22
+#23 5.880   Downloaded wasm-bindgen-futures v0.4.58
+#23 5.882   Downloaded core-foundation v0.10.1
+#23 5.885   Downloaded zmij v1.0.14
+#23 5.886   Downloaded zerovec-derive v0.11.2
+#23 5.888   Downloaded utf8_iter v1.0.4
+#23 5.890   Downloaded rand_chacha v0.3.1
+#23 5.891   Downloaded thiserror v1.0.69
+#23 5.899   Downloaded quick-error v1.2.3
+#23 5.909   Downloaded rand_xorshift v0.4.0
+#23 5.916   Downloaded lock_api v0.4.14
+#23 5.922   Downloaded compression-codecs v0.4.36
+#23 5.932   Downloaded colorchoice v1.0.4
+#23 5.938   Downloaded ipnet v2.11.0
+#23 5.941   Downloaded jobserver v0.1.34
+#23 5.943   Downloaded shlex v1.3.0
+#23 5.945   Downloaded unicode-ident v1.0.22
+#23 5.948   Downloaded cmake v0.1.57
+#23 5.950   Downloaded pkg-config v0.3.32
+#23 5.953   Downloaded parking_lot v0.12.5
+#23 5.956   Downloaded http-body v1.0.1
+#23 5.958   Downloaded tinystr v0.8.2
+#23 5.966   Downloaded simd-adler32 v0.3.8
+#23 5.971   Downloaded wait-timeout v0.2.1
+#23 5.975   Downloaded zeroize v1.8.2
+#23 5.978   Downloaded native-tls v0.2.14
+#23 5.984   Downloaded wasm-bindgen-macro v0.2.108
+#23 5.986   Downloaded futures-channel v0.3.31
+#23 5.991   Downloaded system-configuration v0.6.1
+#23 5.995   Downloaded thiserror-impl v2.0.17
+#23 5.997   Downloaded rustls-native-certs v0.8.3
+#23 6.000   Downloaded core-foundation v0.9.4
+#23 6.002   Downloaded redox_syscall v0.5.18
+#23 6.006   Downloaded fs_extra v1.3.0
+#23 6.008   Downloaded pin-project-lite v0.2.16
+#23 6.022   Downloaded http-body-util v0.1.3
+#23 6.038   Downloaded thiserror v2.0.17
+#23 6.043   Downloaded bit-set v0.8.0
+#23 6.048   Downloaded schannel v0.1.28
+#23 6.051   Downloaded tracing-attributes v0.1.31
+#23 6.058   Downloaded clap_lex v0.7.7
+#23 6.061   Downloaded termcolor v1.4.1
+#23 6.064   Downloaded oqs v0.11.0
+#23 6.097   Downloaded generic-array v0.14.7
+#23 6.099   Downloaded rustc-hash v2.1.1
+#23 6.106   Downloaded anstyle v1.0.13
+#23 6.108   Downloaded thiserror-impl v1.0.69
+#23 6.113   Downloaded terminal_size v0.4.3
+#23 6.122   Downloaded anstyle-parse v0.2.7
+#23 6.126   Downloaded unarray v0.1.4
+#23 6.127   Downloaded tokio-macros v2.6.0
+#23 6.129   Downloaded ppv-lite86 v0.2.21
+#23 6.131   Downloaded tempfile v3.24.0
+#23 6.133   Downloaded smallvec v1.15.1
+#23 6.135   Downloaded rand_core v0.9.5
+#23 6.136   Downloaded quote v1.0.43
+#23 6.139   Downloaded cty v0.2.2
+#23 6.140   Downloaded bit-vec v0.8.0
+#23 6.142   Downloaded signature v2.2.0
+#23 6.143   Downloaded autocfg v1.5.0
+#23 6.145   Downloaded cpufeatures v0.2.17
+#23 6.155   Downloaded wasm-bindgen v0.2.108
+#23 6.158   Downloaded rustc_version v0.4.1
+#23 6.159   Downloaded core-foundation-sys v0.8.7
+#23 6.162   Downloaded curve25519-dalek-derive v0.1.1
+#23 6.177   Downloaded anstream v0.6.21
+#23 6.193   Downloaded block-buffer v0.10.4
+#23 6.195   Downloaded crypto-common v0.1.7
+#23 6.197   Downloaded plotters-svg v0.3.7
+#23 6.199   Downloaded rusty-fork v0.3.1
+#23 6.203   Downloaded serde_derive v1.0.228
+#23 6.210   Downloaded proc-macro2 v1.0.105
+#23 6.216   Downloaded find-msvc-tools v0.1.8
+#23 6.219   Downloaded litemap v0.8.1
+#23 6.221   Downloaded version_check v0.9.5
+#23 6.223   Downloaded rand_chacha v0.9.0
+#23 6.224   Downloaded rand_core v0.6.4
+#23 6.225   Downloaded httparse v1.10.1
+#23 6.228   Downloaded crc32fast v1.5.0
+#23 6.231   Downloaded toml_edit v0.22.27
+#23 6.234   Downloaded getrandom v0.2.17
+#23 6.236   Downloaded rustls-pki-types v1.14.0
+#23 6.239   Downloaded same-file v1.0.6
+#23 6.242   Downloaded openssl-probe v0.2.0
+#23 6.248   Downloaded plotters-backend v0.3.7
+#23 6.250   Downloaded hyper-rustls v0.27.7
+#23 6.255   Downloaded tokio-rustls v0.26.4
+#23 6.284   Downloaded is-terminal v0.4.17
+#23 6.287   Downloaded cast v0.3.0
+#23 6.288   Downloaded uuid v1.19.0
+#23 6.291   Downloaded parking_lot_core v0.9.12
+#23 6.306   Downloaded glob v0.3.3
+#23 6.313   Downloaded icu_normalizer v2.1.1
+#23 6.317   Downloaded icu_normalizer_data v2.1.1
+#23 6.320   Downloaded icu_locale_core v2.1.1
+#23 6.329   Downloaded log v0.4.29
+#23 6.335   Downloaded ciborium-io v0.2.2
+#23 6.337   Downloaded crunchy v0.2.4
+#23 6.345   Downloaded inout v0.1.4
+#23 6.347   Downloaded either v1.15.0
+#23 6.349   Downloaded cexpr v0.6.0
+#23 6.351   Downloaded ciborium-ll v0.2.2
+#23 6.361   Downloaded arrayref v0.3.9
+#23 6.364   Downloaded getrandom v0.3.4
+#23 6.367   Downloaded openssl-sys v0.9.111
+#23 6.371   Downloaded allocator-api2 v0.2.21
+#23 6.374   Downloaded digest v0.10.7
+#23 6.377   Downloaded clap_derive v4.5.49
+#23 6.379   Downloaded once_cell v1.21.3
+#23 6.381   Downloaded js-sys v0.3.85
+#23 6.383   Downloaded cstr_core v0.2.6
+#23 6.385   Downloaded r-efi v5.3.0
+#23 6.394   Downloaded ed25519 v2.2.3
+#23 6.400   Downloaded base64ct v1.8.3
+#23 6.410   Downloaded walkdir v2.5.0
+#23 6.420   Downloaded crossbeam-deque v0.8.6
+#23 6.423   Downloaded tinyvec_macros v0.1.1
+#23 6.426   Downloaded predicates-core v1.0.9
+#23 6.427   Downloaded socket2 v0.6.1
+#23 6.429   Downloaded multimap v0.10.1
+#23 6.436   Downloaded difflib v0.4.0
+#23 6.446   Downloaded dirs-sys v0.4.1
+#23 6.448   Downloaded normalize-line-endings v0.3.0
+#23 6.449   Downloaded serde v1.0.228
+#23 6.453   Downloaded serde_core v1.0.228
+#23 6.456   Downloaded spki v0.7.3
+#23 6.462   Downloaded pkcs8 v0.10.2
+#23 6.478   Downloaded sha2 v0.10.9
+#23 6.482   Downloaded ryu v1.0.22
+#23 6.487   Downloaded number_prefix v0.4.0
+#23 6.489   Downloaded float-cmp v0.10.0
+#23 6.497   Downloaded directories v5.0.1
+#23 6.501   Downloaded windows-targets v0.48.5
+#23 6.523   Downloaded semver v1.0.27
+#23 6.530   Downloaded criterion-plot v0.5.0
+#23 6.536   Downloaded hermit-abi v0.5.2
+#23 6.538   Downloaded oorandom v11.1.5
+#23 6.559   Downloaded icu_provider v2.1.1
+#23 6.565   Downloaded bitflags v2.10.0
+#23 6.572   Downloaded shell-words v1.1.1
+#23 6.574   Downloaded libredox v0.1.12
+#23 6.578   Downloaded icu_collections v2.1.1
+#23 6.583   Downloaded codespan-reporting v0.13.1
+#23 6.591   Downloaded build-deps v0.1.4
+#23 6.592   Downloaded chacha20 v0.9.1
+#23 6.594   Downloaded arrayvec v0.7.6
+#23 6.596   Downloaded anes v0.1.6
+#23 6.598   Downloaded clap v4.5.54
+#23 6.607   Downloaded lazy_static v1.5.0
+#23 6.609   Downloaded cipher v0.4.4
+#23 6.610   Downloaded constant_time_eq v0.4.2
+#23 6.612   Downloaded libloading v0.8.9
+#23 6.614   Downloaded opaque-debug v0.3.1
+#23 6.615   Downloaded windows-interface v0.59.3
+#23 6.617   Downloaded aead v0.5.2
+#23 6.618   Downloaded windows-implement v0.60.2
+#23 6.624   Downloaded universal-hash v0.5.1
+#23 6.625   Downloaded android_system_properties v0.1.5
+#23 6.626   Downloaded iana-time-zone-haiku v0.1.2
+#23 6.634   Downloaded termtree v0.5.1
+#23 6.636   Downloaded predicates-tree v1.0.12
+#23 6.646   Downloaded wasm-bindgen-macro-support v0.2.108
+#23 6.649   Downloaded fixedbitset v0.5.7
+#23 6.651   Downloaded bytes v1.11.0
+#23 6.665   Downloaded tinytemplate v1.2.1
+#23 6.678   Downloaded predicates v3.1.3
+#23 6.685   Downloaded bs58 v0.5.1
+#23 6.687   Downloaded clang-sys v1.8.1
+#23 6.694   Downloaded prost v0.13.5
+#23 6.701   Downloaded tracing-serde v0.2.0
+#23 6.717   Downloaded matchers v0.2.0
+#23 6.727   Downloaded num-traits v0.2.19
+#23 6.730   Downloaded web-time v1.1.0
+#23 6.731   Downloaded crossbeam-utils v0.8.21
+#23 6.734   Downloaded crossbeam-epoch v0.9.18
+#23 6.737   Downloaded byteorder v1.5.0
+#23 6.756   Downloaded http-body v0.4.6
+#23 6.765   Downloaded hex v0.4.3
+#23 6.772   Downloaded time-core v0.1.7
+#23 6.775   Downloaded num-conv v0.1.0
+#23 6.788   Downloaded outref v0.5.2
+#23 6.801   Downloaded redox_users v0.4.6
+#23 6.814   Downloaded async-compression v0.4.37
+#23 6.821   Downloaded flate2 v1.1.8
+#23 6.824   Downloaded ciborium v0.2.2
+#23 6.826   Downloaded icu_properties v2.1.2
+#23 6.828   Downloaded option-ext v0.2.0
+#23 6.834   Downloaded base64-simd v0.8.0
+#23 6.835   Downloaded dialoguer v0.11.0
+#23 6.850   Downloaded cxxbridge-macro v1.0.192
+#23 6.859   Downloaded prost-types v0.13.5
+#23 6.872   Downloaded prost-derive v0.13.5
+#23 6.875   Downloaded password-hash v0.5.0
+#23 6.889   Downloaded aws-smithy-observability v0.2.0
+#23 6.904   Downloaded sha1 v0.10.6
+#23 6.914   Downloaded md-5 v0.10.6
+#23 6.921   Downloaded icu_properties_data v2.1.2
+#23 6.928   Downloaded wit-bindgen v0.51.0
+#23 6.937   Downloaded const-oid v0.9.6
+#23 6.976   Downloaded tracing-log v0.2.0
+#23 6.977   Downloaded argon2 v0.5.3
+#23 6.986   Downloaded thread_local v1.1.9
+#23 6.992   Downloaded crc v3.3.0
+#23 6.994   Downloaded lru v0.16.3
+#23 6.996   Downloaded crc-catalog v2.4.0
+#23 6.998   Downloaded nu-ansi-term v0.50.3
+#23 7.006   Downloaded spki v0.6.0
+#23 7.009   Downloaded linux-keyutils v0.2.4
+#23 7.015   Downloaded console v0.15.11
+#23 7.031   Downloaded miniz_oxide v0.8.9
+#23 7.036   Downloaded security-framework v2.11.1
+#23 7.041   Downloaded powerfmt v0.2.0
+#23 7.044   Downloaded bytes-utils v0.1.4
+#23 7.049   Downloaded rustls-webpki v0.103.9
+#23 7.052   Downloaded base16ct v0.1.1
+#23 7.062   Downloaded base64 v0.22.1
+#23 7.070   Downloaded rfc6979 v0.3.1
+#23 7.071   Downloaded signature v1.6.4
+#23 7.078   Downloaded colored v2.2.0
+#23 7.085   Downloaded time-macros v0.2.25
+#23 7.088   Downloaded ff v0.12.1
+#23 7.089   Downloaded num-integer v0.1.46
+#23 7.091   Downloaded deranged v0.5.5
+#23 7.093   Downloaded security-framework v3.5.1
+#23 7.101   Downloaded bumpalo v3.19.1
+#23 7.104   Downloaded vsimd v0.8.0
+#23 7.108   Downloaded aws-smithy-query v0.60.9
+#23 7.111   Downloaded urlencoding v2.1.3
+#23 7.112   Downloaded zerotrie v0.2.3
+#23 7.128   Downloaded anyhow v1.0.100
+#23 7.132   Downloaded cxxbridge-cmd v1.0.192
+#23 7.137   Downloaded windows-core v0.62.2
+#23 7.140   Downloaded iana-time-zone v0.1.64
+#23 7.142   Downloaded aws-smithy-xml v0.60.13
+#23 7.144   Downloaded aws-credential-types v1.2.11
+#23 7.153   Downloaded blake2 v0.10.6
+#23 7.155   Downloaded aws-smithy-checksums v0.63.13
+#23 7.157   Downloaded xmlparser v0.13.6
+#23 7.159   Downloaded aws-smithy-eventstream v0.60.14
+#23 7.160   Downloaded aws-smithy-async v1.2.7
+#23 7.162   Downloaded prettyplease v0.2.37
+#23 7.164   Downloaded tower v0.5.3
+#23 7.173   Downloaded aws-smithy-http v0.62.6
+#23 7.176   Downloaded aws-smithy-json v0.61.9
+#23 7.179   Downloaded tower-http v0.6.8
+#23 7.187   Downloaded assert_cmd v2.1.2
+#23 7.189   Downloaded fallible-streaming-iterator v0.1.9
+#23 7.199   Downloaded url v2.5.8
+#23 7.205   Downloaded indexmap v2.13.0
+#23 7.217   Downloaded tinyvec v1.10.0
+#23 7.220   Downloaded rayon-core v1.13.0
+#23 7.223   Downloaded encode_unicode v1.0.0
+#23 7.226   Downloaded prost-build v0.13.5
+#23 7.238   Downloaded sec1 v0.3.0
+#23 7.241   Downloaded pear_codegen v0.2.9
+#23 7.242   Downloaded uncased v0.9.10
+#23 7.245   Downloaded atomic v0.6.1
+#23 7.255   Downloaded pkcs8 v0.9.0
+#23 7.287   Downloaded cc v1.2.53
+#23 7.290   Downloaded aws-types v1.3.11
+#23 7.304   Downloaded group v0.12.1
+#23 7.306   Downloaded ecdsa v0.14.8
+#23 7.320   Downloaded hyper-util v0.1.19
+#23 7.324   Downloaded http v1.4.0
+#23 7.327   Downloaded half v2.7.1
+#23 7.329   Downloaded mio v1.1.1
+#23 7.357   Downloaded sct v0.7.1
+#23 7.359   Downloaded cxx-build v1.0.192
+#23 7.373   Downloaded async-trait v0.1.89
+#23 7.376   Downloaded poly1305 v0.8.0
+#23 7.383   Downloaded tokio-rustls v0.24.1
+#23 7.386   Downloaded pear v0.2.9
+#23 7.390   Downloaded rand v0.8.5
+#23 7.392   Downloaded hyper-rustls v0.24.2
+#23 7.399   Downloaded der v0.7.10
+#23 7.403   Downloaded hashlink v0.9.1
+#23 7.405   Downloaded minimal-lexical v0.2.1
+#23 7.409   Downloaded spin v0.10.0
+#23 7.412   Downloaded keyring v3.6.3
+#23 7.419   Downloaded typenum v1.19.0
+#23 7.425   Downloaded sharded-slab v0.1.7
+#23 7.432   Downloaded inlinable_string v0.1.15
+#23 7.433   Downloaded proc-macro2-diagnostics v0.10.1
+#23 7.435   Downloaded serde_path_to_error v0.1.20
+#23 7.444   Downloaded fallible-iterator v0.3.0
+#23 7.445   Downloaded hmac v0.12.1
+#23 7.470   Downloaded winnow v0.7.14
+#23 7.476   Downloaded indicatif v0.17.11
+#23 7.496   Downloaded crypto-bigint v0.4.9
+#23 7.517   Downloaded axum-core v0.5.6
+#23 7.519   Downloaded tokio-util v0.7.18
+#23 7.535   Downloaded chacha20poly1305 v0.10.1
+#23 7.555   Downloaded zerocopy-derive v0.8.33
+#23 7.559   Downloaded socket2 v0.5.10
+#23 7.567   Downloaded ed25519-dalek v2.2.0
+#23 7.599   Downloaded axum-macros v0.5.0
+#23 7.610   Downloaded bao v0.12.1
+#23 7.624   Downloaded rand v0.9.2
+#23 7.628   Downloaded elliptic-curve v0.12.3
+#23 7.663   Downloaded matchit v0.8.4
+#23 7.698   Downloaded wasip2 v1.0.2+wasi-0.2.9
+#23 7.721   Downloaded zerovec v0.11.5
+#23 7.759   Downloaded aws-smithy-runtime-api v1.10.0
+#23 7.785   Downloaded hashbrown v0.16.1
+#23 7.835   Downloaded nom v7.1.3
+#23 7.847   Downloaded p256 v0.11.1
+#23 7.850   Downloaded regex-lite v0.1.8
+#23 7.854   Downloaded bytemuck v1.24.0
+#23 7.860   Downloaded der v0.6.1
+#23 7.890   Downloaded aws-smithy-types v1.3.6
+#23 7.893   Downloaded iri-string v0.7.10
+#23 7.906   Downloaded itertools v0.10.5
+#23 7.913   Downloaded idna v1.1.0
+#23 7.958   Downloaded ahash v0.8.12
+#23 7.983   Downloaded aws-sigv4 v1.3.7
+#23 8.007   Downloaded yansi v1.0.1
+#23 8.009   Downloaded http v0.2.12
+#23 8.011   Downloaded criterion v0.5.1
+#23 8.023   Downloaded aws-runtime v1.5.18
+#23 8.025   Downloaded crypto-bigint v0.5.5
+#23 8.039   Downloaded serde_json v1.0.149
+#23 8.043   Downloaded hyper v1.8.1
+#23 8.058   Downloaded itertools v0.13.0
+#23 8.083   Downloaded aws-sdk-sso v1.92.0
+#23 8.093   Downloaded aws-smithy-http-client v1.1.5
+#23 8.115   Downloaded figment v0.10.19
+#23 8.136   Downloaded futures-util v0.3.31
+#23 8.193   Downloaded reqwest v0.12.28
+#23 8.222   Downloaded regex v1.12.2
+#23 8.245   Downloaded aws-sdk-ssooidc v1.94.0
+#23 8.260   Downloaded clap_builder v4.5.54
+#23 8.273   Downloaded plotters v0.3.7
+#23 8.290   Downloaded aws-smithy-runtime v1.9.8
+#23 8.294   Downloaded h2 v0.4.13
+#23 8.364   Downloaded aho-corasick v1.1.4
+#23 8.400   Downloaded rayon v1.11.0
+#23 8.539   Downloaded itertools v0.14.0
+#23 8.603   Downloaded aws-config v1.8.12
+#23 8.623   Downloaded aws-lc-rs v1.15.3
+#23 8.672   Downloaded hashbrown v0.14.5
+#23 8.723   Downloaded vcpkg v0.2.15
+#23 8.753   Downloaded crc-fast v1.9.0
+#23 8.785   Downloaded h2 v0.3.27
+#23 8.789   Downloaded rustls-webpki v0.101.7
+#23 8.800   Downloaded portable-atomic v1.13.0
+#23 8.806   Downloaded cxx v1.0.192
+#23 8.818   Downloaded proptest v1.9.0
+#23 8.856   Downloaded hyper v0.14.32
+#23 8.891   Downloaded axum v0.8.8
+#23 8.916   Downloaded bindgen v0.71.1
+#23 8.942   Downloaded tracing-subscriber v0.3.22
+#23 8.953   Downloaded rusqlite v0.32.1
+#23 8.957   Downloaded blake3 v1.8.3
+#23 9.030   Downloaded time v0.3.45
+#23 9.039   Downloaded unicode-width v0.2.2
+#23 9.047   Downloaded zerocopy v0.8.33
+#23 9.063   Downloaded openssl v0.10.75
+#23 9.095   Downloaded syn v2.0.114
+#23 9.109   Downloaded aws-sdk-sts v1.96.0
+#23 9.117   Downloaded chrono v0.4.43
+#23 9.264   Downloaded curve25519-dalek v4.1.3
+#23 9.326   Downloaded rustls v0.21.12
+#23 9.452   Downloaded regex-syntax v0.8.8
+#23 9.520   Downloaded rustls v0.23.36
+#23 9.538   Downloaded bstr v1.12.1
+#23 9.687   Downloaded rustix v1.1.3
+#23 9.704   Downloaded windows_i686_gnullvm v0.52.6
+#23 9.712   Downloaded windows_aarch64_gnullvm v0.52.6
+#23 9.726   Downloaded windows_x86_64_gnullvm v0.52.6
+#23 9.746   Downloaded windows_x86_64_gnullvm v0.48.5
+#23 9.914   Downloaded fiat-crypto v0.2.9
+#23 9.930   Downloaded tracing v0.1.44
+#23 9.971   Downloaded windows_aarch64_gnullvm v0.48.5
+#23 10.60   Downloaded web-sys v0.3.85
+#23 10.68   Downloaded windows_aarch64_msvc v0.52.6
+#23 10.70   Downloaded windows_x86_64_msvc v0.52.6
+#23 10.73   Downloaded windows_x86_64_msvc v0.48.5
+#23 10.79   Downloaded regex-automata v0.4.13
+#23 10.81   Downloaded windows_aarch64_msvc v0.48.5
+#23 10.82   Downloaded windows_x86_64_gnu v0.52.6
+#23 10.87   Downloaded windows_i686_gnu v0.52.6
+#23 10.89   Downloaded windows_i686_msvc v0.48.5
+#23 10.91   Downloaded windows_i686_msvc v0.52.6
+#23 11.22   Downloaded libc v0.2.180
+#23 11.24   Downloaded petgraph v0.7.1
+#23 11.26   Downloaded windows_aarch64_gnullvm v0.53.1
+#23 11.27   Downloaded windows_x86_64_gnullvm v0.53.1
+#23 11.40   Downloaded windows_x86_64_msvc v0.53.1
+#23 11.42   Downloaded windows_i686_gnullvm v0.53.1
+#23 11.43   Downloaded windows_x86_64_gnu v0.48.5
+#23 11.45   Downloaded windows_aarch64_msvc v0.53.1
+#23 11.47   Downloaded ring v0.17.14
+#23 15.10   Downloaded windows_i686_gnu v0.48.5
+#23 15.12   Downloaded windows_i686_msvc v0.53.1
+#23 15.14   Downloaded windows_x86_64_gnu v0.53.1
+#23 15.16   Downloaded tokio v1.49.0
+#23 15.19   Downloaded windows_i686_gnu v0.53.1
+#23 15.52   Downloaded windows-sys v0.59.0
+#23 15.58   Downloaded windows-sys v0.52.0
+#23 15.64   Downloaded encoding_rs v0.8.35
+#23 15.93   Downloaded aws-sdk-s3 v1.120.0
+#23 16.65   Downloaded windows-sys v0.61.2
+#23 16.71   Downloaded libsqlite3-sys v0.30.1
+#23 16.81   Downloaded windows-sys v0.60.2
+#23 16.86   Downloaded linux-raw-sys v0.11.0
+#23 16.91   Downloaded windows-sys v0.48.0
+#23 17.53   Downloaded aws-lc-sys v0.36.0
+#23 18.57   Downloaded oqs-sys v0.11.0+liboqs-0.13.0
+#23 DONE 22.4s
+
+#24 [rust-builder 10/11] RUN cargo build --release --bin recrypt-server --bin recrypt
+#24 0.554    Compiling libc v0.2.180
+#24 0.554    Compiling proc-macro2 v1.0.105
+#24 0.554    Compiling unicode-ident v1.0.22
+#24 0.554    Compiling quote v1.0.43
+#24 0.554    Compiling cfg-if v1.0.4
+#24 0.557    Compiling shlex v1.3.0
+#24 0.557    Compiling find-msvc-tools v0.1.8
+#24 0.558    Compiling version_check v0.9.5
+#24 0.558    Compiling bytes v1.11.0
+#24 0.558    Compiling smallvec v1.15.1
+#24 0.680    Compiling once_cell v1.21.3
+#24 0.700    Compiling pin-project-lite v0.2.16
+#24 0.748    Compiling typenum v1.19.0
+#24 0.759    Compiling subtle v2.6.1
+#24 0.800    Compiling parking_lot_core v0.9.12
+#24 0.817    Compiling itoa v1.0.17
+#24 0.821    Compiling generic-array v0.14.7
+#24 0.836    Compiling scopeguard v1.2.0
+#24 0.856    Compiling futures-core v0.3.31
+#24 0.875    Compiling lock_api v0.4.14
+#24 0.876    Compiling log v0.4.29
+#24 0.909    Compiling tracing-core v0.1.36
+#24 0.919    Compiling futures-sink v0.3.31
+#24 0.919    Compiling pin-utils v0.1.0
+#24 0.940    Compiling fnv v1.0.7
+#24 0.951    Compiling foldhash v0.2.0
+#24 0.969    Compiling serde_core v1.0.228
+#24 0.991    Compiling futures-task v0.3.31
+#24 1.010    Compiling http v1.4.0
+#24 1.042    Compiling autocfg v1.5.0
+#24 1.066    Compiling futures-util v0.3.31
+#24 1.142    Compiling equivalent v1.0.2
+#24 1.160    Compiling allocator-api2 v0.2.21
+#24 1.430    Compiling hashbrown v0.16.1
+#24 1.438    Compiling num-traits v0.2.19
+#24 1.452    Compiling http v0.2.12
+#24 1.504    Compiling syn v2.0.114
+#24 1.544    Compiling jobserver v0.1.34
+#24 1.588    Compiling getrandom v0.2.17
+#24 1.592    Compiling errno v0.3.14
+#24 1.649    Compiling rand_core v0.6.4
+#24 1.691    Compiling cc v1.2.53
+#24 1.798    Compiling signal-hook-registry v1.4.8
+#24 1.805    Compiling socket2 v0.6.1
+#24 1.908    Compiling mio v1.1.1
+#24 1.947    Compiling parking_lot v0.12.5
+#24 1.988    Compiling crypto-common v0.1.7
+#24 1.988    Compiling block-buffer v0.10.4
+#24 2.033    Compiling http-body v1.0.1
+#24 2.051    Compiling digest v0.10.7
+#24 2.081    Compiling http-body-util v0.1.3
+#24 2.210    Compiling pkg-config v0.3.32
+#24 2.212    Compiling ryu v1.0.22
+#24 2.247    Compiling cmake v0.1.57
+#24 2.320    Compiling indexmap v2.13.0
+#24 2.329    Compiling getrandom v0.3.4
+#24 2.352    Compiling http-body v0.4.6
+#24 2.446    Compiling powerfmt v0.2.0
+#24 2.498    Compiling vsimd v0.8.0
+#24 2.530    Compiling deranged v0.5.5
+#24 2.537    Compiling percent-encoding v2.3.2
+#24 2.577    Compiling time-core v0.1.7
+#24 2.633    Compiling either v1.15.0
+#24 2.691    Compiling outref v0.5.2
+#24 2.714    Compiling num-conv v0.1.0
+#24 2.725    Compiling httparse v1.10.1
+#24 2.741    Compiling untrusted v0.9.0
+#24 2.764    Compiling semver v1.0.27
+#24 2.781    Compiling bytes-utils v0.1.4
+#24 2.785    Compiling num-integer v0.1.46
+#24 2.794    Compiling base64-simd v0.8.0
+#24 2.817    Compiling crc32fast v1.5.0
+#24 2.843    Compiling slab v0.4.11
+#24 2.912    Compiling tower-service v0.3.3
+#24 2.916    Compiling rustc_version v0.4.1
+#24 2.926    Compiling dunce v1.0.5
+#24 2.934    Compiling try-lock v0.2.5
+#24 2.938    Compiling fs_extra v1.3.0
+#24 2.969    Compiling ring v0.17.14
+#24 2.973    Compiling want v0.3.1
+#24 2.991    Compiling cpufeatures v0.2.17
+#24 3.013    Compiling futures-channel v0.3.31
+#24 3.088    Compiling httpdate v1.0.3
+#24 3.090    Compiling aws-lc-sys v0.36.0
+#24 3.108    Compiling stable_deref_trait v1.2.1
+#24 3.116    Compiling bitflags v2.10.0
+#24 3.121    Compiling base64 v0.22.1
+#24 3.126    Compiling serde v1.0.228
+#24 3.155    Compiling base64ct v1.8.3
+#24 3.241    Compiling prettyplease v0.2.37
+#24 3.250    Compiling atomic-waker v1.1.2
+#24 3.290    Compiling time v0.3.45
+#24 3.293    Compiling sha2 v0.10.9
+#24 3.325    Compiling anyhow v1.0.100
+#24 3.343    Compiling glob v0.3.3
+#24 3.355    Compiling vcpkg v0.2.15
+#24 3.384    Compiling aws-lc-rs v1.15.3
+#24 3.482    Compiling regex-syntax v0.8.8
+#24 3.548    Compiling sync_wrapper v1.0.2
+#24 3.590    Compiling tower-layer v0.3.3
+#24 3.634    Compiling ipnet v2.11.0
+#24 3.650    Compiling const-oid v0.9.6
+#24 3.723    Compiling clang-sys v1.8.1
+#24 3.766    Compiling zerocopy v0.8.33
+#24 3.789    Compiling memchr v2.7.6
+#24 3.882    Compiling form_urlencoded v1.2.2
+#24 3.895    Compiling rustls v0.23.36
+#24 3.929    Compiling synstructure v0.13.2
+#24 3.988    Compiling scratch v1.0.9
+#24 4.088    Compiling minimal-lexical v0.2.1
+#24 4.204    Compiling rustls v0.21.12
+#24 4.330    Compiling libloading v0.8.9
+#24 4.338    Compiling regex-automata v0.4.13
+#24 4.441    Compiling nom v7.1.3
+#24 4.445    Compiling link-cplusplus v1.0.12
+#24 4.956    Compiling ff v0.12.1
+#24 5.048    Compiling bindgen v0.71.1
+#24 5.129    Compiling litemap v0.8.1
+#24 5.222    Compiling base16ct v0.1.1
+#24 5.274    Compiling termcolor v1.4.1
+#24 5.310    Compiling unicode-width v0.2.2
+#24 5.345    Compiling writeable v0.6.2
+#24 5.436    Compiling group v0.12.1
+#24 5.459    Compiling codespan-reporting v0.13.1
+#24 5.518    Compiling zeroize_derive v1.4.3
+#24 5.577    Compiling tokio-macros v2.6.0
+#24 5.819    Compiling tracing-attributes v0.1.31
+#24 5.860    Compiling zerofrom-derive v0.1.6
+#24 5.890    Compiling yoke-derive v0.8.1
+#24 5.913    Compiling zerovec-derive v0.11.2
+#24 6.151    Compiling zeroize v1.8.2
+#24 6.269    Compiling tokio v1.49.0
+#24 6.392    Compiling rustls-pki-types v1.14.0
+#24 6.753    Compiling serde_derive v1.0.228
+#24 6.956    Compiling displaydoc v0.2.5
+#24 7.053    Compiling der v0.6.1
+#24 7.081    Compiling regex v1.12.2
+#24 7.164    Compiling zerofrom v0.1.6
+#24 7.198    Compiling yoke v0.8.1
+#24 7.198    Compiling tracing v0.1.44
+#24 7.283    Compiling zerovec v0.11.5
+#24 7.346    Compiling crypto-bigint v0.4.9
+#24 7.471    Compiling cexpr v0.6.0
+#24 7.525    Compiling zerotrie v0.2.3
+#24 7.657    Compiling spki v0.6.0
+#24 7.721    Compiling pkcs8 v0.9.0
+#24 7.841    Compiling tinystr v0.8.2
+#24 7.891    Compiling sec1 v0.3.0
+#24 7.956    Compiling icu_locale_core v2.1.1
+#24 8.129    Compiling potential_utf v0.1.4
+#24 8.272    Compiling itertools v0.14.0
+#24 8.377    Compiling itertools v0.13.0
+#24 8.388    Compiling hmac v0.12.1
+#24 8.492    Compiling socket2 v0.5.10
+#24 8.529    Compiling icu_normalizer_data v2.1.1
+#24 8.595    Compiling cxxbridge-flags v1.0.192
+#24 8.632    Compiling icu_properties_data v2.1.2
+#24 8.669    Compiling openssl-probe v0.2.0
+#24 8.712    Compiling fastrand v2.3.0
+#24 8.760    Compiling rustc-hash v2.1.1
+#24 8.816    Compiling icu_provider v2.1.1
+#24 8.844    Compiling rustls-native-certs v0.8.3
+#24 8.877    Compiling cxx v1.0.192
+#24 9.008    Compiling rfc6979 v0.3.1
+#24 9.025    Compiling cxx-build v1.0.192
+#24 9.059    Compiling icu_collections v2.1.1
+#24 9.135    Compiling elliptic-curve v0.12.3
+#24 9.179    Compiling prost-derive v0.13.5
+#24 9.218    Compiling uuid v1.19.0
+#24 9.275    Compiling build-deps v0.1.4
+#24 9.309    Compiling signature v1.6.4
+#24 9.343    Compiling ecdsa v0.14.8
+#24 9.567    Compiling aws-types v1.3.11
+#24 9.624    Compiling zmij v1.0.14
+#24 9.669    Compiling rustix v1.1.3
+#24 9.699    Compiling hex v0.4.3
+#24 9.763    Compiling p256 v0.11.1
+#24 9.821    Compiling icu_properties v2.1.2
+#24 9.856    Compiling icu_normalizer v2.1.1
+#24 10.29    Compiling tokio-util v0.7.18
+#24 10.41    Compiling aws-smithy-async v1.2.7
+#24 10.52    Compiling openssl-sys v0.9.111
+#24 10.60    Compiling curve25519-dalek v4.1.3
+#24 10.70    Compiling aws-smithy-types v1.3.6
+#24 10.74    Compiling h2 v0.4.13
+#24 10.89    Compiling tower v0.5.3
+#24 10.96    Compiling h2 v0.3.27
+#24 11.20    Compiling blake3 v1.8.3
+#24 11.37    Compiling aws-smithy-runtime-api v1.10.0
+#24 11.41    Compiling aws-smithy-eventstream v0.60.14
+#24 11.83    Compiling crypto-bigint v0.5.5
+#24 12.03    Compiling serde_json v1.0.149
+#24 12.12    Compiling linux-raw-sys v0.11.0
+#24 12.51    Compiling aws-smithy-http v0.62.6
+#24 12.60    Compiling aws-credential-types v1.2.11
+#24 13.15    Compiling rustls-webpki v0.101.7
+#24 13.42    Compiling sct v0.7.1
+#24 13.53    Compiling aws-smithy-observability v0.2.0
+#24 13.54    Compiling thiserror v2.0.17
+#24 14.05    Compiling heck v0.5.0
+#24 14.08    Compiling prost v0.13.5
+#24 14.10    Compiling aws-sigv4 v1.3.7
+#24 14.14    Compiling oqs-sys v0.11.0+liboqs-0.13.0
+#24 14.38    Compiling recrypt-openfhe-sys v0.1.0 (/app/crates/recrypt-openfhe-sys)
+#24 14.73    Compiling hyper v1.8.1
+#24 14.83    Compiling hyper v0.14.32
+#24 15.01    Compiling idna_adapter v1.2.1
+#24 15.32    Compiling ppv-lite86 v0.2.21
+#24 15.47    Compiling thiserror-impl v2.0.17
+#24 15.49    Compiling cxxbridge-macro v1.0.192
+#24 15.91    Compiling tokio-rustls v0.24.1
+#24 16.06    Compiling hyper-util v0.1.19
+#24 16.25    Compiling inout v0.1.4
+#24 16.30    Compiling arrayref v0.3.9
+#24 16.32    Compiling arrayvec v0.7.6
+#24 16.34    Compiling fixedbitset v0.5.7
+#24 16.43    Compiling signature v2.2.0
+#24 16.47    Compiling adler2 v2.0.1
+#24 16.47    Compiling simd-adler32 v0.3.8
+#24 16.49    Compiling oqs v0.11.0
+#24 16.52    Compiling cty v0.2.2
+#24 16.54    Compiling utf8_iter v1.0.4
+#24 16.61    Compiling constant_time_eq v0.4.2
+#24 16.69    Compiling idna v1.1.0
+#24 16.72    Compiling tempfile v3.24.0
+#24 16.90    Compiling cstr_core v0.2.6
+#24 16.97    Compiling miniz_oxide v0.8.9
+#24 17.05    Compiling ed25519 v2.2.3
+#24 17.06    Compiling petgraph v0.7.1
+#24 17.13    Compiling cipher v0.4.4
+#24 17.22    Compiling rand_chacha v0.3.1
+#24 17.71    Compiling prost-types v0.13.5
+#24 17.79    Compiling aws-smithy-json v0.61.9
+#24 18.12    Compiling hyper-rustls v0.24.2
+#24 18.14    Compiling recrypt-ffi v0.1.0 (/app/crates/recrypt-ffi)
+#24 18.21    Compiling ahash v0.8.12
+#24 18.26    Compiling rustversion v1.0.22
+#24 18.36    Compiling regex-lite v0.1.8
+#24 18.42    Compiling multimap v0.10.1
+#24 18.48    Compiling ed25519-dalek v2.2.0
+#24 18.48    Compiling prost-build v0.13.5
+#24 18.49    Compiling rand v0.8.5
+#24 18.52    Compiling chacha20 v0.9.1
+#24 18.58    Compiling flate2 v1.1.8
+#24 18.63    Compiling url v2.5.8
+#24 18.79    Compiling proc-macro2-diagnostics v0.10.1
+#24 18.82    Compiling compression-core v0.4.31
+#24 18.88    Compiling crc-catalog v2.4.0
+#24 18.88    Compiling openssl v0.10.75
+#24 18.97    Compiling foreign-types-shared v0.1.1
+#24 18.99    Compiling xmlparser v0.13.6
+#24 19.03    Compiling foreign-types v0.3.2
+#24 19.06    Compiling crc v3.3.0
+#24 19.14    Compiling aws-smithy-xml v0.60.13
+#24 19.16    Compiling recrypt-proto v0.1.0 (/app/crates/recrypt-proto)
+#24 19.35    Compiling compression-codecs v0.4.36
+#24 19.51    Compiling bao v0.12.1
+#24 19.69    Compiling toml_datetime v0.6.11
+#24 19.71    Compiling serde_spanned v0.6.9
+#24 19.76    Compiling openssl-macros v0.1.1
+#24 19.78    Compiling libsqlite3-sys v0.30.1
+#24 19.90    Compiling spin v0.10.0
+#24 19.90    Compiling bs58 v0.5.1
+#24 19.93    Compiling urlencoding v2.1.3
+#24 19.98    Compiling winnow v0.7.14
+#24 19.99    Compiling mime v0.3.17
+#24 20.01    Compiling lazy_static v1.5.0
+#24 20.01    Compiling toml_write v0.1.2
+#24 20.02    Compiling yansi v1.0.1
+#24 20.04    Compiling native-tls v0.2.14
+#24 20.17    Compiling crc-fast v1.9.0
+#24 20.19    Compiling aws-smithy-query v0.60.9
+#24 20.32    Compiling hashbrown v0.14.5
+#24 20.69    Compiling async-compression v0.4.37
+#24 20.73    Compiling serde_urlencoded v0.7.1
+#24 20.85    Compiling sha1 v0.10.6
+#24 20.87    Compiling md-5 v0.10.6
+#24 20.92    Compiling uncased v0.9.10
+#24 20.96    Compiling openssl-probe v0.1.6
+#24 21.00    Compiling iri-string v0.7.10
+#24 21.08    Compiling toml_edit v0.22.27
+#24 21.24    Compiling utf8parse v0.2.2
+#24 21.27    Compiling anstyle-parse v0.2.7
+#24 21.36    Compiling hashlink v0.9.1
+#24 21.53    Compiling pear_codegen v0.2.9
+#24 22.12    Compiling tower-http v0.6.8
+#24 23.13    Compiling toml v0.8.23
+#24 23.20    Compiling aws-smithy-checksums v0.63.13
+#24 23.67    Compiling async-trait v0.1.89
+#24 24.02    Compiling lru v0.16.3
+#24 24.10    Compiling figment v0.10.19
+#24 24.11    Compiling portable-atomic v1.13.0
+#24 24.19    Compiling anstyle v1.0.13
+#24 24.30    Compiling fallible-iterator v0.3.0
+#24 24.36    Compiling inlinable_string v0.1.15
+#24 24.36    Compiling fallible-streaming-iterator v0.1.9
+#24 24.38    Compiling thiserror v1.0.69
+#24 24.43    Compiling is_terminal_polyfill v1.70.2
+#24 24.48    Compiling iana-time-zone v0.1.64
+#24 24.49    Compiling colorchoice v1.0.4
+#24 24.52    Compiling anstyle-query v1.1.5
+#24 24.55    Compiling chrono v0.4.43
+#24 24.67    Compiling pear v0.2.9
+#24 24.70    Compiling console v0.15.11
+#24 24.71    Compiling anstream v0.6.21
+#24 24.93    Compiling matchers v0.2.0
+#24 24.98    Compiling tokio-native-tls v0.3.1
+#24 25.14    Compiling terminal_size v0.4.3
+#24 25.19    Compiling axum-core v0.5.6
+#24 25.28    Compiling sharded-slab v0.1.7
+#24 25.36    Compiling tracing-serde v0.2.0
+#24 25.41    Compiling thiserror-impl v1.0.69
+#24 25.68    Compiling axum-macros v0.5.0
+#24 26.37    Compiling serde_path_to_error v0.1.20
+#24 26.46    Compiling universal-hash v0.5.1
+#24 26.53    Compiling tracing-log v0.2.0
+#24 26.54    Compiling thread_local v1.1.9
+#24 26.62    Compiling nu-ansi-term v0.50.3
+#24 26.69    Compiling clap_lex v0.7.7
+#24 26.72    Compiling option-ext v0.2.0
+#24 26.75    Compiling opaque-debug v0.3.1
+#24 26.77    Compiling strsim v0.11.1
+#24 26.82    Compiling matchit v0.8.4
+#24 26.84    Compiling tracing-subscriber v0.3.22
+#24 26.89    Compiling clap_builder v4.5.54
+#24 26.90    Compiling poly1305 v0.8.0
+#24 26.94    Compiling dirs-sys v0.4.1
+#24 27.14    Compiling axum v0.8.8
+#24 27.14    Compiling hyper-tls v0.6.0
+#24 27.58    Compiling clap_derive v4.5.49
+#24 27.85    Compiling password-hash v0.5.0
+#24 28.32    Compiling linux-keyutils v0.2.4
+#24 28.66    Compiling blake2 v0.10.6
+#24 28.95    Compiling aead v0.5.2
+#24 29.08    Compiling encoding_rs v0.8.35
+#24 29.28    Compiling shell-words v1.1.1
+#24 29.39    Compiling number_prefix v0.4.0
+#24 29.44    Compiling indicatif v0.17.11
+#24 30.01    Compiling reqwest v0.12.28
+#24 30.80    Compiling dialoguer v0.11.0
+#24 30.83    Compiling clap v4.5.54
+#24 30.86    Compiling chacha20poly1305 v0.10.1
+#24 30.94    Compiling argon2 v0.5.3
+#24 31.34    Compiling keyring v3.6.3
+#24 31.48    Compiling directories v5.0.1
+#24 31.55    Compiling colored v2.2.0
+#24 45.14    Compiling rustls-webpki v0.103.9
+#24 49.64    Compiling tokio-rustls v0.26.4
+#24 49.96    Compiling hyper-rustls v0.27.7
+#24 50.12    Compiling aws-smithy-http-client v1.1.5
+#24 51.71    Compiling aws-smithy-runtime v1.9.8
+#24 54.15    Compiling aws-runtime v1.5.18
+#24 55.07    Compiling aws-sdk-sts v1.96.0
+#24 55.07    Compiling aws-sdk-sso v1.92.0
+#24 55.07    Compiling aws-sdk-ssooidc v1.94.0
+#24 55.69    Compiling aws-sdk-s3 v1.120.0
+#24 57.43    Compiling aws-config v1.8.12
+#24 67.84    Compiling rusqlite v0.32.1
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn.h:613,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/backenddyn.h:46,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintbackend.h:38,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/math-hal.h:48,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/elemparams.h:39,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/ilparams.h:39,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h:49,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/lat-hal.h:35,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/openfhecore.h:39,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/pke/openfhe.h:40,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/target/release/build/recrypt-openfhe-sys-2c7afcfc4567bb93/out/cxxbridge/crate/recrypt-openfhe-sys/src/wrapper.h:11,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/target/release/build/recrypt-openfhe-sys-2c7afcfc4567bb93/out/cxxbridge/sources/recrypt-openfhe-sys/src/lib.rs.cc:1:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h:714: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   714 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h:1108: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1108 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h:1147: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1147 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat.h:625,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/hal/nativeintbackend.h:38,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/math-hal.h:49:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h:783: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   783 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h:1171: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1171 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h:1210: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1210 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/math/nbtheory-impl.h:41,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/ildcrtparams.h:44,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h:50:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/distributiongenerator.h:78: warning: ignoring '#pragma omp threadprivate' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:    78 |         #pragma omp threadprivate(m_prng)
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h:52:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h:133: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   133 | #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(size))
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h:164: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   164 | #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(size))
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h:185: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   185 | #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(size))
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/pke/openfhe.h:51:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/matrix.h:336: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   336 | #pragma omp parallel for
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/matrix.h:453: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   453 | #pragma omp parallel for
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/matrix.h:491: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   491 | #pragma omp parallel for
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn.h:613,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/backenddyn.h:46,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintbackend.h:38,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/math-hal.h:48,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/elemparams.h:39,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/ilparams.h:39,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h:49,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/lat-hal.h:35,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/openfhecore.h:39,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/pke/openfhe.h:40,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/target/release/build/recrypt-openfhe-sys-2c7afcfc4567bb93/out/cxxbridge/crate/recrypt-openfhe-sys/src/wrapper.h:11,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from src/wrapper.cc:1:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h:714: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   714 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h:1108: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1108 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/bigintdyn/transformdyn-impl.h:1147: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1147 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat.h:625,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/hal/nativeintbackend.h:38,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/math/math-hal.h:49:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h:783: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   783 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h:1171: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1171 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/hal/intnat/transformnat-impl.h:1210: warning: ignoring '#pragma omp critical' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:  1210 | #pragma omp critical
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/math/nbtheory-impl.h:41,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/ildcrtparams.h:44,
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:                  from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h:50:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/distributiongenerator.h:78: warning: ignoring '#pragma omp threadprivate' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:    78 |         #pragma omp threadprivate(m_prng)
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/lat-backend.h:52:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h:133: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   133 | #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(size))
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h:164: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   164 | #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(size))
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/lattice/hal/default/dcrtpoly.h:185: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   185 | #pragma omp parallel for num_threads(OpenFHEParallelControls.GetThreadLimit(size))
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: In file included from /app/vendor/openfhe-install/include/openfhe/pke/openfhe.h:51:
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/matrix.h:336: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   336 | #pragma omp parallel for
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/matrix.h:453: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   453 | #pragma omp parallel for
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0: /app/vendor/openfhe-install/include/openfhe/core/math/matrix.h:491: warning: ignoring '#pragma omp parallel' [-Wunknown-pragmas]
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:   491 | #pragma omp parallel for
+#24 72.86 warning: recrypt-openfhe-sys@0.1.0:       |
+#24 73.00    Compiling recrypt-core v0.1.0 (/app/crates/recrypt-core)
+#24 73.03    Compiling recrypt-storage v0.1.0 (/app/crates/recrypt-storage)
+#24 73.39    Compiling identikey-storage-auth v0.1.0 (/app/crates/identikey-storage-auth)
+#24 73.77    Compiling recrypt-server v0.1.0 (/app/recrypt-server)
+#24 74.23    Compiling recrypt-cli v0.1.0 (/app/recrypt-cli)
+#24 134.0     Finished `release` profile [optimized] target(s) in 2m 13s
+#24 DONE 135.5s
+
+#25 [rust-builder 11/11] RUN strip target/release/recrypt-server target/release/recrypt
+#25 DONE 0.4s
+
+#26 [runtime 5/7] COPY --from=rust-builder /app/target/release/recrypt-server ./
+#26 DONE 0.2s
+
+#27 [runtime 6/7] COPY --from=rust-builder /app/target/release/recrypt ./
+#27 DONE 0.1s
+
+#28 [runtime 7/7] RUN mkdir -p /data && chown recrypt:recrypt /data
+#28 DONE 0.2s
+
+#29 exporting to image
+#29 exporting layers
+#29 exporting layers 0.2s done
+#29 writing image sha256:4945e8b82376cd9a940cbf9c8b16f1ebcdb000e9698ce545c54dd5dc2c5c1d6a done
+#29 naming to docker.io/library/recrypt-server done
+#29 DONE 0.3s

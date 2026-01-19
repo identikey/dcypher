@@ -6,6 +6,7 @@ pub mod files;
 pub mod helpers;
 pub mod identity;
 pub mod share;
+pub mod wallet_cmd;
 
 use recrypt_core::pre::backends::{LatticeBackend, MockBackend};
 use recrypt_core::pre::{BackendId, PreBackend};
@@ -48,6 +49,7 @@ impl Context {
     }
 
     /// Create a boxed backend from the resolved backend ID
+    #[allow(dead_code)]
     pub fn create_backend(&self) -> anyhow::Result<Box<dyn PreBackend>> {
         let backend_id = self.resolve_backend_id()?;
         create_backend_from_id(backend_id)

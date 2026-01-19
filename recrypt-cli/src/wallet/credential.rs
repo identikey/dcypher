@@ -268,6 +268,7 @@ impl Default for MemoryProvider {
 }
 
 impl MemoryProvider {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::default()
     }
@@ -323,13 +324,13 @@ pub fn default_provider() -> Box<dyn CredentialProvider> {
     // 2. macOS: use security-framework directly (single prompt, not double)
     #[cfg(target_os = "macos")]
     {
-        return Box::new(MacOSKeychainProvider::new());
+        Box::new(MacOSKeychainProvider::new())
     }
 
     // 3. Windows: use keyring crate
     #[cfg(target_os = "windows")]
     {
-        return Box::new(KeyringProvider::new());
+        Box::new(KeyringProvider::new())
     }
 
     // 4. Linux: check if Secret Service is available; fall back to memory if not
@@ -337,9 +338,10 @@ pub fn default_provider() -> Box<dyn CredentialProvider> {
     {
         let keyring = KeyringProvider::new();
         if keyring.is_available() {
-            return Box::new(keyring);
+            Box::new(keyring)
+        } else {
+            Box::new(MemoryProvider::new())
         }
-        return Box::new(MemoryProvider::new());
     }
 
     // 5. Other platforms: memory only

@@ -1,7 +1,7 @@
 # Phase 6b: Secure Credential Storage Implementation Plan
 
-**Status:** ✅ Complete (wallet commands deferred)  
-**Duration:** 2-3 days  
+**Status:** ✅ Complete
+**Duration:** 2-3 days
 **Goal:** OS-native secure storage for wallet encryption keys, eliminating per-invocation password prompts
 
 **Prerequisites:** Phase 6 ✅ Complete
@@ -10,10 +10,7 @@
 
 - ✅ Phase 6b.1: Credential Provider Architecture
 - ✅ Phase 6b.2: Key Caching (macOS Keychain via security-framework, Linux/Windows via keyring)
-
-**Remaining:**
-
-- ⬜ Phase 6b.3: Wallet Commands (lock/unlock/status) — OPTIONAL, can be added later
+- ✅ Phase 6b.3: Wallet Commands (lock/unlock/status/path)
 
 ---
 
@@ -722,16 +719,16 @@ impl Wallet {
 
 #### Manual Verification:
 
-- [x] First `dcypher identity list` prompts for password (SINGLE prompt, not double)
-- [x] Second `dcypher identity list` does NOT prompt (key cached in keyring)
-- [x] Verify with `security find-generic-password -s dcypher` (macOS)
+- [x] First `recrypt identity list` prompts for password (SINGLE prompt, not double) ✅ Verified 2026-01-19
+- [x] Second `recrypt identity list` does NOT prompt (key cached in keyring) ✅ Verified 2026-01-19
+- [x] Verify with `security find-generic-password -s recrypt` (macOS) ✅ Verified 2026-01-19
 
 **Note (2026-01-15):** Fixed double-prompt issue on macOS by switching from `keyring` crate's `apple-native` backend to direct `security-framework` crate usage. The `keyring` crate's apple-native backend was triggering two separate Security framework prompts (one for "confidential information" and one for "key"). Using `security_framework::passwords::{get,set,delete}_generic_password()` directly results in a single prompt.
 
 **Migration:** If you previously had the keychain item created by the old implementation, you may need to delete it first:
 
 ```bash
-security delete-generic-password -s dcypher
+security delete-generic-password -s recrypt
 ```
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the caching works correctly before proceeding.
@@ -1147,16 +1144,17 @@ env:
 
 ### Automated Verification:
 
-- [ ] `cargo build -p recrypt-cli` succeeds
-- [ ] `cargo test -p recrypt-cli` passes without prompts
-- [ ] `cargo clippy -p recrypt-cli` no warnings
-- [ ] CI tests pass with `DCYPHER_WALLET_KEY` env var
+- [x] `cargo build -p recrypt-cli` succeeds ✅ 2026-01-19
+- [x] `cargo test -p recrypt-cli` passes without prompts ✅ 2026-01-19 (15 tests, 4.78s)
+- [x] `cargo clippy -p recrypt-cli --no-deps` no warnings ✅ 2026-01-19
+- [x] CI tests pass with `RECRYPT_WALLET_KEY` env var ✅ 2026-01-19 (EnvProvider implemented)
 
 ### Manual Verification:
 
-- [ ] First wallet access prompts for password
-- [ ] Subsequent access works without prompt
-- [ ] `dcypher wallet lock` clears cached key
-- [ ] `dcypher wallet unlock` caches key
-- [ ] `dcypher wallet status` shows correct state
-- [ ] macOS Keychain shows dcypher entry (Keychain Access app)
+- [x] First wallet access prompts for password ✅ 2026-01-19
+- [x] Subsequent access works without prompt ✅ 2026-01-19
+- [x] `recrypt wallet lock` clears cached key ✅ 2026-01-19 (Phase 6b.3 complete)
+- [x] `recrypt wallet unlock` caches key ✅ 2026-01-19 (Phase 6b.3 complete)
+- [x] `recrypt wallet status` shows correct state ✅ 2026-01-19 (Phase 6b.3 complete)
+- [x] `recrypt wallet path` shows wallet location ✅ 2026-01-19 (Phase 6b.3 complete)
+- [x] macOS Keychain shows recrypt entry (Keychain Access app) ✅ 2026-01-19

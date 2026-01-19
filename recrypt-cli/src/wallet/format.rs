@@ -205,6 +205,7 @@ mod tests {
                     public: "test-pub".to_string(),
                     secret: "test-sec".to_string(),
                 },
+                pre_backend: recrypt_core::pre::BackendId::Mock,
             },
         );
 
@@ -276,6 +277,7 @@ mod tests {
                     public: "pre-pub".to_string(),
                     secret: "pre-sec".to_string(),
                 },
+                pre_backend: recrypt_core::pre::BackendId::Mock,
             },
         );
 

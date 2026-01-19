@@ -71,6 +71,11 @@ enum Commands {
         #[command(subcommand)]
         action: commands::config::ConfigCommand,
     },
+    /// Manage wallet (unlock/lock)
+    Wallet {
+        #[command(subcommand)]
+        action: commands::wallet_cmd::WalletCommand,
+    },
 }
 
 #[tokio::main]
@@ -94,5 +99,6 @@ async fn main() -> Result<()> {
         Commands::File { action } => commands::files::run(action, &ctx).await,
         Commands::Share { action } => commands::share::run(action, &ctx).await,
         Commands::Config { action } => commands::config::run(action, &ctx).await,
+        Commands::Wallet { action } => commands::wallet_cmd::run(action, &ctx).await,
     }
 }
