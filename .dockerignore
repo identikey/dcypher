@@ -1,6 +1,34 @@
-__pycache__
-.venv
-.git
-.env*
-vendor/
-node_modules/
+# Build artifacts
+target/
+*.rlib
+*.rmeta
+
+# Git
+.git/
+.gitignore
+.gitmodules
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+
+# Documentation (not needed in build)
+docs/
+thoughts/
+*.md
+!README.md
+
+# Development files
+Justfile
+test-*.sh
+docker/
+
+# OpenFHE build artifacts (we copy source only)
+vendor/openfhe-development/build/
+vendor/openfhe-install/
+
+# macOS
+.DS_Store
