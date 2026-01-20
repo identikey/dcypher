@@ -13,6 +13,7 @@ impl TestServer {
             port: 0, // OS assigns port
             storage: Default::default(),
             nonce: Default::default(),
+            pre_backend: "mock".into(),
         };
 
         let state = recrypt_server::state::AppState::new(&config).await.unwrap();

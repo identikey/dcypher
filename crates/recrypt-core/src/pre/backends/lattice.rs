@@ -30,6 +30,7 @@ impl LatticeBackend {
     /// Uses plaintext_modulus=65537, scaling_mod_size=60 for all instances.
     /// This ensures serialized keys are compatible across backend instances.
     #[cfg(feature = "openfhe")]
+    #[allow(clippy::arc_with_non_send_sync)] // FfiContext is thread-safe after init per OpenFHE docs
     pub fn new() -> PreResult<Self> {
         let context = FfiContext::new()
             .map_err(|e| PreError::BackendUnavailable(format!("OpenFHE init failed: {e}")))?;

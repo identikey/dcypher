@@ -119,13 +119,66 @@ impl RecryptKey {
     /// Serialize with backend tag and public keys
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = vec![self.backend as u8];
-        // Include from_public
-        out.extend(self.from_public.to_bytes());
-        // Include to_public
-        out.extend(self.to_public.to_bytes());
-        // Include recrypt key bytes
+        // Length-prefixed from_public
+        let from_bytes = self.from_public.to_bytes();
+        out.extend((from_bytes.len() as u32).to_le_bytes());
+        out.extend(from_bytes);
+        // Length-prefixed to_public
+        let to_bytes = self.to_public.to_bytes();
+        out.extend((to_bytes.len() as u32).to_le_bytes());
+        out.extend(to_bytes);
+        // Remainder is recrypt key bytes
         out.extend(&self.bytes);
         out
+    }
+
+    /// Deserialize from bytes
+    pub fn from_bytes(bytes: &[u8]) -> PreResult<Self> {
+        if bytes.len() < 9 {
+            return Err(PreError::Deserialization("RecryptKey too short".into()));
+        }
+
+        let backend = BackendId::try_from(bytes[0])?;
+        let mut pos = 1;
+
+        // Read from_public
+        let from_len = u32::from_le_bytes(
+            bytes[pos..pos + 4]
+                .try_into()
+                .map_err(|_| PreError::Deserialization("Invalid from_public length".into()))?,
+        ) as usize;
+        pos += 4;
+        if pos + from_len > bytes.len() {
+            return Err(PreError::Deserialization("from_public truncated".into()));
+        }
+        let from_public = PublicKey::from_bytes(&bytes[pos..pos + from_len])?;
+        pos += from_len;
+
+        // Read to_public
+        if pos + 4 > bytes.len() {
+            return Err(PreError::Deserialization("to_public length missing".into()));
+        }
+        let to_len = u32::from_le_bytes(
+            bytes[pos..pos + 4]
+                .try_into()
+                .map_err(|_| PreError::Deserialization("Invalid to_public length".into()))?,
+        ) as usize;
+        pos += 4;
+        if pos + to_len > bytes.len() {
+            return Err(PreError::Deserialization("to_public truncated".into()));
+        }
+        let to_public = PublicKey::from_bytes(&bytes[pos..pos + to_len])?;
+        pos += to_len;
+
+        // Remainder is key bytes
+        let key_bytes = bytes[pos..].to_vec();
+
+        Ok(Self {
+            backend,
+            from_public,
+            to_public,
+            bytes: key_bytes,
+        })
     }
 }
 

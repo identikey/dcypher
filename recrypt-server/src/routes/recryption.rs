@@ -8,6 +8,9 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::Response,
 };
+use recrypt_core::pre::BackendId;
+use recrypt_core::{EncryptedFile, HybridEncryptor};
+use recrypt_proto::MultiFormat;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -15,6 +18,7 @@ pub struct CreateShareRequest {
     pub to_fingerprint: String,
     pub file_hash: String,   // base58
     pub recrypt_key: String, // base58
+    pub backend_id: String,  // "mock" or "lattice"
 }
 
 #[derive(Serialize)]
@@ -84,6 +88,12 @@ pub async fn create_share(
         .into_vec()
         .map_err(|_| ServerError::BadRequest("Invalid base58 in recrypt_key".into()))?;
 
+    // Parse backend ID
+    let backend_id: BackendId = body
+        .backend_id
+        .parse()
+        .map_err(|_| ServerError::BadRequest(format!("Invalid backend_id: {}", body.backend_id)))?;
+
     // Generate share ID
     let share_data = format!(
         "{}:{}:{}",
@@ -102,6 +112,7 @@ pub async fn create_share(
         to_fingerprint: body.to_fingerprint.clone(),
         file_hash,
         recrypt_key: recrypt_key_bytes,
+        backend_id,
         created_at: now,
     };
 
@@ -178,22 +189,36 @@ pub async fn download_recrypted(
         .await
         .map_err(|e| ServerError::Internal(format!("Storage error: {e}")))?;
 
-    // NOTE: For MVP Phase 5, we're returning the file as-is without actual recryption transform
-    // Full implementation would:
-    // 1. Deserialize EncryptedFile from file_bytes using recrypt-proto
-    // 2. Call HybridEncryptor::recrypt(&recrypt_key, &encrypted_file)
-    // 3. Serialize the result back to bytes
-    // 4. Return as streaming response
-    //
-    // This placeholder proves the authorization flow works; the crypto transform will be
-    // added in Phase 5b or when integrating with real clients.
+    // === ACTUAL RECRYPTION TRANSFORM ===
+
+    // 1. Deserialize EncryptedFile from protobuf
+    let encrypted = EncryptedFile::from_protobuf(&file_bytes)
+        .map_err(|e| ServerError::Internal(format!("Failed to deserialize file: {e}")))?;
+
+    // 2. Reconstruct RecryptKey from stored bytes (includes embedded public keys)
+    let recrypt_key = recrypt_core::pre::RecryptKey::from_bytes(&policy.recrypt_key)
+        .map_err(|e| ServerError::Internal(format!("Failed to deserialize recrypt key: {e}")))?;
+
+    // 3. Perform recryption (transforms wrapped_key only)
+    let encryptor = HybridEncryptor::new(state.pre_backend.as_ref());
+    let recrypted = encryptor
+        .recrypt(&recrypt_key, &encrypted)
+        .map_err(|e| ServerError::Internal(format!("Recryption failed: {e}")))?;
+
+    // 4. Serialize back to protobuf
+    let recrypted_bytes = recrypted
+        .to_protobuf()
+        .map_err(|e| ServerError::Internal(format!("Failed to serialize: {e}")))?;
+
+    // === END RECRYPTION TRANSFORM ===
 
     let response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header("X-Share-Id", share_id)
-        .header("X-Recrypted", "placeholder") // Changed from "true" to indicate MVP status
-        .body(Body::from(file_bytes))
+        .header("X-Recrypted", "true")
+        .header("X-Backend", policy.backend_id.to_string())
+        .body(Body::from(recrypted_bytes))
         .map_err(|e| ServerError::Internal(e.to_string()))?;
 
     Ok(response)

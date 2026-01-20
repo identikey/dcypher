@@ -1,8 +1,9 @@
 use crate::config::Config;
-use recrypt_storage::{ChunkStorage, InMemoryStorage, LocalFileStorage};
 use identikey_storage_auth::{
     InMemoryOwnershipStore, InMemoryProviderIndex, OwnershipStore, ProviderIndex,
 };
+use recrypt_core::pre::{backends::MockBackend, BackendId, PreBackend};
+use recrypt_storage::{ChunkStorage, InMemoryStorage, LocalFileStorage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -18,6 +19,8 @@ pub struct AppState {
     pub shares: Arc<RwLock<ShareStore>>,
     pub nonces: Arc<RwLock<NonceStore>>,
     pub config: Arc<Config>,
+    /// PRE backend for recryption ops (initialized once at startup, thread-safe after)
+    pub pre_backend: Arc<dyn PreBackend + Send + Sync>,
 }
 
 /// In-memory account storage (Phase 5 MVP)
@@ -50,6 +53,7 @@ pub struct SharePolicy {
     pub to_fingerprint: String,
     pub file_hash: blake3::Hash,
     pub recrypt_key: Vec<u8>,
+    pub backend_id: BackendId,
     pub created_at: u64,
 }
 
@@ -159,6 +163,23 @@ impl AppState {
         let ownership: Arc<dyn OwnershipStore> = Arc::new(InMemoryOwnershipStore::new());
         let providers: Arc<dyn ProviderIndex> = Arc::new(InMemoryProviderIndex::new());
 
+        // Initialize PRE backend (slow for lattice, do once at startup)
+        let pre_backend: Arc<dyn PreBackend + Send + Sync> =
+            match config.pre_backend.to_lowercase().as_str() {
+                "lattice" | "pq" => {
+                    tracing::info!("Initializing lattice PRE backend (this may take ~2 min)...");
+                    // TODO: Wire up LatticeBackend when ready for production
+                    // let backend = recrypt_core::pre::backends::LatticeBackend::new()?;
+                    // Arc::new(backend)
+                    tracing::warn!("Lattice backend not yet wired; falling back to mock");
+                    Arc::new(MockBackend)
+                }
+                _ => {
+                    tracing::info!("Using mock PRE backend (testing only)");
+                    Arc::new(MockBackend)
+                }
+            };
+
         Ok(Self {
             storage,
             ownership,
@@ -167,6 +188,7 @@ impl AppState {
             shares: Arc::new(RwLock::new(ShareStore::new())),
             nonces: Arc::new(RwLock::new(NonceStore::new(config.nonce.window_secs))),
             config: Arc::new(config.clone()),
+            pre_backend,
         })
     }
 }

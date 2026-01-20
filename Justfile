@@ -192,6 +192,7 @@ rebuild-all: clean-all submodules build-deps build
 setup: submodules build-deps build
     @echo ""
     @echo "🚀 Setup complete! Try: just test-ffi"
+    @echo "💭 Optional: npx humanlayer thoughts init (for dev notes)"
 
 # Show dependency install locations
 show-deps:

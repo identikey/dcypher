@@ -16,6 +16,14 @@ pub struct Config {
 
     #[serde(default)]
     pub nonce: NonceConfig,
+
+    /// PRE backend: "mock" (default, fast) or "lattice" (post-quantum, slow init)
+    #[serde(default = "default_pre_backend")]
+    pub pre_backend: String,
+}
+
+fn default_pre_backend() -> String {
+    "mock".into()
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]

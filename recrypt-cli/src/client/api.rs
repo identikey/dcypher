@@ -164,6 +164,7 @@ impl ApiClient {
         file_hash: String,
         to_fingerprint: String,
         recrypt_key: Vec<u8>,
+        backend_id: recrypt_core::pre::BackendId,
     ) -> Result<ShareResponse> {
         let nonce = self.fetch_nonce().await?;
 
@@ -180,6 +181,7 @@ impl ApiClient {
             to_fingerprint,
             file_hash,
             recrypt_key: bs58::encode(&recrypt_key).into_string(),
+            backend_id: backend_id.to_string(),
         };
 
         let response = add_auth_headers(
@@ -330,6 +332,7 @@ struct CreateShareRequest {
     to_fingerprint: String,
     file_hash: String,
     recrypt_key: String,
+    backend_id: String,
 }
 
 #[derive(Deserialize, Serialize)]

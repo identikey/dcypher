@@ -109,6 +109,7 @@ async fn create(file_hash: String, to_fingerprint: String, ctx: &Context) -> Res
             file_hash.clone(),
             to_fingerprint.clone(),
             recrypt_key.to_bytes(), // Serialize recrypt key
+            my_backend_id,          // Pass backend ID for server-side recrypt
         )
         .await?;
 
