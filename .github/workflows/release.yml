@@ -10,10 +10,6 @@ on:
         description: 'Version for testing (e.g., 0.0.0-test)'
         required: true
         default: '0.0.0-test'
-      target:
-        description: 'Specific target to build (leave empty for all)'
-        required: false
-        default: ''
 
 permissions:
   contents: write
@@ -25,8 +21,6 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
-    # Skip targets not matching the filter (when specified via workflow_dispatch)
-    if: ${{ inputs.target == '' || matrix.target == inputs.target }}
 
     strategy:
       fail-fast: false
