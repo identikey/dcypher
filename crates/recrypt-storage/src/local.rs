@@ -96,10 +96,10 @@ impl ChunkStorage for LocalFileStorage {
 
         let mut entries = fs::read_dir(&chunks_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
-            if let Some(name) = entry.file_name().to_str() {
-                if let Some(hash) = hash_from_base58(name) {
-                    hashes.push(hash);
-                }
+            if let Some(name) = entry.file_name().to_str()
+                && let Some(hash) = hash_from_base58(name)
+            {
+                hashes.push(hash);
             }
         }
 

@@ -230,10 +230,10 @@ impl ChunkStorage for S3Storage {
                 for obj in contents {
                     if let Some(key) = obj.key {
                         // Extract hash from key: "chunks/b3/{hash_base58}"
-                        if let Some(hash_b58) = key.strip_prefix(&full_prefix) {
-                            if let Some(hash) = hash_from_base58(hash_b58) {
-                                hashes.push(hash);
-                            }
+                        if let Some(hash_b58) = key.strip_prefix(&full_prefix)
+                            && let Some(hash) = hash_from_base58(hash_b58)
+                        {
+                            hashes.push(hash);
                         }
                     }
                 }
