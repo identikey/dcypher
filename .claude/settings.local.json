@@ -6,7 +6,12 @@
       "Bash(cargo test:*)",
       "Bash(cargo build:*)",
       "Bash(cargo clippy:*)",
-      "Bash(./target/debug/recrypt wallet:*)"
+      "Bash(./target/debug/recrypt wallet:*)",
+      "Bash(just version:*)",
+      "Bash(just release:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(python3:*)",
+      "Bash(ruby -ryaml -e:*)"
     ],
     "deny": []
   }

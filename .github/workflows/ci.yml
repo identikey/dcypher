@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libomp-dev libclang-dev protobuf-compiler
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache OpenFHE
+        id: cache-openfhe
+        uses: actions/cache@v4
+        with:
+          path: vendor/openfhe-install
+          key: openfhe-linux-x64-${{ hashFiles('vendor/openfhe-development/**/*.cpp', 'vendor/openfhe-development/**/*.h', 'vendor/openfhe-development/CMakeLists.txt') }}
+
+      - name: Build OpenFHE
+        if: steps.cache-openfhe.outputs.cache-hit != 'true'
+        run: just build-openfhe
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libomp-dev libclang-dev protobuf-compiler
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache OpenFHE
+        id: cache-openfhe
+        uses: actions/cache@v4
+        with:
+          path: vendor/openfhe-install
+          key: openfhe-linux-x64-${{ hashFiles('vendor/openfhe-development/**/*.cpp', 'vendor/openfhe-development/**/*.h', 'vendor/openfhe-development/CMakeLists.txt') }}
+
+      - name: Build OpenFHE
+        if: steps.cache-openfhe.outputs.cache-hit != 'true'
+        run: just build-openfhe
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test
+
+      - name: Run tests
+        run: cargo test -- --test-threads=1
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libomp-dev libclang-dev protobuf-compiler
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache OpenFHE
+        id: cache-openfhe
+        uses: actions/cache@v4
+        with:
+          path: vendor/openfhe-install
+          key: openfhe-linux-x64-${{ hashFiles('vendor/openfhe-development/**/*.cpp', 'vendor/openfhe-development/**/*.h', 'vendor/openfhe-development/CMakeLists.txt') }}
+
+      - name: Build OpenFHE
+        if: steps.cache-openfhe.outputs.cache-hit != 'true'
+        run: just build-openfhe
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: build
+
+      - name: Build release
+        run: cargo build --release

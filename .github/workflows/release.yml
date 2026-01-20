@@ -1,0 +1,234 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_ext: ""
+            archive_ext: tar.gz
+
+          # Linux ARM64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_ext: ""
+            archive_ext: tar.gz
+            use_cross: true
+
+          # macOS Intel
+          - target: x86_64-apple-darwin
+            os: macos-13
+            binary_ext: ""
+            archive_ext: tar.gz
+
+          # macOS ARM (Apple Silicon)
+          - target: aarch64-apple-darwin
+            os: macos-14
+            binary_ext: ""
+            archive_ext: tar.gz
+
+          # Windows (best-effort)
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary_ext: ".exe"
+            archive_ext: zip
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ===== Linux Setup =====
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux' && !matrix.use_cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libomp-dev libclang-dev protobuf-compiler
+
+      # ===== macOS Setup =====
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake libomp protobuf
+
+      # ===== Windows Setup =====
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          choco install protoc
+
+      # ===== Rust Setup =====
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      # ===== OpenFHE Build (non-cross) =====
+      - name: Cache OpenFHE
+        if: "!matrix.use_cross"
+        id: cache-openfhe
+        uses: actions/cache@v4
+        with:
+          path: vendor/openfhe-install
+          key: openfhe-${{ matrix.target }}-${{ hashFiles('vendor/openfhe-development/**/*.cpp', 'vendor/openfhe-development/**/*.h', 'vendor/openfhe-development/CMakeLists.txt') }}
+
+      - name: Build OpenFHE (Unix)
+        if: "!matrix.use_cross && runner.os != 'Windows' && steps.cache-openfhe.outputs.cache-hit != 'true'"
+        run: just build-openfhe
+
+      - name: Build OpenFHE (Windows)
+        if: runner.os == 'Windows' && steps.cache-openfhe.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installDir = "$PWD\vendor\openfhe-install"
+
+          cd vendor\openfhe-development
+          if (Test-Path build) { Remove-Item -Recurse -Force build }
+          New-Item -ItemType Directory -Path build | Out-Null
+          cd build
+
+          cmake .. `
+            -DCMAKE_INSTALL_PREFIX="$installDir" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_STATIC=ON `
+            -DBUILD_UNITTESTS=OFF `
+            -DBUILD_EXAMPLES=OFF `
+            -DBUILD_BENCHMARKS=OFF `
+            -DWITH_OPENMP=OFF
+
+          cmake --build . --config Release --parallel
+          cmake --install . --config Release
+
+      # ===== Cargo Cache =====
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      # ===== Build =====
+      - name: Build (native)
+        if: "!matrix.use_cross"
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      # ===== Package =====
+      - name: Get version
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/recrypt-server dist/
+          cp target/${{ matrix.target }}/release/recrypt dist/
+          chmod +x dist/recrypt-server dist/recrypt
+
+          cd dist
+          tar -czvf ../recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz *
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/recrypt-server.exe dist/
+          Copy-Item target/${{ matrix.target }}/release/recrypt.exe dist/
+
+          Compress-Archive -Path dist/* -DestinationPath recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip
+
+      # ===== Checksum =====
+      - name: Generate checksum (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          shasum -a 256 recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz > recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Generate checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip).Hash.ToLower()
+          "$hash  recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip" | Out-File -Encoding utf8 recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip.sha256
+
+      # ===== Upload =====
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recrypt-${{ matrix.target }}
+          path: |
+            recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+            recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Release v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -1 artifacts/ >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

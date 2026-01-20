@@ -286,3 +286,63 @@ wallet-delete:
 wallet-dir:
     ls -la ~/Library/Application\ Support/io.identikey.recrypt/
 
+# =============================================================================
+# Release Management
+# =============================================================================
+
+# Show current version from Cargo.toml
+version:
+    @grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2
+
+# Create a new release (bumps version, commits, tags, pushes)
+# Usage: just release 1.2.3
+release version:
+    #!/usr/bin/env bash
+    set -Eeuo pipefail
+
+    # Validate version format
+    if ! [[ "{{version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Error: Version must be in format X.Y.Z (e.g., 1.2.3)"
+        exit 1
+    fi
+
+    # Check for clean working directory
+    if ! git diff --quiet || ! git diff --staged --quiet; then
+        echo "Error: Working directory not clean. Commit or stash changes first."
+        exit 1
+    fi
+
+    # Check we're on main branch
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$BRANCH" != "main" ]]; then
+        echo "Warning: Not on main branch (currently on $BRANCH)"
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+
+    echo "Releasing version {{version}}..."
+
+    # Update version in root Cargo.toml
+    sed -i.bak 's/^version = ".*"/version = "{{version}}"/' Cargo.toml
+    rm Cargo.toml.bak
+
+    # Update Cargo.lock
+    cargo update --workspace
+
+    # Commit and tag
+    git add Cargo.toml Cargo.lock
+    git commit -m "Release v{{version}}"
+    git tag -a "v{{version}}" -m "Release v{{version}}"
+
+    echo ""
+    echo "Created commit and tag for v{{version}}"
+    echo ""
+    echo "To publish:"
+    echo "  git push && git push --tags"
+    echo ""
+    echo "To undo:"
+    echo "  git reset --hard HEAD~1 && git tag -d v{{version}}"
+
