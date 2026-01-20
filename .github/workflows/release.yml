@@ -123,6 +123,8 @@ jobs:
             bash -c "
               apt-get update && \
               apt-get install -y cmake build-essential libomp-dev git && \
+              git config --global --add safe.directory /project && \
+              git config --global --add safe.directory /project/vendor/openfhe-development && \
               cd vendor/openfhe-development && \
               mkdir -p build && cd build && \
               cmake .. \
