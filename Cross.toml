@@ -8,11 +8,10 @@ passthrough = [
 # Use pre-built cross image with C++ toolchain
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
 
-# Build OpenFHE inside the container before Rust build
-# Note: libssl-dev is required for openssl-sys crate cross-compilation
+# Install dependencies needed for the Rust build
+# Note: OpenFHE must be pre-built for ARM64 before running cross (see release workflow)
 pre-build = [
-    "apt-get update && apt-get install -y cmake libomp-dev libssl-dev libclang-dev",
-    "cd /project/vendor/openfhe-development && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/project/vendor/openfhe-install -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DBUILD_UNITTESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF -DWITH_OPENMP=ON && make -j$(nproc) && make install"
+    "apt-get update && apt-get install -y libomp-dev libssl-dev libclang-dev"
 ]
 
 [target.aarch64-unknown-linux-gnu.env]

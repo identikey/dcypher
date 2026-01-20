@@ -97,18 +97,45 @@ jobs:
         with:
           tool: cross
 
-      # ===== OpenFHE Build (non-cross) =====
+      # ===== OpenFHE Build =====
       - name: Cache OpenFHE
-        if: "!matrix.use_cross"
         id: cache-openfhe
         uses: actions/cache@v4
         with:
           path: vendor/openfhe-install
           key: openfhe-${{ matrix.target }}-${{ hashFiles('vendor/openfhe-development/**/*.cpp', 'vendor/openfhe-development/**/*.h', 'vendor/openfhe-development/CMakeLists.txt') }}
 
-      - name: Build OpenFHE (Unix)
+      - name: Build OpenFHE (Unix native)
         if: "!matrix.use_cross && runner.os != 'Windows' && steps.cache-openfhe.outputs.cache-hit != 'true'"
         run: just build-openfhe
+
+      - name: Set up QEMU
+        if: matrix.use_cross && steps.cache-openfhe.outputs.cache-hit != 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build OpenFHE (cross via Docker)
+        if: matrix.use_cross && steps.cache-openfhe.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD:/project" \
+            -w /project \
+            ubuntu:22.04 \
+            bash -c "
+              apt-get update && \
+              apt-get install -y cmake build-essential libomp-dev && \
+              cd vendor/openfhe-development && \
+              mkdir -p build && cd build && \
+              cmake .. \
+                -DCMAKE_INSTALL_PREFIX=/project/vendor/openfhe-install \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_STATIC=ON \
+                -DBUILD_UNITTESTS=OFF \
+                -DBUILD_EXAMPLES=OFF \
+                -DBUILD_BENCHMARKS=OFF \
+                -DWITH_OPENMP=ON && \
+              make -j\$(nproc) && \
+              make install
+            "
 
       - name: Build OpenFHE (Windows)
         if: runner.os == 'Windows' && steps.cache-openfhe.outputs.cache-hit != 'true'
