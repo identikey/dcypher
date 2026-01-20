@@ -975,16 +975,16 @@ impl TryFrom<proto::BackendId> for BackendId {
 
 #### Automated Verification:
 
-- [ ] Compiles with feature: `cargo build -p recrypt-core --features tfhe`
-- [ ] Trait implementation compiles: `cargo check -p recrypt-core --features tfhe`
-- [ ] Protobuf regeneration succeeds: `cargo build -p recrypt-proto`
-- [ ] Basic instantiation: `cargo test -p recrypt-core --features tfhe tfhe_backend_creation`
+- [x] Compiles with feature: `cargo build -p recrypt-core --features tfhe`
+- [x] Trait implementation compiles: `cargo check -p recrypt-core --features tfhe`
+- [x] Protobuf regeneration succeeds: `cargo build -p recrypt-proto`
+- [x] Basic instantiation: `cargo test -p recrypt-core --features tfhe tfhe_backend_creation`
 
 #### Manual Verification:
 
-- [ ] `BackendId::Tfhe` serializes/deserializes correctly
-- [ ] Error messages for v1 limitations are clear
-- [ ] Feature flag correctly gates TFHE code
+- [x] `BackendId::Tfhe` serializes/deserializes correctly
+- [x] Error messages for v1 limitations are clear
+- [x] Feature flag correctly gates TFHE code
 
 **Implementation Note**: v1 limitations (no public key encryption, symmetric KSK) are expected and documented. Phase 3 will remove these limitations.
 
