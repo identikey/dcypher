@@ -8,14 +8,14 @@ passthrough = [
 # Use pre-built cross image with C++ toolchain
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
 
-# Mount OpenFHE source for building inside container
+# Build OpenFHE inside the container before Rust build
+# Note: libssl-dev is required for openssl-sys crate cross-compilation
+pre-build = [
+    "apt-get update && apt-get install -y cmake libomp-dev libssl-dev libclang-dev",
+    "cd /project/vendor/openfhe-development && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/project/vendor/openfhe-install -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DBUILD_UNITTESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF -DWITH_OPENMP=ON && make -j$(nproc) && make install"
+]
+
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = [
     "CARGO_MANIFEST_DIR",
-]
-
-# Build OpenFHE inside the container before Rust build
-pre-build = [
-    "apt-get update && apt-get install -y cmake libomp-dev",
-    "cd /project/vendor/openfhe-development && mkdir -p build && cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/project/vendor/openfhe-install -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DBUILD_UNITTESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF -DWITH_OPENMP=ON && make -j$(nproc) && make install"
 ]
