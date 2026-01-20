@@ -97,7 +97,7 @@ async fn status(ctx: &Context) -> Result<()> {
         None => {
             let dirs = ProjectDirs::from("io", "identikey", "recrypt")
                 .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-            dirs.data_dir().join("wallet.recw")
+            dirs.data_dir().join("wallet.recrypt")
         }
     };
     let wallet_path_str = wallet_path.display().to_string();
@@ -136,7 +136,7 @@ async fn path(ctx: &Context) -> Result<()> {
         None => {
             let dirs = ProjectDirs::from("io", "identikey", "recrypt")
                 .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-            dirs.data_dir().join("wallet.recw")
+            dirs.data_dir().join("wallet.recrypt")
         }
     };
 
