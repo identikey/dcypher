@@ -4,6 +4,16 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for testing (e.g., 0.0.0-test)'
+        required: true
+        default: '0.0.0-test'
+      target:
+        description: 'Specific target to build (leave empty for all)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -15,6 +25,8 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    # Skip targets not matching the filter (when specified via workflow_dispatch)
+    if: ${{ inputs.target == '' || matrix.target == inputs.target }}
 
     strategy:
       fail-fast: false
@@ -147,7 +159,12 @@ jobs:
       - name: Get version
         id: version
         shell: bash
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -225,9 +242,15 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
+        if: github.event_name != 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           name: v${{ steps.version.outputs.version }}
@@ -238,6 +261,12 @@ jobs:
             artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test build summary
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "## Test Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "This was a manual test build - no release was created." >> $GITHUB_STEP_SUMMARY
 
       - name: Summary
         run: |
