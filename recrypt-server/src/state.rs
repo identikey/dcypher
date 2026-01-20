@@ -2,7 +2,10 @@ use crate::config::Config;
 use identikey_storage_auth::{
     InMemoryOwnershipStore, InMemoryProviderIndex, OwnershipStore, ProviderIndex,
 };
-use recrypt_core::pre::{BackendId, PreBackend, backends::MockBackend};
+use recrypt_core::pre::{
+    BackendId, PreBackend,
+    backends::{LatticeBackend, MockBackend},
+};
 use recrypt_storage::{ChunkStorage, InMemoryStorage, LocalFileStorage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -164,21 +167,37 @@ impl AppState {
         let providers: Arc<dyn ProviderIndex> = Arc::new(InMemoryProviderIndex::new());
 
         // Initialize PRE backend (slow for lattice, do once at startup)
-        let pre_backend: Arc<dyn PreBackend + Send + Sync> =
-            match config.pre_backend.to_lowercase().as_str() {
-                "lattice" | "pq" => {
-                    tracing::info!("Initializing lattice PRE backend (this may take ~2 min)...");
-                    // TODO: Wire up LatticeBackend when ready for production
-                    // let backend = recrypt_core::pre::backends::LatticeBackend::new()?;
-                    // Arc::new(backend)
-                    tracing::warn!("Lattice backend not yet wired; falling back to mock");
-                    Arc::new(MockBackend)
+        // SECURITY: Never silently downgrade - fail hard if requested backend unavailable
+        let pre_backend: Arc<dyn PreBackend + Send + Sync> = match config
+            .pre_backend
+            .to_lowercase()
+            .as_str()
+        {
+            "lattice" | "pq" | "post-quantum" => {
+                if !LatticeBackend::is_available() {
+                    anyhow::bail!(
+                        "FATAL: Lattice backend requested but OpenFHE not available. \
+                             Build with `--features openfhe` or use `pre_backend = \"mock\"` for testing."
+                    );
                 }
-                _ => {
-                    tracing::info!("Using mock PRE backend (testing only)");
-                    Arc::new(MockBackend)
-                }
-            };
+                tracing::info!("Initializing lattice PRE backend (this may take ~2 min)...");
+                let start = std::time::Instant::now();
+                let backend = LatticeBackend::new()
+                    .map_err(|e| anyhow::anyhow!("Failed to init lattice backend: {e}"))?;
+                tracing::info!("Lattice backend ready in {:?}", start.elapsed());
+                Arc::new(backend)
+            }
+            "mock" | "test" => {
+                tracing::warn!("Using mock PRE backend - NOT FOR PRODUCTION USE");
+                Arc::new(MockBackend)
+            }
+            other => {
+                anyhow::bail!(
+                    "Unknown PRE backend '{}'. Valid options: 'lattice', 'mock'",
+                    other
+                );
+            }
+        };
 
         Ok(Self {
             storage,

@@ -91,6 +91,15 @@ pub struct PreContext {
     _private: (),
 }
 
+// SAFETY: OpenFHE CryptoContext is thread-safe after initialization.
+// The context uses internal locking for concurrent operations.
+// Key operations (encrypt/decrypt/recrypt) can run in parallel on different data.
+// See: docs/openfhe-threading-model.md
+#[cfg(feature = "openfhe")]
+unsafe impl Send for PreContext {}
+#[cfg(feature = "openfhe")]
+unsafe impl Sync for PreContext {}
+
 #[cfg(feature = "openfhe")]
 impl PreContext {
     /// Create a new PRE context with default parameters

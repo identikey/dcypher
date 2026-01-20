@@ -21,7 +21,12 @@
       "Bash(scripts/spec_metadata.sh:*)",
       "Bash(gh secret:*)",
       "Bash(gh variable:*)",
-      "Bash(gh workflow run:*)"
+      "Bash(gh workflow run:*)",
+      "Bash(grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(bash scripts/spec_metadata.sh:*)"
     ],
     "deny": []
   }

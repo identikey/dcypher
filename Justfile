@@ -287,6 +287,25 @@ wallet-dir:
     ls -la ~/Library/Application\ Support/io.identikey.recrypt/
 
 # =============================================================================
+# E2E Tests
+# =============================================================================
+
+# Run CLI unit test (no server, local encrypt/decrypt only)
+test-cli: build-release
+    ./test-cli.sh
+
+# Run e2e recryption test with mock backend (~5 seconds)
+test-e2e: build-release
+    ./tests/e2e/recryption.sh mock
+
+# Run e2e recryption test with lattice backend (~3 minutes, post-quantum)
+test-e2e-lattice: build-release
+    ./tests/e2e/recryption.sh lattice
+
+# Run all e2e tests (mock + lattice)
+test-e2e-all: test-e2e test-e2e-lattice
+
+# =============================================================================
 # Release Management
 # =============================================================================
 
