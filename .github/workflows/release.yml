@@ -197,6 +197,7 @@ jobs:
   release:
     name: Create Release
     needs: build
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
 
     steps:
@@ -207,9 +208,20 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+        continue-on-error: true
 
-      - name: List artifacts
-        run: ls -la artifacts/
+      - name: Check for artifacts
+        id: check
+        run: |
+          if [ -d artifacts ] && [ "$(ls -A artifacts 2>/dev/null)" ]; then
+            echo "has_artifacts=true" >> $GITHUB_OUTPUT
+            echo "Found artifacts:"
+            ls -la artifacts/
+          else
+            echo "has_artifacts=false" >> $GITHUB_OUTPUT
+            echo "No artifacts found - all builds may have failed"
+            exit 1
+          fi
 
       - name: Get version
         id: version
