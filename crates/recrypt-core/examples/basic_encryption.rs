@@ -14,8 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✓ Keypair ready\n");
 
     // Encrypt some data
-    let messages = vec![
-        b"Hello, Recrypt!" as &[u8],
+    let messages: &[&[u8]] = &[
+        b"Hello, Recrypt!",
         b"Short msg",
         b"This is a longer message with more bytes to test the hybrid encryption system.",
     ];

@@ -26,8 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Sign various messages
-    let messages = vec![
-        b"Transfer $100 to Bob" as &[u8],
+    let messages: &[&[u8]] = &[
+        b"Transfer $100 to Bob",
         b"Approve document #42",
         b"Revoke access for user@example.com",
     ];
@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tampered = b"Tampered message";
     match verify_message(tampered, &sig, &verifying_keys) {
         Ok(_) => println!("   ✗ ERROR: Tampered message passed verification!"),
-        Err(e) => println!("   ✓ Correctly rejected: {}\n", e),
+        Err(e) => println!("   ✓ Correctly rejected: {e}\n"),
     }
 
     println!("✅ Multi-signature system working correctly!");

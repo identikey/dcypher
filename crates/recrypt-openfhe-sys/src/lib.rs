@@ -82,7 +82,7 @@ mod tests {
 
         let ring_dim = ffi::get_ring_dimension(&ctx);
         assert!(ring_dim > 0);
-        println!("Ring dimension: {}", ring_dim);
+        println!("Ring dimension: {ring_dim}");
     }
 
     #[test]

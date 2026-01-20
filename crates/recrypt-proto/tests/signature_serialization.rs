@@ -103,7 +103,6 @@ fn test_signed_file_size_overhead() {
     );
     assert!(
         overhead > 4000 && overhead < 5000,
-        "Expected ~4.7KB overhead, got {} bytes",
-        overhead
+        "Expected ~4.7KB overhead, got {overhead} bytes"
     );
 }

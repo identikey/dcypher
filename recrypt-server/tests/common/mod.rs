@@ -3,6 +3,7 @@ use tokio::net::TcpListener;
 
 pub struct TestServer {
     pub url: String,
+    #[allow(dead_code)]
     pub addr: SocketAddr,
 }
 
@@ -30,7 +31,7 @@ impl TestServer {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         Self {
-            url: format!("http://{}", addr),
+            url: format!("http://{addr}"),
             addr,
         }
     }

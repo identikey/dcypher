@@ -155,7 +155,7 @@ mod tests {
         storage.put(&hash2, data2).await.unwrap();
 
         let mut hashes = storage.list().await.unwrap();
-        hashes.sort_by(|a, b| a.to_hex().cmp(&b.to_hex()));
+        hashes.sort_by_key(|a| a.to_hex());
 
         assert_eq!(hashes.len(), 2);
         assert!(hashes.contains(&hash1));

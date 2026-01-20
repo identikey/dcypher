@@ -38,10 +38,10 @@ async fn test_full_upload_flow() {
     let ownership = InMemoryOwnershipStore::new();
     let providers = InMemoryProviderIndex::new();
 
-    let (signing_keys, verifying_keys, owner_fp) = test_keys();
+    let (_signing_keys, _verifying_keys, owner_fp) = test_keys();
 
     // 1. Upload encrypted file
-    let plaintext = b"Secret document content";
+    let _plaintext = b"Secret document content";
     let ciphertext = b"encrypted-bytes-here"; // Simulated
     let file_hash = blake3::hash(ciphertext);
 
