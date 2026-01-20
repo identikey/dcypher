@@ -11,7 +11,17 @@
       "Bash(just release:*)",
       "Bash(cargo fmt:*)",
       "Bash(python3:*)",
-      "Bash(ruby -ryaml -e:*)"
+      "Bash(ruby -ryaml -e:*)",
+      "Bash(humanlayer thoughts sync:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "mcp__github__list_commits",
+      "mcp__github__get_commit",
+      "Bash(gh run watch:*)",
+      "Bash(scripts/spec_metadata.sh:*)",
+      "Bash(gh secret:*)",
+      "Bash(gh variable:*)",
+      "Bash(gh workflow run:*)"
     ],
     "deny": []
   }
