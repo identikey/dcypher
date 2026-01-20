@@ -62,10 +62,7 @@ async fn unlock(ctx: &Context) -> Result<()> {
             provider: provider.name().to_string(),
         })?;
     } else {
-        print_success(format!(
-            "Wallet unlocked (cached in {})",
-            provider.name()
-        ));
+        print_success(format!("Wallet unlocked (cached in {})", provider.name()));
     }
 
     Ok(())

@@ -65,8 +65,8 @@ pub fn verify_multisig(
     ed25519_pk: &[u8],
     ml_dsa_pk: &[u8],
 ) -> ServerResult<()> {
-    use recrypt_core::sign::{MultiSig, VerifyingKeys, verify_message};
     use ed25519_dalek::{Signature as Ed25519Sig, VerifyingKey};
+    use recrypt_core::sign::{MultiSig, VerifyingKeys, verify_message};
 
     // Parse ED25519 public key
     let ed_pk_arr: [u8; 32] = ed25519_pk

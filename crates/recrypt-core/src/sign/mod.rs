@@ -1,9 +1,9 @@
 //! Multi-signature system (ED25519 + ML-DSA)
 
 use crate::error::{CoreError, CoreResult};
+use ed25519_dalek::{Signature as Ed25519Signature, SigningKey, VerifyingKey};
 use recrypt_ffi::ed25519::{ed25519_sign, ed25519_verify};
 use recrypt_ffi::liboqs::{PqAlgorithm, pq_sign, pq_verify};
-use ed25519_dalek::{Signature as Ed25519Signature, SigningKey, VerifyingKey};
 
 /// A multi-signature combining classical and post-quantum signatures
 #[derive(Clone, Debug)]

@@ -5,9 +5,9 @@
 
 #[cfg(feature = "proptest")]
 mod proptest_suite {
+    use proptest::prelude::*;
     use recrypt_core::pre::backends::MockBackend;
     use recrypt_core::*;
-    use proptest::prelude::*;
 
     proptest! {
         /// Property: decrypt(encrypt(x)) == x

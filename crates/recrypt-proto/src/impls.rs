@@ -4,8 +4,8 @@ use crate::armor::{ArmorType, armor_decode, armor_encode};
 use crate::error::{ProtoError, ProtoResult};
 use crate::format::MultiFormat;
 use crate::proto;
-use recrypt_core::hybrid::EncryptedFile;
 use prost::Message;
+use recrypt_core::hybrid::EncryptedFile;
 use serde::{Deserialize, Serialize};
 
 // EncryptedFile serialization

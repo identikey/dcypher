@@ -2,7 +2,7 @@ use crate::config::Config;
 use identikey_storage_auth::{
     InMemoryOwnershipStore, InMemoryProviderIndex, OwnershipStore, ProviderIndex,
 };
-use recrypt_core::pre::{backends::MockBackend, BackendId, PreBackend};
+use recrypt_core::pre::{BackendId, PreBackend, backends::MockBackend};
 use recrypt_storage::{ChunkStorage, InMemoryStorage, LocalFileStorage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

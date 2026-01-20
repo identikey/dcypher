@@ -2,9 +2,9 @@
 
 use anyhow::{Context as AnyhowContext, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use ed25519_dalek::{Signature, SigningKey};
 use recrypt_ffi::ed25519;
 use recrypt_ffi::liboqs::{pq_sign, PqAlgorithm};
-use ed25519_dalek::{Signature, SigningKey};
 use serde::Deserialize;
 
 use crate::wallet::Identity;
