@@ -122,7 +122,7 @@ jobs:
             ubuntu:22.04 \
             bash -c "
               apt-get update && \
-              apt-get install -y cmake build-essential libomp-dev && \
+              apt-get install -y cmake build-essential libomp-dev git && \
               cd vendor/openfhe-development && \
               mkdir -p build && cd build && \
               cmake .. \
