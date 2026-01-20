@@ -4,7 +4,7 @@ use tfhe::core_crypto::prelude::*;
 
 use crate::ciphertext::{LweCiphertextChunk, MultiLweCiphertext};
 use crate::error::TfheResult;
-use crate::keys::TfheSecretKey;
+use crate::keys::{TfhePublicKey, TfheSecretKey};
 use crate::params::TfheParams;
 
 /// Encrypt a 32-byte symmetric key as 128 × 2-bit LWE ciphertexts
@@ -44,6 +44,50 @@ pub fn encrypt_symmetric_key(
                 params.ciphertext_modulus,
                 &mut encryption_generator,
             );
+
+            chunks.push(LweCiphertextChunk::from_lwe(&lwe_ct));
+        }
+    }
+
+    Ok(MultiLweCiphertext { chunks })
+}
+
+/// Encrypt a 32-byte symmetric key using a public key (asymmetric encryption)
+///
+/// This is the production encryption function that allows anyone with the
+/// recipient's public key to encrypt data for them.
+///
+/// # Arguments
+///
+/// * `recipient` - The recipient's public key
+/// * `plaintext` - A 32-byte symmetric key to encrypt
+/// * `params` - TFHE parameters
+///
+/// # Returns
+///
+/// A multi-LWE ciphertext containing 128 × 2-bit encryptions
+pub fn encrypt_with_public_key(
+    recipient: &TfhePublicKey,
+    plaintext: &[u8; 32],
+    _params: &TfheParams,
+) -> TfheResult<MultiLweCiphertext> {
+    let delta = TfheParams::delta();
+    let mut chunks = Vec::with_capacity(MultiLweCiphertext::CHUNK_COUNT);
+
+    // Encrypt each 2-bit chunk
+    for byte_idx in 0..32 {
+        let byte = plaintext[byte_idx];
+
+        // 4 chunks per byte (2 bits each)
+        for chunk_idx in 0..4 {
+            let shift = chunk_idx * 2;
+            let two_bits = ((byte >> shift) & 0b11) as u64;
+
+            // Scale plaintext by delta to place it in the upper bits
+            let plaintext_val = Plaintext(two_bits * delta);
+
+            // Encrypt using public key
+            let lwe_ct = recipient.encrypt_lwe(plaintext_val);
 
             chunks.push(LweCiphertextChunk::from_lwe(&lwe_ct));
         }

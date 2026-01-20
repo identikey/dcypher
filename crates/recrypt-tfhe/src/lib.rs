@@ -63,8 +63,8 @@ pub mod recrypt;
 // Re-exports for convenience
 pub use ciphertext::{LweCiphertextChunk, MultiLweCiphertext, SeededLweCiphertext};
 pub use decrypt::decrypt_symmetric_key;
-pub use encrypt::encrypt_symmetric_key;
+pub use encrypt::{encrypt_symmetric_key, encrypt_with_public_key};
 pub use error::{TfheError, TfheResult};
-pub use keys::{TfheRecryptKey, TfheSecretKey};
+pub use keys::{TfhePublicKey, TfheRecryptKey, TfheSecretKey};
 pub use params::TfheParams;
 pub use recrypt::recrypt;
