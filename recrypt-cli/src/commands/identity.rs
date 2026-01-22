@@ -1,8 +1,10 @@
 use anyhow::{Context as _, Result};
+use base64::Engine;
 use clap::Subcommand;
 use colored::Colorize;
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::{debug, info, instrument};
 
 use recrypt_core::pre::PreBackend;
 use recrypt_ffi::ed25519;
@@ -69,8 +71,13 @@ pub async fn run(action: IdentityCommand, ctx: &Context) -> Result<()> {
     }
 }
 
+#[instrument(skip(ctx))]
 async fn new_identity(name: Option<String>, ctx: &Context) -> Result<()> {
+    debug!("Starting identity creation");
+    
     let mut wallet = Wallet::load(ctx.wallet_override.as_deref())?;
+    debug!("Wallet loaded");
+    
     let is_new_wallet = wallet.is_new();
 
     // Determine identity name
@@ -96,29 +103,36 @@ async fn new_identity(name: Option<String>, ctx: &Context) -> Result<()> {
     if ctx.verbose {
         print_info("Generating ED25519 keypair...");
     }
+    debug!("Generating ED25519 keypair");
     let ed25519_kp = ed25519::ed25519_keygen();
 
     if ctx.verbose {
         print_info("Generating ML-DSA-87 keypair...");
     }
+    debug!("Generating ML-DSA-87 keypair");
     let ml_dsa_kp =
         pq_keygen(PqAlgorithm::MlDsa87).context("Failed to generate ML-DSA-87 keypair")?;
 
     // Resolve which PRE backend to use
+    debug!("Resolving PRE backend");
     let backend_id = ctx.resolve_backend_id()?;
     let backend = super::create_backend_from_id(backend_id)?;
+    debug!("Backend initialized: {}", backend.name());
 
     if ctx.verbose {
         print_info(format!("Generating PRE keypair ({})...", backend.name()));
     }
+    debug!("Generating PRE keypair");
     let pre_kp = backend
         .generate_keypair()
         .context("Failed to generate PRE keypair")?;
 
     // Compute fingerprint: base58(blake3(ed25519_pk))
+    debug!("Computing fingerprint");
     let fingerprint =
         bs58::encode(blake3::hash(ed25519_kp.verifying_key.as_bytes()).as_bytes()).into_string();
 
+    debug!("Creating identity struct");
     let identity = Identity {
         created_at: SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -134,20 +148,23 @@ async fn new_identity(name: Option<String>, ctx: &Context) -> Result<()> {
             secret: bs58::encode(&ml_dsa_kp.secret_key).into_string(),
         },
         pre: KeyPair {
-            public: bs58::encode(pre_kp.public.as_bytes()).into_string(),
-            secret: bs58::encode(pre_kp.secret.as_bytes()).into_string(),
+            public: base64::engine::general_purpose::STANDARD.encode(pre_kp.public.as_bytes()),
+            secret: base64::engine::general_purpose::STANDARD.encode(pre_kp.secret.as_bytes()),
         },
         pre_backend: backend_id,
     };
 
+    debug!("Inserting identity into wallet");
     wallet
         .data
         .identities
         .insert(identity_name.clone(), identity);
 
+    debug!("Saving wallet");
     wallet.save(is_new_wallet)?;
 
     // Set as active if first identity
+    debug!("Updating config");
     let mut config = Config::load()?;
     if config.active_identity.is_none() {
         config.active_identity = Some(identity_name.clone());
@@ -170,6 +187,7 @@ async fn new_identity(name: Option<String>, ctx: &Context) -> Result<()> {
         println!("  {}: {}", "Wallet".dimmed(), wallet.path().display());
     }
 
+    info!("Identity created successfully");
     Ok(())
 }
 
