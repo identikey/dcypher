@@ -48,6 +48,10 @@ chrono = "0.4"
 thiserror = "1"
 anyhow = "1"
 
+# Instrumentation
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
 # OS keyring integration (platform-specific features below)
 keyring = { version = "3", default-features = false }
 

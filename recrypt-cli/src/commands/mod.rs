@@ -19,6 +19,7 @@ pub struct Context {
     pub wallet_override: Option<String>,
     pub backend_override: Option<String>,
     pub verbose: bool,
+    pub debug: bool,
 }
 
 impl Context {

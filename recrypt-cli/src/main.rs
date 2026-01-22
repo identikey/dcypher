@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use tracing_subscriber::{fmt, EnvFilter};
 
 mod client;
 mod commands;
@@ -35,6 +36,10 @@ struct Cli {
     /// Verbose output
     #[arg(short, long, global = true)]
     verbose: bool,
+
+    /// Enable debug instrumentation (timing, detailed logs)
+    #[arg(long, global = true, env = "RECRYPT_DEBUG")]
+    debug: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -82,6 +87,21 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Initialize tracing
+    let filter = if cli.debug {
+        EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("recrypt_cli=debug"))
+    } else {
+        EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("recrypt_cli=warn"))
+    };
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_timer(fmt::time::uptime())
+        .init();
+
     let ctx = commands::Context {
         json_output: cli.json,
         identity_override: cli.identity,
@@ -89,6 +109,7 @@ async fn main() -> Result<()> {
         wallet_override: cli.wallet,
         backend_override: cli.backend,
         verbose: cli.verbose,
+        debug: cli.debug,
     };
 
     match cli.command {
