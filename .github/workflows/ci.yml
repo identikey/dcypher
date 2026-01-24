@@ -11,6 +11,25 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  proto:
+    name: Proto Lint & Breaking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buf Setup
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: Buf Lint
+        run: buf lint
+
+      - name: Buf Breaking Change Detection
+        uses: bufbuild/buf-breaking-action@v1
+        with:
+          against: "https://github.com/${{ github.repository }}.git#branch=main"
+        # Only check breaking changes on PRs, not on main pushes
+        if: github.event_name == 'pull_request'
+
   fmt:
     name: Format
     runs-on: ubuntu-latest

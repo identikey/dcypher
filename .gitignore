@@ -37,3 +37,6 @@ vendor/openfhe-install/
 vendor/liboqs-install/
 # HumanLayer thoughts (local only)
 thoughts/
+
+# Buf generated code (use buf.build registry instead)
+gen/

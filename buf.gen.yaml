@@ -1,0 +1,31 @@
+# Buf code generation configuration
+# See: https://buf.build/docs/configuration/v2/buf-gen-yaml
+#
+# Usage: buf generate
+# This generates client code for multiple languages from the proto definitions.
+version: v2
+
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/identikey/recrypt/gen/go
+
+plugins:
+  # Go
+  - remote: buf.build/protocolbuffers/go
+    out: gen/go
+    opt: paths=source_relative
+
+  # Python
+  - remote: buf.build/protocolbuffers/python
+    out: gen/python
+
+  # TypeScript (connect-es for modern TS/JS)
+  - remote: buf.build/connectrpc/es
+    out: gen/ts
+    opt: target=ts
+
+  # Java
+  - remote: buf.build/protocolbuffers/java
+    out: gen/java

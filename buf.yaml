@@ -1,0 +1,18 @@
+# Buf configuration for protobuf schema management
+# See: https://buf.build/docs/configuration/v2/buf-yaml
+version: v2
+
+modules:
+  - path: crates/recrypt-proto/proto
+    name: buf.build/identikey/recrypt
+
+lint:
+  use:
+    - STANDARD
+  except:
+    # We use BACKEND_UNKNOWN = 0 intentionally as the unspecified value
+    - ENUM_ZERO_VALUE_SUFFIX
+
+breaking:
+  use:
+    - FILE

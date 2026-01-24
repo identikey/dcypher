@@ -197,6 +197,10 @@ jobs:
           cp target/${{ matrix.target }}/release/recrypt-server dist/
           cp target/${{ matrix.target }}/release/recrypt dist/
           chmod +x dist/recrypt-server dist/recrypt
+          
+          # Include proto definitions for client generation
+          mkdir -p dist/proto
+          cp crates/recrypt-proto/proto/recrypt.proto dist/proto/
 
           cd dist
           tar -czvf ../recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.tar.gz *
@@ -208,6 +212,10 @@ jobs:
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           Copy-Item target/${{ matrix.target }}/release/recrypt-server.exe dist/
           Copy-Item target/${{ matrix.target }}/release/recrypt.exe dist/
+          
+          # Include proto definitions for client generation
+          New-Item -ItemType Directory -Path dist/proto -Force | Out-Null
+          Copy-Item crates/recrypt-proto/proto/recrypt.proto dist/proto/
 
           Compress-Archive -Path dist/* -DestinationPath recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.zip
 
@@ -234,10 +242,27 @@ jobs:
             recrypt-${{ steps.version.outputs.version }}-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
           if-no-files-found: error
 
+  publish-proto:
+    name: Publish Proto to Buf Registry
+    runs-on: ubuntu-latest
+    # Only publish on actual releases, not test builds
+    if: github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Buf Setup
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: Buf Push
+        uses: bufbuild/buf-push-action@v1
+        with:
+          buf_token: ${{ secrets.BUF_TOKEN }}
+
   release:
     name: Create Release
-    needs: build
-    if: always() && !cancelled()
+    needs: [build]
+    # publish-proto runs in parallel but shouldn't block release
+    if: always() && !cancelled() && needs.build.result != 'failure'
     runs-on: ubuntu-latest
 
     steps:
