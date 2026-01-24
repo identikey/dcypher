@@ -12,6 +12,10 @@ lint:
   except:
     # We use BACKEND_UNKNOWN = 0 intentionally as the unspecified value
     - ENUM_ZERO_VALUE_SUFFIX
+    # Our enum values use TYPE_VALUE pattern (e.g., BACKEND_LATTICE) not TYPE_ID_VALUE
+    - ENUM_VALUE_PREFIX
+    # Proto lives in proto/ not recrypt/v1/ - restructuring would break existing code
+    - PACKAGE_DIRECTORY_MATCH
 
 breaking:
   use:
